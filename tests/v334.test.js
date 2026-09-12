@@ -100,7 +100,7 @@ async function seedSettingsPatch(page, patch) {
     await passGithubGate(page);
 
     const tToday = task("t-today", { dueDate: TODAY });
-    const upA = block("b-up-a", "t-today", { plannedStartAt: `${TODAY}T11:00:00` });
+    const upA = block("b-up-a", "t-today", { plannedStartAt: `${TODAY}T11:00:00`, plannedEndAt: `${TODAY}T11:30:00` });
     const done1 = block("b-done-1", "t-today", {
       completed: true, plannedStartAt: `${TODAY}T08:00:00`, plannedEndAt: `${TODAY}T08:30:00`,
       actualStartAt: `${TODAY}T08:02:00`, actualEndAt: `${TODAY}T08:28:00`, charge: 3, discharge: 2
@@ -124,7 +124,8 @@ async function seedSettingsPatch(page, patch) {
     await seed(page, {
       currentView: "exec", selectedDate: TODAY,
       projects: [project("p1")], tasks: [tToday],
-      blocks: [upA, done1, doneRoutine, doneNoProject, incomplete1, incomplete2]
+      blocks: [upA, done1, doneRoutine, doneNoProject, incomplete1, incomplete2,
+        block("b-reversed", "", { plannedStartAt: `${TODAY}T11:00:00` })]
     });
     check("1280px以上でexec-two-paneが出る", await page.locator(".exec-two-pane").count() === 1);
     const leftBox = await page.locator(".exec-pane-left").boundingBox();
@@ -141,6 +142,8 @@ async function seedSettingsPatch(page, patch) {
     check("計画モードでも右ペインにDRIFT/TIME COMBの折りたたみが時間軸の下に出る(§B M-3対応、embedded時は常に出す)",
       await page.locator(".exec-pane-right .tl-radar-panel ~ .exec-analysis-fold").count() === 1);
 
+    check("逆転時刻はカードから除外し訂正案内を出す", await page.locator(".timeline-card[data-id=b-reversed]").count() === 0
+      && (await page.locator(".timeline-availability").innerText()).includes("b-reversed"));
     console.log("[2] 実績モード(_execMode=actual): 右ペインは実績のみ(予定Blockは出ない)。左は「やったこと」=完了Block全件(母集団拡大)");
     await resetSetItemLog(page);
     const beforeToggle = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);

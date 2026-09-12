@@ -14,6 +14,7 @@ const {createReportProofAdapter}=await import("../src/features/feedback/report-p
 const {createFeedbackCoordinator}=await import("../src/features/feedback/feedback-coordinator.js");
 // v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位37): adoptSyncResult が単発予定の比較 singleSchedulesEqual を参照するようになったので、実物を砂場へ渡す(製品変更なし)。
 const {singleSchedulesEqual,validateSingleScheduleContainer}=await import("../src/core/single-schedule.js");
+const {mergeReadingEvidence}=await import("../src/core/daily-reading-sync.js");
 const here=__dirname;
 const {transformSync}=require('./support/sync-proof-transform.cjs');
 const acorn=require('acorn');
@@ -32,6 +33,7 @@ function fixture(mode='ok'){
  const syncErrors=[];
  const box={state,commitCandidate,singleSchedulesEqual,validateSingleScheduleContainer,setState:value=>{box.state=value;},saveState:Object.assign(()=>{},{pendingStamp:null}),
   STORAGE_KEY:'fixture-only',_lastSaveError:null,_githubSaveInFlight:mode==='inflight',autoSaveTimer:null,
+  mergeReadingEvidence,
   console:{error:(...args)=>syncErrors.push(args.map(String).join(' '))},localStorage:{setItem(k,value){if(mode==='quota')throw Error('synthetic quota');raw=value;}},
   archiveConnectionKey:()=>generation,capturePrimarySyncState:()=>({}),requireGitHubConfig:()=>({branch:'fixture',token:'SYNTHETIC_TOKEN'}),
   fetchGitHubFileSHA:async()=>mode==='conflict'?'b'.repeat(40):'a'.repeat(40),getLastSyncedSha:()=> 'a'.repeat(40),

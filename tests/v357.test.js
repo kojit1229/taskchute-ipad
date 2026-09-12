@@ -275,7 +275,7 @@ async function dataSnapshot(page) {
       await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
     check("Block編集モーダルを閉じた後、左列に一覧の中身が見える", await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1);
 
-    console.log("[3e] PC左列⇔オーバーレイ: 1280px⇔1279pxの幅またぎで表示形態が切り替わる(選択中のstate.modalは維持、B-M5)");
+    console.log("[3e] PC左列⇔オーバーレイ: 1280px⇔1023pxの幅またぎで表示形態が切り替わる(選択中のstate.modalは維持、B-M5)");
     await seedFixture();
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForSelector(".exec-two-pane");
@@ -283,27 +283,30 @@ async function dataSnapshot(page) {
     await page.waitForSelector(".exec-pane-left .fill-gap-sheet");
     const modalBeforeCross = (await stateNow(page)).modal;
     await page.setViewportSize({ width: 1279, height: 900 });
+    await page.waitForSelector(".exec-pane-left .fill-gap-sheet");
+    check("1279px横向きは左列シートを維持し重複しない", await page.locator(".fill-gap-sheet").count() === 1 && await page.locator("#modalRoot.open").count() === 0);
+    await page.setViewportSize({ width: 1023, height: 900 });
     await page.waitForSelector("#modalRoot.open .fill-gap-sheet");
-    check("1280→1279へ幅を跨ぐと左列からオーバーレイモーダルへ切り替わる(B-M5)",
-      await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1 && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0 && await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
+    check("1280→1023へ幅を跨ぐと左列からオーバーレイモーダルへ切り替わる(B-M5)",
+      await page.locator("[data-work-list=exec]").count() === 1 && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0 && await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
     check("幅を跨いでも選択中の隙間(state.modal)は維持される", JSON.stringify((await stateNow(page)).modal) === JSON.stringify(modalBeforeCross));
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForFunction(() => document.querySelector(".exec-pane-left .fill-gap-sheet") && !document.querySelector("#modalRoot.open"));
-    check("1279→1280へ戻すとオーバーレイから左列へ戻る(B-M5)",
+    check("1023→1280へ戻すとオーバーレイから左列へ戻る(B-M5)",
       await page.evaluate(() => !document.querySelector("#modalRoot")?.classList.contains("open")) && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 1);
     await page.click(".exec-pane-left .fill-gap-sheet .modal-close");
     await page.waitForSelector(".exec-pane-left .fill-gap-sheet", { state: "detached" });
     await page.setViewportSize({ width: 390, height: 844 });
 
-    console.log("[3b] 1279px以下ではモーダル(オーバーレイ)のまま");
-    await page.setViewportSize({ width: 1279, height: 900 });
+    console.log("[3b] 1023px以下ではモーダル(オーバーレイ)のまま");
+    await page.setViewportSize({ width: 1023, height: 900 });
     // v357修正(B-M1レビュー対応): 固定waitではなくv334矩形リスナの再描画完了(.exec-two-pane
     // が消える=1280px境界のmatchMediaリスナがrender()を終えた)をDOM状態で待つ。
-    await page.waitForSelector(".exec-pane-left [data-work-list=exec]");
+    await page.waitForFunction(() => !document.querySelector(".exec-two-pane"));
     await page.click('.exec-header-actions [data-action="fill-gap-open"]');
     await page.waitForSelector("#modalRoot.open .fill-gap-sheet");
-    check("1279pxではオーバーレイモーダルとして開く", await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
-    check("1279px横向きは実一覧を保持し補完シートは左列へ重複しない", await page.locator(".exec-pane-left [data-work-list=exec]").count() === 1 && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
+    check("1023pxではオーバーレイモーダルとして開く", await page.locator("#modalRoot.open .fill-gap-sheet").count() === 1);
+    check("1023pxは実一覧を保持し補完シートは重複しない", await page.locator("[data-work-list=exec]").count() === 1 && await page.locator(".exec-pane-left .fill-gap-sheet").count() === 0);
     await page.click(".fill-gap-sheet .modal-close");
     await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
     await page.setViewportSize({ width: 390, height: 844 });

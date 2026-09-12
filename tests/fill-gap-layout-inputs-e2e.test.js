@@ -44,16 +44,12 @@ const IDS = ["fillGapTitle", "fillGapLength", "fillGapCategory", "fillGapProject
       return { saved: localStorage.getItem(key), modal: JSON.stringify((await import("./src/state/store.js")).state.modal) };
     }, STATE_KEY);
     async function resize(width) {
-      await page.evaluate(() => {
-        window.__gapMediaChanged = false;
-        matchMedia("(min-width: 1280px)").addEventListener("change", () => { window.__gapMediaChanged = true; }, { once: true });
-      });
       await page.setViewportSize({ width, height: 900 });
-      await page.waitForFunction(() => window.__gapMediaChanged);
     }
-    for (const width of [1279, 1280, 390, 1280]) {
+    for (const width of [1279, 1280, 1023, 1024, 390, 1280]) {
+      console.log("CHECK layout width", width);
       await resize(width);
-      const destination = width >= 1280 ? ".exec-pane-left" : "#modalRoot.open";
+      const destination = width >= 1024 ? ".exec-pane-left" : "#modalRoot.open";
       await page.waitForSelector(`${destination} .fill-gap-sheet`);
       assert.equal(await page.locator(".fill-gap-sheet").count(), 1);
       assert.deepEqual(await values(), expected);

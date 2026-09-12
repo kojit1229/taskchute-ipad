@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "d40975a31f135022",
+      "sourceHash": "d8605bb2e17d18da",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -712,6 +712,30 @@
       }
     },
     {
+      "file": "daily-reading-sync.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "content-ai"
+      ],
+      "assertionSignals": 46,
+      "assertionHash": "cf1b78f8f39b16d3",
+      "sourceHash": "bbe8493457627361",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "daily-report-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -1025,9 +1049,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 25,
-      "assertionHash": "ab2febb1cbe5b915",
-      "sourceHash": "3b7c623f8c19ede8",
+      "assertionSignals": 34,
+      "assertionHash": "93dad1f3dc2b95e2",
+      "sourceHash": "6a78499775ac2b5e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1039,6 +1063,29 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "exec-timeline-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 21,
+      "assertionHash": "9e80203ff5f06db8",
+      "sourceHash": "5d3b7c54029ccc9f",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
@@ -1365,7 +1412,7 @@
       ],
       "assertionSignals": 26,
       "assertionHash": "2edf1860e5e9b7c4",
-      "sourceHash": "73efe45eee67cf44",
+      "sourceHash": "866b51083484070e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1416,7 +1463,7 @@
       ],
       "assertionSignals": 11,
       "assertionHash": "74e7839e05f981cc",
-      "sourceHash": "2c4a73d43d7f0452",
+      "sourceHash": "e173f331308cbccc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2158,7 +2205,7 @@
       ],
       "assertionSignals": 178,
       "assertionHash": "26c695e12722b4cb",
-      "sourceHash": "e0029eefcfffcd37",
+      "sourceHash": "7e0f64bf270779e5",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2799,6 +2846,29 @@
       "assertionSignals": 42,
       "assertionHash": "5446d23074eea353",
       "sourceHash": "0b5c1fd418f4964a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "single-schedule-layout-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 29,
+      "assertionHash": "0cec37e52f71dbbf",
+      "sourceHash": "c395faf35e114c04",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6733,9 +6803,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 47,
-      "assertionHash": "96b2b622d9a7941f",
-      "sourceHash": "ef667147bf636ac3",
+      "assertionSignals": 48,
+      "assertionHash": "ea0526344c9142df",
+      "sourceHash": "4c27f47d7ddc9113",
       "waits": {
         "fixedCount": 8,
         "numericMilliseconds": 2400,
@@ -6832,9 +6902,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 53,
-      "assertionHash": "06f9479b6dfec708",
-      "sourceHash": "c2cd4cb146f86dac",
+      "assertionSignals": 54,
+      "assertionHash": "1e4c0f2827e8ede6",
+      "sourceHash": "550cecb9c8da8411",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 200,

@@ -573,7 +573,7 @@ function renderTodayTower() {
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
     <div class="daily-today-main">
-      <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}${renderTowerBoard()}</section>
+      <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
       <div class="daily-today-records">${renderFlightLog(today, blocks)}${renderTowerGates(blocks)}${renderTowerJournal(today)}</div>
     </div>
   </div>`;

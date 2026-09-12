@@ -515,7 +515,9 @@ async function syncStampFixture({ pending = true, localOnly = true } = {}) {
   const noop = () => {}, { commitCandidate } = await api();
   // v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位37): adoptSyncResult / syncCoreEqual が単発予定の比較・容器検査を参照するので実物を砂場へ渡す(製品変更なし)。
   const singleSchedule = await import(pathToFileURL(path.join(__dirname, '../src/core/single-schedule.js')).href);
+  const { mergeReadingEvidence } = await import('../src/core/daily-reading-sync.js');
   const ctx = vm.createContext({ JSON, state: local, commitCandidate, _lastSaveError: null,
+    mergeReadingEvidence,
     singleSchedulesEqual: singleSchedule.singleSchedulesEqual, validateSingleScheduleContainer: singleSchedule.validateSingleScheduleContainer, console: { warn: noop },
     nowDateTime: () => stamp(0), saveState: Object.assign(noop, { pendingStamp: stamp(20) }),
     setState: value => { ctx.state = value; }, normalizeState: x => x,
@@ -532,7 +534,8 @@ async function syncStampFixture({ pending = true, localOnly = true } = {}) {
     normalizedRemoteCopy: JSON.parse, prepareArchiveMerge: async () => {}, assertPrimarySettingsSafe: noop,
     requireSyncMerge: r => {
       const blocks = [...new Map([...r.blocks, ...ctx.state.blocks].map(b => [b.id, b])).values()];
-      return { blocks, changedVsRemote: JSON.stringify(blocks) !== JSON.stringify(r.blocks) };
+      return { blocks, values: { reading: mergeReadingEvidence(ctx.state, r, blocks) },
+        changedVsRemote: JSON.stringify(blocks) !== JSON.stringify(r.blocks) };
     },
     applySyncMergeToLocal: merge => { ctx.state.blocks = merge.blocks; return true; },
     applySyncMergeToRemote: (merge, r) => { r.blocks = merge.blocks; return merge.changedVsRemote; },

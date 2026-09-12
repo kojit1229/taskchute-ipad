@@ -48,7 +48,29 @@ import { assignBlocksToLanes, adjustLaneTopPositions } from "./timeline-layout.j
 import { registerActions } from "../ui/actions.js";
 import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule } from "./single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps } from "./daily-gap-placement.js";
+import { plannedMinute } from "../core/planned-occupancy.js";
 let plannedDraftIntervals = () => [];
+export function restoreTimelineOrigin(initial, current) {
+  const el = document.querySelector('.timeline[data-date]');
+  if (!el) return;
+  if (initial) (current ? document.querySelector('.now-line') || el : el).scrollIntoView({ block: current ? 'center' : 'start' });
+}
+export function updateTimelineClock() {
+  const now = new Date(), minute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  for (const el of document.querySelectorAll('.timeline[data-date]')) {
+    if (el.dataset.date !== todayISO()) continue;
+    const scale = Number(el.dataset.rowHeight) / 60;
+    let line = el.querySelector('.now-line');
+    if (minute < 240 || minute >= 1440) { line?.remove(); continue; }
+    if (!line) { el.insertAdjacentHTML('beforeend', '<div class="now-line" style="position:absolute;left:0;right:0;border-top:2px solid var(--timeline-now-line,#FF3B30);pointer-events:none;z-index:5"><span></span></div>'); line = el.querySelector('.now-line'); }
+    line.style.top = `${(minute - 240) * scale}px`;
+    line.querySelector('span').textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    for (const card of el.querySelectorAll('[data-actual-start]')) {
+      const start = Math.max(240, plannedMinute(card.dataset.actualStart, el.dataset.date));
+      card.style.height = `${Math.max(0, minute - start) * scale}px`;
+    }
+  }
+}
 
 // ---- 依存注入(configureTimeline) ----
 let escapeHTML, getCategoryColor, migrationBadgeHTML, leverageTypeMarkHTML;
@@ -78,6 +100,12 @@ function configureTimeline(deps) {
   // app.js自身が呼ぶregisterActions({...})(v174方式、v180/v181で分割移行)へ移行した。
   registerActions({
     "timeline-mode": ({ target }) => setTimelineMode(target.dataset.mode),
+    "timeline-jump": ({ target }) => {
+      const where = target.dataset.where;
+      if (where === "now" && state.selectedDate !== todayISO()) return;
+      (where === "list" ? document.querySelector('[data-work-list="exec"], [data-work-list="exec-actual"]')
+        : where === "now" ? document.querySelector('.now-line') || document.querySelector('.timeline') : document.querySelector('.timeline'))?.scrollIntoView({ block: where === "now" ? "center" : "start" });
+    },
     "drift-postpone": ({ id }) => postponeBlockToNextDay(id)
     // v354: TIME COMB「補う」はfill-gap-open(app.js側でグローバル登録)へ統一した
     // (旧time-comb-fill/createBlockForActualGapは廃止。「空き時間を補う」シートを開くだけで、
@@ -369,14 +397,30 @@ function fillGapSelectedOverlayHTML(modal, rowHeight, startHour) {
 function renderTimeline({ compact, mode = "planned", embedded = false }) {
   const schedules = mode === "planned" ? scheduleDisplay(state, state.selectedDate) : null;
   const allBlocks = blocksForDate(state.selectedDate);
+  const availability = plannedAvailability(state, state.selectedDate, { draftIntervals: plannedDraftIntervals() });
+  const timelineBlocks = state.blocks.filter(block => block && !block.deleted);
+  const planned = new Map(availability.intervals.filter(row => row.kind === "block").map(row => [row.id, row]));
+  const clock = new Date(), nowAt = `${todayISO()}T${pad2(clock.getHours())}:${pad2(clock.getMinutes())}:${pad2(clock.getSeconds())}`;
   // モードに応じてフィルタリングと表示位置決定
   let blocksToRender;
   if (mode === "actual") {
-    blocksToRender = allBlocks.filter((b) => b.actualStartAt);
+    blocksToRender = timelineBlocks.filter((b) => b.actualStartAt);
   } else {
     // 予定モード: 未完了 + plannedStartAt あり(完了済みは予定から消す)
-    blocksToRender = allBlocks.filter((b) => b.plannedStartAt && !b.completed);
+    blocksToRender = timelineBlocks.filter((b) => b.plannedStartAt && !b.migratedTo);
   }
+  blocksToRender = blocksToRender.flatMap(block => {
+    const interval = planned.get(block.id);
+    const start = mode === "actual" ? plannedMinute(block.actualStartAt, state.selectedDate) : interval?.start;
+    const end = mode === "actual" ? plannedMinute(block.actualEndAt || nowAt, state.selectedDate) : interval?.end;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+    const range = [Math.max(240, start), Math.min(1440, end)];
+    return range[0] <= range[1] && start < 1440 && end >= 240 ? [{ ...block, timelineRange: range,
+      timelineHint: `${start < 240 ? "前から継続 / " : ""}${end > 1440 ? "翌日へ継続 / " : ""}${interval?.estimatedEnd && mode === "planned" ? "終了未定・仮の長さ" : ""}` }] : [];
+  });
+  const actualRanges = mode === "actual" ? blocksToRender.map(block => block.timelineRange).filter(([s, e]) => s < e) : [];
+  const actualOverlapCount = actualRanges.reduce((count, [start, end], index) => count
+    + actualRanges.slice(index + 1).filter(([s, e]) => start < e && s < end).length, 0);
   // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示するためタイムラインから除外
   blocksToRender = blocksToRender.filter((b) => b.category !== "ルーティン");
   // v39: エネルギー構造分析からのカテゴリフィルタ(UI状態)
@@ -386,7 +430,7 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
   // v10: ズームレベル(state.timelineZoom: 1.0 / 2.0 / 4.0 のいずれか)
   const zoom = compact ? 1 : (state.timelineZoom || 1);
   const rowHeight = (compact ? 48 : 60) * zoom;
-  const startHour = mode === "planned" ? 4 : 5;
+   const startHour = 4;
   const endHour = 24;
   const rows = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
   // v10: レーン分割(PC 5、iPhone 3)
@@ -404,6 +448,9 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
       <button class="btn ghost ${zoom === 1 ? "active" : ""}" data-action="tl-zoom" data-zoom="1">1x</button>
       <button class="btn ghost ${zoom === 2 ? "active" : ""}" data-action="tl-zoom" data-zoom="2">2x</button>
       <button class="btn ghost ${zoom === 4 ? "active" : ""}" data-action="tl-zoom" data-zoom="4">4x</button>
+      <button class="btn ghost" data-action="timeline-jump" data-where="now" ${state.selectedDate !== todayISO() ? "disabled" : ""}>現在時刻へ</button>
+      <button class="btn ghost" data-action="timeline-jump" data-where="all">全日を見る</button>
+      ${embedded ? '<button class="btn ghost" data-action="timeline-jump" data-where="list">予定一覧へ</button>' : ""}
       <span class="tl-controls-divider"></span>
       <button class="btn ghost ${energyGraphMode === "energy" ? "active" : ""}" data-action="tl-energy-mode" data-mode="energy">エネルギー</button>
       <button class="btn ghost ${energyGraphMode === "battery" ? "active" : ""}" data-action="tl-energy-mode" data-mode="battery">バッテリー</button>
@@ -435,6 +482,7 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
   const rowsHTML = rows.map((hour) => {
     const rowStart = hour * 60;
     const top = (hour - startHour) * rowHeight;
+    if (hour === endHour) return `<div class="time-row" data-minute="1440" style="top:${top}px;height:0"><span style="position:absolute;bottom:0">24:00</span></div>`;
     if (!embedded) {
       return `<div class="time-row" data-action="timeline-new-block" data-minute="${rowStart}"
              style="top:${top}px;height:${rowHeight}px; cursor:pointer;">${String(hour).padStart(2, "0")}:00</div>`;
@@ -451,14 +499,24 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
   }).join("");
 
   const fillGapSelected = (embedded && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate
-    && Boolean(typeof window !== "undefined" && window.matchMedia?.("(min-width: 1280px)").matches))
+    && Boolean(typeof window !== "undefined" && window.matchMedia?.("(min-width: 1280px), (min-width: 1024px) and (orientation: landscape)").matches))
     ? fillGapSelectedOverlayHTML(state.modal, rowHeight, startHour) : "";
 
   return `
     ${timelineControls}
+    ${mode === "planned" ? `<div class="timeline-availability">${availability.error ? escapeHTML(availability.error)
+      : `空き ${availability.gaps.reduce((sum, [s,e]) => sum + e-s, 0)}分 / ルーティン・完了した予定等も使用中として計算`}</div>` : ""}
+    ${mode === "planned" && !availability.error ? `<div class="timeline-gap-list">${availability.gaps.map(([s,e]) => {
+      const time = minute => `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
+      return e-s < 15 ? `<span>${e-s}分・配置対象外</span>` : `<button class="btn ghost" data-action="fill-gap-open" data-basis="planned" data-date="${state.selectedDate}" data-start="${time(s)}" data-end="${time(e)}">${time(s)}–${time(e)} / ${e-s}分へ配置</button>`;
+    }).join("")}</div>` : ""}
+    ${mode === "planned" && availability.overlaps.length ? `<p role="status">計画の重複 ${availability.overlaps.length}件（保存された時刻を保持）</p>` : ""}
+    ${mode === "actual" && actualOverlapCount ? `<p role="status">実績の重複 ${actualOverlapCount}件（保存された時刻を保持）</p>` : ""}
+    ${isToday && nowMinutes < 240 ? '<p class="muted">現在は表示範囲外です（4:00〜24:00）</p>' : ""}
+    ${positioned.some(row => row.isOverflow) ? `<details><summary>重なった予定の全件（${positioned.length}件）</summary>${positioned.map(row => `<button class="btn" data-action="${row.block.scheduleRecord ? "schedule-view-details" : "edit-block"}" data-date="${state.selectedDate}" data-id="${escapeHTML(row.block.id)}">${escapeHTML(row.block.title)}</button>`).join("")}</details>` : ""}
     ${schedules ? scheduleWarning(schedules, escapeHTML) : ""}
     ${schedules?.records.length ? `<details class="timeline-schedule-list"><summary>単発予定の一覧</summary>${schedules.records.map(record => renderSchedule(record, state.selectedDate, escapeHTML)).join("")}</details>` : ""}
-    <div class="timeline" style="position:relative; min-height:${rowHeight * (endHour - startHour + 1)}px">
+    <div class="timeline" data-date="${state.selectedDate}" data-row-height="${rowHeight}" style="position:relative; min-height:${rowHeight * (endHour - startHour)}px">
       ${rowsHTML}
       <div class="timeline-cards-area" style="position:absolute; top:0; left:60px; right:100px; height:100%;">
         ${positioned.map((a) => renderTimelineCard(a, mode, maxLanes)).join("")}
@@ -518,11 +576,13 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
   return `
     <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""} ${isMigrated ? "is-migrated" : ""}"
          ${overflowAttr}
+         ${isActual && !block.actualEndAt ? `data-actual-start="${escapeHTML(block.actualStartAt)}"` : ""}
          style="top:${top}px; height:${height}px; left:${leftPercent}%; width:calc(${widthPercent}% - 4px); ${catStyle}"
          data-action="edit-block" data-id="${block.id}">
       ${completeBtnHTML}
       ${startEndBtn}
       <div class="tl-card-body">
+        <small>${isActual ? "実績" : "予定枠"}${block.completed ? " / 完了" : ""}${block.timelineHint ? ` / ${escapeHTML(block.timelineHint)}` : ""}</small>
         <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}${migratedBadgeHTML}</strong>
       </div>
     </div>
@@ -531,7 +591,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
 
 function renderEnergyGraph(allBlocks, rowHeight, startHour, endHour, compact = false) {
   const morning = state.settings.morningEnergyLog[state.selectedDate] ?? 5;
-  const totalHeight = rowHeight * (endHour - startHour + 1);
+  const totalHeight = rowHeight * (endHour - startHour);
   const startMinute = startHour * 60;
   const endMinute = endHour * 60;
 

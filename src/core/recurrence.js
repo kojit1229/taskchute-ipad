@@ -253,7 +253,7 @@ function maintainRecurrences({ purge = false } = {}) {
     let guard = 0;
     while (cur <= to && guard < 800) {
       guard++;
-      if (recurrenceMatchesDate(rule, cur) && !existing.has(`${rule.id}|${cur}`)) {
+      if (!(state.archivedDates || []).includes(cur) && recurrenceMatchesDate(rule, cur) && !existing.has(`${rule.id}|${cur}`)) {
         state.blocks.push(makeRecurrenceInstance(rule, cur));
         existing.add(`${rule.id}|${cur}`);
       }

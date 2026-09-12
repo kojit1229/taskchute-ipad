@@ -42,6 +42,7 @@ import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createDailyReading } from "./src/features/daily-reading.js";
 import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurrence.js";
+import { restoreTimelineOrigin, updateTimelineClock } from "./src/features/timeline.js";
 import { isDailyReadingBlock, markDailyReadingEdit } from "./src/core/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
@@ -2234,6 +2235,8 @@ function normalizeState(value) {
     twelveWeekReviewWeekMinItems: 3,  // v357: 13 WEEKSバーの振り返り週(W13)参考平均の閾値(design.md §2.1裁定7)
     ...actualSettings
   };
+  if (actualSettings.dailyReadingRoutineIds && typeof actualSettings.dailyReadingRoutineIds === "object" && !Array.isArray(actualSettings.dailyReadingRoutineIds))
+    value.settings.dailyReadingRoutineIds = { affirmation: "", visionBoard: "", ...actualSettings.dailyReadingRoutineIds };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
     "today", "wbs", "wish", "tasks", "timeline", "exec",
@@ -3533,6 +3536,7 @@ let _lastScrollDate = null;
 
 function renderMain() {
   const view = state.currentView;
+  const initialTimelineDisplay = _lastScrollView === null && !isFocusInEditableElement();
   // v146レビュー対応: フォーカスガードはmain.innerHTMLを差し替える「前」に評価する(差し替え後は
   // 旧main内のフォーカス要素がDOMごと消えてbodyへ戻ってしまい、判定が構造的に効かなくなるため)。
   // 自作ガードではなく既存のisFocusInEditableElement(input/textarea/contenteditable判定)を使う。
@@ -3575,14 +3579,10 @@ function renderMain() {
   }
   if (view === "exec") {
     main.innerHTML = renderExecView();
-    // v333: 計画=タスクシュートと同じ自動スクロール、実績=タイムラインと同じ現在時刻ライン
-    if (_execMode === "actual" && state.selectedDate === todayISO()) {
-      setTimeout(() => document.querySelector(".now-line")?.scrollIntoView({ block: "center" }), 50);
-    } else if (shouldAutoScroll) {
+    if (initialTimelineDisplay) restoreTimelineOrigin(true, shouldAutoScroll);
+    if (_execMode !== "actual" && shouldAutoScroll) {
       const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
-      if (targetId) {
-        setTimeout(() => document.querySelector(`[data-work-list="exec"] [data-work-key="block:${CSS.escape(targetId)}"]`)?.scrollIntoView({ block: "center" }) /* v333: v331の行1段化でstrong[edit-block]が無くなったため行の展開トリガを目印にする */, 50);
-      }
+      if (targetId) setTimeout(() => document.querySelector(`[data-work-list="exec"] [data-work-key="block:${CSS.escape(targetId)}"]`)?.scrollIntoView({ block: "center" }), 50);
     }
   }
   if (view === "journal") {
@@ -6461,7 +6461,7 @@ function execDoneListHTML() {
 // 表示するフォールバック(発注書§B「無理なら右列は実績のみ+計画は破線に切替可、と報告」に該当)。
 function renderExecView() {
   const isActual = _execMode === "actual";
-  const desktop = Boolean(window.matchMedia?.("(min-width: 1280px), (min-width: 1024px) and (orientation: landscape)").matches);
+  const desktop = fillGapExecDesktop();
   const endText = projectedEndText() || "見込み終了 —";
   const bufferInfo = computeBufferRemaining(state.selectedDate);
   const bufferText = (state.selectedDate === todayISO() && bufferInfo.hasBuffer)
@@ -6502,6 +6502,7 @@ function renderExecView() {
         <button class="${isActual ? "active" : ""}" data-action="exec-mode-toggle" data-mode="actual">実績(タイムライン)</button>
       </div>
       <div class="row exec-header-actions">
+        <button class="btn ghost" data-action="timeline-jump" data-where="all">時間軸へ</button>
         ${execFillGapAddButtonHTML()}
         ${!isActual ? `
           <div class="segmented" style="margin:0">
@@ -9955,7 +9956,7 @@ function restoreFillGapLayoutInputs() {
 }
 
 function fillGapExecDesktop() {
-  return state.currentView === "exec" && Boolean(window.matchMedia?.("(min-width: 1280px)").matches);
+  return state.currentView === "exec" && Boolean(window.matchMedia?.("(min-width: 1280px), (min-width: 1024px) and (orientation: landscape)").matches);
 }
 
 function openFillGapSheet(start, end, date, basis) {
@@ -13033,7 +13034,7 @@ function isTouchedBlock(b) {
     : null;
   const renamed = rule ? b.title !== rule.title : false;
   return Boolean(
-    b.completed || b.actualStartAt || b.actualEndAt ||
+    b.deleted || b.source === "daily-reading-manual" || b.completed || b.actualStartAt || b.actualEndAt ||
     Number(b.pomodoroCount || 0) > 0 || (b.comment || "").trim() ||
     b.isMIT || Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0 ||
     renamed
@@ -15450,7 +15451,8 @@ function updateBatteryTick() {
     if (layer) {
       const allBlocks = blocksForDate(state.selectedDate);
       const rowHeight = 60 * (state.timelineZoom || 1);
-      layer.outerHTML = renderEnergyGraph(allBlocks, rowHeight, 5, 24);
+      layer.outerHTML = renderEnergyGraph(allBlocks, rowHeight, 4, 24);
+      updateTimelineClock();
     }
   }
 }
@@ -15605,11 +15607,12 @@ if (window.matchMedia) {
     // v362(A2): 設定タブもPC 2列⇔1列がこの1280px境界で切り替わるため、幅跨ぎで再描画に乗せる。
     if (state.currentView === "wbs" || state.currentView === "exec" || state.currentView === "settings") render();
   };
-  if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
-  else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
-  // Exec layout also changes below 1280 when tablet landscape enters/leaves two panes.
-  const _execLandscapeMediaQuery = window.matchMedia("(min-width: 1024px) and (orientation: landscape)");
-  const _onExecLandscapeChange = () => { if (state.currentView === "exec" && !fillGapExecDesktop()) render(); };
+  const _onDesktopLayoutChange = () => { if (state.currentView !== "exec") _onWbsLayoutChange(); };
+  if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onDesktopLayoutChange);
+  else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onDesktopLayoutChange);
+  // Rebuild exec only when its sheet destination changes.
+  const _execLandscapeMediaQuery = window.matchMedia("(min-width: 1280px), (min-width: 1024px) and (orientation: landscape)");
+  const _onExecLandscapeChange = () => { if (state.currentView === "exec") _onWbsLayoutChange(); };
   if (_execLandscapeMediaQuery.addEventListener) _execLandscapeMediaQuery.addEventListener("change", _onExecLandscapeChange);
   else if (_execLandscapeMediaQuery.addListener) _execLandscapeMediaQuery.addListener(_onExecLandscapeChange);
 }
