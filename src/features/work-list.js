@@ -27,6 +27,7 @@ function configureWorkList(deps) {
     "daily-search-change": ({ target }) => handleWorkListInput(target) });
 }
 function rowsFor(scope) {
+  if (scope.startsWith("wbs-")) return screenDeps.wbsSearchModel(scope, view(scope));
   return buildThreeScreenRows(state, { scope, today: todayISO(), conditions: view(scope) }, screenDeps);
 }
 // v374(B-1修正): WBSのTask行(旧app.js renderTaskRow)が持っていた⚙資産/✂削減マーク
@@ -54,15 +55,15 @@ function listRow(row, scope) {
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }
-function rowsHTML(model, scope) { return scope === "wbs" ? model.shown.map(row => listRow(row, scope)).join("") : renderScreenGroups(model.shown, row => listRow(row, scope)); }
+function rowsHTML(model, scope) { return scope.startsWith("wbs-") ? screenDeps.wbsSearchRows(model, scope) : scope === "wbs" ? model.shown.map(row => listRow(row, scope)).join("") : renderScreenGroups(model.shown, row => listRow(row, scope)); }
 function searchModel(scope, model, composing = false) {
   const ui = view(scope);
   const projects = state.projects.filter(project => !project.deleted).map(project => [String(project.id ?? ""), String(project.title ?? "")]);
   const categories = [...new Set(model.rows.map(row => String(row.category ?? "")).filter(Boolean))].sort();
-  return { scope: scope.startsWith("exec-") ? "today" : scope, query: ui.query, mode: ui.mode, composing,
+  return { scope: scope.startsWith("wbs-") ? "wbs" : scope.startsWith("exec-") ? "today" : scope, query: ui.query, mode: ui.mode, composing,
     filters: { status: ui.status, project: ui.project, category: ui.category, due: ui.due },
     options: {
-      status: scope === "exec-candidates" ? [["", "すべて"], ["no-wish", "やりたいことを除外"]] : [["", "すべて"], ["open", "未完了"], ["running", "実行中"], ["completed", "完了"], ...(scope !== "wbs" ? [["ended", "終了・未完了"]] : []), ...(scope === "wbs" ? [["suspended", "中断"]] : [])],
+      status: scope === "exec-candidates" ? [["", "すべて"], ["no-wish", "やりたいことを除外"]] : [["", "すべて"], ["open", "未完了"], ["running", "実行中"], ["completed", "完了"], ...(!scope.startsWith("wbs") ? [["ended", "終了・未完了"]] : []), ...(scope.startsWith("wbs") ? [["suspended", "中断"]] : [])],
       project: [["", "すべて"], ["__none__", "Projectなし"], ...projects],
       category: [["", "すべて"], ...categories.map(name => [name, name])],
       due: [["", "すべて"], ["today", "対象日"], ["overdue", "超過"], ["none", "なし"], ...(scope === "exec-candidates" ? [["week", "期限7日以内"]] : [])]
@@ -72,6 +73,11 @@ function searchModel(scope, model, composing = false) {
 }
 function renderWorkList(scope) {
   const model = rowsFor(scope);
+  if (scope.startsWith("wbs-")) return `<section data-work-list="${escapeHTML(scope)}">${renderSearchFrame(searchModel(scope, model), {
+    escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear",
+    filterKeys: scope === "wbs-projects" ? [] : ["status", "category", "due"],
+    queryLabel: scope === "wbs-projects" ? "Projectの名前・説明を検索" : "選択ProjectのTaskを検索", queryId: scope + "-query"
+  })}</section>`;
   return `<section class="work-list tower-panel-box${scope === "today" ? " sec-arrivals" : scope === "exec-actual" ? " exec-done-section" : ""}" data-work-list="${scope}">
     <h2>${scope === "wbs" ? "Project / Task を探す" : scope === "today" ? "今日の予定・実績" : scope === "exec-candidates" ? "追加候補（今日へ追加）" : scope === "exec-actual" ? "やったこと" : "予定一覧"}${scope === "wbs" ? "" : ` <span>${scope === "today" ? "今日" : "選択日"} ${escapeHTML(model.date)}</span>`}</h2>
     ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear" })}
@@ -133,12 +139,22 @@ function rememberWorkListScroll() {
       action: button.dataset.action, id: button.dataset.id, blockId: button.dataset.blockId,
       view: state.currentView, date: state.selectedDate, today: todayISO?.() } : null;
   document.querySelectorAll("[data-work-list]").forEach(root => {
-    view(root.dataset.workList).scroll = root.querySelector("[data-work-list-rows]").scrollTop;
+    const ui = view(root.dataset.workList);
+    ui.scroll = root.querySelector("[data-work-list-rows]").scrollTop;
+    ui.input = root.querySelector('[data-work-filter="query"]');
+    ui.inputFocused = ui.input === button;
+    ui.composing = root.dataset.workComposing;
   });
 }
 function restoreWorkListScroll() {
   document.querySelectorAll("[data-work-list]").forEach(root => {
-    root.querySelector("[data-work-list-rows]").scrollTop = view(root.dataset.workList).scroll;
+    const ui = view(root.dataset.workList), input = root.querySelector('[data-work-filter="query"]');
+    root.querySelector("[data-work-list-rows]").scrollTop = ui.scroll;
+    if (ui.input && input !== ui.input) {
+      input.replaceWith(ui.input);
+      root.dataset.workComposing = ui.composing || "0";
+      if (ui.inputFocused && !state.modal) ui.input.focus({ preventScroll: true });
+    }
   });
   const saved = renderFocus; renderFocus = null;
   if (!saved || state.modal || state.currentView !== saved.view || state.selectedDate !== saved.date
@@ -151,4 +167,4 @@ function restoreWorkListScroll() {
     : saved.blockId != null ? `[data-block-id="${CSS.escape(saved.blockId)}"]` : '';
   root?.querySelector(`[data-work-key="${CSS.escape(saved.key)}"] button[data-action="${CSS.escape(saved.action)}"]${identity}:not(:disabled)`)?.focus({ preventScroll: true });
 }
-export { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };
+export { view as workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };

@@ -3000,6 +3000,12 @@ details.settings-row > .fold-summary.settings-row-summary {
 .wbs-row-menu-panel[hidden] { display: none; } .wbs-row-menu-panel > button { min-width: 44px; min-height: 44px; font-size: 12px; }
 .wbs-row-menu-panel .wbs-criteria-btn, .wbs-row-menu-panel .plan-owner-badge { width: auto; height: 44px; padding: 4px 10px; }
 .wbs-tower button { min-height: 44px; }
+.wbs-project-list, .wbs-project-detail { min-width: 0; }
+.wbs-project-choice { display: block; width: 100%; min-height: 56px; text-align: left; overflow-wrap: anywhere; }
+.wbs-project-choice.selected { border-left: 3px solid var(--tower-amber); }
+.wbs-task-row > div:nth-child(3) { display: flex; flex-direction: column; max-width: 120px; }
+.wbs-task-title { max-width: 100%; white-space: normal; text-align: left; padding-inline: 0; }
+@media (max-width: 600px) { .wbs-task-row { grid-template-columns: auto minmax(0, 1fr) 44px; } .wbs-task-row > div:nth-child(3) { grid-row: 2; grid-column: 2; max-width: none; flex-direction: row; flex-wrap: wrap; } .wbs-task-row > .wbs-row-menu-toggle { grid-column: 3; grid-row: 1; } }
 .wbs-today-btn { min-width: 60px; border: 1px solid #6b5322; color: var(--tower-amber); background: transparent; } .wbs-task-done { min-width: 60px; color: var(--tower-text); font-size: 11px; text-align: center; opacity: .7; }
 .wbs-task-row.is-completed .wbs-task-title { color: var(--tower-text); text-decoration: line-through; opacity: .7; }
 .wbs-tower .is-suspended { opacity: 1; } .wbs-task-row.is-suspended .wbs-task-title { text-decoration: line-through; text-decoration-color: rgba(142, 142, 147, .6); }

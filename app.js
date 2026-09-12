@@ -48,7 +48,8 @@ import { candidateTasks } from "./src/features/three-screen-rows.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
-import { configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
+import { workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
+import { workListRows, filterWorkList } from "./src/core/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
 import { state, setState } from "./src/state/store.js";
@@ -321,7 +322,7 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails,
+configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
@@ -1500,7 +1501,7 @@ let _twyAddCandidateSelectedIds = new Set();
 let _twyExcuseOpenItemId = null;
 let _twyAddPanelOpen = false;
 // v330: PC WBSの選択Project。表示専用でstate/localStorageへは保存しない。
-let _wbsSelectedProjectId = "";
+let _wbsSelectedProjectId = null;
 // v331: 実行タブ「これから」行の展開状態(1行だけ開く)。表示専用でstate/localStorageへは保存しない。
 let _execExpandedBlockId = "";
 let _execExpandedTaskId = "";  // v332: 「タスク」行の展開状態(1行だけ開く。非永続)
@@ -5323,12 +5324,10 @@ function renderWBS() {
 
   return `
     <div class="tower-skin wbs-tower"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
-    ${renderWorkList("wbs")}
     ${renderWipBanner()}
     ${renderWbsThisWeek()}
     <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
-      ${filteredProjects.length > 0 ? (desktop ? renderWbsDesktopProjects(filteredProjects) : filteredProjects.map(renderProjectTree).join(""))
-        : `<div class="muted" style="padding:12px; text-align:center">このカテゴリのProjectはありません</div>`}
+      ${renderWbsDesktopProjects(filteredProjects)}
     </section></div>
   `;
 }
@@ -6128,14 +6127,50 @@ function renderWbsProjectMeta(project, model) {
 
 function renderWbsDesktopProjects(projects) {
   const preferred = [...projects].sort((a, b) => Number(Boolean(b.twelveWeekStartDate)) - Number(Boolean(a.twelveWeekStartDate)));
-  let selected = projects.find((project) => project.id === _wbsSelectedProjectId);
-  if (!selected) selected = preferred.find((project) => !isWbsProjectDone(project)) || preferred[0];
-  _wbsSelectedProjectId = selected?.id || "";
-  const list = projects.map((project) => {
+  const none = { id: "", title: "プロジェクトなし" };
+  let selected = _wbsSelectedProjectId === "" ? none : state.projects.find(project => !project.deleted && project.id === _wbsSelectedProjectId);
+  if (!selected) selected = preferred.find((project) => !isWbsProjectDone(project)) || preferred[0] || none;
+  _wbsSelectedProjectId = selected.id;
+  return `<div class="wbs-project-list"><header>プロジェクト</header>${renderWorkList("wbs-projects")}</div>${renderWbsProjectDetail(selected)}`;
+}
+
+function wbsSearchModel(scope, conditions) {
+  if (scope === "wbs-projects") {
+    const projects = [...wbsFilteredProjects(), { id: "", title: "プロジェクトなし" }];
+    const rows = workListRows({ projects }, { scope: "wbs" });
+    return { rows, shown: filterWorkList(rows, conditions, todayISO()) };
+  }
+  const id = decodeURIComponent(scope.slice("wbs-tasks-".length));
+  const model = wbsProjectTaskModel({ id });
+  const rows = workListRows({ tasks: model.visibleTasks }, { scope: "wbs", dueDate: effectiveDueDate });
+  const hits = filterWorkList(rows, conditions, todayISO()), keep = new Set(hits.map(row => row.id));
+  const addChildren = id => model.visibleTasks.filter(task => task.parentTaskId === id && task.status !== "completed").forEach(task => {
+    if (!keep.has(task.id)) { keep.add(task.id); addChildren(task.id); }
+  });
+  hits.forEach(row => addChildren(row.id));
+  for (const id of [...keep]) {
+    let task = model.allTasksOfProject.find(task => task.id === id);
+    const seen = new Set();
+    while (task?.parentTaskId && !seen.has(task.parentTaskId)) {
+      seen.add(task.parentTaskId); keep.add(task.parentTaskId);
+      task = model.allTasksOfProject.find(parent => parent.id === task.parentTaskId);
+    }
+  }
+  const filtering = [conditions.query, conditions.status, conditions.category, conditions.due].some(Boolean);
+  const tasks = model.allTasksOfProject.filter(task => keep.has(task.id)).map(task => filtering ? { ...task, collapsed: false } : task);
+  return { rows: workListRows({ tasks: model.allTasksOfProject }, { scope: "wbs", dueDate: effectiveDueDate }), shown: tasks.map(item => ({ item })), tasks };
+}
+
+function wbsSearchRows(model, scope) {
+  if (scope !== "wbs-projects") {
+    const project = state.projects.find(project => project.id === _wbsSelectedProjectId);
+    const hideProgress = Boolean(project?.twelveWeekStartDate && project.status === "active" && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate));
+    return model.tasks.filter(task => !model.tasks.some(parent => parent.id === task.parentTaskId)).sort(siblingTaskCompare).map(task => renderTaskTree(task, model.tasks, 0, hideProgress)).join("");
+  }
+  return model.shown.map(({ item: project }) => {
     const model = wbsProjectTaskModel(project);
-    return `<button class="wbs-project-choice${project.id === selected?.id ? " selected" : ""}" data-action="wbs-select-project" data-id="${escapeHTML(project.id)}" data-wbs-row-id="${escapeHTML(project.id)}"><strong>${escapeHTML(project.title)}</strong><span class="wbs-project-meta">${renderWbsProjectMeta(project, model)}</span></button>`;
+    return `<button class="wbs-project-choice${project.id === _wbsSelectedProjectId ? " selected" : ""}" data-action="wbs-select-project" data-id="${escapeHTML(project.id)}" data-wbs-row-id="${escapeHTML(project.id)}"><strong>${escapeHTML(project.title)}</strong><span class="wbs-project-meta">${renderWbsProjectMeta(project, model)}</span></button>`;
   }).join("");
-  return `<div class="wbs-project-list"><header>プロジェクト <span>${projects.length}件</span></header>${list}</div>${selected ? renderWbsProjectDetail(selected) : ""}`;
 }
 
 function renderWbsProjectDetail(project) {
@@ -6146,9 +6181,9 @@ function renderWbsProjectDetail(project) {
     return task.status !== "completed" && due && due < todayISO();
   }).length;
   return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
-    <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button><button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
+    <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button>${project.id ? `<button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}` : ""}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
     ${renderTwyTrackBlock(project)}${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
-    <div class="stack">${model.rootTasks.length ? model.rootTasks.map((task) => renderTaskTree(task, model.visibleTasks, 0, hideOldProgress)).join("") : `<div class="muted">Task未登録</div>`}</div></div>`;
+    ${renderWorkList("wbs-tasks-" + encodeURIComponent(project.id))}</div>`;
 }
 
 function renderProjectTree(project) {
@@ -6203,7 +6238,7 @@ function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
   const indent = depth * 28;
   const collapsed = Boolean(task.collapsed);  // v33: 折りたたみ
   return `
-    <div style="margin-left:${indent}px" data-wbs-row-id="${escapeHTML(task.id)}">
+    <div style="margin-left:${indent}px" data-wbs-row-id="${escapeHTML(task.id)}" data-work-key="task:${escapeHTML(task.id)}">
       ${renderTaskRow(task, depth, children.length > 0, collapsed, hideProgress, Boolean(state.settings.wbsCompactMode))}
       ${children.length && !collapsed
         ? children.map((c) => renderTaskTree(c, allTasksOfProject, depth + 1, hideProgress)).join("")
@@ -6281,8 +6316,8 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
   return `
     <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
       <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>
-      <div class="wbs-task-copy"><span class="wbs-task-title" data-id="${task.id}">${escapeHTML(task.title)}</span>${metaHTML}${editMode && !compact ? inlineEdit : ""}${progressHTML}</div>
-      ${task.status === "completed" ? `<span class="wbs-task-done">完了</span>` : `<button class="btn wbs-today-btn" data-action="task-today" data-id="${task.id}">今日へ</button>`}
+      <div class="wbs-task-copy"><button class="btn ghost wbs-task-title" data-action="edit-task" data-id="${task.id}">${escapeHTML(task.title)}</button>${metaHTML}${editMode && !compact ? inlineEdit : ""}${progressHTML}</div>
+      <div>${scheduledToday ? `<button class="btn wbs-today-btn" data-action="placement-add-today" data-id="${task.id}">予定を見る</button>` : ""}${task.status === "completed" ? `<span class="wbs-task-done">完了</span>` : `<button class="btn wbs-today-btn" data-action="${scheduledToday ? "placement-add-another" : "task-today"}" data-id="${task.id}">${scheduledToday ? "別の予定を追加" : "今日へ"}</button>`}</div>
       <button class="wbs-row-menu-toggle" data-action="wbs-row-menu-toggle" aria-expanded="false" aria-label="${escapeHTML(task.title)}の副操作">…</button>
       <div class="wbs-row-menu-panel" hidden>
         ${planMetaHTML}${task.aiWork ? `<span class="ai-work-flag" title="AIに作業依頼中">🤝</span>` : ""}${planActionsHTML}

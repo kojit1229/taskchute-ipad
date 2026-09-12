@@ -92,6 +92,72 @@ const today = '2026-09-06', selected = '2026-09-07';
       return JSON.stringify([state.tasks, state.projects, state.blocks]);
     });
     assert.equal(businessAfter, businessBefore, 'navigation, classification and searching do not save business changes');
+    // S3-02: independent Project/Task searches, hierarchy, retained DOM and two placements.
+    await page.evaluate(async () => {
+      const { state } = await import('/src/state/store.js');
+      state.projects.push({ id: 'alpha', title: 'Alpha', description: '検索用説明', status: 'active' }, { id: 'beta', title: 'Beta', status: 'active' });
+      state.tasks.push({ id: 'parent', title: '親', projectId: 'alpha', status: 'completed', collapsed: true },
+        { id: 'child', title: '検索対象', projectId: 'alpha', parentTaskId: 'parent', status: 'todo' },
+        { id: 'grandchild', title: '未完了の子', projectId: 'alpha', parentTaskId: 'child', status: 'todo' },
+        { id: 'beta-task', title: '別Project', projectId: 'beta', status: 'todo' },
+        ...Array.from({ length: 40 }, (_, i) => ({ id: 'alpha-' + i, title: '連続 ' + i, projectId: 'alpha', status: 'todo', order: i })));
+      state.settings.wbsHideCompleted = false; state.settings.wbsCompactMode = false;
+    });
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.locator('[data-action="nav"][data-view="wbs"]').first().click();
+    const projectSearch = page.locator('[data-work-list="wbs-projects"]');
+    await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
+    const taskSearch = page.locator('[data-work-list="wbs-tasks-alpha"]');
+    const searchBefore = await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.tasks, state.projects, state.blocks, state.settings]); });
+    const projectQuery = projectSearch.locator('[data-work-filter="query"]');
+    await projectQuery.fill('検索用説明');
+    assert.equal(await projectSearch.locator('[data-action="wbs-select-project"]').count(), 1);
+    await projectQuery.fill('該当なし');
+    assert.equal(await projectSearch.locator('[data-action="wbs-select-project"]').count(), 0);
+    assert.equal(await taskSearch.count(), 1, 'filtering projects never changes selection');
+    await projectQuery.fill('');
+    const taskQuery = taskSearch.locator('[data-work-filter="query"]');
+    await taskQuery.fill('検索対象');
+    for (const id of ['parent', 'child', 'grandchild']) assert.equal(await taskSearch.locator('[data-work-key="task:' + id + '"]').count(), 1);
+    await taskQuery.evaluate(el => { window.taskSearchInput = el; el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); el.value = '連続'; el.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true })); });
+    assert.equal(await taskSearch.locator('[data-work-key="task:child"]').count(), 1);
+    await taskQuery.evaluate(el => el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+    assert.equal(await taskSearch.locator('[data-work-key]').count(), 40);
+    assert(await taskQuery.evaluate(el => el === window.taskSearchInput && el === document.activeElement));
+    await taskSearch.locator('[data-work-list-rows]').evaluate(el => { el.scrollTop = 900; window.taskSearchTop = el.scrollTop; });
+    await projectSearch.locator('[data-action="wbs-select-project"][data-id="beta"]').click();
+    const betaQuery = page.locator('[data-work-list="wbs-tasks-beta"] [data-work-filter="query"]');
+    assert.equal(await betaQuery.inputValue(), '');
+    await betaQuery.fill('別Project');
+    await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
+    assert.equal(await taskQuery.inputValue(), '連続');
+    assert(await taskQuery.evaluate(el => el === window.taskSearchInput));
+    assert(await taskSearch.locator('[data-work-list-rows]').evaluate(el => el.scrollTop === window.taskSearchTop));
+    await taskQuery.fill('検索対象');
+    await taskSearch.locator('.wbs-task-title[data-id="child"]').click();
+    await page.locator('.task-modal').waitFor();
+    await page.locator('.task-modal [data-action="modal-close"]').last().click();
+    await page.locator('.task-modal').waitFor({ state: 'hidden' });
+    assert(await taskQuery.evaluate(el => el === window.taskSearchInput));
+    assert.equal(await taskQuery.inputValue(), '検索対象');
+    assert.equal(await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.tasks, state.projects, state.blocks, state.settings]); }), searchBefore, 'search and return never mutate business state or settings');
+    await projectSearch.locator('[data-action="wbs-select-project"][data-id=""]').click();
+    assert.equal(await page.locator('[data-work-list="wbs-tasks-"] [data-work-key="task:none"]').count(), 1);
+    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.projects.some(p => p.id === '')), false);
+    await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
+    await taskSearch.locator('[data-action="task-today"][data-id="child"]').click();
+    await page.locator('.modal-footer [data-action="modal-save"]').click();
+    await taskSearch.locator('[data-action="placement-add-another"][data-id="child"]').click();
+    await page.locator('.modal-footer [data-action="modal-save"]').click();
+    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.blocks.filter(b => !b.deleted && b.taskId === 'child').length), 2);
+    assert.equal(await taskSearch.locator('[data-action="placement-add-today"][data-id="child"]').count(), 1);
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.waitForFunction(() => !!document.querySelector('[data-work-list="wbs-tasks-alpha"]'));
+      assert(await taskQuery.isVisible());
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'WBS no horizontal overflow');
+    }
+    console.log('PASS S3-02: left/right search, hierarchy, IME, per-Project DOM/query/scroll, detail return, no save and two placements');
     assert.deepEqual(errors, []);
     console.log('PASS S3-01: explicit dates, occurrences, candidates, groups, zero actuals, IME, responsive execution and no mutation');
   } finally {
