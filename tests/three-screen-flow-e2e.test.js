@@ -1,15 +1,20 @@
 // S5-01: timeline placement, Task/Block execution, daily report and localStorage reload across three screens.
 const assert = require('node:assert/strict');
 const { chromium, launchOptions, defaultContextOptions, startServer, randomPort, STATE_KEY, passGithubGate, fixedClock } = require('./helpers');
-const wall = new Date(), now = fixedClock(new Date(wall.getFullYear(), wall.getMonth(), wall.getDate(), 10).getTime());
+const now = fixedClock(new Date(2026, 8, 13, 10).getTime());
 const instant = new Date(now()), date = [instant.getFullYear(), String(instant.getMonth() + 1).padStart(2, '0'), String(instant.getDate()).padStart(2, '0')].join('-');
 const additionalChecks = [];
 (async () => {
   const server = startServer(randomPort()); let browser;
   try {
-    browser = await chromium.launch(launchOptions());
-    const context = await browser.newContext({ ...defaultContextOptions(), reducedMotion: 'reduce', serviceWorkers: 'block', viewport: { width: 1280, height: 1000 } });
-    const page = await context.newPage(), errors = [];
+    const launch = launchOptions();
+    // A temporary app window exposes real standalone media without installing an OS PWA.
+    const context = await chromium.launchPersistentContext('', { ...launch, ...defaultContextOptions(),
+      headless: true, args: [...launch.args, '--app=http://localhost:' + server.address().port + '/fixture-app'], ignoreDefaultArgs: ['about:blank'],
+      reducedMotion: 'reduce', serviceWorkers: 'block', viewport: { width: 1280, height: 1000 } });
+    browser = context.browser();
+    console.log('S5-03_BROWSER ' + JSON.stringify({ version: browser.version(), mode: 'isolated Chromium app window', serviceWorkers: 'separate sw-integration suite' }));
+    const page = context.pages()[0], errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', async route => {
       const url = new URL(route.request().url());
@@ -234,4 +239,88 @@ additionalChecks.push(async (page, { instant, nav }) => {
     }
   }
   console.log('PASS S5-02 month/year midnight, existing/new paths, storage failure, retained inputs, retry, reload and unchanged legacy 23:59');
+});
+
+additionalChecks.push(async (page, { instant, date, nav }) => {
+  await page.clock.setFixedTime(instant);
+  const tomorrowDate = new Date(instant.getFullYear(), instant.getMonth(), instant.getDate() + 1);
+  const tomorrow = [tomorrowDate.getFullYear(), String(tomorrowDate.getMonth() + 1).padStart(2, '0'), String(tomorrowDate.getDate()).padStart(2, '0')].join('-');
+  await page.evaluate(({ key, date, tomorrow }) => {
+    const state = JSON.parse(localStorage.getItem(key));
+    const block = (id, start, end) => ({ id, title: '長い架空作業名'.repeat(8), date, category: '仕事', taskId: '',
+      plannedStartAt: date + 'T' + start, plannedEndAt: end, actualStartAt: '', actualEndAt: '', completed: false });
+    Object.assign(state, { currentView: 'exec', selectedDate: date, timelineMode: 'planned', timelineZoom: 1,
+      blocks: [block('measure-hour', '09:00:00', date + 'T10:00:00'), block('measure-short', '09:05:00', date + 'T09:10:00'),
+        block('measure-end', '23:45:00', tomorrow + 'T00:00:00')], tasks: [], projects: [], recurrences: [], singleSchedules: [] });
+    state.settings.lastOpenedDate = date; state.settings.timelineCategoryFilter = '';
+    localStorage.setItem(key, JSON.stringify(state));
+  }, { key: STATE_KEY, date, tomorrow });
+  await page.reload(); await page.locator('.timeline[data-date]').waitFor();
+  const measurements = [];
+  for (const width of [390, 768, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const zoom of [1, 2, 4]) {
+      await page.locator('[data-action="tl-zoom"][data-zoom="' + zoom + '"]').click();
+      const measured = await page.evaluate(() => {
+        const axis = document.querySelector('.timeline[data-date]'), origin = axis.querySelector('.time-row[data-minute="240"]').getBoundingClientRect().top;
+        const rows = ['measure-hour', 'measure-short', 'measure-end'].map(id => {
+          const el = axis.querySelector('.timeline-card[data-id="' + id + '"]'), rect = el.getBoundingClientRect(), style = getComputedStyle(el);
+          return { id, top: rect.top - origin, height: rect.height, margin: style.marginTop, transform: style.transform };
+        });
+        return { origin, end: axis.querySelector('.time-row[data-minute="1440"]').getBoundingClientRect().top - origin,
+          hour: axis.querySelector('.time-row[data-minute="540"]').getBoundingClientRect().top - origin, rows,
+          overflow: document.documentElement.scrollWidth - innerWidth };
+      });
+      measurements.push({ width, zoom, ...measured });
+      assert(Math.abs(measured.end - 1200 * zoom) <= 1);
+      assert(Math.abs(measured.hour - 300 * zoom) <= 1);
+      for (const [i, start] of [300, 305, 1185].entries()) {
+        assert(Math.abs(measured.rows[i].top - start * zoom) <= 1, width + '/' + zoom + '/' + measured.rows[i].id);
+        assert.equal(measured.rows[i].margin, '0px'); assert.equal(measured.rows[i].transform, 'none');
+      }
+      assert(Math.abs(measured.rows[0].top - measured.hour) <= 1, 'same timestamp has the same physical top');
+      assert(measured.overflow <= 1);
+      console.log('S5-03_GEOMETRY ' + JSON.stringify(measurements.at(-1)));
+      if (process.env.TEST_ARTIFACTS_DIR && zoom === 1) {
+        const path = require('node:path');
+        await page.locator('.time-row[data-minute="240"]').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: path.join(process.env.TEST_ARTIFACTS_DIR, 'timeline-' + width + '.png') });
+      }
+    }
+  }
+  assert.equal(measurements.length, 15);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const session = await page.context().newCDPSession(page);
+  await session.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, right: 0, bottom: 34, left: 0 } });
+  await nav('today');
+  const pwa = await page.evaluate(async () => {
+    const manifest = await (await fetch('/manifest.webmanifest')).json(), nav = document.querySelector('.bottom-nav');
+    return { manifestDisplay: manifest.display, standalone: matchMedia('(display-mode: standalone)').matches,
+      bottomPadding: parseFloat(getComputedStyle(nav).paddingBottom),
+      todayPadding: parseFloat(getComputedStyle(document.querySelector('[data-daily-view="today"]')).paddingBottom),
+      safeAreaSupported: CSS.supports('padding-bottom', 'env(safe-area-inset-bottom)') };
+  });
+  console.log('S5-03_PWA_BROWSER ' + JSON.stringify(pwa));
+  assert.equal(pwa.manifestDisplay, 'standalone'); assert.equal(pwa.standalone, true);
+  assert.equal(pwa.safeAreaSupported, true); assert.equal(pwa.bottomPadding, 34); assert.equal(pwa.todayPadding, 122);
+  const first = page.locator('#dailyTodayPlans [data-action="edit-block"]').first();
+  await page.locator('[data-action="today-plans-jump"]').click(); await first.click();
+  const field = page.locator('#modalRoot [data-modal-field="plannedStartAt"]');
+  assert.equal(await field.getAttribute('type'), 'datetime-local'); assert.equal(await field.getAttribute('step'), '300');
+  assert(await field.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 16));
+  await field.fill(date + 'T09:15'); await field.focus();
+  const original = await field.inputValue();
+  await page.setViewportSize({ width: 768, height: 390 });
+  assert.equal(await field.inputValue(), original);
+  assert(await field.evaluate(el => el === document.activeElement));
+  const footer = await page.locator('#modalRoot .modal-footer').evaluate(el => ({ padding: parseFloat(getComputedStyle(el).paddingBottom), height: el.getBoundingClientRect().height }));
+  assert.equal(footer.padding, 46);
+  console.log('S5-03_ROTATION ' + JSON.stringify({ from: [390, 844], to: [768, 390], value: original, focusRetained: true, footer }));
+  if (process.env.TEST_ARTIFACTS_DIR) await page.screenshot({ path: require('node:path').join(process.env.TEST_ARTIFACTS_DIR, 'standalone-rotated-input.png') });
+  await page.locator('#modalRoot [data-action="modal-close"]').last().click();
+  await page.locator('[data-action="draft-leave-discard"]').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await session.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, right: 0, bottom: 0, left: 0 } });
+  await session.send('Emulation.setEmulatedMedia', { features: [] });
+  console.log('PASS S5-03 physical geometry at five widths/three scales, standalone media, 34px safe area and rotated native input');
 });
