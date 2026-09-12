@@ -33,6 +33,12 @@ const today = '2026-09-06', selected = '2026-09-07';
       const base = { date: selected, taskId: 'none', title: '選択日の予定', category: '作業', deleted: false, completed: false, estimateMin: 15 };
       state.blocks = [
         { ...base, id: 'today-only', date: today, title: '今日だけ' },
+        ...[
+          { id: 'today-plan', plannedStartAt: today + 'T09:00' },
+          { id: 'today-unlinked', taskId: '' },
+          { id: 'today-actual', actualStartAt: today + 'T08:00', actualEndAt: today + 'T08:15' },
+          { id: 'today-routine', taskId: '', category: 'ルーティン' }
+        ].map(block => ({ ...base, date: today, ...block })),
         { ...base, id: 'planned', plannedStartAt: selected + 'T09:00' },
         { ...base, id: 'second', title: '同じTaskの別枠', plannedStartAt: selected + 'T10:00' },
         { ...base, id: 'untimed', title: '時刻未定' },
@@ -57,6 +63,9 @@ const today = '2026-09-06', selected = '2026-09-07';
     });
     assert.equal(await page.locator('[data-work-list="today"] [data-work-key="block:today-only"]').count(), 1);
     assert.equal(await page.locator('[data-work-list="today"] [data-work-key="block:planned"]').count(), 0);
+    // 3段-01: 今日の群は、存在する群だけ設計06 §4の順に表示する。
+    const todayGroups = await page.locator('[data-work-list="today"] [data-screen-group]').evaluateAll(nodes => nodes.map(node => node.dataset.screenGroup));
+    assert.deepEqual(todayGroups, ['plans', 'untimed', 'unlinked', 'actuals', 'routines', 'candidates'].filter(group => todayGroups.includes(group)), '今日の群のDOM順');
     await page.locator('[data-work-list="today"] [data-action="nav"][data-view="exec"]').click();
     const plans = page.locator('[data-work-list="exec"]'), candidates = page.locator('[data-work-list="exec-candidates"]');
     await plans.waitFor();

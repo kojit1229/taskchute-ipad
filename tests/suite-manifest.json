@@ -981,7 +981,7 @@
       ],
       "assertionSignals": 25,
       "assertionHash": "ab2febb1cbe5b915",
-      "sourceHash": "46fcd30fafe82c8f",
+      "sourceHash": "8518058b9fa33678",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1370,7 +1370,7 @@
       ],
       "assertionSignals": 11,
       "assertionHash": "74e7839e05f981cc",
-      "sourceHash": "a059785976a53b26",
+      "sourceHash": "2c4a73d43d7f0452",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3072,6 +3072,30 @@
       }
     },
     {
+      "file": "three-screen-connection-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 66,
+      "assertionHash": "f315137d38929435",
+      "sourceHash": "b3b587b39913a6ce",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "timeline-layout-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -3229,8 +3253,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 165,
-      "assertionHash": "4d9d6d949fc8a79c",
-      "sourceHash": "07fb1c068206d3d5",
+      "assertionHash": "98ec2f62a3aff54c",
+      "sourceHash": "d61ee7cfb345d7bb",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3755,8 +3779,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 28,
-      "assertionHash": "9f79aacf020aeda9",
-      "sourceHash": "3e5ca73b516dce24",
+      "assertionHash": "8746b52f6ab2d5cb",
+      "sourceHash": "d2afa8f6d603308f",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 400,
@@ -4211,7 +4235,7 @@
       ],
       "assertionSignals": 12,
       "assertionHash": "2e6d3c8b4bd819ae",
-      "sourceHash": "8c9a05f737be0569",
+      "sourceHash": "68c40e1be5f47792",
       "waits": {
         "fixedCount": 10,
         "numericMilliseconds": 3000,
@@ -5902,8 +5926,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 43,
-      "assertionHash": "789589386c5aff7c",
-      "sourceHash": "71ee74014ad44826",
+      "assertionHash": "72f36628cc3aca1f",
+      "sourceHash": "0e91897f55f0fc3f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6521,9 +6545,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 21,
-      "assertionHash": "5f44b688aec82adb",
-      "sourceHash": "8930343ae5faddcb",
+      "assertionSignals": 22,
+      "assertionHash": "99e3a8437b304af5",
+      "sourceHash": "969222fea1050657",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6545,8 +6569,8 @@
         "planning-execution"
       ],
       "assertionSignals": 27,
-      "assertionHash": "a47e333f5d461f02",
-      "sourceHash": "cb9a038f69dc0e11",
+      "assertionHash": "e254156fe43ee472",
+      "sourceHash": "bc3c0b80074ece4a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6568,8 +6592,8 @@
         "planning-execution"
       ],
       "assertionSignals": 23,
-      "assertionHash": "ba80a0ee5abb2b9b",
-      "sourceHash": "c3eee0754ad73d8a",
+      "assertionHash": "bc86724c3b9801ce",
+      "sourceHash": "01fd49a7d5d5c8d5",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 50,
@@ -6616,9 +6640,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 53,
-      "assertionHash": "6fb30526932c4004",
-      "sourceHash": "773c9b5e088786ad",
+      "assertionSignals": 56,
+      "assertionHash": "b63cb47504a6b4e8",
+      "sourceHash": "5b9f8977b53a204a",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 50,
@@ -6640,8 +6664,8 @@
         "planning-execution"
       ],
       "assertionSignals": 47,
-      "assertionHash": "e73035e14606d978",
-      "sourceHash": "1b10d21d44e82424",
+      "assertionHash": "9550411ee1905344",
+      "sourceHash": "b26d6e421edb186c",
       "waits": {
         "fixedCount": 3,
         "numericMilliseconds": 150,
@@ -6813,7 +6837,7 @@
       ],
       "assertionSignals": 46,
       "assertionHash": "ec0dfc6ecf3b27dd",
-      "sourceHash": "10c225e933df49a5",
+      "sourceHash": "4abd788c89b41848",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -8065,8 +8089,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 31,
-      "assertionHash": "c70678bd77edd286",
-      "sourceHash": "5694d6e9392ae07a",
+      "assertionHash": "d5609e08d8b32b49",
+      "sourceHash": "b384551d8d38e5ef",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

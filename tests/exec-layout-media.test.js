@@ -45,6 +45,7 @@ function harness(legacy, preserve = false) {
   } }, _execMode: "plan", _scheduleDraft: null, projectedEndText: () => "",
   computeBufferRemaining: () => ({}), todayISO: () => state.selectedDate,
   renderTimelineView: () => '<div class="timeline"></div>',
+  renderWorkList: scope => `<section data-work-list="${scope}"></section>`,
   renderTasks: () => '<section data-work-list="exec"></section>', execDoneListHTML: () => '<div class="done-list"></div>',
   buildFillGapModal: () => '<div class="fill-gap-sheet"></div>', execFillGapAddButtonHTML: () => "",
   bufferMeterHTML: () => "", escapeHTML: s => s, renderDateBar: () => "", scheduleDraftActive: () => false,

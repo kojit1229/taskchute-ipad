@@ -5323,7 +5323,7 @@ function renderWBS() {
   </div>`;
 
   return `
-    <div class="tower-skin wbs-tower"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
+    <div class="tower-skin wbs-tower" data-daily-view="wbs"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
     ${renderWipBanner()}
     ${renderWbsThisWeek()}
     <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
@@ -6492,7 +6492,7 @@ function renderExecView() {
     </div>
     ${!isActual ? bufferMeterHTML() : ""}
     <div class="exec-date-context">時間軸・実績の対象日: ${escapeHTML(state.selectedDate)}</div>${renderDateBar()}
-    ${bodyHTML}
+    <div data-daily-view="exec">${bodyHTML}</div>
   `;
 }
 
@@ -14072,7 +14072,7 @@ function legacyDetailFrame(kind, record, title, className, canDelete, saveLabel,
     kind, id: record.id || `new-${kind}`, draftId: null, title, dateLabel: "",
     sections: [{ title: "", fields: [], slot: "legacyFields" }],
     dirty: false, busy: false, errors: [], saveLabel, canDelete, origin: state.currentView
-  }, { slots: { legacyFields: fields }, className });
+  }, { slots: { legacyFields: fields }, className }).replace('<div class="modal-card', `<div${["task", "project"].includes(kind) ? ' data-daily-view="detail"' : ""} class="modal-card`);
 }
 
 function buildProjectModal(project) {

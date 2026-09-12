@@ -80,7 +80,7 @@ function renderWorkList(scope) {
   })}</section>`;
   return `<section class="work-list tower-panel-box${scope === "today" ? " sec-arrivals" : scope === "exec-actual" ? " exec-done-section" : ""}" data-work-list="${scope}">
     <h2>${scope === "wbs" ? "Project / Task を探す" : scope === "today" ? "今日の予定・実績" : scope === "exec-candidates" ? "追加候補（今日へ追加）" : scope === "exec-actual" ? "やったこと" : "予定一覧"}${scope === "wbs" ? "" : ` <span>${scope === "today" ? "今日" : "選択日"} ${escapeHTML(model.date)}</span>`}</h2>
-    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear" })}
+    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear", queryId: scope === "wbs" ? "wbs-search-input" : "work-search-" + scope })}
     ${scope === "today" ? '<p><button class="btn" data-action="nav" data-view="exec">予定へ</button><button class="btn" data-action="nav" data-view="journal">記録へ</button></p>' : ""}
     ${scope === "exec" ? '<p class="muted">Taskは <button class="btn ghost" data-action="nav" data-view="wbs">作業一覧で見る</button></p>' : ""}
   </section>`;

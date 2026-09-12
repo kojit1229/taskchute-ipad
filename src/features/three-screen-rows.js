@@ -28,7 +28,7 @@ export function buildThreeScreenRows(state, { scope, today, conditions }, deps) 
 }
 
 export function renderScreenGroups(rows, renderRow) {
-  const labels = { plans: "予定", untimed: "時刻未定の予定枠", unlinked: "その他の予定枠", routines: "ルーティン", actuals: "やったこと", candidates: "未完了Task" };
+  const labels = { plans: "予定", untimed: "時刻未定の予定枠", unlinked: "その他の予定枠", actuals: "やったこと", routines: "ルーティン", candidates: "未完了Task" };
   return Object.entries(labels).map(([key, label]) => {
     const group = rows.filter(row => screenRowGroup(row) === key);
     return group.length ? `<section data-screen-group="${key}"><h3>${label}</h3>${group.map(renderRow).join("")}</section>` : "";
