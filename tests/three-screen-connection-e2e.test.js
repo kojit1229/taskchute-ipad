@@ -288,6 +288,48 @@ const today = '2026-09-06', selected = '2026-09-07';
     assert.equal(declarations.filter(d => d.blockId === 'detail-block' && d.resultNote === '架空の終了結果').length, 1);
     if (await page.locator('[data-action="body-scan-discard"]').count()) await page.locator('[data-action="body-scan-discard"]').first().click();
     console.log('PASS S3-05: permanent completion, unscheduled times, atomic failure/retry, retained metadata and end result');
+    // S3-07: date ownership, IME, storage failure, navigation and archived protection.
+    await page.clock.install({ time: new Date(2026, 8, 6, 10, 30) });
+    const navJournal = async view => {
+      await page.locator('#sidebar [data-action="nav"][data-view="' + view + '"]').click();
+      await page.locator('#app[data-view="' + view + '"]').waitFor();
+    };
+    await navJournal('today');
+    const journalInput = page.locator('#towerJournalFree');
+    const journalValue = date => page.evaluate(async date => (await import('/src/state/store.js')).state.journals[date], date);
+    await journalInput.fill('自動保存の架空本文'); await page.clock.runFor(650);
+    assert.equal(await journalValue(today), '自動保存の架空本文');
+    assert.equal(await page.locator('[data-journal-save-status]').textContent(), '端末に保存しました');
+    await journalInput.dispatchEvent('compositionstart'); await journalInput.fill('日本語変換中の架空本文');
+    await page.clock.runFor(1000); assert.equal(await journalValue(today), '自動保存の架空本文');
+    await journalInput.dispatchEvent('compositionend'); assert.equal(await journalValue(today), '日本語変換中の架空本文');
+    await page.evaluate(() => {
+      window.journalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (key === 'taskchute-journal-pwa-state-v1') throw new DOMException('fixture quota', 'QuotaExceededError');
+        return window.journalSetItem.call(this, key, value);
+      };
+    });
+    await journalInput.fill('保存失敗でも残る日付別の本文'); await page.clock.runFor(650);
+    assert.equal(await journalValue(today), '日本語変換中の架空本文');
+    assert.equal(await journalInput.inputValue(), '保存失敗でも残る日付別の本文');
+    assert((await page.locator('[data-journal-save-status]').textContent()).includes('入力は残しています'));
+    await navJournal('exec'); await navJournal('today');
+    assert.equal(await journalInput.inputValue(), '保存失敗でも残る日付別の本文');
+    await page.evaluate(() => { Storage.prototype.setItem = window.journalSetItem; });
+    await page.locator('[data-action="save-tower-journal"]').click();
+    assert.equal(await journalValue(today), '保存失敗でも残る日付別の本文');
+    await journalInput.fill('日跨ぎ直前の本文');
+    await page.clock.setSystemTime(new Date(2026, 8, 7, 0, 0));
+    await page.clock.setFixedTime(new Date(2026, 8, 7, 0, 0)); await page.clock.runFor(1000);
+    assert.equal(await journalValue(today), '日跨ぎ直前の本文');
+    assert.notEqual(await journalValue(selected), '日跨ぎ直前の本文');
+    await page.evaluate(async date => { (await import('/src/state/store.js')).state.archivedDates.push(date); }, selected);
+    await navJournal('exec'); await navJournal('today');
+    console.log('S3-07 archive state', await page.evaluate(async () => ({ now: new Date().toISOString(), date: document.querySelector('#towerJournalFree').dataset.towerJournalDate, archived: (await import('/src/state/store.js')).state.archivedDates })));
+    assert(await journalInput.evaluate(el => el.readOnly));
+    assert(await page.locator('[data-action="save-tower-journal"]').isDisabled());
+    console.log('PASS S3-07: debounce, IME commit, storage failure, draft restoration, retry, day ownership and archived readonly');
     assert.deepEqual(errors, []);
     console.log('PASS S3-01: explicit dates, occurrences, candidates, groups, zero actuals, IME, responsive execution and no mutation');
   } finally {

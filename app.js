@@ -39,6 +39,7 @@ import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/feat
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
+import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -467,14 +468,8 @@ registerActions({
   "sync-banner-dismiss": () => dismissSyncBanner(),
   "open-iron-log": () => setView("iron-log"),
   "save-tower-journal": ({ target }) => {
-    const date = target.dataset.date || todayISO();
-    if (isArchivedDate(state, date)) return showToast(ARCHIVED_READONLY_MESSAGE);
     const free = document.getElementById("towerJournalFree");
-    if (!free) return;
-    state.journals[date] = free.value;
-    const meta = (state.journalMeta[date] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.textUpdatedAt = nowDateTime();
-    saveAndRender("ジャーナルを保存しました");
+    if (free?.dataset.towerJournalDate === target.dataset.date) towerJournal.saveElement(free);
   },
   "early-bird-check": () => toggleEarlyBird(),
   "tower-gate-edit-toggle": () => {
@@ -1557,6 +1552,8 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyOperationDeps = {
+  journalConnection: zeroConnectionKey,
+  journalSaved: date => { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); },
   makeBlock: input => makeBlock(input), projectName: id => projectName(id),
   draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   isReadingBlock: function isReadingBlock(block) {
@@ -1768,10 +1765,11 @@ document.addEventListener("toggle", (event) => {
 // 変換確定/フォーカス離脱のタイミングでの保留render実行。
 // v140(Med-2): compositionendはフォーカスがまだ入力欄に残っていれば延期を継続する
 // (attemptFlushDeferredRenderが両条件を見て判定する)。
-document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); });
+document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); towerJournal.composition(event.target, true); });
 document.addEventListener("compositionend", (event) => {
   _imeComposing = false;
   handleWorkListComposition(event.target, false);
+  towerJournal.composition(event.target, false);
   attemptFlushDeferredRender();
 });
 document.addEventListener("focusout", () => {
@@ -1787,6 +1785,7 @@ document.addEventListener("focusout", () => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  if (towerJournal.input(target, event.isComposing || _imeComposing)) return;
   if (handleWorkListInput(target)) return;
   // v315: ユーザーが編集したIRON LOG入力はプリフィル所有権を外す。
   placementInput(target);
@@ -3348,6 +3347,8 @@ function makeBlock(input) {
 
 function render() {
   if (draftSaveTransaction?.defer(() => render())) return;
+  const journalFocus = document.activeElement?.matches?.('[data-tower-journal-date]');
+  if (journalFocus && _imeComposing) { renderDeferringForFocus(); return; }
   // v271: iOSのネイティブpickerを開いている間はselectを含む全体DOMを差し替えず、focusout後に1回反映する。
   if (document.activeElement?.matches?.("[data-tower-arrival-select], [data-fund-report-date]")) {
     if (!_deferredRenderPending) _deferredRenderPendingSince = Date.now();
@@ -3371,6 +3372,7 @@ function render() {
   rememberWorkListScroll();
   renderMain();
   restoreGlobalInputs();
+  towerJournal.restore(journalFocus);
   restoreWorkListScroll();
   renderTimelineRail();
   renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
@@ -13708,6 +13710,8 @@ function openBlockEditor(id) {
 }
 
 const dailyDrafts = createDailyDraftStore();
+const towerJournal = createTowerJournal({ state: () => state, connection: zeroConnectionKey, now: nowDateTime, document,
+  run: input => runDailyOperation("save-tower-journal", input, dailyOperationDeps) });
 const dailyDraftSessions = new WeakMap();
 const draftLeaveGuard = createDraftLeaveGuard(document, {
   drafts: dailyDrafts, readDraft: readDailyDraft, isComposing: () => _imeComposing, notify: showToast

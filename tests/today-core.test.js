@@ -1405,3 +1405,31 @@ function check(name, cond, extra = "") {
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// S3-07: exact owner and atomic persistence, independent of the browser clock.
+{
+  const assertJournal = require('node:assert/strict');
+  const { runDailyOperation: runJournal } = require('../src/features/daily-operations.js');
+  const { commitCandidate: commitJournal } = require('../src/core/commit.js');
+  const date = '2026-09-06', now = date + 'T12:00:00';
+  const state = { journals: { [date]: 'before' }, journalMeta: { [date]: { textUpdatedAt: '2027-01-01T00:00:00', aiRequest: 'keep' } }, archivedDates: [], settings: {}, dataModifiedAt: now };
+  const input = { id: date, connection: 'fixture', beforeValue: 'before', beforeStamp: state.journalMeta[date].textUpdatedAt, value: 'draft', observedAt: now };
+  let saved = false, connection = 'fixture';
+  const deps = { state, commitCandidate: commitJournal, now, journalConnection: () => connection, persist: () => saved };
+  const before = JSON.stringify(state);
+  assertJournal.equal(runJournal('save-tower-journal', input, deps).ok, false);
+  assertJournal.equal(JSON.stringify(state), before, 'failure rolls back text, metadata and global stamp');
+  saved = true; connection = 'different';
+  assertJournal.equal(runJournal('save-tower-journal', input, deps).status, 'invalid');
+  connection = 'fixture'; state.archivedDates = [date];
+  assertJournal.equal(runJournal('save-tower-journal', input, deps).status, 'invalid');
+  state.archivedDates = []; state.journals[date] = 'synchronized text';
+  assertJournal.equal(runJournal('save-tower-journal', input, deps).status, 'invalid');
+  assertJournal.equal(state.journals[date], 'synchronized text', 'retry never overwrites a different text');
+  state.journals[date] = 'before';
+  assertJournal.equal(runJournal('save-tower-journal', input, deps).ok, true);
+  assertJournal.equal(state.journals[date], 'draft'); assertJournal.equal(state.journalMeta[date].aiRequest, 'keep');
+  assertJournal(state.journalMeta[date].textUpdatedAt > input.beforeStamp, 'text stamp advances beyond synchronized future stamp');
+  assertJournal(state.dataModifiedAt >= state.journalMeta[date].textUpdatedAt, 'global stamp includes the journal clock floor');
+  console.log('PASS S3-07 journal candidate: rollback, connection, archive, concurrent text and monotonic stamp');
+}
