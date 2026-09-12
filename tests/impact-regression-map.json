@@ -580,6 +580,7 @@
         "vision-connection",
         "vision-connection-e2e",
         "vision-overview",
+        "vision-layout-e2e",
         "remaining-screen-labels"
       ]
     },

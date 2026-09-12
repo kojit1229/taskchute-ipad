@@ -7530,8 +7530,9 @@ function renderVision() {
   const section = state.settings.visionSection || "vision";
   const overview = section === "board" || visionEditDraft ? "" : visionOverview.render(section);
   return `
+    <section class="vision-layout" aria-label="ビジョンの閲覧と編集">
     ${renderHeader("方向性を見失わないための場所", "ビジョン")}
-    <div class="segmented">
+    <div class="segmented vision-sections" aria-label="表示する内容">
       <button class="${section === "vision" ? "active" : ""}" data-action="vision-section" data-section="vision">ビジョン</button>
       <button class="${section === "affirmation" ? "active" : ""}" data-action="vision-section" data-section="affirmation">アファメーション</button>
       <button class="${section === "board" ? "active" : ""}" data-action="vision-section" data-section="board">ビジョンボード</button>
@@ -7547,6 +7548,7 @@ function renderVision() {
       </div>
       <div class="exec-pane-right">${renderVisionAlignment()}</div>
     </div>
+    </section>
   `;
 }
 
@@ -7632,6 +7634,7 @@ function renderVisionEdit() {
   const differentConnection = draft.connectionKey !== ensureVisionConnection();
   return `
     <div class="vision-edit">
+      <p class="vision-edit-scope">既存の全文を編集しています。3テーマの概要とアファメーションは、この保存では変わりません。</p>
       ${differentConnection ? '<p class="vision-status" role="status">接続先が変わりました。この入力は元の接続先の下書きです。保存するには元の接続先へ戻してください。入力は保持しています。</p>' : ""}
       <textarea class="vision-edit-textarea" data-vision-edit-textarea>${escapeHTML(draft.text)}</textarea>
     </div>
