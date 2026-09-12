@@ -1,4 +1,5 @@
-// Independent synchronous Markdown builder. Input comes from captureReportInput. No persistence or application imports.
+// Independent synchronous Markdown builder. Input comes from captureReportInput. Uses pure report/core helpers; no persistence or application globals.
+import { readingReportMinutes } from "./report-input.js";
 function minutesOf(dateTime) {
   if (!dateTime) return 0;
   // v18: Date を経由せず、文字列から直接抽出(iOS Safari の TZ 解釈バグを回避)
@@ -97,6 +98,8 @@ export function buildReportMarkdown(input) {
     return sum;
   }, 0);
   const reportDurationMinutes = (b) => {
+    const reading = readingReportMinutes(b);
+    if (reading !== null) return reading;
     if (b.actualStartAt && b.actualEndAt) {
       const actual = Math.max(0, minutesOf(b.actualEndAt) - minutesOf(b.actualStartAt));
       // v276(K指示2026-08-27): FLIGHT LOGは0分実績を保持し、日報集計だけ予定所要で補完する。

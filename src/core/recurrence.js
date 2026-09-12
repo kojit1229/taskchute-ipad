@@ -30,6 +30,7 @@
 // characterization test: recurrence-core.test.js(このディレクトリ)。
 
 // ---- 依存注入(configureRecurrence) ----
+import { readingMark } from "./daily-reading.js";
 let todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock;
 let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS;
 let getState;
@@ -49,7 +50,8 @@ function routineRate(blocks, recurrences = []) {
   // 率計器は計画Blockの消化を測るため、実績記録専用のoneTap Blockは除外する。
   // v253: protectionは実行率で裁かない契約のため、対応するルールのBlockも母集団から除外する。
   const protectedIds = new Set(recurrences.filter((rule) => !rule.deleted && rule.protection).map((rule) => rule.id));
-  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap && !protectedIds.has(b.recurrenceGroupId));
+  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap && !protectedIds.has(b.recurrenceGroupId)
+    && !(['daily-reading-auto', 'daily-reading-manual'].includes(b.source) && readingMark(b, b.source === 'daily-reading-manual')?.kind === 'feedback'));
   const done = list.filter((b) => b.completed).length;
   return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }

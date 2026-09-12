@@ -1,4 +1,5 @@
 import { reportActuals } from "../../core/daily-report.js";
+import { routineRate } from "../../core/recurrence.js";
 // Generated from verified current helpers; state is one detached capture clone. No shared mutable state.
 const CONDITION_BUDGET_BASELINE_LOOKBACK_DAYS = 28;
 const CONDITION_BUDGET_BASELINE_MIN_SAMPLES = 7;
@@ -167,14 +168,6 @@ function dateToISO(date) {
 }
 function pad2(value) {
   return String(value).padStart(2, "0");
-}
-function routineRate(blocks, recurrences = []) {
-  // 率計器は計画Blockの消化を測るため、実績記録専用のoneTap Blockは除外する。
-  // v253: protectionは実行率で裁かない契約のため、対応するルールのBlockも母集団から除外する。
-  const protectedIds = new Set(recurrences.filter((rule) => !rule.deleted && rule.protection).map((rule) => rule.id));
-  const list = blocks.filter((b) => b.category === "ルーティン" && !b.oneTap && !protectedIds.has(b.recurrenceGroupId));
-  const done = list.filter((b) => b.completed).length;
-  return { done, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
 }
 function parseISO(iso) {
   const [y, m, d] = String(iso || "").split("-").map(Number);

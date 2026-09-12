@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "daily-reading-report": {
+      "paths": ["^src/features/feedback/report-(input|builder|derived)\\.js$", "^src/core/recurrence\\.js$"],
+      "suites": ["daily-reading-core", "daily-reading-e2e", "recurrence-core", "v276"]
+    },
     "daily-reading-sync": {
       "paths": ["^src/core/daily-reading-sync\\.js$", "^src/sync/github\\.js$"],
       "suites": ["daily-reading-sync", "v106", "v364", "mutation-global-e2e", "feedback-save-proof"]

@@ -672,9 +672,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 34,
-      "assertionHash": "28195f48333a2f1d",
-      "sourceHash": "4d4996baf98903cc",
+      "assertionSignals": 91,
+      "assertionHash": "0b440203980cacb5",
+      "sourceHash": "2bbfc02729a133cf",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3195,9 +3195,35 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 130,
-      "assertionHash": "358fef90c9869a98",
-      "sourceHash": "df47010fb8b9e4a9",
+      "assertionSignals": 134,
+      "assertionHash": "1e2334a0deba2bd8",
+      "sourceHash": "e5b8d6e9b44346e8",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "three-screen-flow-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 82,
+      "assertionHash": "982ec925f743a6c1",
+      "sourceHash": "b5dfc7ba7688c029",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

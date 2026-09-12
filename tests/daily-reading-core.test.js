@@ -90,3 +90,179 @@ const { isDailyReadingBlock, markDailyReadingEdit, excludedReadingRule } = requi
   state.recurrences[0].deleted = true; assert.equal(excludedReadingRule(state, 'board', DAY, deps), false);
 }
 console.log('PASS explicit provenance, original date on deletion/move, orphan/legacy copy refusal, exact valid exclusion');
+
+// S3-12: report capture must retain historical provenance independently of current settings.
+{
+  const { captureReportInput, readingReportMinutes } = require('../src/features/feedback/report-input.js');
+  const { buildReportMarkdown } = require('../src/features/feedback/report-builder.js');
+  const { deriveReportValues } = require('../src/features/feedback/report-derived.js');
+  const { routineRate } = require('../src/core/recurrence.js');
+  const { buildDailyReport, REPORT_PENDING } = require('../src/core/daily-report.js');
+  const state = fixture();
+  const auto = buildDailyReading(state, input(state), deps).records[0].after;
+  const ai = buildDailyReading(state, input(state, 'feedback'), deps).records[0].after;
+  Object.assign(state, { projects: [], reports: {}, journals: { [DAY]: '架空の本文' }, singleSchedules: [] });
+  state.settings = { dailyReadingRecordEnabled: false, dailyReadingRoutineIds: {} };
+  const capture = () => captureReportInput(state, DAY, deriveReportValues);
+  const scenarios = [
+    [auto, 0], [{ ...auto, plannedStartAt: '', plannedEndAt: '' }, 0], [ai, 0],
+    [{ ...auto, source: 'daily-reading-manual', actualEndAt: DAY + 'T10:12:00' }, 12],
+    [{ ...auto, source: 'daily-reading-manual' }, 0],
+    [{ ...auto, source: '', externalRef: '' }, 30],
+  ];
+  for (const [block, minutes] of scenarios) {
+    state.blocks = [block]; const snapshot = structuredClone(state), captured = capture();
+    assert.equal(captured.blocks[0].externalRef, block.externalRef);
+    const markdown = buildReportMarkdown(captured), duration = minutes ? '0h' + minutes + 'm' : '0h';
+    assert(markdown.includes('| 時間実行 | ' + duration + ' /'), markdown);
+    assert(markdown.includes('- ルーティン: ' + duration), markdown);
+    assert.equal(captured.actuals[0].minutes, block.source ? minutes : 0);
+    assert.deepEqual(state, snapshot);
+    const capturedMark = captured.blocks[0].externalRef;
+    block.externalRef = 'edited-after-capture';
+    assert.equal(captured.blocks[0].externalRef, capturedMark);
+    block.externalRef = capturedMark;
+  }
+  state.blocks = [{ ...ai, oneTap: false }, auto];
+  assert.deepEqual(routineRate(state.blocks, state.recurrences), { done: 1, total: 1, pct: 100 });
+  assert.deepEqual(capture().derived.rateRoutine, { done: 1, total: 1, pct: 100 });
+  state.recurrences[0].protection = true;
+  assert.deepEqual(capture().derived.rateRoutine, { done: 0, total: 0, pct: 0 });
+  for (const patch of [{ externalRef: 42 }, { externalRef: 'daily-reading:v1:{}' },
+    { actualEndAt: DAY + 'T25:00:00' }, { actualStartAt: DAY + 'T11:00:00' },
+    { actualEndAt: DAY + 'T10:12:00' }, { actualStartAt: '', actualEndAt: '' }]) {
+    state.blocks = [{ ...auto, ...patch }];
+    assert.throws(() => readingReportMinutes(state.blocks[0]), /閲覧記録|invalid_report_field/);
+    assert.equal(capture().blocks.length, 0);
+  }
+  // fixSL2B2: one malformed mark cannot withhold valid report records.
+  state.settings.dailyReadingRecordEnabled = true;
+  const ordinary = { ...auto, id: 'valid-ordinary', source: '', externalRef: '', actualEndAt: DAY + 'T10:12:00' };
+  const validInput = (() => { state.blocks = [auto, ordinary]; return capture(); })();
+  for (const externalRef of ['daily-reading:v1:{}', 'daily-reading:v1:' + JSON.stringify({ ...readingMark(auto), referenceDate: DAY.slice(0, 8) + (DAY.endsWith('01') ? '02' : '01') })]) {
+    state.blocks = [auto, { ...auto, id: 'invalid-reading', externalRef }, ordinary];
+    const before = structuredClone(state), warnings = [], warn = console.warn;
+    console.warn = (...args) => warnings.push(args);
+    try {
+      const captured = capture();
+      assert.deepEqual(captured.blocks, validInput.blocks);
+      assert.deepEqual(captured.actuals, validInput.actuals);
+      assert.deepEqual(captured.derived, validInput.derived);
+      assert.equal(buildReportMarkdown(captured), buildReportMarkdown(validInput));
+      const result = buildDailyReport(state, { reportDate: DAY }, { captureReport: capture, buildReport: buildReportMarkdown });
+      assert.equal(result.pending, false); assert.equal(result.report, buildReportMarkdown(validInput));
+      assert.equal(warnings.length, 2); assert(warnings.every(args => args.includes('invalid-reading')));
+      assert.deepEqual(state, before);
+    } finally { console.warn = warn; }
+  }
+  state.blocks = [{ ...auto, source: 'daily-reading-manual', completed: false, actualEndAt: '' }];
+  assert.equal(capture().actuals.length, 0);
+  assert(buildReportMarkdown(capture()).includes('| 時間実行 | 0h /'));
+  state.blocks[0].actualEndAt = DAY + 'T10:12:00';
+  assert.equal(capture().actuals[0].minutes, 12, 'ended incomplete remains an actual under stage 2');
+  state.blocks = [auto]; const saved = structuredClone(state.blocks);
+  const failed = buildDailyReport(state, { reportDate: DAY }, { captureReport: capture, buildReport: () => { throw Error('fixture report failure'); } });
+  assert.equal(failed.report, REPORT_PENDING); assert.equal(failed.pending, true);
+  const retried = buildDailyReport(state, { reportDate: DAY }, { captureReport: capture, buildReport: buildReportMarkdown });
+  assert.equal(retried.pending, false); assert.deepEqual(retried.records, []); assert.deepEqual(state.blocks, saved);
+  console.log('PASS S3-12 report: provenance, 0/12 minutes, ordinary fallback, AI rate exclusion, invalid timestamps, timer and report-only retry');
+}
+
+// S5-02: isolated reading records survive report failure, replay/reload and the next day.
+{
+  const { runDailyOperation } = require('../src/features/daily-operations.js');
+  const { commitCandidate } = require('../src/core/commit.js');
+  const { captureReportInput } = require('../src/features/feedback/report-input.js');
+  const { deriveReportValues } = require('../src/features/feedback/report-derived.js');
+  const { buildReportMarkdown } = require('../src/features/feedback/report-builder.js');
+  const { REPORT_PENDING } = require('../src/core/daily-report.js');
+  const state = fixture();
+  Object.assign(state, { projects: [], reports: {}, singleSchedules: [], journals: { [DAY]: '閲覧後も保持する本文' } });
+  let saves = 0, reportFails = true;
+  const operationDeps = { ...deps, state, commitCandidate, now: () => AT,
+    persist: () => { saves++; return true; }, scheduleSync: () => {},
+    captureReport: (source, date) => captureReportInput(source, date, deriveReportValues),
+    buildReport: captured => { if (reportFails) throw Error('fixture report failure'); return buildReportMarkdown(captured); } };
+  const run = (name, value) => runDailyOperation(name, value, operationDeps);
+  state.settings.dailyReadingRecordEnabled = false;
+  for (const kind of ['affirmation', 'visionBoard', 'feedback'])
+    assert(run('daily-reading-record', { ...input(state, kind), sequence: 1 }).discarded);
+  assert.equal(saves, 0); assert.equal(state.blocks.length, 0);
+  state.settings.dailyReadingRecordEnabled = true;
+  for (const kind of ['affirmation', 'visionBoard', 'feedback'])
+    assert(run('daily-reading-record', { ...input(state, kind), sequence: 2 }).ok);
+  assert.equal(saves, 3); assert.equal(state.blocks.length, 3); assert.equal(state.tasks.length, 0); assert.equal(state.recurrences.length, 2);
+  const originalBlocks = structuredClone(state.blocks), originalHabits = structuredClone(state.habitStreaks);
+  assert(run('daily-report-refresh', { reportDate: DAY }).ok); assert.equal(state.reports[DAY], REPORT_PENDING);
+  assert.deepEqual(state.blocks, originalBlocks); assert.deepEqual(state.habitStreaks, originalHabits);
+  Object.assign(state, JSON.parse(JSON.stringify(state)));
+  const afterReload = saves;
+  for (const kind of ['affirmation', 'visionBoard', 'feedback'])
+    assert(run('daily-reading-record', { ...input(state, kind), sequence: 3 }).unchanged);
+  assert.equal(saves, afterReload);
+  reportFails = false; assert(run('daily-report-refresh', { reportDate: DAY }).ok);
+  assert(state.reports[DAY].includes('| 時間実行 | 0h /'));
+  assert.deepEqual(state.blocks, originalBlocks);
+  const ai = state.blocks.find(b => b.id.startsWith('daily-reading-feedback_'));
+  assert(run('daily-actual-edit', { kind: 'actual', id: ai.id, values: { actualEndAt: DAY + 'T10:12:00' } }).ok);
+  assert(run('daily-report-refresh', { reportDate: DAY }).ok);
+  assert(state.reports[DAY].includes('| 時間実行 | 0h12m /'));
+  const [year, month, day] = DAY.split('-').map(Number), next = new Date(year, month - 1, day + 1);
+  const nextDay = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0'), String(next.getDate()).padStart(2, '0')].join('-');
+  const previous = structuredClone(state.blocks); operationDeps.today = () => nextDay; operationDeps.now = () => nextDay + 'T10:00:00';
+  assert(run('daily-reading-record', { ...input(state, 'feedback'), sequence: 4, date: nextDay, referenceDate: DAY, recordedAt: nextDay + 'T10:00:00' }).ok);
+  assert.equal(state.blocks.length, 4);
+  assert.deepEqual(state.blocks.filter(b => b.date === DAY), previous);
+  assert.deepEqual(state.habitStreaks, originalHabits);
+  assert.equal(state.journals[DAY], '閲覧後も保持する本文');
+  console.log('PASS S5-02 three readers: flag off, report-only failure/retry, serialized reload, replay, manual 12 minutes and next-day identity');
+}
+
+// fixSL2B: existing report and regeneration stay identical through flag-off reading.
+{
+  const { captureReportInput } = require('../src/features/feedback/report-input.js');
+  const { buildReportMarkdown } = require('../src/features/feedback/report-builder.js');
+  const { deriveReportValues } = require('../src/features/feedback/report-derived.js');
+  const { runDailyOperation } = require('../src/features/daily-operations.js');
+  const { commitCandidate } = require('../src/core/commit.js');
+  const state = fixture();
+  Object.assign(state, { projects: [], reports: { [DAY]: '# 保存済みの架空日報\n手書き追記を保持' },
+    journals: { [DAY]: '架空の一般記録' }, singleSchedules: [], blocks: [{ id: 'ordinary-report-fixture', date: DAY,
+      title: '一般作業', category: '仕事', completed: true, plannedStartAt: DAY + 'T08:00', plannedEndAt: DAY + 'T08:30',
+      actualStartAt: DAY + 'T08:00', actualEndAt: DAY + 'T08:20' }] });
+  state.settings.dailyReadingRecordEnabled = false;
+  const capture = () => captureReportInput(state, DAY, deriveReportValues);
+  const regenerate = () => buildReportMarkdown(capture());
+  const savedReport = state.reports[DAY], savedInput = capture(), savedMarkdown = regenerate();
+  assert(savedMarkdown.includes('| 時間実行 | 0h20m / 0h30m (67%) |'));
+  let saves = 0, syncs = 0;
+  const operationDeps = { ...deps, state, commitCandidate, now: () => AT,
+    persist: () => { saves++; return true; }, scheduleSync: () => { syncs++; } };
+  for (const kind of ['affirmation', 'visionBoard', 'feedback']) {
+    const request = { ...input(state, kind), sequence: 1 };
+    const unchangedReport = () => {
+      assert.equal(state.reports[DAY], savedReport, kind + ': stored report');
+      assert.deepEqual(capture(), savedInput, kind + ': regeneration input');
+      assert.equal(regenerate(), savedMarkdown, kind + ': regenerated report');
+    };
+    assert(buildReadingView(request, { ok: true, text: '架空の一般記録' }, text => text).html);
+    unchangedReport();
+    const candidate = buildDailyReading(state, request, deps);
+    assert.equal(candidate.discarded, true); assert.deepEqual(candidate.records, []);
+    unchangedReport();
+    assert.equal(runDailyOperation('daily-reading-record', request, operationDeps).discarded, true);
+    unchangedReport();
+  }
+  assert.equal(saves, 0); assert.equal(syncs, 0); assert.equal(state.blocks.length, 1);
+  // Positive control checks committed identity and completion aggregation, not another duration example.
+  state.settings.dailyReadingRecordEnabled = true;
+  assert.equal(runDailyOperation('daily-reading-record', { ...input(state), sequence: 2 }, operationDeps).ok, true);
+  const captured = capture(), markdown = regenerate();
+  assert.deepEqual(captured.actuals.map(row => row.blockId).sort(), ['ordinary-report-fixture', 'rec_affirm_' + DAY].sort());
+  assert(savedMarkdown.includes('| Block 実行 | 1 / 1 (100%) |'));
+  assert(markdown.includes('| Block 実行 | 2 / 2 (100%) |'));
+  assert.deepEqual(captured.derived.rateRoutine, { done: 1, total: 1, pct: 100 });
+  assert.notEqual(markdown, savedMarkdown); assert.equal(state.reports[DAY], savedReport);
+  assert.equal(saves, 1); assert.equal(syncs, 1);
+  console.log('PASS fixSL2B flag-off stored report/input/Markdown unchanged for three reading kinds; flag-on committed actual identity and completion count');
+}

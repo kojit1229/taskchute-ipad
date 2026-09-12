@@ -1,0 +1,69 @@
+{
+  "version": 396,
+  "date": "2026-09-13",
+  "title": "閲覧由来の記録を日報へ渡す経路(保存は無効のまま)と、3画面の通し・失敗/日跨ぎ・スマホ/PWA の検査群",
+  "summary": "閲覧記録(上部3ボタンの記録)が有効になったときに、日報の実績表とルーティンの消化率へ同じ成功時刻の実績として入る経路が用意された(いまは設定が既定オフのため日報は変わらない。不正な印の記録だけ警告付きで除外し他は集計する)。あわせて、3画面を通した日常操作、再読込・保存失敗・日跨ぎ・閲覧記録の合流、スマホ/PWA と5つの幅(390/768/1024/1280/1440)の配置を自動検査で固定した(製品の見た目・動きの変更なし)",
+  "changedFiles": [
+    "CHANGES_v396.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v396.json",
+    "src/core/recurrence.js",
+    "src/features/feedback/report-builder.js",
+    "src/features/feedback/report-derived.js",
+    "src/features/feedback/report-input.js",
+    "sw.js",
+    "tests/daily-reading-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/three-screen-connection-e2e.test.js",
+    "tests/three-screen-flow-e2e.test.js"
+  ],
+  "intent": [
+    "束 S-L2B=3段-12(閲覧由来の記録を日報へ)→5段-01(3画面の通し検査)→5段-02(再読込・失敗・日跨ぎ・閲覧合流の検査)→5段-03(スマホ・PWA・3幅の配置検査)+fixSL2B/2。設計06 §5.3・§8、設計07 §8.1"
+  ],
+  "changes": [
+    "src/features/feedback/report-input.js / report-builder.js / report-derived.js、src/core/recurrence.js: 閲覧由来の Block(externalRef=daily-reading:v1)を同じ成功時刻の実績として日報集計へ。旗オフでは不変。不正な印の Block だけ警告付きで除外",
+    "tests: three-screen-flow-e2e 新設(通し・失敗・日跨ぎ・5幅・PWA)、daily-reading-core に旗オフ日報不変と旗オン集計の断言、three-screen-connection-e2e の追加",
+    "sw.js: CACHE_NAME v396(APP_SHELL 変更なし)"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad)の PWA 表示は未確認(5段-06 の引渡しで K の実機5点へ)"
+  ],
+  "reviewFocus": [
+    "旗オフで日報が不変か",
+    "5段の試験が製品0行で既存期待値を変えていないか",
+    "不正な印の除外が他の集計を止めないか"
+  ],
+  "verification": [
+    "受領実走(v395 main b08fda9 起点、reports/supervision/recv-SL2Bv): (a)(b)(c)=0",
+    "独立検証: Codex 200a FAIL 中2 / Claude 200b FAIL 高1・中1 → fixSL2B/2 → Codex recheck203(負荷時の時間切れのみ=監督者 PASS)",
+    "release-gate --final は監督者が実走(reports/impl-r1/v396/release-gate-final*.log)"
+  ],
+  "knownLimitations": [
+    "負荷が高いときの描画待ちが 30秒を超えることがある(three-screen-flow-e2e / exec-timeline-e2e、試験の余裕は次周送り)",
+    "手動訂正で完了かつ終了が空の例外経路(200b 軽微)は次周送り"
+  ],
+  "relatedSuites": [
+    "daily-actuals-e2e",
+    "v261",
+    "v267",
+    "daily-reading-core",
+    "daily-reading-e2e",
+    "daily-reading-sync",
+    "v276",
+    "three-screen-connection-e2e",
+    "three-screen-flow-e2e",
+    "exec-timeline-e2e",
+    "single-schedule-layout-e2e",
+    "today-core",
+    "tower-core",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "fill-gap-layout-inputs-e2e",
+    "v357",
+    "v334",
+    "sw-integration",
+    "exec-layout-media",
+    "daily-parts-isolation-e2e"
+  ]
+}
