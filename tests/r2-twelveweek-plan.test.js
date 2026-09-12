@@ -249,7 +249,7 @@ async function seed(page, values) {
     check("LINKに5ノードある", await page.locator(".twy-plan-link-node").count() === 5);
     const linkLabels = await page.locator(".twy-plan-link-label").allTextContents();
     check("5ノードの見出しがdesign通り", JSON.stringify(linkLabels) === JSON.stringify(
-      ["12WYプロジェクト", "WBSタスク(戦術)", "Block(コマ)", "週次コミット", "weeklyScore"]), JSON.stringify(linkLabels));
+      ["12週のプロジェクト", "タスク", "予定・実行記録", "今週の確定分", "今週の進み具合"]), JSON.stringify(linkLabels));
     check("1つ目のノードはWBSへのnav導線", await page.locator('.twy-plan-link-node').nth(0)
       .locator('[data-action="nav"][data-view="wbs"]').count() === 1);
     check("3つ目のノードはタイムラインへのnav導線", await page.locator('.twy-plan-link-node').nth(2)
@@ -274,7 +274,7 @@ async function seed(page, values) {
     check("当週(W3)のth列がdata-current=1", await page.locator(".twy-plan-grid thead th").nth(3).getAttribute("data-current") === "1");
 
     const t1Row = page.locator('.twy-plan-task-row[data-task-id="t1"]');
-    check("t1行に★(keystone)が付く", (await t1Row.locator(".twy-plan-task-name").textContent()).startsWith("★"));
+    check("t1行に★(keystone)が付く", (await t1Row.locator(".twy-plan-task-name").textContent()).startsWith("★ 重要な行動:"));
     const t1Cells = await t1Row.locator(".twy-plan-cell").allTextContents();
     const t1Status = await t1Row.locator(".twy-plan-cell").evaluateAll((els) => els.map((el) => el.dataset.status));
     check("t1 W1: met・2/2", t1Status[0] === "met" && t1Cells[0] === "2/2", JSON.stringify({ s: t1Status[0], c: t1Cells[0] }));
@@ -353,7 +353,7 @@ async function seed(page, values) {
     await seed(page, { projects: [], tasks: [], currentView: "twelveweek" });
     await page.click('.twy-face-segmented button[data-face="plan"]');
     await page.waitForSelector(".twy-plan-link-panel");
-    check("0件誘導が出る(LINKは出したまま)", (await page.locator(".twy-plan-grid-panel .twy-plan-guide").textContent()).includes("対象の12WYプロジェクトがありません"));
+    check("0件誘導が出る(LINKは出したまま)", (await page.locator(".twy-plan-grid-panel .twy-plan-guide").textContent()).includes("対象の12週のプロジェクトがありません"));
     check("グリッドは無い(タスク行0)", await page.locator(".twy-plan-task-row").count() === 0);
 
     // cycleStartDate未設定時はPLAN面自体が誘導のみ(design §2.1b・R1のMEDIUM-7と同じ扱い)。
@@ -362,7 +362,7 @@ async function seed(page, values) {
     await page.waitForFunction(() => document.querySelector(".twy-plan-link-panel"));
     check("cycleStartDate未設定はPLAN面も誘導1行のみ(LINKグリッドなし)",
       await page.locator(".twy-plan-grid-panel").count() === 0
-      && (await page.locator(".twy-plan-link-panel .twy-plan-guide").textContent()).includes("12WYサイクルが未設定"));
+      && (await page.locator(".twy-plan-link-panel .twy-plan-guide").textContent()).includes("12週のサイクルが未設定"));
     await seed(page, {
       settings: { twelveWeekStartDate: CYCLE_START, twelveWeekScoreTarget: 85 },
       projects: [p1], tasks: [t1, t2, t3, t4], weeklyCommitments,

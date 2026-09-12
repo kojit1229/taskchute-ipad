@@ -294,7 +294,7 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
     const allItems = [item("b1", WEEK), item("b2", "2026-08-23"), item("b3", "2026-08-24"), item("b4", "2026-08-25"), item("b5", "2026-08-26")];
     await seed({ weeklyCommitments: [meta("manual", ["b1", "b2", "b3", "b4", "b5"]), ...allItems] }); await openSheet();
     await page.locator('[data-action="twy-add-item"]').click();
-    check("#18 候補0件は案内と閉じるだけ", (await page.locator("[data-twy-add-panel]").textContent()).includes("追加できる未コミット候補がありません")
+    check("#18 候補0件は案内と閉じるだけ", (await page.locator("[data-twy-add-panel]").textContent()).includes("追加できる未確定の予定がありません") /* 4回-02 の日本語化に追随(2026-09-12 CHANGELOG) */
       && await page.locator('[data-twy-add-panel] input').count() === 0 && await page.locator('[data-action="twy-add-item-confirm"]').count() === 0);
 
     const immutable = [
@@ -337,7 +337,7 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
     await seed({ weeklyCommitments: [meta("manual", ["b1", "b2"]), ...allExcused] }); await openSheet();
     check("C'全件免除はN/A", (await page.locator(".twy-commit-count").textContent()).includes("N/A(全件免除)"));
     await seed({ weeklyCommitments: [meta("manual", [])] }); await openSheet();
-    check("C' item0件は確定済みと今週は対象なしを矛盾なく表示", (await page.locator(".twy-commit-sheet").textContent()).includes("確定itemがありません")
+    check("C' item0件は確定済みと今週は対象なしを矛盾なく表示", (await page.locator(".twy-commit-sheet").textContent()).includes("確定した予定がありません") /* 4回-02 の日本語化に追随(2026-09-12 CHANGELOG) */
       && (await page.locator(".twy-commit-count").textContent()).includes("今週は対象なし")
       && !(await page.locator(".twy-commit-count").textContent()).includes("未確定"));
 

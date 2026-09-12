@@ -59,6 +59,14 @@
         "today-detail-integration-e2e"
       ]
     },
+    "zero-session": {
+      "paths": ["^src/features/zero-session\\.js$", "^src/features/daily-draft\\.js$"],
+      "suites": ["zero-session", "zero-save-boundary", "data-contract-gate"]
+    },
+    "zero-entry": {
+      "paths": ["^src/features/zero-entry\\.js$"],
+      "suites": ["zero-save-boundary", "zero-draft-e2e", "draft-leave", "draft-save-transaction", "daily-operations-registry", "daily-parts-contract"]
+    },
     "daily-parts": {
       "paths": [
         "^src/ui/daily-parts/",
@@ -580,6 +588,7 @@
         "vision-connection",
         "vision-connection-e2e",
         "vision-overview",
+        "vision-layout-e2e",
         "remaining-screen-labels"
       ]
     },

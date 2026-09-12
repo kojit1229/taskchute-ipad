@@ -38,6 +38,7 @@ import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js
 import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
+import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
@@ -7530,8 +7531,9 @@ function renderVision() {
   const section = state.settings.visionSection || "vision";
   const overview = section === "board" || visionEditDraft ? "" : visionOverview.render(section);
   return `
+    <section class="vision-layout" aria-label="ビジョンの閲覧と編集">
     ${renderHeader("方向性を見失わないための場所", "ビジョン")}
-    <div class="segmented">
+    <div class="segmented vision-sections" aria-label="表示する内容">
       <button class="${section === "vision" ? "active" : ""}" data-action="vision-section" data-section="vision">ビジョン</button>
       <button class="${section === "affirmation" ? "active" : ""}" data-action="vision-section" data-section="affirmation">アファメーション</button>
       <button class="${section === "board" ? "active" : ""}" data-action="vision-section" data-section="board">ビジョンボード</button>
@@ -7547,6 +7549,7 @@ function renderVision() {
       </div>
       <div class="exec-pane-right">${renderVisionAlignment()}</div>
     </div>
+    </section>
   `;
 }
 
@@ -7632,6 +7635,7 @@ function renderVisionEdit() {
   const differentConnection = draft.connectionKey !== ensureVisionConnection();
   return `
     <div class="vision-edit">
+      <p class="vision-edit-scope">既存の全文を編集しています。3テーマの概要とアファメーションは、この保存では変わりません。</p>
       ${differentConnection ? '<p class="vision-status" role="status">接続先が変わりました。この入力は元の接続先の下書きです。保存するには元の接続先へ戻してください。入力は保持しています。</p>' : ""}
       <textarea class="vision-edit-textarea" data-vision-edit-textarea>${escapeHTML(draft.text)}</textarea>
     </div>
@@ -9435,6 +9439,8 @@ function beginZtWrite(id) {
   if (!t) return false;
   ztCurrent = { id: t.id, text: t.text, fav: t.fav, questionId: t.questionId || null };  // v39: 問い紐づけを保持
   ztWriteStartedAt = Date.now();  // v104: 実経過時間の計測開始(カウントダウン残数ではなくこちらを保存に使う)
+  ztCurrent.zeroDraft = createZeroEntryDraft({ theme: t, id: crypto.randomUUID(), connection: zeroConnectionKey(),
+    date: todayISO(), createdAt: nowDateTime(), startedAt: ztWriteStartedAt });
   return true;
 }
 
@@ -9459,45 +9465,38 @@ function discardZtWrite(inputSelector = "#zt-write-input") {
 function saveZtEntry(inputSelector = "#zt-write-input", options) {
   const draft = draftSaveTransaction.readDraft?.(inputSelector);
   if (draft && !draft.current) return showToast("対象が変わりました。入力は残しています"), { ok: false };
-  const result = draftSaveTransaction.run(() => applyZtEntry(inputSelector), options);
+  const result = applyZtEntry(inputSelector);
   if (result?.ok && draft) draftSaveTransaction.clearDraft(draft);
   return result;
 }
 
 function applyZtEntry(inputSelector) {
-  if (!ztCurrent) return;
-  const body = (document.querySelector(inputSelector)?.value || "").trim();
-  if (!body) return showToast("空のままでは保存できません");
-  const cur = ztCurrent;
-  // v104: 書き始め→保存の実経過秒数(Date.now()差分、文字列パース無し)。60秒カウントダウンを
-  //       超えて書き続けた場合も実測される。計測開始が無い異常系はnull。
-  const durationSec = ztWriteStartedAt != null ? Math.max(0, Math.round((Date.now() - ztWriteStartedAt) / 1000)) : null;
-  state.zeroThinking.entries.push({
-    id: crypto.randomUUID(),
-    date: todayISO(),
-    theme: cur.text,
-    body,
-    questionId: cur.questionId || null,  // v39: どの問いの下で書いたか
-    createdAt: nowDateTime(),
-    updatedAt: null,  // v102: 追記編集した時にだけ埋まる(未編集はnull)
-    durationSec  // v104: 参考情報。追記編集(saveZtEdit)では変更しない
+  const result = runZeroEntry("zero-complete", inputSelector);
+  if (!result.ok) return result;
+  stopZtTimer(); ztCurrent = null; ztWriteStartedAt = null;
+  render(); showToast("保存しました — 日報に追加");
+  return result;
+}
+
+function zeroConnectionKey() {
+  const cfg = personalDataFileConfig(state.settings.github || {});
+  return JSON.stringify([cfg.owner || "", cfg.repo || "", cfg.branch || "", cfg.path || ""]);
+}
+
+function runZeroEntry(action, inputSelector) {
+  const draft = ztCurrent?.zeroDraft, input = document.querySelector(inputSelector);
+  const result = runDailyOperation(action, { draft, body: input?.value }, {
+    ...dailyOperationDeps, zeroDrafts: dailyDrafts, nowMs: () => Date.now(), today: todayISO,
+    isZeroOwner: candidate => Boolean(input?.isConnected && !_imeComposing && !state.modal
+      && document.querySelector(inputSelector) === input && ztCurrent?.zeroDraft === candidate
+      && candidate.connection === zeroConnectionKey())
   });
-  // v39: 問いに紐づく entry なら、問いの鮮度を更新し open→deepening へ自動遷移
-  if (cur.questionId) {
-    state.questions = state.questions.map((q) => q.id === cur.questionId
-      ? { ...q, lastTouchedAt: todayISO(), status: q.status === "open" ? "deepening" : q.status, updatedAt: nowDateTime() }
-      : q);
+  if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
+  if (action !== "zero-complete" && result.ok && !result.draftStored?.ok) {
+    showToast("下書きの控えを保存できません。この画面内にだけ残っています");
+    return { ...result, ok: false, reason: "draft-storage-failed" };
   }
-  // ★テーマは残す、それ以外は書いたら一覧から消す(履歴には残る)
-  if (!cur.fav) {
-    state.zeroThinking.themes = state.zeroThinking.themes.filter((x) => x.id !== cur.id);
-  }
-  draftSaveTransaction.defer(() => {
-    stopZtTimer();
-    ztCurrent = null;
-    ztWriteStartedAt = null;
-  });
-  saveAndRender(cur.fav ? "保存しました(★は残ります) — 日報に追加" : "保存しました — 日報に追加");
+  return result;
 }
 
 // v102: 過去のentry(回答済み)を開いて追記・編集する。書く画面(ztCurrent)とは別の
@@ -13476,7 +13475,7 @@ function openTwyCommitSheet() {
 function buildTwyCommitSheetHTML(weekStart) {
   const meta = twyCommittedWeekMeta(weekStart);
   const range = weekRange(weekStart);
-  const title = `WEEKLY COMMIT <span>${escapeHTML(twyDateLabel(range.weekStart))}〜${escapeHTML(twyDateLabel(range.weekEnd))}</span>`;
+  const title = `今週の確定分 <span>${escapeHTML(twyDateLabel(range.weekStart))}〜${escapeHTML(twyDateLabel(range.weekEnd))}</span>`;
   return modalHeaderHTML(title) + `<div class="twy-commit-sheet">
     ${meta ? twyCommitPostHTML(weekStart) : twyCommitPreHTML(weekStart)}
     </div></div></div>`;
@@ -13484,16 +13483,16 @@ function buildTwyCommitSheetHTML(weekStart) {
 
 function twyCommitPreHTML(weekStart) {
   const candidates = candidateBlocksForWeek(state, weekStart);
-  if (!candidates.length) return `<div class="twy-commit-meta">今週範囲に12WY候補Blockがありません。</div>`;
+  if (!candidates.length) return `<div class="twy-commit-meta">今週の12週のプロジェクトに確定できる予定がありません。</div>`;
   const rows = twyCommitGroups(candidates).map((group) => twyCommitGroupRowHTML(group, "commit")).join("");
-  return `<div class="twy-commit-meta">候補 = 今週範囲の12WYプロジェクト配下の予定Block(自動列挙・タスク単位に集約表示)。集約行のチェック=配下Block一括 / ▸で展開してBlock個別チェック</div>
+  return `<div class="twy-commit-meta">候補は12週のプロジェクトにある今週の予定です。タスクのチェックで予定をまとめて選択し、▸で開くと予定を個別に選べます。</div>
     <div data-twy-commit-list>${rows}</div><div class="twy-commit-foot">
       <span class="twy-commit-count" data-twy-commit-count>${twyCommitCountLabel(candidates.length)}</span>
       <button type="button" class="commit-btn" data-action="twy-commit-week">今週を確定</button></div>`;
 }
 
 function twyCommitCountLabel(total) {
-  return `選択中 ${_twyCommitSelectedBlockIds.size}コマ / 候補 ${total}コマ(Block単位で保存)`;
+  return `選択中 ${_twyCommitSelectedBlockIds.size}コマ / 候補 ${total}コマ(予定ごとに保存)`;
 }
 
 // v330修正: 「今週を確定」で確定されスコア対象になるitemの判定をここへ集約する。
@@ -13515,7 +13514,7 @@ function twyCommitPostHTML(weekStart) {
   const scoreItemIds = new Set(scoreItems.map((item) => item.id));
   const rows = sortedItems.map((item) => twyCommitItemRowHTML(item, scoreItemIds.has(item.id))).join("");
   return `<div class="twy-commit-meta">確定済 ${escapeHTML((meta?.committedAt || "").replace("T", " ").slice(0, 16))}</div>
-    <div data-twy-commit-list>${rows || `<div class="twy-commit-meta">確定itemがありません。</div>`}</div>
+    <div data-twy-commit-list>${rows || `<div class="twy-commit-meta">確定した予定がありません。</div>`}</div>
     <div class="twy-commit-foot"><span class="twy-commit-count">${twyCommitScoreLabel(weeklyScore(state.weeklyCommitments || [], weekStart), Boolean(meta), scoreItems.filter((item) => item.excused).length)}</span>
       <button type="button" class="commit-btn" data-action="twy-add-item">+ 計画追加</button></div>
     ${_twyAddPanelOpen ? twyAddItemPanelHTML(weekStart) : ""}`;
@@ -13554,7 +13553,7 @@ function twyAddCandidates(weekStart) {
 
 function twyAddItemPanelHTML(weekStart) {
   const candidates = twyAddCandidates(weekStart);
-  if (!candidates.length) return `<div class="twy-add-panel" data-twy-add-panel><div class="twy-commit-meta">追加できる未コミット候補がありません。</div>
+  if (!candidates.length) return `<div class="twy-add-panel" data-twy-add-panel><div class="twy-commit-meta">追加できる未確定の予定がありません。</div>
     <button type="button" class="btn" data-action="twy-add-item-cancel">閉じる</button></div>`;
   const rows = twyCommitGroups(candidates).map((group) => twyCommitGroupRowHTML(group, "add")).join("");
   return `<div class="twy-add-panel" data-twy-add-panel><div data-twy-commit-list>${rows}</div><div class="twy-commit-foot">
@@ -13748,16 +13747,24 @@ function requestDraftLeave(leave, { allowDiscard = true, inputSelector = "#zt-wr
         && state.currentView === view && !state.modal && !modalRoot.classList.contains("open"));
       save = () => saveZtEdit(id, { deferPost: true });
     }
-  } else if (ztCurrent && document.querySelector(inputSelector)?.value) {
+  } else if (ztCurrent && document.querySelector(inputSelector)) {
     const session = ztCurrent;
     const id = session.id;
-    const date = todayISO();
     const input = document.querySelector(inputSelector);
     const view = state.currentView;
     isCurrentOwner = () => Boolean(input?.isConnected && document.querySelector(inputSelector) === input
-      && ztCurrent === session && ztCurrent.id === id && todayISO() === date && state.currentView === view
+      && ztCurrent === session && ztCurrent.id === id && session.zeroDraft.connection === zeroConnectionKey() && state.currentView === view
       && !state.modal && !modalRoot.classList.contains("open"));
-    save = () => saveZtEntry(inputSelector, { deferPost: true });
+    if (!isCurrentOwner() || _imeComposing) {
+      showToast("対象と入力の変換を確認してください。入力は残しています");
+      return true;
+    }
+    stopZeroEntry(session.zeroDraft, Date.now());
+    stopZtTimer();
+    const entry = state.zeroThinking.entries.find(row => row.id === session.zeroDraft.id);
+    if (!zeroNeedsSave(session.zeroDraft, input.value, entry)) return false;
+    save = () => runZeroEntry("zero-leave", inputSelector);
+    if (save().ok) return false;
   }
   if (!save) return false;
   draftLeaveGuard.request({ save, leave, isCurrentOwner, allowDiscard, inputSelector });

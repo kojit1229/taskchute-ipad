@@ -5,7 +5,7 @@ const source = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
 const names = ['saveState', 'saveAndRender', 'closeModal', 'submitModal', 'readModalFields',
   'modalDraftSnapshot', 'requestDraftLeave', 'saveProjectFromModal', 'saveTaskFromModal', 'saveBlockFromModal',
-  'saveZtEntry', 'applyZtEntry', 'saveZtEdit', 'applyZtEdit', 'saveTrackFromForm', 'saveProjectTrackFromModal',
+  'runZeroEntry', 'saveZtEntry', 'applyZtEntry', 'saveZtEdit', 'applyZtEdit', 'saveTrackFromForm', 'saveProjectTrackFromModal',
   'readTrackDraft', 'autoCloseStaleRoutineRuns', 'resetPomodoroForBlock', 'transferIronLogToCompletedBlock',
   'trackOnBlockStarted', 'trackOnBlockCompletionChanged', 'autoCommitWeekIfNeeded', 'stampCommitmentCompletion',
   'toggleTaskCompleteFromBlock', 'commitBlockChanges'];
@@ -21,6 +21,9 @@ const factory = ['core/mutation-stamp', 'features/draft-save', 'features/draft-l
 const init = ast.body.find(n => n.type === 'ExpressionStatement' && n.expression.type === 'AssignmentExpression'
   && n.expression.left.name === 'draftSaveTransaction');
 assert(init, 'actual app transaction dependency wiring exists');
+const { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } = require('../src/features/zero-entry.js');
+const { createDailyDraftStore } = require('../src/features/daily-draft.js');
+const { runDailyOperation } = require('../src/features/daily-operations.js');
 const copy = value => JSON.parse(JSON.stringify(value));
 function setup(mode, { storageFail = true, completed = false, track = false } = {}) {
   const effects = { persisted: [], schedules: 0, renders: 0, stops: 0, post: [], toasts: [], sequence: [], dialogs: [] };
@@ -82,6 +85,15 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
       ctx.state.modal = { type: 'bodyScan', id }; effects.post.push(id); effects.sequence.push('post');
     }
   });
+  Object.assign(ctx, { runDailyOperation, stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
+    dailyDrafts: createDailyDraftStore({ storage: () => ({ setItem() {} }) }),
+    dailyOperationDeps: { state: data, commitCandidate, now: ctx.nowDateTime,
+      persist: () => { ctx.persistLocalNoSchedule(); return !ctx._lastSaveError; },
+      scheduleSync: () => { ctx.scheduleAutoSave(); ctx.scheduleAutoSync(); } } });
+  if (ctx.ztCurrent) {
+    data.zeroThinking.themes[0] = { ...ctx.ztCurrent };
+    ctx.ztCurrent.zeroDraft = createZeroEntryDraft({ theme: data.zeroThinking.themes[0], id: 'answer', connection: 'fixture', date: ctx.todayISO(), createdAt: ctx.nowDateTime(), startedAt: Date.now() });
+  }
   vm.runInContext(factory + '\n' + extracted + '\n' + source.slice(init.start, init.end) + '\nconst draftLeaveGuard = createDraftLeaveGuard(document);', ctx);
   ctx.dispatchModalSave = (type, id, values) => ({ project: ctx.saveProjectFromModal, task: ctx.saveTaskFromModal, block: ctx.saveBlockFromModal })[type](id, values);
   putField('title', 'new title');
@@ -106,7 +118,9 @@ for (const mode of ['project', 'task', 'new-task', 'new-block', 'block', 'zero-n
     const x = setup(mode, { completed: mode === 'block', track: mode === 'project' });
     const original = x.state(), before = copy(original), owner = x.ctx.ztCurrent;
     const result = x.run();
-    assert.equal(result.ok, false); assert.equal(result.reason, 'storage-failed');
+    assert.equal(result.ok, false);
+    if (mode === 'zero-new') assert.match(result.error.message, /local persistence failed/, 'registry returns commitCandidate failure');
+    else assert.equal(result.reason, 'storage-failed');
     assert.equal(x.state(), original); assert.deepEqual(x.state(), before);
     assert.equal(x.modalRoot.innerHTML, 'original-form'); assert.equal(x.ctx.ztCurrent, owner);
     if (mode === 'zero-edit') assert.equal(x.ctx.ztEditId, 'past');

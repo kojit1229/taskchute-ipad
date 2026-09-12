@@ -14,6 +14,10 @@ const extracted = names.map(name => {
   assert(node, name);
   return source.slice(node.start, node.end);
 }).join("\n");
+const { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } = require('../src/features/zero-entry.js');
+const { createDailyDraftStore } = require('../src/features/daily-draft.js');
+const { runDailyOperation } = require('../src/features/daily-operations.js');
+const { commitCandidate } = require('../src/core/commit.js');
 let count = 0;
 function check(value, label) { assert(value, label); count++; }
 function setup({ modal = null, writing = false, editing = false, value = "draft", saved = "original", valid = true, storageError = false } = {}) {
@@ -27,7 +31,7 @@ function setup({ modal = null, writing = false, editing = false, value = "draft"
   };
   const fields = [{ dataset: { modalField: "comment" }, type: "textarea", value: saved }];
   const state = { modal, currentView: "zero", zeroThinking: { entries: [{ id: "past", body: saved, date: "2026-09-05" }] } };
-  const ctx = vm.createContext({ document, state, today: "2026-09-06", todayISO: () => ctx.today, modalRoot: { firstElementChild: { isConnected: true }, classList: { contains: () => Boolean(ctx.state.modal) }, querySelectorAll: selector => selector === "[data-modal-field]" ? fields : [] },
+  const ctx = vm.createContext({ stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => ctx.connection, showToast() {}, document, state, today: "2026-09-06", todayISO: () => ctx.today, modalRoot: { firstElementChild: { isConnected: true }, classList: { contains: () => Boolean(ctx.state.modal) }, querySelectorAll: selector => selector === "[data-modal-field]" ? fields : [] },
     ztCurrent: writing ? { id: "theme" } : null, ztEditId: editing ? "past" : null,
     ztWriteStartedAt: 12, _execMode: "plan", _lastSaveError: storageError,
     stopZtTimer() {}, persistLocalNoSchedule() {}, fillGapExecDesktop: () => false,
@@ -37,6 +41,16 @@ function setup({ modal = null, writing = false, editing = false, value = "draft"
     saveZtEntry: () => { effects.saved++; if (valid && !storageError) ctx.ztCurrent = null; return { ok: valid && !storageError }; },
     saveZtEdit: () => { effects.saved++; if (valid && !storageError) ctx.ztEditId = null; return { ok: valid && !storageError }; }
   });
+  ctx.connection = 'fixture';
+  if (writing) ctx.ztCurrent.zeroDraft = createZeroEntryDraft({ theme: ctx.ztCurrent, id: 'answer', connection: ctx.connection, date: ctx.today, createdAt: '2026-09-06T10:00:00', startedAt: Date.now() });
+  const drafts = createDailyDraftStore({ storage: () => ({ setItem() { if (storageError) throw Error('quota'); } }) });
+  ctx.runZeroEntry = (action) => {
+    effects.saved++;
+    return runDailyOperation(action, { draft: ctx.ztCurrent.zeroDraft, body: input.value }, {
+      state, commitCandidate, zeroDrafts: drafts, nowMs: () => Date.now(), now: () => '2026-09-06T10:00:00', today: () => ctx.today,
+      isZeroOwner: draft => valid && draft.connection === ctx.connection, persist: () => true
+    });
+  };
   vm.runInContext(feature + "\nconst draftLeaveGuard = createDraftLeaveGuard(document); let modalDraftBaseline;\n" + extracted, ctx);
   vm.runInContext("modalDraftBaseline = modalDraftSnapshot()", ctx);
   fields[0].value = value;
@@ -54,7 +68,7 @@ for (const kind of ["task", "project", "block"]) {
     if (choice === "stay") check(x.fields[0].value === "draft" && x.effects.focus === 1, `${kind}: draft/focus retained`);
   }
 }
-for (const mode of ["writing", "editing"]) {
+for (const mode of ["editing"]) {
   for (const choice of ["save", "stay", "discard"]) {
     const x = setup({ [mode]: true });
     x.ctx.setView("today");
@@ -84,7 +98,7 @@ for (const options of [{ valid: false }, { storageError: true }]) {
   check(!x.active() && !x.ctx.state.modal, "unchanged form closes directly");
 }
 for (const mode of ["writing", "editing"]) {
-  const x = setup({ [mode]: true });
+  const x = setup({ [mode]: true, storageError: mode === "writing" });
   (mode === "writing" ? x.ctx.discardZtWrite : x.ctx.closeZtEdit)();
   check(x.active() && x.effects.rendered === 0, `${mode}: cancel uses same guard`);
   x.resolve("stay");
@@ -103,10 +117,26 @@ for (const change of [
   check(x.effects.saved === 0 && x.effects.left === 0 && x.effects.focus === 0 && !x.active(), "stale modal owner stops every action");
 }
 for (const mode of ["writing", "editing"]) {
-  const x = setup({ [mode]: true }); x.ctx.requestDraftLeave(() => x.effects.left++);
-  if (mode === "writing") x.ctx.today = "2026-09-07";
+  const x = setup({ [mode]: true, storageError: mode === "writing" }); x.ctx.requestDraftLeave(() => x.effects.left++);
+  const attempts = x.effects.saved;
+  if (mode === "writing") x.ctx.connection = "other-connection";
   else x.ctx.state.zeroThinking.entries[0].date = "2026-09-04";
-  x.resolve("save"); check(x.effects.saved === 0 && x.effects.left === 0, "changed zero-thinking date refuses save");
+  x.resolve("save"); check(x.effects.saved === attempts && x.effects.left === 0, "changed zero-thinking owner refuses save");
 }
 
+{
+  const x = setup({ writing: true });
+  x.ctx.setView('today');
+  check(!x.active() && x.effects.dialogs.length === 0 && x.ctx.state.currentView === 'today', 'successful draft leave has zero confirmations');
+  check(x.effects.saved === 1 && x.ctx.state.zeroThinking.entries.length === 1, 'leave saves draft only');
+  x.ctx.requestDraftLeave(() => {});
+  check(x.effects.saved === 1, 'unchanged saved body and stopped time require no save');
+}
+for (const choice of ['stay', 'save', 'discard']) {
+  const x = setup({ writing: true, storageError: true }); x.ctx.setView('today');
+  check(x.active() && x.ctx.state.currentView === 'zero', 'failed autosave retains editor');
+  x.resolve(choice);
+  check(x.ctx.state.currentView === (choice === 'discard' ? 'today' : 'zero'), 'failure choice protects navigation');
+  check(x.input.value === 'draft' && x.ctx.state.zeroThinking.entries.length === 1, 'failure never completes answer');
+}
 console.log(`PASS: draft leave guard (${count} checks)`);

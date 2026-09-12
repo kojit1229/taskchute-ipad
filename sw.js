@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v389";  // v389: 自動配置も単発予定の占有を使う、単発予定の通し試験、日報の別表、系列の型・合流・導出(第2回の下地、画面接続なし)
+const CACHE_NAME = "taskchute-journal-pwa-v390";  // v390: ビジョンの採用配置、0秒思考の保存・完了・離脱と複数テーマの控えの部品(画面接続は次)、12週の表示を日本語に
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
 
@@ -705,6 +705,8 @@ const APP_SHELL = [
 
   "./src/features/draft-leave.js",
   "./src/features/daily-draft.js",
+  "./src/features/zero-entry.js",
+  "./src/features/zero-session.js",
   "./src/features/single-schedule.js",
   "./src/features/single-schedule-view.js",
   "./src/features/daily-gap-placement.js",

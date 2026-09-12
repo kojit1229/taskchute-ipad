@@ -5694,6 +5694,63 @@ details.settings-row > .fold-summary.settings-row-summary {
 .tower-condition > .karada-import { grid-column:1 / -1; }
 
 .vision-overview-stage { display:block; }
+.vision-layout {
+  min-width: 0;
+  width: 100%;
+}
+.vision-layout .vision-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.vision-layout .vision-sections button {
+  flex: 1 1 140px;
+  min-width: 0;
+  white-space: normal;
+}
+.vision-layout button,
+.vision-layout summary {
+  min-height: 44px;
+}
+.vision-layout input,
+.vision-layout select,
+.vision-layout textarea {
+  font-size: 16px;
+}
+.vision-layout .exec-pane-left,
+.vision-layout .exec-pane-right {
+  min-width: 0;
+}
+.vision-layout .vision-theme-copy,
+.vision-layout .vision-read,
+.vision-layout .vision-overview-affirmation {
+  overflow-wrap: anywhere;
+}
+.vision-layout .vision-legacy-content > summary {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.vision-layout .vision-actions {
+  flex-wrap: wrap;
+}
+.vision-layout .vision-actions .btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.vision-edit-scope {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
+}
+@media (max-width: 600px) {
+  .vision-layout .vision-sections button {
+    flex-basis: 100%;
+  }
+  .vision-layout .vision-actions .btn {
+    flex: 1 1 140px;
+  }
+}
 .vision-overview-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
 .vision-theme { padding:0; overflow:hidden; min-width:0; }
 .vision-theme img { display:block; width:100%; height:auto; aspect-ratio:2/1; object-fit:cover; }

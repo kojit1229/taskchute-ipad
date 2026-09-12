@@ -138,16 +138,32 @@ function storeChecks() {
     console.log("PASS connection/target/fingerprint changes reject old input, no unauthorized restore");
 
     await action("nav", null, "zero");
-    for (const [open, id, selector, leave, save] of [
-      ["zt-write", "theme", "#zt-write-input", "zt-discard", "zt-save"],
-      ["zt-entry-open", "past", "#zt-edit-input", "zt-edit-close", "zt-edit-save"]
+    // 監督者の契約追随(2026-09-12 CHANGELOG 13:20): 3回-03b で「テーマの回答(zt-write)」の離脱は基準比較→必要時は自動で下書き保存→成功時は確認0(設計09 §4.5)、完了後も右欄に同じ回答の編集が残る(§4.3 7)、完了した控えは完了印付きで残る(§4.4)。履歴の追記(zt-entry-open)は従来の確認付き離脱のまま。
+    for (const [open, id, selector, leave, save, autosaveLeave] of [
+      ["zt-write", "theme", "#zt-write-input", "zt-discard", "zt-save", true],
+      ["zt-entry-open", "past", "#zt-edit-input", "zt-edit-close", "zt-edit-save", false]
     ]) {
+      if (await page.locator("#zt-write-input").count()) { await action("zt-discard"); await page.clock.runFor(70); } // 完了後に残る編集を中止で閉じる(完成済み本文は消えない)
       await action(open, id); await page.clock.runFor(70); // Existing editor focus callback.
       await page.locator(selector).fill("行と同じ管理で保持");
-      await action(leave); await choose("stay");
-      assert.equal((await backups())[0].kind, "zero");
-      await action(save, id); assert.equal((await backups()).length, 0, "direct row save clears backup");
+      if (autosaveLeave) {
+        await action(leave); await page.clock.runFor(70);
+        assert.equal(await page.locator('[data-action="draft-leave-stay"]').count(), 0, "zero leave autosaves without confirm");
+        assert.equal((await backups())[0].kind, "zero");
+        await action(open, id); await page.clock.runFor(70);
+        await action(save, id);
+        const zeroBackups = (await backups()).filter(item => item.kind === "zero");
+        assert(zeroBackups.every(item => Object.values(item.drafts || {}).every(draft => draft.completed)), "direct row save leaves no live zero backup");
+      } else {
+        await action(leave); await choose("stay");
+        assert.equal((await backups())[0].kind, "zero");
+        await action(save, id);
+        const live = (await backups()).filter(item => !(item.kind === "zero" && Object.values(item.drafts || {}).every(draft => draft.completed)));
+        assert.equal(live.length, 0, "direct row save clears backup (completed zero container may remain)");
+      }
     }
+    // 完了印付きの0秒思考の控え(新契約で残る)は以降の件数断言の対象外なので試験側で片付ける(製品の挙動ではない)
+    await page.evaluate(prefix => { for (const key of Object.keys(sessionStorage).filter(key => key.startsWith(prefix))) { const item = JSON.parse(sessionStorage.getItem(key)); if (item.kind === "zero" && Object.values(item.drafts || {}).every(draft => draft.completed)) sessionStorage.removeItem(key); } }, DAILY_DRAFT_KEY);
     await action("edit-task", "t"); await field.fill("再読込後に無断復元しない");
     await action("modal-close"); await choose("stay");
     assert.equal((await backups()).length, 1); await page.reload();

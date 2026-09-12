@@ -27,7 +27,8 @@ for (const name of DAILY_ACTIONS) {
 }
 for (const name of ['missing', 'toString', '__proto__']) assert.throws(() => run(name, {}, deps), /unknown operation/);
 assert.equal(saves, 0); assert.equal(schedules, 0);
-console.log('PASS all 22 rows, 16 invalid-input rejections, 6 legacy delegates and unknown names');
+// 124/R3-03 adds three candidate rows; derive counts from the actual registry.
+console.log(`PASS all ${DAILY_ACTIONS.length} rows, ${Object.values(rows).filter(row => !row.legacy).length} invalid-input rejections, 6 legacy delegates and unknown names`);
 const fixture = '__fixture';
 try {
   rows[fixture] = { build: () => ({ records: [] }) };
@@ -140,8 +141,9 @@ const immediate = DAILY_ACTIONS.filter(name => !deferred.includes(name));
 // v386 契約追随(監督者決定 2026-09-11、fixB6): 33 の daily-report-refresh が即時経路に1行増えて 16→17
 // 38: add/complete/delete add three registry paths; edit replaces the existing unwired row.
 // B8/41: two ordered placement operations are added (20 + 2); keep exhaustive routing checks.
-assert.equal(immediate.length, 22);
-assert(immediate.every(name => routes.includes(name)), 'other 22 data-actions reach the registry immediately');
+// R3-A/3回-03(監督者の契約追随 2026-09-11): 0秒思考の登録行3件(zero-draft-save / zero-complete / zero-leave)追加(22→25)。design/CHANGELOG.md
+assert.equal(immediate.length, 25);
+assert(immediate.every(name => routes.includes(name)), 'other 25 data-actions reach the registry immediately');
 const confirmationActions = {};
 const visit = node => {
   if (!node || typeof node !== 'object') return;
