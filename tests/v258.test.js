@@ -143,8 +143,8 @@ function sourceBetween(source, startMarker, endMarker) {
     await page.reload();
     // v329: 行の副操作は…メニュー(排他)の中。reload直後は必ず閉じているため先に開く
     // (seed()は複数回呼ばれるがそのたびreloadする・セレクタ追随・assert不変)
-    await page.waitForSelector('[data-wbs-row-id="p258"] [data-action="wbs-row-menu-toggle"]');
-    await page.locator('[data-wbs-row-id="p258"] [data-action="wbs-row-menu-toggle"]').first().click();
+    await page.waitForSelector('[data-action="wbs-select-project"][data-id="p258"]');
+    await page.locator('[data-action="wbs-select-project"][data-id="p258"]').first().click();
     await page.waitForTimeout(150);
     await page.waitForSelector('[data-action="edit-project"][data-id="p258"]');
     await page.locator('[data-action="edit-project"][data-id="p258"]').first().click();

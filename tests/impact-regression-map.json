@@ -43,7 +43,8 @@
     },
     "work-list-ui": {
       "paths": [
-        "^src/(core|features)/work-list\\.js$"
+        "^src/(core|features)/work-list\\.js$",
+        "^src/features/three-screen-rows\\.js$"
       ],
       "patterns": [
         "configureWorkList|renderWorkList|handleWorkList|restoreWorkList|rememberWorkList|execDoneListHTML|renderExecDoneRow|block-row-toggle|exec-row-copy"
@@ -51,6 +52,7 @@
       "suites": [
         "daily-add-e2e",
         "work-list-model",
+        "three-screen-connection-e2e",
         "work-list-focus",
         "work-list-render-focus",
         "work-list-e2e",

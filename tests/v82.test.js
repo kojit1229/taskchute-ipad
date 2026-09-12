@@ -1,6 +1,6 @@
 // v82 検証: UX監査(workbench/out/2026-07-12-ux-audit/findings.md)の「B. K判断が必要」のうち
 // K承認済みの B1/B2/B3 に対応。CHANGES_v82.md参照。
-//   B1: bottom-nav(mobileNav)の入替。現在はv333の4枠(今日/ジャーナル/実行/その他)。
+//   B1: bottom-nav(mobileNav)の入替。現在はS-B1の4枠(今日/実行/作業一覧/その他)。
 //       時間軸は実行内の実績切替へ統合。朝の体調記録→ジャーナルの1タップは維持。
 //   B2: 「今日のリズム」ゾーン(ながれ)を折りたたみにし、集計値
 //       (ながれ完了数)をsummary行に要約表示する。v73縮退モードの
@@ -95,14 +95,14 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) B1: bottom-navの入替
     // ============================================================
-    console.log("[1] B1: bottom-navが 今日/ジャーナル/実行/その他 の並びになっている");
+    console.log("[1] B1: bottom-navが 今日/実行/作業一覧/その他 の並びになっている");
     await seed({ blocks: [], view: "home" });
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
     // v333: 4枠へ統合。実行内の実績タイムラインはv333.test.jsで別途維持。
-    check("bottom-navの並びがv333の4項目仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "その他"]), JSON.stringify(bottomLabels));
+    check("bottom-navの並びがS-B1の4項目仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
 
     console.log("[1b] ホームからジャーナルへ1タップで遷移できる(朝の体調記録の日課動線)");
-    await page.click('#bottomNav button[data-view="journal"]');
+    await page.click('[data-work-list="today"] [data-action="nav"][data-view="journal"]');
     await page.waitForTimeout(300);
     const viewAfterTap = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
     check("1タップでcurrentViewがjournalになる", viewAfterTap === "journal", viewAfterTap);
@@ -111,7 +111,7 @@ function check(name, cond, extra = "") {
     await seed({ blocks: [], view: "more" });
     const moreGridText = await page.locator(".more-tower-grid").textContent();
     check("WBSが「その他」に出る", moreGridText.includes("WBS"), moreGridText);
-    check("ジャーナルは「その他」に出ない(bottom-navへ移動済み)", !moreGridText.includes("ジャーナル"), moreGridText);
+    check("ジャーナルは「その他」に出ない(今日の記録へ導線)", !moreGridText.includes("ジャーナル"), moreGridText);
     const moreDataViews = await page.locator('.more-tower-grid [data-action="nav"]').evaluateAll((els) => els.map((el) => el.dataset.view));
     check("「その他」の受け皿にwbsが含まれる", moreDataViews.includes("wbs"), JSON.stringify(moreDataViews));
     // v230でhome撤去、v233でinstruments/iron-log追加、v356で12WY追加。

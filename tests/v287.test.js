@@ -396,8 +396,8 @@ async function verifyTaskBadges(browser) {
     })));
     // v333: 実行タブ統合で4項目化(「時間」廃止、未着手バッジはexecへ移動)。仕様変更としてセレクタ追随。
     const expectedMobileItems = [
-      { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
-      { id: "exec", label: "実行" }, { id: "more", label: "その他" }
+      { id: "today", label: "今日" }, { id: "exec", label: "実行" },
+      { id: "wbs", label: "作業一覧" }, { id: "more", label: "その他" }
     ];
     check("mobileNavは4項目・id・ラベル", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
 
@@ -427,13 +427,13 @@ async function verifyTaskBadges(browser) {
       sidebar: await badgeText(page, "#sidebar", "exec"),
       bottom: await badgeText(page, "#bottomNav", "exec"),
       // v332追随: タスク一覧の行(.exec-task-row)も .exec-row を共有するため、Block行だけを数える
-      rows: await page.locator(".exec-row-now, .exec-row-upcoming").count(),
+      rows: await page.locator('.exec-row-now, .exec-row-upcoming').evaluateAll(rows => rows.map(row => row.querySelector('[data-action="now-start"]')?.dataset.id ?? null)),
       selectedDate: await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).selectedDate, STATE_KEY)
     };
-    // v374: 実行の一覧は実時計の今日を基準に全件表示する(v373)。過去日を閲覧中も今日の非削除Block 7件
-    //       のうち未完了の6件(valid-start/valid-complete/started/timeline/routine/stale)が now/upcoming 行として出る。バッジも今日基準のまま。
+    // S-B1: 実行一覧は選択日のBlockを表示し、バッジは実時計の今日を基準にする。
+    // 件数だけでなく昨日のBlockの識別子を照合し、今日のBlock混入も検出する。
     check("過去日閲覧中もバッジは今日基準の2件で不変", pastSnapshot.sidebar === "2"
-      && pastSnapshot.bottom === "2" && pastSnapshot.rows === 6 && pastSnapshot.selectedDate === YESTERDAY,
+      && pastSnapshot.bottom === "2" && JSON.stringify(pastSnapshot.rows) === JSON.stringify(["yesterday-block"]) && pastSnapshot.selectedDate === YESTERDAY,
       JSON.stringify(pastSnapshot));
 
     const manyBlocks = Array.from({ length: 101 }, (_, index) => block(`many-${index}`, "many-task", TODAY, {

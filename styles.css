@@ -3000,6 +3000,12 @@ details.settings-row > .fold-summary.settings-row-summary {
 .wbs-row-menu-panel[hidden] { display: none; } .wbs-row-menu-panel > button { min-width: 44px; min-height: 44px; font-size: 12px; }
 .wbs-row-menu-panel .wbs-criteria-btn, .wbs-row-menu-panel .plan-owner-badge { width: auto; height: 44px; padding: 4px 10px; }
 .wbs-tower button { min-height: 44px; }
+.wbs-project-list, .wbs-project-detail { min-width: 0; }
+.wbs-project-choice { display: block; width: 100%; min-height: 56px; text-align: left; overflow-wrap: anywhere; }
+.wbs-project-choice.selected { border-left: 3px solid var(--tower-amber); }
+.wbs-task-row > div:nth-child(3) { display: flex; flex-direction: column; max-width: 120px; }
+.wbs-task-title { max-width: 100%; white-space: normal; text-align: left; padding-inline: 0; }
+@media (max-width: 600px) { .wbs-task-row { grid-template-columns: auto minmax(0, 1fr) 44px; } .wbs-task-row > div:nth-child(3) { grid-row: 2; grid-column: 2; max-width: none; flex-direction: row; flex-wrap: wrap; } .wbs-task-row > .wbs-row-menu-toggle { grid-column: 3; grid-row: 1; } }
 .wbs-today-btn { min-width: 60px; border: 1px solid #6b5322; color: var(--tower-amber); background: transparent; } .wbs-task-done { min-width: 60px; color: var(--tower-text); font-size: 11px; text-align: center; opacity: .7; }
 .wbs-task-row.is-completed .wbs-task-title { color: var(--tower-text); text-decoration: line-through; opacity: .7; }
 .wbs-tower .is-suspended { opacity: 1; } .wbs-task-row.is-suspended .wbs-task-title { text-decoration: line-through; text-decoration-color: rgba(142, 142, 147, .6); }
@@ -4603,9 +4609,9 @@ details.settings-row > .fold-summary.settings-row-summary {
   background: var(--tower-panel);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
 }
-.timeline-tower .view-header .eyebrow { color: var(--tower-cyan); font-size: 10px; font-weight: 700; letter-spacing: .18em; }
+.timeline-tower .view-header .eyebrow { color: var(--tower-cyan); font-size: 11px; font-weight: 700; letter-spacing: .18em; }
 .timeline-tower .view-header h1 { margin: 2px 0 0; color: var(--tower-text); font-size: 20px; letter-spacing: .06em; }
-.timeline-tower .view-header .view-breadcrumb { color: var(--tower-cyan); opacity: .6; font-size: 10px; }
+.timeline-tower .view-header .view-breadcrumb { color: var(--tower-cyan); opacity: .6; font-size: 11px; }
 
 /* ---- 日付バー(renderDateBarの.datebar/.btn/.inputは無改修。配色だけ) ---- */
 .timeline-tower .tl-datebar-panel {
@@ -4666,7 +4672,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   font-size: 11px;
   letter-spacing: .18em;
 }
-.timeline-tower .tl-radar-panel h2 span { float: right; color: var(--tower-text); font-size: 10px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
+.timeline-tower .tl-radar-panel h2 span { float: right; color: var(--tower-text); font-size: 11px; font-weight: 400; letter-spacing: .08em; opacity: .6; }
 .timeline-tower .tl-radar-body { padding: 8px; }
 
 /* ---- ズーム/エネルギー切替コントロール(既存.tl-zoom-controlsのまま配色だけ) ---- */
@@ -4699,6 +4705,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 /* ---- エネルギー/バッテリーグラフのラベル(既存.energy-graph-overlayのまま配色だけ) ---- */
 .timeline-tower .energy-graph-overlay { color: var(--tower-text); }
 .timeline-tower .battery-curve-label { color: var(--tower-amber) !important; }
+.timeline-tower .time-row, .timeline-tower .tl-start-btn, .timeline-tower .tl-complete-btn, .timeline-tower .now-line span, .timeline-tower .energy-graph-overlay div, .timeline-tower .battery-curve-label { font-size: 11px !important; }
 
 /* ===== v232: IRON LOG (P4 lane artifact) ===== */
 /* css-iron-log.css — IRON LOG専用画面(レーンB)。.iron-* プレフィクスのみ。
@@ -5549,6 +5556,9 @@ details.settings-row > .fold-summary.settings-row-summary {
 .detail-sheet .modal-body { min-height: 0; overscroll-behavior: contain; }
 .detail-sheet .modal-footer .btn { min-height: 44px; }
 .detail-sheet :is(input, select, textarea) { min-width: 0; max-width: 100%; font-size: 16px; }
+@media (max-width: 1023px) { .task-detail-single .detail-columns { grid-template-columns: minmax(0, 1fr); }
+  .task-detail-single .detail-column + .detail-column { border-left: 0; padding-left: 0; }
+}
 .detail-sheet textarea.textarea { min-height: 120px !important; }
 @media (min-width: 1000px) {
   .detail-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }

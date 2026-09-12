@@ -68,7 +68,8 @@ const IDS = ["fillGapTitle", "fillGapLength", "fillGapCategory", "fillGapProject
     await page.locator(".fill-gap-sheet .modal-close").click();
     await page.waitForSelector(".fill-gap-sheet", { state: "detached" });
     await page.locator('[data-action="nav"][data-view="wbs"]:visible').first().click();
-    await page.locator('[data-work-list="wbs"] [data-action="edit-task"][data-id="gap-t"]').click();
+    await page.locator('[data-work-list="wbs-projects"] [data-action="wbs-select-project"][data-id="gap-p"]').click();
+    await page.locator('[data-work-list="wbs-tasks-gap-p"] .wbs-task-title[data-action="edit-task"][data-id="gap-t"]').click();
     await page.locator('[data-modal-field="title"]').fill("別の未保存Task入力");
     await page.evaluate(() => { window.__otherGapEditor = document.querySelector('[data-modal-field="title"]'); });
     await resize(1279); await resize(1280);

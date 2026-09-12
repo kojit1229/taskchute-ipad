@@ -74,14 +74,7 @@ function configureSync(syncMod) {
   const openProject = async (id) => {
     // v329: 行の副操作は…メニュー(排他)の中。DOM直操作のトグルはrenderを経ないため
     // 開閉状態がそのまま残ることがあり、閉じている時だけ開く(セレクタ追随・assert不変)
-    const menuOpen = await page.evaluate((rowId) => {
-      const panel = document.querySelector(`[data-wbs-row-id="${rowId}"] .wbs-row-menu-panel`);
-      return panel ? !panel.hidden : false;
-    }, id);
-    if (!menuOpen) {
-      await page.click(`[data-wbs-row-id="${id}"] [data-action="wbs-row-menu-toggle"]`);
-      await page.waitForTimeout(150);
-    }
+    await page.locator(`[data-action="wbs-select-project"][data-id="${id}"]`).click();
     await page.locator(`[data-action="edit-project"][data-id="${id}"]`).first().click();
     await page.waitForSelector("[data-twy-track]", { state: "attached" });
   };
@@ -121,7 +114,7 @@ function configureSync(syncMod) {
     // v328(既存): toggle-wbs-editは単独ボタンと「表示 ▾」ポップオーバー内の2箇所にあり、
     // 後者は既定非表示のためvisible待ちだと最初の1件(非表示側)で詰まる。ここではクリックせず
     // 存在確認だけなのでattachedで待つ(セレクタ追随・assert不変)
-    await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]', { state: "attached" }); baseline = await savedState();
+    await page.reload(); await page.locator('[data-action="wbs-select-project"][data-id="p-num"]').click(); await page.waitForSelector('[data-work-list="wbs-projects"]', { state: "attached" }); baseline = await savedState();
 
     await openProject("p-num"); await page.locator('[data-action="twy-kind-numeric"]').click();
     for (const [field, value] of [["twyName", "読書"], ["twyStartDate", TODAY], ["twyBaseline", "0"],
@@ -139,14 +132,17 @@ function configureSync(syncMod) {
     let state = await savedState();
     const numeric = state.tracks.find((track) => track.ownerId === "p-num");
     const milestone = state.tracks.find((track) => track.ownerId === "p-ms");
-    check("条件1 numeric/milestone登録がWBS状態行まで連鎖", numeric?.kind === "numeric" && milestone?.kind === "milestone"
-      && await page.locator(`[data-twy-track-id="${numeric?.id}"] .t-state`).count() === 1
-      && await page.locator(`[data-twy-track-id="${milestone?.id}"] .twy-ms-node`).count() === 2);
+    await page.locator('[data-action="wbs-select-project"][data-id="p-num"]').click();
+    const numericStates = await page.locator(`[data-twy-track-id="${numeric?.id}"] .t-state`).count();
+    await page.locator('[data-action="wbs-select-project"][data-id="p-ms"]').click();
+    const milestoneNodes = await page.locator(`[data-twy-track-id="${milestone?.id}"] .twy-ms-node`).count();
+    check("条件1 numeric/milestone登録が選択ProjectのWBS状態行まで連鎖", numeric?.kind === "numeric" && milestone?.kind === "milestone"
+      && numericStates === 1 && milestoneNodes === 2);
 
     // v329以前から: 12WY Projectが複数(p-num/p-ms)あると各行に同じ「今週を確定」ボタンが
     // 出るため2件に一致する。twy-open-commitはプロジェクト非依存のグローバルシートを開くため
     // どちらでもよく、.first()で明示する(セレクタ追随・assert不変)
-    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
+    await page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').first().click();
     check("条件2 確定前は候補2コマが既定選択", await page.locator('.twy-commit-row input[type="checkbox"]:checked').count() === 2);
     await resetSaveProbe(); await page.locator('[data-action="twy-commit-week"]').click();
     state = await savedState();
@@ -189,7 +185,7 @@ function configureSync(syncMod) {
       && recorded.createdAt === recorded.updatedAt && await saveCalls() === 2, JSON.stringify({ recorded, saves: await saveCalls() }));
     await page.evaluate((key) => { const state = JSON.parse(localStorage.getItem(key)); state.currentView = "wbs";
       localStorage.setItem(key, JSON.stringify(state)); }, STATE_KEY);
-    await page.reload(); await page.waitForSelector(`[data-twy-track-id="${numeric.id}"]`);
+    await page.reload(); await page.locator('[data-action="wbs-select-project"][data-id="p-num"]').click(); await page.waitForSelector(`[data-twy-track-id="${numeric.id}"]`);
     check("条件3 measurement後のWBSは1/20章へ更新", (await page.locator(
       `[data-twy-track-id="${numeric.id}"] .twy-val`).textContent()).replace(/\s/g, "") === "1/20章");
 
@@ -197,7 +193,7 @@ function configureSync(syncMod) {
     // v329以前から: 12WY Projectが複数(p-num/p-ms)あると各行に同じ「今週を確定」ボタンが
     // 出るため2件に一致する。twy-open-commitはプロジェクト非依存のグローバルシートを開くため
     // どちらでもよく、.first()で明示する(セレクタ追随・assert不変)
-    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
+    await page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').first().click();
     const milestoneItem = items[1];
     await excuseCommitment(milestoneItem.id, "今週対象外");
     check("条件2 未完了1件の免除で確定シート分母は2→1", (await page.locator(".twy-commit-count").textContent())
@@ -229,7 +225,7 @@ function configureSync(syncMod) {
     // v329以前から: 12WY Projectが複数(p-num/p-ms)あると各行に同じ「今週を確定」ボタンが
     // 出るため2件に一致する。twy-open-commitはプロジェクト非依存のグローバルシートを開くため
     // どちらでもよく、.first()で明示する(セレクタ追随・assert不変)
-    await page.locator('.twy-commit-open[data-action="twy-open-commit"]').first().click();
+    await page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').first().click();
     await excuseCommitment(completionSeed.id, "全件免除確認");
     check("条件2 確定シートは全免除でN/A", (await page.locator(".twy-commit-count").textContent()).includes("N/A(全件免除)"));
     await page.locator('[data-action="modal-close"]').click();
@@ -262,11 +258,11 @@ function configureSync(syncMod) {
     console.log("[3] 判定条件3-2: 同じ測定の7日/8日境界");
     await page.evaluate((key) => { const value = JSON.parse(localStorage.getItem(key)); value.currentView = "wbs";
       localStorage.setItem(key, JSON.stringify(value)); }, STATE_KEY);
-    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 1, 1, 0, 0))); await page.reload();
+    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 1, 1, 0, 0))); await page.reload(); await page.locator('[data-action="wbs-select-project"][data-id="p-num"]').click();
     await page.waitForSelector(`[data-twy-track-id="${numeric.id}"] .t-state`);
     check("同じ測定の7日後は未更新にならない", (await page.locator(
       `[data-twy-track-id="${numeric.id}"] .t-state`).textContent()) !== "未更新");
-    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 2, 1, 0, 0))); await page.reload();
+    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 2, 1, 0, 0))); await page.reload(); await page.locator('[data-action="wbs-select-project"][data-id="p-num"]').click();
     await page.waitForSelector(`[data-twy-track-id="${numeric.id}"] .t-state`);
     check("8日放置の統合ステップで状態ラベルが未更新", (await page.locator(
       `[data-twy-track-id="${numeric.id}"] .t-state`).textContent()) === "未更新");

@@ -341,17 +341,17 @@ function staticChecks() {
     };
     await seed({ projects: [projectTS], tasks: [taskTS], view: "wbs" });
 
-    await page.click('[data-wbs-row-id="proj-ts"] [data-action="wbs-row-menu-toggle"]');
-    await page.waitForSelector('[data-wbs-row-id="proj-ts"] [data-action="edit-project"]', { state: "visible" });
-    await page.click('[data-wbs-row-id="proj-ts"] [data-action="edit-project"]');
+    await page.click('[data-action="wbs-select-project"][data-id="proj-ts"]');
+    await page.waitForSelector('[data-wbs-detail-id="proj-ts"] [data-action="edit-project"]', { state: "visible" });
+    await page.click('[data-wbs-detail-id="proj-ts"] [data-action="edit-project"]');
     await waitForModalField(page, "title");
     check("Project編集モーダルには.tower-sheetが付かない", await page.locator('.modal-card.tower-sheet').count() === 0);
     await page.click('[data-action="modal-close"]');
     await waitForModalClosed(page);
 
     await page.click('[data-wbs-row-id="task-ts"] [data-action="wbs-row-menu-toggle"]');
-    await page.waitForSelector('[data-wbs-row-id="task-ts"] [data-action="edit-task"]', { state: "visible" });
-    await page.click('[data-wbs-row-id="task-ts"] [data-action="edit-task"]');
+    await page.waitForSelector('[data-wbs-row-id="task-ts"] .wbs-row-menu-panel [data-action="edit-task"]', { state: "visible" });
+    await page.click('[data-wbs-row-id="task-ts"] .wbs-row-menu-panel [data-action="edit-task"]');
     await waitForModalField(page, "title");
     check("Task編集モーダルには.tower-sheetが付かない", await page.locator('.modal-card.tower-sheet').count() === 0);
     await page.click('[data-action="modal-close"]');

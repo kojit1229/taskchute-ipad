@@ -210,7 +210,7 @@ async function checkWbsUnchanged(browser) {
     }, STATE_KEY);
     await current.page.reload();
     await current.page.locator('#app[data-view="wbs"]').waitFor();
-    const metrics = await current.page.locator(`[data-wbs-row-id="${PROJECT_ID}"] .wbs-project-copy strong[data-id="${PROJECT_ID}"]`).evaluate((element) => {
+    const metrics = await current.page.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"] > strong`).evaluate((element) => {
       const style = getComputedStyle(element);
       const parsedLineHeight = parseFloat(style.lineHeight);
       const lineHeight = Number.isFinite(parsedLineHeight) ? parsedLineHeight : parseFloat(style.fontSize) * 1.6;

@@ -46,9 +46,9 @@ const {chromium,launchOptions,startServer,randomPort,STATE_KEY,passGithubGate}=r
    };
    await browseSource();
    console.log('STEP source '+source);
-   if(source==='wbs' && width>=1280) await page.locator('[data-action="wbs-select-project"][data-id="p"]').click();
+   if(source==='wbs') await page.locator('[data-action="wbs-select-project"][data-id="p"]').click();
    const action=source==='wish'?'wish-subtask-to-tasks':'task-today';
-   const open=async id=>{await page.locator(`[data-action="${action}"][data-id="${id}"]`).click();await page.locator("#modalRoot").evaluate(async root=>{await Promise.all(root.getAnimations({subtree:true}).map(animation=>animation.finished));});};
+   const open=async (id, entryAction=action)=>{await page.locator(`[data-action="${entryAction}"][data-id="${id}"]`).click();await page.locator("#modalRoot").evaluate(async root=>{await Promise.all(root.getAnimations({subtree:true}).map(animation=>animation.finished));});};
    if(source==='wbs') {
     for(const suffix of ['a','b','c']) {
      const id=source+'-'+suffix;
@@ -70,8 +70,8 @@ const {chromium,launchOptions,startServer,randomPort,STATE_KEY,passGithubGate}=r
      assert.equal(first[0].completed,false);
      assert.equal((await state()).currentView,'wbs');
      assert.equal((await state()).selectedDate,'2020-01-01','untimed save preserves browsing date');
-     await open(id);
-     assert.equal((await state()).modal.id,first[0].id,'reopen shows existing result');
+      await open(id,'placement-add-today');
+      assert.equal((await state()).modal.id,first[0].id,'reopen shows existing result');
      const replay=await page.evaluate(async id=>{
       const {state}=await import('/src/state/store.js');
       const {commitPlacement}=await import('/src/features/placement.js');

@@ -53,6 +53,7 @@ function check(name, cond, extra = "") {
     // 2個表示は過渡状態ではなく仕様なので、待機延長では解消しない。
     // normalizeStateが補完する「その他」Taskを除き、seedしたIDごとに検証する。
     if (view === "wbs" && tasks.length) {
+      await page.locator(`[data-action="wbs-select-project"][data-id="${tasks[0].projectId}"]`).click();
       await page.waitForFunction(
         (ids) => ids.every((id) =>
           document.querySelectorAll(`[data-action="toggle-criteria-request"][data-id="${id}"]`).length === 1),
@@ -128,6 +129,7 @@ function check(name, cond, extra = "") {
       && await btnA.evaluate((el) => el.classList.contains("on"))
       && await btnA.getAttribute("aria-pressed") === "true");
     await page.reload();
+    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForTimeout(500);
     const btnAReload = page.locator('[data-action="toggle-criteria-request"][data-id="task-A"]');
     check("再読込後もONが保持される(.on)", await btnAReload.evaluate((el) => el.classList.contains("on")));
@@ -183,6 +185,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, TODAY });
     await pageMobile.reload();
+    await pageMobile.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await pageMobile.waitForTimeout(500);
     check("モバイル幅でもトグルON表示(.on)が見える",
       await pageMobile.locator('[data-action="toggle-criteria-request"][data-id="task-M"]').evaluate((el) => el.classList.contains("on")));

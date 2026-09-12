@@ -71,7 +71,11 @@ async function seed(page, values = {}) {
   }, { key: STATE_KEY, values, today: TODAY, modified: OLD_MODIFIED });
   await page.reload();
   await page.locator(".wbs-view-menu > summary").click();
-  await page.waitForSelector('#app[data-view="wbs"] #wbs-search-input');
+  await page.waitForSelector('#app[data-view="wbs"] #wbs-projects-query');
+  if(values.projects?.length) {
+    const choice=page.locator(`[data-action="wbs-select-project"][data-id="${values.projects[0].id}"]`);
+    if(await choice.count()) { await page.locator('.wbs-view-menu > summary').click(); await choice.click(); await openViewMenu(page); }
+  }
 }
 
 async function openViewMenu(page) {
@@ -160,6 +164,7 @@ async function verifyMigrationAndDoneProjectToggle(page) {
   }, STATE_KEY);
   await page.reload();
   await page.waitForSelector('[data-wbs-row-id="p-done"]');
+  await page.locator('[data-action="wbs-select-project"][data-id="p-done"]').click();
   check("全完了から1件未完了へ戻すとProjectが再表示", await page.locator('[data-wbs-row-id="t-done"]').count() === 1);
 }
 
@@ -330,6 +335,7 @@ async function verifyCompactAndPlanProtection(page) {
   check("FはlocalStorageへ1回保存しdataModifiedAtを動かさない",
     await page.evaluate(() => window.__v302StateWrites) === 1 && state.dataModifiedAt === OLD_MODIFIED);
   await page.reload();
+  await page.locator('[data-action="wbs-select-project"][data-id="p-f"]').click();
   await page.waitForSelector('[data-wbs-row-id="t-f"] > .wbs-task-row.is-compact');
   check("F設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsCompactMode === true);
   await openViewMenu(page);
@@ -404,18 +410,16 @@ async function verifyExistingFiltersAndSearch(page) {
 
     const viewMenu = page.locator("details.wbs-view-menu");
     if (await viewMenu.evaluate(el => el.open)) await viewMenu.locator("summary").click();
-    const input = page.locator("#wbs-search-input");
-    await input.fill("検索対象");
-    await page.waitForFunction((id) => document.querySelector(`[data-action="wbs-search-jump"][data-id="${id}"]`), openTask.id);
-    await page.evaluate(() => {
-      window.__v302Scrolled = "";
-      Element.prototype.scrollIntoView = function scrollSpy() { window.__v302Scrolled = this.dataset.wbsRowId || ""; };
-    });
-    await page.locator(`[data-action="wbs-search-jump"][data-id="${openTask.id}"]`).click();
-    await page.waitForFunction((id) => window.__v302Scrolled === id, openTask.id);
-    check(`${mode.name}: 検索結果ジャンプはcategoryを解除し対象行を表示`,
+    await openViewMenu(page);
+    await page.locator('[data-action="wbs-category-filter"]').selectOption("");
+    await page.locator('#wbs-projects-query').fill(work.title);
+    await page.locator(`[data-action="wbs-select-project"][data-id="${work.id}"]`).click();
+    await page.locator(`[data-work-list="wbs-tasks-${work.id}"] [data-work-filter="query"]`).fill("検索対象");
+    check(`${mode.name}: category解除→Project選択→Task検索で対象行だけへ到達`,
       (await stateNow(page)).settings.wbsCategoryFilter === ""
-        && await page.locator(`[data-wbs-row-id="${openTask.id}"]`).count() === 1);
+        && await page.locator(`[data-wbs-row-id="${openTask.id}"]`).count() === 1
+        && await page.locator(`[data-wbs-row-id="t-reg-learn-${mode.hide}"]`).count() === 0
+        && await page.locator(`[data-work-list="wbs-tasks-${work.id}"] [data-work-key]`).count() === 1);
   }
 
   console.log("[7] 完了Project検索ジャンプはDフィルタを解除しcompact行へ到達");
@@ -429,20 +433,14 @@ async function verifyExistingFiltersAndSearch(page) {
   await waitSetting(page, { wbsHideDoneProjects: true });
   check("検索前は完了Project非表示", await page.locator('[data-wbs-row-id="p-search-done"]').count() === 0);
   await openViewMenu(page);
-  // v374: 開いたままの「表示▾」メニューが検索結果へのクリックを遮るため、405-406行と同じく検索前に閉じる
-  const viewMenu2 = page.locator("details.wbs-view-menu");
-  if (await viewMenu2.evaluate(el => el.open)) await viewMenu2.locator("summary").click();
-  await page.locator("#wbs-search-input").fill("完了検索");
-  await page.waitForSelector('[data-action="wbs-search-jump"][data-id="t-search-done"]');
-  await page.evaluate(() => {
-    window.__v302Scrolled = "";
-    Element.prototype.scrollIntoView = function scrollSpy() { window.__v302Scrolled = this.dataset.wbsRowId || ""; };
-  });
-  await page.locator('[data-action="wbs-search-jump"][data-id="t-search-done"]').click();
-  await page.waitForFunction(() => window.__v302Scrolled === "t-search-done");
-  check("ジャンプ時にDを解除して完了Taskのcompact行を表示",
+  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
+  await page.locator('#wbs-projects-query').fill('検索完了案件');
+  await page.locator('[data-action="wbs-select-project"][data-id="p-search-done"]').click();
+  await page.locator('#wbs-tasks-p-search-done-query').fill('完了検索');
+  check("Dを解除してProject選択・Task検索から完了Taskのcompact行へ到達",
     (await stateNow(page)).settings.wbsHideDoneProjects === false
-      && await page.locator('[data-wbs-row-id="t-search-done"] > .wbs-task-row.is-compact').count() === 1);
+      && await page.locator('[data-wbs-row-id="t-search-done"] > .wbs-task-row.is-compact').count() === 1
+      && await page.locator('[data-work-list="wbs-tasks-p-search-done"] [data-work-key]').count() === 1);
 }
 
 (async () => {

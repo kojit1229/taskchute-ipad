@@ -146,8 +146,8 @@ function check(name, cond, extra = "") {
   }, { KEY: STATE_KEY, PROJECT_ID });
   await pageA.reload();
   await pageA.waitForTimeout(400);
-  await pageA.locator(`[data-wbs-row-id="${PROJECT_ID}"] > .wbs-project-head > .wbs-row-menu-toggle`).click();
-  await pageA.click(`.wbs-row-menu-panel [data-action="add-task-to-project"][data-id="${PROJECT_ID}"]`);
+  await pageA.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"]`).click();
+  await pageA.click(`.wbs-detail-actions [data-action="add-task-to-project"][data-id="${PROJECT_ID}"]`);
   await pageA.waitForSelector('[data-modal-field="title"]', { state: "visible" });
   await pageA.fill('[data-modal-field="title"]', TASK_TITLE);
   await pageA.click('[data-action="modal-save"]');

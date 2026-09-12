@@ -180,8 +180,8 @@ async function verifyMainFlow(browser) {
     const mobileItems = await page.$$eval("#bottomNav button", (els) => els.map((el) => ({ id: el.dataset.view, label: el.childNodes[0].textContent })));
     // v333: 実行タブ統合で4項目化(「時間」廃止)。仕様変更としてセレクタ追随。
     const expectedMobileItems = [
-      { id: "today", label: "今日" }, { id: "journal", label: "ジャーナル" },
-      { id: "exec", label: "実行" }, { id: "more", label: "その他" }
+      { id: "today", label: "今日" }, { id: "exec", label: "実行" },
+      { id: "wbs", label: "作業一覧" }, { id: "more", label: "その他" }
     ];
     check("mobileNavは4項目・id/ラベルの組", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
     const moreHeight = await page.locator('#bottomNav [data-view="more"]').evaluate((el) => el.getBoundingClientRect().height);

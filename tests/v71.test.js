@@ -123,10 +123,10 @@ function check(name, cond, extra = "") {
     // v82(UX監査B1・K承認): 日課動線(朝: ホーム→ジャーナルで体調記録)を1タップにするため、
     // 不定期にしか触らないWBSを「その他」へ降ろし、ジャーナルをbottom-navへ昇格した。
     // WBSが「その他」の受け皿に出ることはv82.test.jsで別途検証する。
-    console.log("[1b] 下部タブ(mobileNav)は 今日/ジャーナル/実行/時間/その他(v182でhome→todayに入替)");
+    console.log("[1b] 下部タブ(mobileNav)は 今日/実行/作業一覧/その他(S-B1)");
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("mobileNavはv182の新構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "ジャーナル", "実行", "その他"]), JSON.stringify(bottomLabels));
+    check("mobileNavはS-B1の4項目構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
 
     // v230: home本体と専用fold群は描画コードごと撤去。移設先のないUIは不存在を固定する。
     console.log("[2] v230: homeナビ・タブ・専用fold群が存在せず、旧home stateはtodayへ縮退する");

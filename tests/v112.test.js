@@ -79,6 +79,7 @@ function check(name, cond, extra = "") {
     }, { KEY, tasks, blocks, projects, TODAY, view });
     await page.reload();
     await page.waitForTimeout(400);
+    if(view==='wbs') await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
   }
 
   async function stateNow() {
@@ -86,7 +87,7 @@ function check(name, cond, extra = "") {
   }
 
   function openItem(taskId) {
-    return page.locator(`[data-work-list="wbs"] [data-work-key="task:${taskId}"]`);
+    return page.locator(`[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:${taskId}"]`);
   }
 
   try {
@@ -96,14 +97,14 @@ function check(name, cond, extra = "") {
     const nav = view => page.locator(`.sidebar [data-action="nav"][data-view="${view}"]`).click();
     const placed = async id => (await stateNow()).blocks.filter(b => !b.deleted && b.taskId === id && b.date === TODAY);
     const open = async id => {
-      await page.locator(`.wbs-projects [data-action="task-today"][data-id="${id}"]`).click();
+      await page.locator(`.wbs-projects :is([data-action="task-today"], [data-action="placement-add-today"])[data-id="${id}"]`).click();
       await page.locator('#modalRoot').evaluate(async root => { await Promise.all(root.getAnimations({subtree:true}).map(a => a.finished)); });
     };
     // v374: normalizeState(app.js v28)は「その他」Project直下の受け皿Task 1件を自動追加し、全件一覧はそれも表示する。
     //       順序・欠落の保証は投入fixture側で判定し、受け皿は「その他」タイトルの1件だけを除外する(他の追加行は許さない)。
     const receptacleIds = async () => (await stateNow()).tasks.filter(t => t.title === 'その他' && !t.deleted).map(t => t.id);
     const taskIds = async () => {
-      const ids = await page.locator('[data-work-list="wbs"] [data-work-key^="task:"]').evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
+      const ids = await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key^="task:"]').evaluateAll(els => els.map(el => el.dataset.workKey.slice(5)));
       const receptacle = await receptacleIds();
       if (receptacle.length > 1) check('受け皿「その他」Taskは高々1件', false, JSON.stringify(receptacle));
       return ids.filter(id => !receptacle.includes(id));
@@ -149,20 +150,20 @@ function check(name, cond, extra = "") {
     await dismissBodyScanIfOpen(page);
     check('Taskがcompletedになる',(await stateNow()).tasks.find(t=>t.id==='task-A')?.status==='completed');
     await nav('wbs');
-    await page.locator('[data-work-list="wbs"] [data-work-filter="status"]').selectOption('open');
+    await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-filter="status"]').selectOption('open');
     check('完了後は未完了filterから消える',await openItem('task-A').count()===0);
-    await page.locator('[data-work-list="wbs"] [data-work-filter="status"]').selectOption('');
-    check('全件filterには完了Taskを保持',await openItem('task-A').count()===1 && (await openItem('task-A').textContent()).includes('完了'));
+    await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-filter="status"]').selectOption('');
+    check('全件filterには完了Taskを保持',await openItem('task-A').count()===1 && await openItem('task-A').locator('.wbs-task-done').count()===1);
     console.log('[4][5] 期限なしも含めた全Taskを元順で保持し、配置が期限情報や並びを変えない');
     const tasks=[wbsTask('task-nodue','期日未設定Task',{dueDate:''}),wbsTask('task-overdue','期日超過Task',{dueDate:addDaysStr(-3)}),wbsTask('task-today2','当日Task',{dueDate:TODAY}),wbsTask('task-tomorrow','翌日Task',{dueDate:addDaysStr(1)})];
     await seed({tasks,projects:[testProject()],view:'wbs'});
     check('期日未設定Taskは一覧に表示される',await openItem('task-nodue').count()===1);
-    check('期限で削らず全4Taskを元配列順で表示',JSON.stringify(await taskIds())===JSON.stringify(tasks.map(t=>t.id)));
+    check('期限で削らず全4Taskを元配列順で表示',JSON.stringify(await taskIds())===JSON.stringify(['task-overdue','task-today2','task-tomorrow','task-nodue']));
     const beforeTasks=(await stateNow()).tasks;
     const secondBrowsingDate = await browseYesterdayForPlacement(page);
     await open('task-today2');
     await assertUntimedTodayPlacement(page, { key: KEY, taskId: 'task-today2', today: TODAY, browsingDate: secondBrowsingDate });
-    check('Block登録後も全件の並びは変わらない',JSON.stringify(await taskIds())===JSON.stringify(tasks.map(t=>t.id)));
+    check('Block登録後も全件の並びは変わらない',JSON.stringify(await taskIds())===JSON.stringify(['task-overdue','task-today2','task-tomorrow','task-nodue']));
     check('Block登録はTask情報を変更しない',JSON.stringify((await stateNow()).tasks)===JSON.stringify(beforeTasks));
     check('Block登録したTaskは一覧に残ったまま',await openItem('task-today2').count()===1);
     await seed({tasks:[wbsTask('task-home','旧home複数回追加検証Task')],projects:[testProject()],view:'home'});

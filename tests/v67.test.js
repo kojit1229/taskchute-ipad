@@ -78,6 +78,8 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: KEY, today: TODAY });
     await page.reload();
+    // S-B1(3段-02)の契約追随(2026-09-12 CHANGELOG 21:35): 作業一覧は左 Project 選択→右にその Project の Task。先に Project を選ぶ(断言は不変)
+    await page.click('[data-action="wbs-select-project"][data-id="test-proj"]');
     await page.waitForSelector('[data-wbs-row-id="task-ai1"] [data-action="wbs-row-menu-toggle"]');
     check("保存前はWBS一覧に🤝マーク無し", await page.locator(".ai-work-flag").count() === 0);
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)

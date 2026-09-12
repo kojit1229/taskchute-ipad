@@ -87,7 +87,7 @@ function check(name, cond, extra = "") {
   }
 
   function projectTitleLocator(page_) {
-    return page_.locator('.wbs-project-copy strong[data-id]');
+    return page_.locator('.wbs-project-choice:not([data-id=""]) > strong');
   }
   async function openViewMenu(page_) {
     if (!await page_.locator(".wbs-view-menu").evaluate((element) => element.open)) {
@@ -162,6 +162,7 @@ function check(name, cond, extra = "") {
     // (d) 絞り込み中もタスク操作(完了チェック・進捗入力)が正常に動く
     // ============================================================
     console.log("[4] 絞り込み中(未分類)でもタスクの完了チェック・進捗の分子/分母入力が正常に動作する");
+    await page.locator('[data-action="wbs-select-project"][data-id="proj-none"]').click();
     await page.click('[data-action="toggle-task"][data-id="task-none"]');
     await page.waitForTimeout(300);
     let s4 = await stateNow();
@@ -175,6 +176,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     await openViewMenu(page);
     await page.locator('[data-action="toggle-wbs-edit"].wbs-menu-edit-toggle').click();
+    await page.locator('[data-action="wbs-select-project"][data-id="proj-work"]').click();
     const numInput = page.locator('input[data-wbs-progress="num"][data-id="task-work"]');
     await numInput.fill("7");
     await numInput.dispatchEvent("change");

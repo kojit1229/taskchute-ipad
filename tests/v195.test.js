@@ -61,6 +61,7 @@ function check(name, cond, extra = "") {
     }, { ids, expected });
   }
   async function openTaskMenu(id) {
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
     await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
   }
   async function openTaskEditor(id) {
@@ -85,6 +86,7 @@ function check(name, cond, extra = "") {
     }, { key: STATE_KEY, project, tasks: [parent, ...children, offParent, offChild, normalizeAi] });
     await page.reload();
     await page.waitForSelector('#app[data-view="wbs"]');
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
 
     console.log("[1] planTarget OFFでは従来表示、owner=aiはaiWorkへ正規化");
     check("対象外の子に担当バッジが出ない", await page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').count() === 0);
@@ -141,6 +143,7 @@ function check(name, cond, extra = "") {
     }, { key: STATE_KEY, ids: children.map((t) => t.id), updatedAt: lazyUpdatedAt });
     await page.reload();
     await page.waitForSelector('#app[data-view="wbs"]');
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
     await openTaskMenu("step-a");
     await page.locator('[data-action="move-plan-step"][data-id="step-a"][data-direction="1"]').click();
     const childIds = children.map((t) => t.id);
@@ -153,6 +156,7 @@ function check(name, cond, extra = "") {
     check("遅延採番で触れた全兄弟のupdatedAtを更新", childIds.every((id) => moved[id].updatedAt !== lazyUpdatedAt));
     await page.reload();
     await page.waitForSelector('#app[data-view="wbs"]');
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
     check("リロード後も順序を保持", JSON.stringify(await siblingOrder(childIds)) === JSON.stringify(["step-b", "step-a", "step-c"]));
 
     console.log("[5] 下に追加は前後orderの中間値で保存");
@@ -219,6 +223,7 @@ process.on("beforeExit", async () => {
     }, { key: STATE_KEY, project, tasks, settings });
     await page.reload();
     await page.waitForSelector('#app[data-view="wbs"]');
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
   }
   async function storedRegressionTask(page, id) {
     return page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.id === id), { key: STATE_KEY, id });

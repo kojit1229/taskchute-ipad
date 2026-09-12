@@ -64,9 +64,10 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       await page.locator('[data-date-picker]').fill(fixtureDates.yesterday);
       await page.waitForFunction(async () => (await import('/src/state/store.js')).state.selectedDate === fixtureDates.yesterday);
       await nav('wbs');
+      await page.locator('[data-action="wbs-select-project"][data-id="p"]').click();
     };
     const open = async id => {
-      await page.locator(`[data-work-list="wbs"] [data-action="placement-add-today"][data-id="${id}"]`).click();
+      await page.locator(`[data-work-list="wbs-tasks-p"] :is([data-action="task-today"],[data-action="placement-add-today"])[data-id="${id}"]`).click();
       await page.locator('.placement-form').waitFor();
       await page.locator('#modalRoot').evaluate(async root => {
         await Promise.all(root.getAnimations({ subtree: true }).map(animation => animation.finished));
@@ -83,7 +84,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
     const untimed = await state();
     const added = untimed.blocks.find(b => b.taskId === 'a' && b.date === fixtureDates.today);
     assert.equal(added.plannedStartAt, ''); assert.equal(added.plannedEndAt, '');
-    await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="a"]').click();
+    await page.locator('[data-work-list="wbs-tasks-p"] :is([data-action="task-today"],[data-action="placement-add-today"])[data-id="a"]').click();
     await page.locator('[data-action="placement-edit"]').click();
     assert.deepEqual((await state()).blocks, untimed.blocks, 'opening the editor does not mutate blocks');
     await page.locator('[data-modal-field="plannedStartAt"]').fill(fixtureDates.today + 'T11:45');
@@ -192,7 +193,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       return { ok, writes, unchanged: stamp === state.dataModifiedAt, count: state.blocks.filter(b => b.id === request.block.id).length };
     }, await request('a'));
     assert.deepEqual(replay, { ok: true, writes: 0, unchanged: true, count: 1 });
-    await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="a"]').click();
+    await page.locator('[data-work-list="wbs-tasks-p"] :is([data-action="task-today"],[data-action="placement-add-today"])[data-id="a"]').click();
     assert.equal((await state()).modal.id, added.id, 'reopen selects saved result');
     assert.equal((await state()).blocks.filter(b => b.id === added.id).length, 1);
     await page.locator('[data-action="placement-return"]').click();
@@ -246,14 +247,14 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
     console.log('PASS 22: midnight reconfirmation / completed Task rejection / deleted request never resurrects');
 
     await startScenario('continuous additions, extras and rendering', { continuous: true });
-    const query = page.locator('[data-work-list="wbs"] [data-work-filter="query"]');
+    const query = page.locator('[data-work-list="wbs-tasks-p"] [data-work-filter="query"]');
     await query.fill('連続追加');
     await query.evaluate(input => { input.setSelectionRange(1, 3); window.continuousQuery = input; });
     const position = () => page.evaluate(() => {
-      const input = document.querySelector('[data-work-list="wbs"] [data-work-filter="query"]');
+      const input = document.querySelector('[data-work-list="wbs-tasks-p"] [data-work-filter="query"]');
       return { sameInput: input === window.continuousQuery, query: input.value,
         start: input.selectionStart, end: input.selectionEnd,
-        scroll: document.querySelector('[data-work-list="wbs"] [data-work-list-rows]').scrollTop };
+        scroll: document.querySelector('[data-work-list="wbs-tasks-p"] [data-work-list-rows]').scrollTop };
     });
     await open('continuous-8');
     const firstPosition = await position();
@@ -264,7 +265,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
     assert.equal(await page.evaluate(() => document.activeElement.dataset.id), 'continuous-8', 'focus returns to originating row');
     assert.equal((await state()).currentView, 'wbs');
     assert.equal((await state()).selectedDate, fixtureDates.yesterday);
-    assert.equal(await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="continuous-8"]').textContent(), '予定を見る');
+    assert.equal(await page.locator('[data-work-list="wbs-tasks-p"] :is([data-action="task-today"],[data-action="placement-add-today"])[data-id="continuous-8"]').textContent(), '予定を見る');
     const firstSaved = (await state()).blocks.find(b => b.id === continuousFirst.block.id);
     const persistedFirst = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY);
     assert.deepEqual(persistedFirst, [firstSaved]);
@@ -294,12 +295,12 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
     assert.equal((await state()).currentView, 'wbs');
     console.log('PASS 23: continuous tasks / second failure retains first / search node, selection and scroll');
 
-    await page.locator('[data-work-list="wbs"] [data-action="placement-add-today"][data-id="continuous-8"]').click();
+    await page.locator('[data-work-list="wbs-tasks-p"] :is([data-action="task-today"],[data-action="placement-add-today"])[data-id="continuous-8"]').click();
     assert.equal((await state()).modal.id, firstSaved.id, 'normal action views saved Block');
     assert.equal((await state()).blocks.length, 2);
     await page.locator('[data-action="placement-return"]').click();
     for (const count of [3, 4]) {
-      await page.locator('[data-work-list="wbs"] [data-action="placement-add-another"][data-id="continuous-8"]').evaluate(button => {
+      await page.locator('[data-work-list="wbs-tasks-p"] [data-action="placement-add-another"][data-id="continuous-8"]').evaluate(button => {
         button.click(); button.click();
       });
       assert.match(await page.locator('.placement-form').textContent(), /別の予定/);
@@ -321,13 +322,14 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       }, separate);
       assert.deepEqual(resend, { ok: true, writes: 0, count });
     }
-    const staleButton = page.locator('[data-work-list="wbs"] [data-action="placement-add-another"][data-id="continuous-8"]');
+    const staleButton = page.locator('[data-work-list="wbs-tasks-p"] [data-action="placement-add-another"][data-id="continuous-8"]');
     await page.evaluate(async () => { (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'continuous-8').status = 'completed'; });
     await staleButton.click();
     assert.equal((await state()).modal, null, 'completed Task is rejected before new candidate selection');
     assert.equal((await state()).blocks.length, 4);
     assert.equal((await state()).tasks.find(t => t.id === 'continuous-8').status, 'completed');
     await page.reload(); await nav('wbs');
+      await page.locator('[data-action="wbs-select-project"][data-id="p"]').click();
     assert.equal((await state()).blocks.length, 4, 'reload does not resend requests');
     assert.deepEqual((await state()).blocks.find(b => b.id === firstSaved.id),
       // B4 25: normalizeState fills missing copiedFromId on reload; compare the full record.
@@ -345,7 +347,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       await nav(scope);
       const unchanged = await page.evaluate(async scope => {
         const { updateWorkLists } = await import('/src/features/work-list.js');
-        const root = document.querySelector(`[data-work-list="${scope}"]`);
+        const root = document.querySelector(`[data-work-list="${scope === 'wbs' ? 'wbs-tasks-p' : scope}"]`);
         const rows = [...root.querySelectorAll('[data-work-key]')];
         window.stableWorkRows = rows;
         updateWorkLists(); updateWorkLists();

@@ -153,7 +153,7 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
     await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
     check("選択で右ペインが切り替わる", await page.locator('[data-wbs-detail-id="p-other"]').isVisible());
     await page.setViewportSize({ width: 1279, height: 900 });
-    await page.waitForSelector(".wbs-projects:not(.is-desktop)");
+    await page.waitForFunction(() => { const a=document.querySelector('.wbs-project-list').getBoundingClientRect(), b=document.querySelector('.wbs-project-detail').getBoundingClientRect(); return b.top >= a.bottom; });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(50);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -162,17 +162,17 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
       await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === stableValue
         && await page.evaluate(() => window.__v330StateWrites) === 0);
 
-    console.log("[4] 1279pxは従来アコーディオン(2ペイン無し)");
-    const mobileLayout = { panes: await page.locator(".wbs-project-list, .wbs-project-detail").count(),
-      carets: await page.locator('.wbs-projects > [data-wbs-row-id] > .wbs-project-head > [data-action="toggle-project-collapse"]').count(),
-      projects: await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).projects.filter((project) => !project.deleted).length, STATE_KEY) };
+    console.log("[4] 1279pxはProject選択とTask検索を縦置き");
     await page.setViewportSize({ width: 1279, height: 900 });
-    await page.waitForSelector(".wbs-projects:not(.is-desktop)");
+    await page.waitForFunction(() => { const a=document.querySelector('.wbs-project-list').getBoundingClientRect(), b=document.querySelector('.wbs-project-detail').getBoundingClientRect(); return b.top >= a.bottom; });
     const mobileLayout2 = { panes: await page.locator(".wbs-project-list, .wbs-project-detail").count(),
-      carets: await page.locator('.wbs-projects > [data-wbs-row-id] > .wbs-project-head > [data-action="toggle-project-collapse"]').count(),
-      projects: mobileLayout.projects };
-    check("1279pxは2ペイン無しで従来アコーディオン", mobileLayout2.panes === 0
-      && mobileLayout2.carets === mobileLayout2.projects, JSON.stringify(mobileLayout2));
+      choices: await page.locator('[data-action="wbs-select-project"]').count(),
+      projects: await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.filter(p => !p.deleted).length, STATE_KEY) };
+    check("1279pxは選択Projectを保持し独立検索2枠と全Project/なし選択肢を縦に表示", mobileLayout2.panes === 2
+      && mobileLayout2.choices === mobileLayout2.projects + 1
+      && await page.locator('[data-wbs-detail-id="p-other"]').isVisible()
+      && await page.locator('#wbs-projects-query').isVisible()
+      && await page.locator('#wbs-tasks-p-other-query').isVisible(), JSON.stringify(mobileLayout2));
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForSelector(".wbs-projects.is-desktop");
 

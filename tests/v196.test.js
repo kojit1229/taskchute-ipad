@@ -112,6 +112,7 @@ function check(name, cond, extra = "") {
     }, { key: STATE_KEY, project, tasks, settings });
     await page.reload();
     await page.waitForSelector('#app[data-view="wbs"]');
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
   }
 
   async function advanceAndPoll(seconds) {
@@ -195,6 +196,7 @@ function check(name, cond, extra = "") {
     check("実行計画のpending stateは維持", appSource.includes("_planStepPending"));
     await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.waitForSelector('#app[data-view="wbs"]');
+    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
 
     console.log("[1c] 承認でサブタスク作成、既存サブタスクは不変");
     await openTaskEditor("task-plan");

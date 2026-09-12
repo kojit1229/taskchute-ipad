@@ -92,7 +92,7 @@ function check(name, cond, extra = "") {
     console.log("[3] Project編集モーダルで優先度(高/中/低)を保存できる");
     await seed({ projects: [testProject("proj-pri", "優先度テストProject")] });
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="proj-pri"] [data-action="wbs-row-menu-toggle"]');
+    await page.click('[data-action="wbs-select-project"][data-id="proj-pri"]');
     await page.waitForTimeout(150);
     await page.click('button[data-action="edit-project"][data-id="proj-pri"]');
     await page.waitForTimeout(200);

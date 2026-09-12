@@ -4,7 +4,7 @@ const {chromium,launchOptions,startServer,randomPort,STATE_KEY,passGithubGate}=r
 const {createFeedbackFixture,DATE,PREFIX}=require('./feedback-fixture.cjs');
 const {observeEntry}=require('./feedback-entry-observer.cjs');
 const {observeCanonical}=require('./feedback-canonical-observer.cjs');
-async function nav(page,view){const direct=page.locator(`#bottomNav [data-view="${view}"]:visible,#sidebar [data-view="${view}"]:visible`).first();
+async function nav(page,view){if(view==='journal'){await nav(page,'today');await page.locator('[data-work-list="today"] [data-action="nav"][data-view="journal"]').click();return;}const direct=page.locator(`#bottomNav [data-view="${view}"]:visible,#sidebar [data-view="${view}"]:visible`).first();
  if(await direct.count())await direct.click();else{await page.locator('#bottomNav [data-view="more"]:visible,#sidebar [data-view="more"]:visible').first().click();await page.locator(`.more-tower-grid [data-view="${view}"]`).click();}}
 async function expose(page,selector){const el=page.locator(selector).first();await el.waitFor({state:'attached'});await el.evaluate(el=>{for(let p=el.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});return el;}
 async function date(page,date){await nav(page,'exec');await page.locator('[data-date-picker]').fill(date);await page.waitForFunction(async date=>(await import('/src/state/store.js')).state.selectedDate===date,date);await nav(page,'journal');await expose(page,`[data-journal-date="${date}"]`);}

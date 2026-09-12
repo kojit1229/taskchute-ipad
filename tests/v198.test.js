@@ -147,6 +147,7 @@ function check(name, cond, extra = "") {
     }, { key: STATE_KEY, tasks, projects, blocks, view, settings, wishOpenId, TODAY });
     await page.reload();
     await page.waitForSelector(`#app[data-view="${view}"]`);
+    if (view === "wbs") await page.locator(`[data-action="wbs-select-project"][data-id="${projects[0].id}"]`).click();
   }
 
   async function storedTasks() {
@@ -219,7 +220,7 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("r4");
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.click(`[data-work-list="wbs"] [data-action="edit-task"][data-id="${kStep.id}"]`);
+      await page.click(`[data-work-list^="wbs-tasks-"] .wbs-task-title[data-action="edit-task"][data-id="${kStep.id}"]`);
       await page.selectOption('[data-modal-field="status"]', "completed");
       await page.click('[data-action="modal-save"]');
       await page.waitForSelector(".ai-step-confirm-modal");
@@ -256,7 +257,7 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("c1", { k: { status: "completed", progressNum: 10 } });
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.click(`[data-work-list="wbs"] [data-action="edit-task"][data-id="${kStep.id}"]`);
+      await page.click(`[data-work-list^="wbs-tasks-"] .wbs-task-title[data-action="edit-task"][data-id="${kStep.id}"]`);
       await page.click('[data-action="modal-save"]');  // statusは触らず「completed」のまま保存
       await page.waitForTimeout(300);
       check("再保存では発火しない", await sheetVisible() === 0);
@@ -514,6 +515,7 @@ function check(name, cond, extra = "") {
       }, { key: STATE_KEY, parent, kStep, aiStep, project, LOCAL_T });
       await pageR2.reload();
       await pageR2.waitForSelector('#app[data-view="wbs"]');
+       await pageR2.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
 
       // シートを開く
       await pageR2.click(`[data-action="toggle-task"][data-id="${kStep.id}"]`);

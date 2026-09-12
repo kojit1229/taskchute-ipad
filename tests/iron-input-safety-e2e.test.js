@@ -94,26 +94,26 @@ async function runCase(browser, port, name, width = 390) {
       await values('B', '42.5', '8');
       await page.locator('[data-action="iron-menu-delete"][data-id="1"]').click();
       await values('B', '42.5', '8'); assert.deepEqual((await saved()).settings.gymExerciseList, ['A', 'C']);
-      await nav('journal'); await nav('iron-log'); await values('B', '42.5', '8');
+      await nav('today'); await nav('iron-log'); await values('B', '42.5', '8');
       await nav('fund'); await nav('iron-log'); await values('B', '42.5', '8');
-      await field('Weight').fill(''); await nav('journal'); await nav('iron-log'); await values('B', '', '8');
+      await field('Weight').fill(''); await nav('today'); await nav('iron-log'); await values('B', '', '8');
       assert.equal((await sets()).length, 0);
     }
     if (name === 'day') {
       await field('Exercise').selectOption('B'); await fill('40', '10');
       const old = JSON.stringify(await sets());
       await page.clock.setFixedTime(new Date(`${NEXT}T00:01:00+09:00`));
-      await nav('journal'); await nav('iron-log'); await values('B', '40', '10');
+      await nav('today'); await nav('iron-log'); await values('B', '40', '10');
       assert.match(await page.locator('.iron-draft-date').innerText(), /2026-09-06.*2026-09-07/);
       assert.equal((await sets(NEXT)).length, 0); await add();
       assert.equal(JSON.stringify(await sets()), old); assert.equal((await sets(NEXT)).length, 1);
       assert.ok((await sets(NEXT))[0].at.startsWith(NEXT)); assert.equal(await page.locator('.iron-draft-date').count(), 0);
       await page.clock.setFixedTime(new Date('2026-09-08T00:01:00+09:00'));
-      await nav('journal'); await nav('iron-log'); assert.equal(await page.locator('.iron-draft-date').count(), 1);
+      await nav('today'); await nav('iron-log'); assert.equal(await page.locator('.iron-draft-date').count(), 1);
       await fill('-1', '10'); assert.equal((await sets('2026-09-08')).length, 0);
-      await nav('journal'); await nav('iron-log'); assert.equal(await page.locator('.iron-draft-date').count(), 0);
+      await nav('today'); await nav('iron-log'); assert.equal(await page.locator('.iron-draft-date').count(), 0);
       await page.clock.setFixedTime(new Date('2026-09-09T00:01:00+09:00'));
-      await nav('journal'); await nav('iron-log'); await add();
+      await nav('today'); await nav('iron-log'); await add();
       assert.equal((await sets('2026-09-09')).length, 0); assert.equal(await page.locator('.iron-draft-date').count(), 1);
       await values('B', '-1', '10');
     }
