@@ -5556,6 +5556,9 @@ details.settings-row > .fold-summary.settings-row-summary {
 .detail-sheet .modal-body { min-height: 0; overscroll-behavior: contain; }
 .detail-sheet .modal-footer .btn { min-height: 44px; }
 .detail-sheet :is(input, select, textarea) { min-width: 0; max-width: 100%; font-size: 16px; }
+.modal-card.task-detail-single { max-width: 760px; }
+.task-detail-single .detail-columns { grid-template-columns: minmax(0, 1fr); }
+.task-detail-single .detail-column + .detail-column { border-left: 0; padding-left: 0; }
 .detail-sheet textarea.textarea { min-height: 120px !important; }
 @media (min-width: 1000px) {
   .detail-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -14309,7 +14309,7 @@ function buildTaskModal(task) {
     ...parentCandidates.map((t) => `<option value="${t.id}" ${task.parentTaskId === t.id ? "selected" : ""}>${escapeHTML(t.title)}</option>`)
   ].join("");
   return legacyDetailFrame("task", task, task.id ? "Task を編集" : "Task を追加",
-    "task-modal detail-sheet", Boolean(task.id), task.id ? "保存" : "追加", () => `
+    "task-modal detail-sheet task-detail-single", Boolean(task.id), task.id ? "保存" : "追加", () => `
       <div class="modal-body">
         <div class="detail-columns"><section class="detail-column" aria-label="基本・完了条件">
         <h4 class="tower-section-title">基本・完了条件</h4>

@@ -108,6 +108,8 @@ const today = '2026-09-06', selected = '2026-09-07';
     const projectSearch = page.locator('[data-work-list="wbs-projects"]');
     await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
     const taskSearch = page.locator('[data-work-list="wbs-tasks-alpha"]');
+    assert.deepEqual(await taskSearch.locator('[data-work-filter="status"] option').evaluateAll(nodes => nodes.map(node => node.value)), ['', 'open', 'running', 'completed', 'suspended']);
+    await taskSearch.locator('[data-work-filter="status"]').selectOption('open');
     const searchBefore = await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.tasks, state.projects, state.blocks, state.settings]); });
     const projectQuery = projectSearch.locator('[data-work-filter="query"]');
     await projectQuery.fill('検索用説明');
@@ -131,6 +133,7 @@ const today = '2026-09-06', selected = '2026-09-07';
     await betaQuery.fill('別Project');
     await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
     assert.equal(await taskQuery.inputValue(), '連続');
+    assert.equal(await taskSearch.locator('[data-work-filter="status"]').inputValue(), 'open');
     assert(await taskQuery.evaluate(el => el === window.taskSearchInput));
     assert(await taskSearch.locator('[data-work-list-rows]').evaluate(el => el.scrollTop === window.taskSearchTop));
     await taskQuery.fill('検索対象');
@@ -158,6 +161,65 @@ const today = '2026-09-06', selected = '2026-09-07';
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'WBS no horizontal overflow');
     }
     console.log('PASS S3-02: left/right search, hierarchy, IME, per-Project DOM/query/scroll, detail return, no save and two placements');
+    // S3-03: every existing field remains in one common, vertically scrollable editor.
+    const taskAction = (name, id) => page.evaluate(({ name, id }) => {
+      const button = document.createElement('button'); button.dataset.action = name; button.dataset.id = id;
+      document.body.append(button); button.click(); button.remove();
+    }, { name, id });
+    const modalField = name => page.locator('#modalRoot [data-modal-field="' + name + '"]');
+    await page.evaluate(async () => {
+      const { state } = await import('/src/state/store.js');
+      state.projects.find(p => p.id === 'alpha').twelveWeekStartDate = '2026-09-05';
+      Object.assign(state.tasks.find(t => t.id === 'child'), { owner: 'ai', aiWork: true, aiBrief: '隠しても残す指示', aiWorkBrief: 'AIへの依頼', planTarget: true, estimateMin: 47, dueDate: '2026-09-15', doneCriteria: '完了の成果', firstStep: '最初の一歩', twyPlan: { perWeek: 3, fromWeek: 2, toWeek: 9, keystone: true } });
+    });
+    await taskAction('edit-task', 'child');
+    const keys = ['title', 'projectId', 'status', 'parentTaskId', 'category', 'dueDate', 'selfDueEnabled', 'doneCriteria', 'firstStep', 'leverageType', 'aiWork', 'aiWorkBrief', 'planTarget', 'aiBrief', 'twyPerWeek', 'twyFromWeek', 'twyToWeek', 'twyKeystone', 'description'];
+    for (const key of keys) assert.equal(await modalField(key).count(), 1, 'one independent field: ' + key);
+    assert.equal(await modalField('dueDate').getAttribute('type'), 'date');
+    assert.equal(await modalField('estimateMin').count(), 0, 'no invented estimate input');
+    assert.equal(await page.locator('.task-modal [role="tab"]').count(), 0);
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      assert(await page.locator('.task-modal .detail-columns').evaluate(el => { const sections = [...el.children].map(node => node.getBoundingClientRect()); return sections[1].top >= sections[0].bottom && el.scrollWidth <= el.clientWidth + 1; }), 'all sections stack vertically');
+      await modalField('description').scrollIntoViewIfNeeded();
+      assert(await modalField('description').isVisible());
+      assert(await page.locator('.task-modal').evaluate(el => [...el.querySelectorAll('input:not([type="hidden"]),select,textarea')].every(input => parseFloat(getComputedStyle(input).fontSize) >= 16)));
+      await page.locator('.task-modal [data-action="modal-save"]').scrollIntoViewIfNeeded();
+      assert(await page.locator('.task-modal [data-action="modal-save"]').isVisible());
+    }
+    await page.locator('.task-modal [data-action="modal-close"]').last().click();
+    await taskAction('add-task-to-project', 'alpha');
+    assert.equal(await modalField('order').getAttribute('type'), 'hidden');
+    assert.equal(await page.locator('.task-modal [data-action="modal-delete"]').count(), 0);
+    await page.locator('.task-modal [data-action="modal-close"]').last().click();
+    const hiddenBefore = await page.evaluate(async () => {
+      const task = (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'child');
+      task.projectId = 'beta'; task.owner = 'k'; task.aiWork = false;
+      return JSON.stringify([task.aiBrief, task.twyPlan, task.estimateMin]);
+    });
+    await taskAction('edit-task', 'child');
+    assert.equal(await modalField('aiBrief').count(), 0);
+    assert.equal(await modalField('twyPerWeek').count(), 0);
+    await page.locator('.task-modal [data-action="modal-save"]').click();
+    await page.locator('.task-modal').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(async () => { const task = (await import('/src/state/store.js')).state.tasks.find(t => t.id === 'child'); return JSON.stringify([task.aiBrief, task.twyPlan, task.estimateMin]); }), hiddenBefore, 'open/save preserves hidden AI, 12-week and estimate values');
+    const savedTask = await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state.tasks.find(t => t.id === 'child')));
+    await taskAction('edit-task', 'child');
+    await modalField('title').fill('保存失敗でも残る入力');
+    await modalField('title').evaluate(el => { window.taskTitleInput = el; });
+    await page.evaluate(key => { window.originalTaskSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function(k, v) { if (k === key) throw new DOMException('fixture quota', 'QuotaExceededError'); return window.originalTaskSetItem.call(this, k, v); }; }, STATE_KEY);
+    await page.locator('.task-modal [data-action="modal-save"]').click();
+    assert.equal(await modalField('title').inputValue(), '保存失敗でも残る入力');
+    assert(await modalField('title').evaluate(el => el === window.taskTitleInput));
+    assert.equal(await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state.tasks.find(t => t.id === 'child'))), savedTask, 'failed save rolls back task');
+    await page.evaluate(() => { Storage.prototype.setItem = window.originalTaskSetItem; });
+    await page.locator('.task-modal [data-action="modal-close"]').last().click();
+    await page.locator('[data-action="draft-leave-stay"]').click();
+    assert.equal(await modalField('title').inputValue(), '保存失敗でも残る入力');
+    await page.locator('.task-modal [data-action="modal-close"]').last().click();
+    await page.locator('[data-action="draft-leave-discard"]').click();
+    assert.equal(await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state.tasks.find(t => t.id === 'child'))), savedTask, 'discard leaves saved task unchanged');
+    console.log('PASS S3-03: all fields, vertical editor, native date, hidden values, no fixed estimate, failure DOM and cancel/discard');
     assert.deepEqual(errors, []);
     console.log('PASS S3-01: explicit dates, occurrences, candidates, groups, zero actuals, IME, responsive execution and no mutation');
   } finally {
