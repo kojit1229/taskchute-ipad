@@ -46,9 +46,9 @@ function assignBlocksToLanes(blocks, mode, maxLanes, rowHeight) {
       const startStr = mode === "actual" ? b.actualStartAt : b.plannedStartAt;
       const endStr = mode === "actual" ? (b.actualEndAt || nowDateTime()) : (b.plannedEndAt || null);
       if (!startStr) return null;
-      const start = minutesOf(startStr);
-      const end = endStr ? minutesOf(endStr) : start + 1;  // 終了未定なら最低1分
-      const realEnd = Math.max(end, start + 1);
+      const start = b.timelineRange?.[0] ?? minutesOf(startStr);
+      const end = b.timelineRange?.[1] ?? (endStr ? minutesOf(endStr) : start + 1);
+      const realEnd = b.timelineRange ? end : Math.max(end, start + 1);
       // v150レビュー対応(項目6、監督者裁定): min-height換算の実効終了時刻による横レーン分割は
       // 実所要20分未満のBlockだけに限定する。20分以上まで延長すると、min-height(38px)との
       // 差が大きい30分Block同士が一日中50%幅に分割されてしまう(実測)。実所要20分以上の
@@ -64,7 +64,8 @@ function assignBlocksToLanes(blocks, mode, maxLanes, rowHeight) {
       return { block: b, start, end: realEnd, clusterEnd, startStr, endStr };
     })
     .filter(Boolean)
-    .sort((a, b) => a.start - b.start || (a.end - a.start) - (b.end - b.start));
+    .sort((a, b) => a.start - b.start || (a.end - a.start) - (b.end - b.start)
+      || Number(!!a.block.scheduleRecord) - Number(!!b.block.scheduleRecord) || a.block.id.localeCompare(b.block.id));
 
   const result = [];
   let cluster = [];          // 現在のクラスタの項目(lane 付与済み)
@@ -116,7 +117,7 @@ function adjustLaneTopPositions(assignments, rowHeight, startHour) {
     const durationMin = a.end - a.start;
     const isShort = durationMin < 5;
     const minHeight = isShort ? 14 : 38;
-    const height = Math.max(minHeight, (durationMin / 60) * rowHeight);
+    const height = a.block?.timelineRange ? (durationMin / 60) * rowHeight : Math.max(minHeight, (durationMin / 60) * rowHeight);
     return { ...a, top, height, isShort };
   });
 }
