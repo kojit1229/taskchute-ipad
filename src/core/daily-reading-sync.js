@@ -8,7 +8,7 @@ export function readingSyncConflict() {
   error.name = "DailyReadingSyncConflict";
   return error;
 }
-export function mergeReadingEvidence(local, remote, blocks) {
+export function mergeReadingEvidence(local, remote, blocks, normalizeBlock = block => block) {
   const stop = () => { throw readingSyncConflict(); };
   const settings = side => {
     const raw = side.settings?.dailyReadingRoutineIds;
@@ -55,9 +55,9 @@ export function mergeReadingEvidence(local, remote, blocks) {
     for (let i = 0; i < 2; i++) {
       const block = records[i], log = habits[i][ruleId]?.logs?.[date];
       if (block && !marks[i]) {
-        const expected = makeRecurrenceInstance(rules[i], date);
-        const fields = new Set([...Object.keys(expected), ...Object.keys(block)]);
-        if ([...fields].some(key => !["createdAt", "updatedAt"].includes(key) && !equal(block[key], expected[key]))) stop();
+        const expected = normalizeBlock(makeRecurrenceInstance(rules[i], date)), observed = normalizeBlock(block);
+        const fields = new Set([...Object.keys(expected), ...Object.keys(observed)]);
+        if ([...fields].some(key => !["createdAt", "updatedAt"].includes(key) && !equal(observed[key], expected[key]))) stop();
       }
       if (fixed && marks[i]) {
         if (block.source === "daily-reading-auto" && !equal(log, { doneAt: marks[i].recordedAt })) stop();

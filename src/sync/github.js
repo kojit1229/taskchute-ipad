@@ -921,7 +921,8 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
     const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks);
-    const reading = mergeReadingEvidence(state, remoteNorm, blocksRaw);
+    const reading = mergeReadingEvidence(state, remoteNorm, blocksRaw,
+      block => normalizeState(JSON.parse(JSON.stringify({ ...state, blocks: [block] }))).blocks[0]);
     if (reading.active && SYNC_CORE_COMPARE_KEYS.filter(key => key !== "habitStreaks").some(key =>
       JSON.stringify(getByPath(state, key) ?? null) !== JSON.stringify(getByPath(remoteNorm, key) ?? null))) throw readingSyncConflict();
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);

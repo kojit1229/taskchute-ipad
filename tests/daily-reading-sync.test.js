@@ -151,5 +151,36 @@ async function run() {
   const same = merged(a, clone(a));
   assert.equal(same.values.reading.changed[0], false); assert.deepEqual(same.values.blocks, a.blocks);
   console.log('PASS setting pair selection, AI, timestamp fallback and idempotent proof');
+  const { chromium, launchOptions, defaultContextOptions, startServer, randomPort, STATE_KEY, passGithubGate } = require('./helpers');
+  const server = startServer(randomPort()), browser = await chromium.launch(launchOptions());
+  try {
+    const context = await browser.newContext({ ...defaultContextOptions(), serviceWorkers: 'block' }), page = await context.newPage();
+    await page.route('**/*', route => new URL(route.request().url()).hostname === 'localhost' ? route.continue() : route.abort());
+    await page.clock.setFixedTime(new Date(2026, 8, 12, 12));
+    await page.goto('http://localhost:' + server.address().port + '/'); await passGithubGate(page);
+    const pending = fixture(); pending.blocks = [rec.makeRecurrenceInstance(pending.recurrences[0], DAY)];
+    pending.settings.autoSync = false; pending.settings.github = {}; pending.settings.lastOpenedDate = DAY;
+    await page.evaluate(({ key, pending }) => localStorage.setItem(key, JSON.stringify(pending)), { key: STATE_KEY, pending });
+    await page.reload(); await page.locator('#app').waitFor();
+    const proof = await page.evaluate(async ({ date, at }) => {
+      const { state } = await import('/src/state/store.js');
+      const { computeSyncMerge } = await import('/src/sync/github.js');
+      const { buildDailyReading } = await import('/src/core/daily-reading.js');
+      const { recurrenceMatchesDate, makeRecurrenceInstance } = await import('/src/core/recurrence.js');
+      const before = JSON.stringify(state), remote = structuredClone(state);
+      const result = buildDailyReading({ ...remote, settings: { ...remote.settings, dailyReadingRecordEnabled: true } },
+        { kind: 'affirmation', date, referenceDate: date, recordedAt: at, routineIds: remote.settings.dailyReadingRoutineIds, displayed: true },
+        { today: () => date, readingCurrent: () => true, readingMatches: recurrenceMatchesDate, readingInstance: makeRecurrenceInstance });
+      const winner = result.records.find(row => row.kind === 'blocks').after;
+      remote.blocks = remote.blocks.map(row => row.id === winner.id ? winner : row);
+      for (const value of result.values) remote[value.key] = value.after;
+      remote.dataModifiedAt = at;
+      const merged = computeSyncMerge(remote, 'local');
+      return { unchanged: before === JSON.stringify(state), doneAt: merged.values.reading.habitStreaks.a.logs[date].doneAt,
+        actual: merged.values.blocks.find(row => row.id === winner.id).actualEndAt };
+    }, { date: DAY, at: LATE });
+    assert.deepEqual(proof, { unchanged: true, doneAt: LATE, actual: LATE });
+    console.log('PASS real app normalization: default fields and second precision do not turn an unedited instance into a conflict');
+  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
 run().then(() => process.exit(0), error => { console.error(error); process.exit(1); });
