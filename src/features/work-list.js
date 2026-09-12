@@ -155,6 +155,7 @@ function restoreWorkListScroll() {
       root.dataset.workComposing = ui.composing || "0";
       if (ui.inputFocused && !state.modal) ui.input.focus({ preventScroll: true });
     }
+    ui.input = null;
   });
   const saved = renderFocus; renderFocus = null;
   if (!saved || state.modal || state.currentView !== saved.view || state.selectedDate !== saved.date

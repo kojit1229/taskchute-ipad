@@ -24,6 +24,9 @@ const today = '2026-09-06', selected = '2026-09-07';
         { id: 'future', title: '先の期限', dueDate: '2026-10-01' },
         { id: 'wish-task', title: 'やりたいこと候補', projectId: 'wish' },
         { id: 'soon', title: '期限7日以内', dueDate: selected },
+        // 監督者修正(2026-09-12 CHANGELOG 12:15): 期限の判定は既存の実効期限(自己締切=期限の2日前、selfDueOff で無効)を使う契約。境界例は selfDueOff で素の期限に固定する。
+        { id: 'day-seven', title: '選択日から7日後', dueDate: '2026-09-14', selfDueOff: true },
+        { id: 'day-eight', title: '選択日から8日後', dueDate: '2026-09-15', selfDueOff: true },
         ...['completed', 'suspended', 'cancelled'].map(status => ({ id: status, title: status, status })),
         { id: 'deleted', title: '削除済み', deleted: true }, { id: 'internal', title: '内部用', kind: 'other' }
       ].map(task => ({ status: 'todo', kind: 'task', deleted: false, parentTaskId: '', ...task }));
@@ -45,6 +48,7 @@ const today = '2026-09-06', selected = '2026-09-07';
     }, { key: STATE_KEY, today, selected });
     await page.reload();
     await page.locator('[data-work-list="today"]').waitFor();
+    assert.equal(await page.locator('[data-work-list="today"] h2 span').innerText(), '今日 2026-09-06');
     // Keep fixture dates independent from startup's selected-date policy.
     await page.evaluate(async selected => { (await import('/src/state/store.js')).state.selectedDate = selected; }, selected);
     const businessBefore = await page.evaluate(async () => {
@@ -56,16 +60,20 @@ const today = '2026-09-06', selected = '2026-09-07';
     await page.locator('[data-work-list="today"] [data-action="nav"][data-view="exec"]').click();
     const plans = page.locator('[data-work-list="exec"]'), candidates = page.locator('[data-work-list="exec-candidates"]');
     await plans.waitFor();
+    assert.equal(await plans.locator('h2 span').innerText(), '選択日 2026-09-07');
+    assert.equal(await candidates.locator('h2 span').innerText(), '選択日 2026-09-07');
     assert.equal(await plans.locator('[data-work-key]').count(), 7);
     for (const [group, id] of [['plans', 'planned'], ['plans', 'second'], ['untimed', 'untimed'], ['unlinked', 'unlinked'], ['routines', 'routine'], ['actuals', 'ended'], ['actuals', 'zero']])
       assert.equal(await plans.locator(`[data-screen-group="${group}"] [data-work-key="block:${id}"]`).count(), 1, group + ':' + id);
-    for (const id of ['none', 'future', 'wish-task', 'soon']) assert.equal(await candidates.locator(`[data-work-key="task:${id}"]`).count(), 1);
+    for (const id of ['none', 'future', 'wish-task', 'soon', 'day-seven', 'day-eight']) assert.equal(await candidates.locator(`[data-work-key="task:${id}"]`).count(), 1);
     for (const id of ['completed', 'suspended', 'cancelled', 'deleted', 'internal']) assert.equal(await candidates.locator(`[data-work-key="task:${id}"]`).count(), 0);
     await candidates.locator('[data-work-filter="status"]').selectOption('no-wish');
     assert.equal(await candidates.locator('[data-work-key="task:wish-task"]').count(), 0);
     await candidates.locator('[data-action="work-list-clear"]').click();
     await candidates.locator('[data-work-filter="due"]').selectOption('week');
     assert.equal(await candidates.locator('[data-work-key="task:soon"]').count(), 1);
+    assert.equal(await candidates.locator('[data-work-key="task:day-seven"]').count(), 1);
+    assert.equal(await candidates.locator('[data-work-key="task:day-eight"]').count(), 0);
     assert.equal(await candidates.locator('[data-work-key="task:future"]').count(), 0);
     assert.equal(await candidates.locator('[data-work-key="task:none"]').count(), 0);
     await candidates.locator('[data-action="work-list-clear"]').click();
