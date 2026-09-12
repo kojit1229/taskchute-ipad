@@ -1,0 +1,99 @@
+{
+  "version": 395,
+  "date": "2026-09-13",
+  "title": "閲覧記録の合流(保存は無効のまま)、実行の4〜24時と空き時間の配置枠、単発予定の新しい配置枠への接続",
+  "summary": "実行画面の時間軸が4時から24時までになり、重なり(計画同士・実績同士・計画と実績)を分けて警告し、空き時間の配置枠が既存の空き時間シートにつながる。画面の幅を切り替えても入力が消えない。今日・時間軸・詳細の単発予定が新しい配置枠で同じ内容として表示され(前日23時〜当日5時は4〜5時に、当日23時〜翌日1時は23〜24時に描く)、保存の決まりに合わない古い予定は除外して警告する。閲覧記録・対応設定・習慣が端末間で同じ候補として合流し、食い違いは止まって両方の原本を残す(閲覧記録の保存そのものは設定で無効のまま)",
+  "changedFiles": [
+    "CHANGES_v395.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v395.json",
+    "src/core/daily-reading-sync.js",
+    "src/core/recurrence.js",
+    "src/features/daily-gap-placement.js",
+    "src/features/daily-view-model.js",
+    "src/features/single-schedule-view.js",
+    "src/features/timeline-layout.js",
+    "src/features/timeline.js",
+    "src/features/today-tower.js",
+    "src/features/work-list.js",
+    "src/sync/github.js",
+    "styles.css",
+    "sw.js",
+    "tests/daily-reading-sync.test.js",
+    "tests/exec-layout-media.test.js",
+    "tests/exec-timeline-e2e.test.js",
+    "tests/fill-gap-layout-inputs-e2e.test.js",
+    "tests/impact-regression-map.json",
+    "tests/single-schedule-layout-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/v334.test.js",
+    "tests/v357.test.js"
+  ],
+  "intent": [
+    "束 S-B3=3段-11(閲覧記録・対応設定・習慣を同じ候補で合流)→3段-13(実行の4〜24時と空き時間の配置枠)→3段-11b→3段-14(予定6の単発予定を新しい配置枠へ接続し直す)+fixSB3〜d+fixSB2b6。設計06 §3.3・§5.2・§5.3、設計07 §5・§8.1"
+  ],
+  "changes": [
+    "src/core/daily-reading-sync.js(新設)・src/sync/github.js: 閲覧記録の Block・対応設定・習慣 doneAt の合流と停止条件(同一 ID・別出所は停止して原本保持、無関係な差は自動解消へ、解除済み設定の log は停止条件外)。5入口は候補保存経由",
+    "src/features/timeline.js / timeline-layout.js / styles.css: 4:00〜24:00、半開区間の重複警告(実績同士も)、plannedOccupancy の利用、空き枠→fillGap 接続、幅切替は表示先が変わるときだけ再描画",
+    "src/features/single-schedule-view.js / daily-gap-placement.js / daily-view-model.js / work-list.js / today-tower.js: 単発予定を新しい配置枠へ(旧 .today-single-schedules の描画は除去)、2日前開始は不正として除外警告・原本保持",
+    "app.js: 依存注入と最小接続、幅切替の再判定、予定枠詳細からの Task 完了の復旧(S-B2b の退行)",
+    "tests: daily-reading-sync / exec-timeline-e2e / single-schedule-layout-e2e 新設、exec-layout-media / v334 / v112 の契約追随",
+    "sw.js: CACHE_NAME v395、APP_SHELL に src/core/daily-reading-sync.js"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad)の時間軸の回転・スクロールは未確認(K の実機確認へ)",
+    "閲覧記録の有効化は本人データ確認・移行承認後の別発注"
+  ],
+  "reviewFocus": [
+    "合流の停止条件が設計06 §5.3 どおりか(別出所の同一 ID・無関係な差・解除済み設定)",
+    "幅切替(1279↔1023/1024、1280 回転)で入力が不変で再描画が1回か",
+    "単発予定が今日・時間軸・詳細で1件ずつ同じ id か、登録ボタンが非公開か"
+  ],
+  "verification": [
+    "受領実走(v394 main a3d973b 起点、reports/supervision/recv-S3B3v): (a)=0、(b)(c) は fixSB3d+S-B4 5段-05 の追随後に 0",
+    "独立検証: Codex 195a FAIL 中1 / Claude 195b PASS 中2 → fixSB3c → Codex recheck197 PASS",
+    "release-gate --final は監督者が実走(reports/impl-r1/v395/release-gate-final*.log)"
+  ],
+  "knownLimitations": [
+    "閲覧記録の保存・日報反映は無効のまま(有効化は別発注)",
+    "負荷が高いときの描画待ち(exec-timeline-e2e / three-screen-flow-e2e)が 30秒を超えることがある(試験の余裕は次周送り)",
+    "195b 軽微6件(syncCoreEqual の再計算・isTouchedBlock の deleted・未来開始/長さ0実績の無言除外・new Date() 直接使用・timelineOrigins 未解放・取り込み後の scheduleAutoSync)は次周送り"
+  ],
+  "relatedSuites": [
+    "daily-reading-sync",
+    "daily-reading-core",
+    "daily-reading-e2e",
+    "v361",
+    "v367",
+    "recurrence-core",
+    "v276",
+    "v364",
+    "exec-timeline-e2e",
+    "timeline-layout-core",
+    "timeline-render-core",
+    "timeline-tick-wiring",
+    "fill-gap-layout-inputs-e2e",
+    "placement-e2e",
+    "daily-placement-e2e",
+    "v302",
+    "v328",
+    "v357",
+    "v334",
+    "exec-layout-media",
+    "v70",
+    "single-schedule-layout-e2e",
+    "single-schedule-view-e2e",
+    "single-schedule-flow-e2e",
+    "today-core",
+    "tower-core",
+    "three-screen-connection-e2e",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "draft-save-transaction",
+    "v112",
+    "sw-integration"
+  ]
+}

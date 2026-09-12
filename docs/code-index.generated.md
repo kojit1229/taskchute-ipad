@@ -5,704 +5,704 @@ Source: app.js (15643 lines, 701 top-level functions)
 
 | Entry | Kind | Line | Lines | Area hint | State-key signals | Effect signals |
 |---|---|---:|---:|---|---|---|
-| pruneExpiredSuggestedThemes | function | 248 | 7 | content | - | clock |
-| invalidateKaradaConnection | function | 403 | 5 | journal-health | - | - |
-| twyEditorCommitted | function | 718 | 4 | state, ui, content | - | save |
-| scrollToSettingsGroup | function | 1316 | 6 | core | - | dom |
-| visionConnectionKey | function | 1334 | 3 | content | settings | - |
-| invalidateVisionConnection | function | 1337 | 14 | content | - | - |
-| ensureVisionConnection | function | 1351 | 5 | content | - | - |
-| isFocusInEditableElement | function | 1450 | 6 | core | - | dom |
-| renderDeferringForFocus | function | 1458 | 8 | ui | - | render, clock |
-| isVisionEditTextareaFocused | function | 1467 | 4 | content | - | dom |
-| attemptFlushDeferredRender | function | 1480 | 9 | ui, content | - | render, clock |
-| readFoldMap | function | 1530 | 3 | core | - | localStorage |
-| isFoldOpen | function | 1533 | 4 | core | - | - |
-| setFoldOpen | function | 1537 | 7 | core | - | localStorage |
-| foldSection | function | 1545 | 8 | core | - | - |
-| event:click@1661 | event-listener | 1661 | 106 | sync, state, ui, content | modal | file |
-| event:toggle@1771 | event-listener | 1771 | 5 | core | - | - |
-| event:compositionstart@1781 | event-listener | 1781 | 1 | core | - | - |
-| event:compositionend@1782 | event-listener | 1782 | 6 | ui | - | - |
-| event:focusout@1788 | event-listener | 1788 | 10 | ui | - | timer |
-| event:input@1799 | event-listener | 1799 | 88 | state, ui, content | settings | save, render, timer, dom |
-| event:change@1888 | event-listener | 1888 | 202 | sync, state, execution, journal-health, ui, content | settings, tasks, wishFilter | save, render, timer, dom |
-| event:input@2092 | event-listener | 2092 | 9 | core | - | - |
-| saveGlobalInput | function | 2109 | 29 | state, ui | condition, journalMeta, journals, settings | - |
-| restoreGlobalInputs | function | 2139 | 10 | core | - | dom |
-| saveState | function | 2150 | 18 | sync, state, execution, ui | dataModifiedAt | save |
-| resolveTheme | function | 2178 | 4 | content | - | - |
-| applyTheme | function | 2182 | 7 | content | settings | dom |
-| compactArr | function | 2196 | 3 | core | - | - |
-| compactMap | function | 2199 | 8 | core | - | - |
-| validateStateContainers | function | 2208 | 11 | state, execution | - | - |
-| normalizeState | function | 2220 | 750 | sync, state, execution, journal-health, content | declarations, journals, json, settings, sleep | - |
-| defaultCategories | function | 2979 | 10 | core | - | - |
-| defaultLifeAreas | function | 2991 | 12 | core | - | - |
-| getRandomCelebrate | function | 3019 | 3 | core | - | - |
-| addCategory | function | 3030 | 17 | state, ui | settings | save |
-| deleteCategory | function | 3049 | 16 | state, ui | settings | save |
-| countCategoryUsage | function | 3067 | 7 | core | blocks, projects, tasks | - |
-| updateCategoryField | function | 3076 | 32 | core | blocks, projects, recurrences, settings, tasks | - |
-| toggleVisionDirectCategory | function | 3109 | 10 | state, content | settings | save |
-| getCategoryColor | function | 3121 | 6 | core | settings | - |
-| getCategoryNames | function | 3129 | 3 | core | settings | - |
-| defaultGitHubSettings | function | 3133 | 16 | sync | json | - |
-| handleAddCategoryFromModal | function | 3151 | 28 | state, ui | settings | save, timer, dom |
-| rerenderActiveModal | function | 3185 | 24 | execution, ui | modal | dom |
-| renderCategorySelect | function | 3209 | 16 | ui | - | - |
-| seedState | function | 3226 | 103 | sync, state, execution, journal-health | - | - |
-| makeBlock | function | 3330 | 31 | execution | - | - |
-| render | function | 3362 | 43 | sync, execution, ui, content | _justStartedBlockId, currentView, settings | render, dom, clock |
-| renderGate | function | 3409 | 43 | sync, ui | settings | render |
-| renderSidebar | function | 3453 | 31 | sync, ui, content | currentView, settings | render |
-| renderBottomNav | function | 3485 | 11 | ui, content | currentView | render |
-| tasksViewRenderedBlocks | function | 3501 | 12 | execution, ui | tasks | - |
-| currentOrNextTaskchuteBlockId | function | 3513 | 12 | execution, ui | - | clock |
-| renderMain | function | 3534 | 67 | execution, journal-health, ui, content | currentView, selectedDate | render, timer, dom |
-| renderHeader | function | 3605 | 18 | ui | currentView | - |
-| plannedRange | function | 3624 | 5 | core | - | - |
-| pushGitHubPath | function | 3641 | 36 | sync, ui | settings | fetch, clock |
-| cycleWeekProgress | function | 3679 | 13 | journal-health | projects, selectedDate, tasks | - |
-| isStaleBlock | function | 3698 | 6 | execution | tasks | - |
-| taskchuteBlocks | function | 3705 | 14 | execution | tasks | - |
-| stampEverStarted | function | 3724 | 4 | core | - | - |
-| deferrableBlocks | function | 3733 | 10 | execution | - | - |
-| blockEverStarted | function | 3745 | 3 | execution | - | - |
-| deferralStats | function | 3750 | 5 | execution | - | - |
-| taskchuteStartRate | function | 3757 | 5 | execution | - | - |
-| taskchuteUnstartedCount | function | 3764 | 3 | execution, ui | - | - |
-| weekRange | function | 3775 | 6 | core | - | clock |
-| candidateBlocksForWeek | function | 3784 | 18 | execution, journal-health | - | - |
-| twyPaceLabel | function | 3804 | 8 | core | - | - |
-| twyMetaLabel | function | 3813 | 9 | core | - | - |
-| buildTrackDigest | function | 3824 | 28 | execution, journal-health, ui | projects, settings, trackMeasurements, tracks, weeklyCommitments | - |
-| commitmentItemForBlock | function | 3855 | 36 | execution | - | - |
-| upsertWeeklyCommitment | function | 3892 | 6 | journal-health | weeklyCommitments | - |
-| commitWeek | function | 3899 | 21 | state, execution, journal-health | settings, weeklyCommitments | save |
-| autoCommitWeekIfNeeded | function | 3921 | 20 | state, execution, journal-health | settings, weeklyCommitments | save |
-| stampCommitmentCompletion | function | 3942 | 14 | state, journal-health | weeklyCommitments | save |
-| trackOnBlockStarted | function | 3957 | 3 | execution | - | - |
-| trackOnBlockCompletionChanged | function | 3961 | 5 | execution, ui | - | - |
-| excuseCommitmentItem | function | 3967 | 13 | state, journal-health | weeklyCommitments | save |
-| unexcuseCommitmentItem | function | 3981 | 11 | state, journal-health | weeklyCommitments | save |
-| addCommitmentItems | function | 3993 | 13 | state, execution, journal-health | weeklyCommitments | save |
-| closeTracksForOwner | function | 4008 | 10 | core | tracks | - |
-| trackRecord | function | 4019 | 21 | core | settings | - |
-| mergeEditedMilestones | function | 4041 | 18 | core | - | - |
-| saveTrackFromForm | function | 4060 | 24 | state | tracks | save |
-| closeActiveTrackManual | function | 4085 | 5 | state | - | save |
-| carryProjectToNewCycle | function | 4091 | 50 | state, journal-health | projects, trackMeasurements, tracks | save |
-| recordTrackMeasurement | function | 4143 | 17 | state | trackMeasurements, tracks | save, clock |
-| updateTrackMilestone | function | 4162 | 37 | state | tracks | save |
-| copyReportToClipboard | function | 4202 | 22 | ui, content | selectedDate | dom |
-| shareReport | function | 4224 | 5 | ui, content | selectedDate | - |
-| scheduleDraftActive | function | 4249 | 3 | execution | - | - |
-| minToHHMM | function | 4253 | 4 | core | - | - |
-| blockOccupiedRange | function | 4263 | 14 | execution | - | - |
-| subtractOccupiedIntervals | function | 4282 | 12 | core | - | - |
-| computeFreeGaps | function | 4301 | 6 | core | - | - |
-| isWeekdayDate | function | 4320 | 4 | core | - | - |
-| aiRearrangeWindowFor | function | 4326 | 4 | core | - | - |
-| movableBlockMinutes | function | 4335 | 8 | execution | - | - |
-| runAiSchedule | function | 4349 | 77 | execution, ui | selectedDate, timelineMode | render, clock |
-| renderDraftLayer | function | 4428 | 26 | state, ui | selectedDate | - |
-| rearrangeSkipMessage | function | 4459 | 8 | core | - | - |
-| draftBarHTML | function | 4468 | 25 | core | selectedDate | - |
-| snapshotDraftForUndo | function | 4498 | 4 | core | - | - |
-| confirmScheduleDraft | function | 4512 | 70 | state, execution, ui | blocks | save |
-| extractZeroSecThemesFromReport | function | 4589 | 22 | content | - | - |
-| event:pointerdown@4614 | event-listener | 4614 | 16 | core | - | - |
-| event:pointermove@4630 | event-listener | 4630 | 17 | core | - | dom |
-| endDraftDrag | function | 4647 | 6 | ui | - | render |
-| openSearchModal | function | 4671 | 5 | ui | modal | timer, dom |
-| buildSearchModal | function | 4677 | 20 | ui | settings | - |
-| searchSnippet | function | 4699 | 6 | core | - | - |
-| crossSearchHits | function | 4706 | 33 | core | feedback, journals, questions, reports, zeroThinking | dom |
-| crossSearchResultsHTML | function | 4740 | 24 | core | - | - |
-| wbsSearchHits | function | 4766 | 19 | core | projects, tasks | - |
-| wbsSearchResultsHTML | function | 4786 | 16 | core | - | - |
-| jumpToWbsSearchResult | function | 4803 | 38 | state, ui | projects, settings, tasks | save, timer, dom |
-| carryableBlocks | function | 4846 | 6 | execution | blocks | - |
-| carryOverPanel | function | 4852 | 12 | state, execution | selectedDate | - |
-| leverageTypeLabel | function | 4869 | 3 | core | - | - |
-| leverageTypeMarkHTML | function | 4873 | 4 | core | - | - |
-| leverageTypeOptionsHTML | function | 4878 | 10 | core | - | - |
-| leverageJudgeHelperHTML | function | 4894 | 18 | core | - | - |
-| migrationBadgeHTML | function | 4925 | 4 | state | - | - |
-| migrationNextCount | function | 4931 | 4 | state, execution | - | - |
-| requestCarryOver | function | 4937 | 10 | state, execution | - | - |
-| carryOverBlock | function | 4948 | 26 | execution, ui | blocks | render |
-| postponeBlockToNextDay | function | 4976 | 6 | execution | - | - |
-| moveBlockToWish | function | 4989 | 11 | execution, content | tasks | - |
-| logMigrationRitual | function | 5004 | 16 | state | migrationRitualLog | - |
-| openMigrationRitual | function | 5021 | 7 | state, execution, ui | modal | - |
-| buildMigrationRitualModal | function | 5029 | 20 | state, ui | - | - |
-| resolveMigrationRitual | function | 5050 | 73 | state, execution, ui, content | blocks | save, render |
-| updateTaskField | function | 5133 | 7 | core | tasks | - |
-| deriveStatusFromProgress | function | 5145 | 7 | core | - | - |
-| fillProgressOnComplete | function | 5153 | 4 | core | - | - |
-| updateTaskProgress | function | 5158 | 16 | core | tasks | - |
-| toggleCriteriaRequest | function | 5178 | 6 | ui | tasks | render |
-| renderWipBanner | function | 5188 | 19 | ui | projects | - |
-| wbsCategoryOptions | function | 5210 | 11 | core | - | - |
-| isWbsProjectDone | function | 5224 | 5 | core | tasks | - |
-| wbsFilteredProjects | function | 5231 | 11 | core | projects, settings | - |
-| wbsWeekRange | function | 5244 | 5 | core | - | - |
-| wbsThisWeekProjects | function | 5252 | 4 | core | projects | - |
-| wbsThisWeekTasks | function | 5257 | 20 | journal-health | tasks | - |
-| renderWbsThisWeek | function | 5278 | 14 | ui | - | - |
-| renderWBS | function | 5293 | 63 | journal-health, ui | projects, settings, tasks | - |
-| nextSiblingOrder | function | 5357 | 5 | core | - | - |
-| midpointOrder | function | 5363 | 4 | core | - | - |
-| siblingTaskCompare | function | 5372 | 6 | core | - | - |
-| planParentFor | function | 5380 | 5 | core | tasks | - |
-| planStepSiblings | function | 5386 | 5 | core | tasks | - |
-| planStepVisibleSiblings | function | 5395 | 8 | core | settings, tasks | - |
-| ensurePlanSiblingOrders | function | 5404 | 17 | core | tasks | - |
-| maybeQueueNextAiStep | function | 5426 | 23 | ui | tasks | - |
-| closeAiStepConfirmIfUndone | function | 5452 | 4 | ui | modal | - |
-| openAiStepConfirm | function | 5457 | 6 | ui | modal | - |
-| buildAiStepConfirmModal | function | 5464 | 20 | ui | - | - |
-| resolveAiStepConfirmSend | function | 5487 | 39 | ui | aiStepPendingRequests, tasks | dom, clock |
-| putAiStepRequest | function | 5532 | 4 | ui | - | - |
-| compensateAiStepRequest | function | 5540 | 11 | core | aiStepDismissedIds, aiStepPendingRequests, tasks | - |
-| togglePlanStepOwner | function | 5552 | 12 | state, ui | tasks | save |
-| movePlanStep | function | 5565 | 23 | state, ui | tasks | save |
-| addPlanStepBelow | function | 5589 | 17 | core | tasks | - |
-| aiStepStatusLabel | function | 5607 | 3 | core | - | - |
-| buildPlanStepRequestTask | function | 5613 | 11 | ui | tasks | - |
-| validatePlanStepDraftSteps | function | 5627 | 21 | core | - | - |
-| setPlanStepUi | function | 5649 | 4 | ui | - | - |
-| refreshPlanStepModalIfOpen | function | 5658 | 5 | ui | modal, tasks | - |
-| stopPlanStepPolling | function | 5664 | 4 | core | - | - |
-| schedulePlanStepPoll | function | 5669 | 5 | execution | - | timer |
-| finishPlanStep | function | 5675 | 6 | ui | - | - |
-| requestPlanStep | function | 5682 | 34 | sync, execution, ui | settings, tasks | clock |
-| pollPlanStepResponse | function | 5717 | 53 | sync, execution, ui | - | fetch, clock |
-| approvePlanStepDraft | function | 5773 | 38 | state, ui | selectedDate, tasks | save |
-| discardPlanStepDraft | function | 5812 | 5 | ui | - | - |
-| renderPlanStepSectionHTML | function | 5820 | 36 | ui | settings | - |
-| wbsTaskCompare | function | 5858 | 8 | core | - | - |
-| taskBlockStats | function | 5868 | 10 | execution | blocks | - |
-| fmtMinShort | function | 5878 | 5 | core | - | - |
-| taskProgressPct | function | 5886 | 6 | core | - | - |
-| projectProgressAgg | function | 5893 | 6 | core | - | - |
-| renderProjectProgressAgg | function | 5900 | 9 | ui | - | - |
-| renderTwyTrackBlock | function | 5911 | 5 | execution, journal-health, ui | tracks | - |
-| renderTwyStaleNote | function | 5917 | 5 | ui | - | - |
-| roundToStep | function | 5923 | 7 | core | - | - |
-| mdFmt | function | 5931 | 4 | core | - | - |
-| twyNumericValueHTML | function | 5936 | 16 | core | - | - |
-| twyMilestoneValueHTML | function | 5953 | 15 | core | - | - |
-| twyBarHTML | function | 5969 | 11 | core | - | - |
-| twyMilestoneProgressHTML | function | 5981 | 11 | state | - | - |
-| twyMilestoneChainHTML | function | 5993 | 17 | execution | - | - |
-| twyEditorHTML | function | 6012 | 4 | core | - | - |
-| twyNumericEditorHTML | function | 6017 | 11 | core | trackMeasurements | - |
-| twyMilestoneEditorHTML | function | 6029 | 33 | state | - | - |
-| renderTwyTrackRow | function | 6063 | 27 | execution, ui | trackMeasurements | - |
-| renderTwyTrackReadOnly | function | 6092 | 24 | execution, ui | trackMeasurements | - |
-| twyTrackIsDone | function | 6119 | 8 | core | trackMeasurements | - |
-| wbsProjectTaskModel | function | 6128 | 16 | core | settings, tasks | - |
-| renderWbsProjectMeta | function | 6145 | 4 | ui | - | - |
-| renderWbsDesktopProjects | function | 6150 | 8 | ui | projects | - |
-| wbsSearchModel | function | 6159 | 26 | core | - | - |
-| wbsSearchRows | function | 6186 | 11 | journal-health, ui | projects, settings | - |
-| renderWbsProjectDetail | function | 6198 | 12 | execution, journal-health, ui | settings | - |
-| renderProjectTree | function | 6211 | 34 | execution, journal-health, ui | settings | - |
-| toggleProjectCollapse | function | 6247 | 5 | state, ui | projects | save |
-| toggleTaskCollapse | function | 6252 | 5 | state, ui | tasks | save |
-| renderTaskTree | function | 6258 | 13 | ui | settings | - |
-| renderTaskRow | function | 6272 | 82 | execution, ui | blocks, settings, tasks | - |
-| execTargetBlocks | function | 6356 | 18 | execution | selectedDate, tasks | - |
-| execBlockAddHTML | function | 6377 | 13 | execution | - | - |
-| execHeaderHTML | function | 6394 | 13 | execution | selectedDate | - |
-| dailyBlockDetails | function | 6412 | 4 | execution, ui | tasks | - |
-| renderExecDoneRow | function | 6417 | 19 | execution, ui | - | - |
-| execDoneListHTML | function | 6437 | 9 | core | blocks, selectedDate | - |
-| renderExecView | function | 6462 | 58 | execution, ui | modal, selectedDate, timelineMode | - |
-| renderTasks | function | 6521 | 6 | ui | - | - |
-| renderExecNowRow | function | 6530 | 30 | execution, ui | - | - |
-| renderExecUpcomingRow | function | 6563 | 27 | execution, ui | tasks | - |
-| renderOpenTasks | function | 6591 | 29 | ui, content | blocks, projects, selectedDate, tasks | - |
-| renderExecTaskRow | function | 6623 | 30 | ui | selectedDate | - |
-| renderCircularProgress | function | 6663 | 16 | ui | - | - |
-| remainingTextNormal | function | 6680 | 4 | core | - | - |
-| parseSleepCsv | function | 6707 | 27 | journal-health | - | - |
-| hmsToHours | function | 6735 | 5 | core | - | - |
-| sleepNumOrNull | function | 6741 | 4 | journal-health | - | - |
-| parseSleepDateTime | function | 6747 | 7 | journal-health | - | - |
-| parseSleepTime | function | 6755 | 4 | journal-health | - | - |
-| shortSleepDate | function | 6760 | 4 | journal-health | - | - |
-| latestSleepLogWithin | function | 6769 | 8 | journal-health | sleep | - |
-| median | function | 6794 | 5 | core | - | - |
-| toNumber | function | 6805 | 5 | core | - | - |
-| conditionBudgetBaseline | function | 6813 | 16 | core | sleep | - |
-| conditionBudget | function | 6836 | 31 | journal-health | - | - |
-| defaultBatterySettings | function | 6879 | 8 | journal-health | - | - |
-| clampBatteryFieldValue | function | 6896 | 9 | journal-health | - | - |
-| parseTimeInputToMinutes | function | 6908 | 5 | core | - | - |
-| minutesToTimeInputValue | function | 6915 | 4 | core | - | - |
-| computeBatteryLevel | function | 6932 | 22 | execution, journal-health | settings | - |
-| batteryEventMinuteForDate | function | 6959 | 6 | journal-health | - | - |
-| batteryCurvePoints | function | 6973 | 41 | execution, journal-health | settings | - |
-| importSleepCsv | function | 7015 | 53 | state, journal-health, ui | sleep | save, clock |
-| aiReportFilesForType | function | 7115 | 10 | content | - | - |
-| fundJournalSummaryForDate | function | 7127 | 1 | journal-health | - | - |
-| parseUtcIsoToMs | function | 7134 | 6 | core | - | - |
-| fetchReportIndex | function | 7156 | 17 | sync, content | - | fetch, clock |
-| aiReportUnreadEntries | function | 7175 | 16 | content | aiReportReadIds | - |
-| aiReportUnreadCount | function | 7192 | 3 | content | - | - |
-| renderAiReportUnreadList | function | 7196 | 11 | ui, content | - | - |
-| patchAiReportUnreadList | function | 7208 | 7 | ui, content | currentView | dom |
-| markAiReportRead | function | 7216 | 10 | state, ui, content | aiReportReadIds | save |
-| maybeMarkAiReportRead | function | 7227 | 6 | content | currentView | dom |
-| unionAiReportEntries | function | 7238 | 1 | content | - | - |
-| knownFutureLetterEntries | function | 7246 | 5 | core | - | - |
-| unionKnownFutureLetters | function | 7251 | 6 | core | - | - |
-| triggerAiReportDirLoad | function | 7263 | 35 | sync, state, ui, content | currentView | fetch, render |
-| triggerAiReportBodyLoad | function | 7305 | 19 | sync, state, ui, content | currentView | fetch, render, clock |
-| refreshAiReports | function | 7332 | 26 | ui, content | settings | render |
-| renderAiReports | function | 7359 | 23 | ui, content | settings | - |
-| renderAiReportBody | function | 7383 | 45 | state, journal-health, ui, content | - | render |
-| splitWeeklyReviewMd | function | 7430 | 19 | journal-health, ui | - | - |
-| renderAiWeeklyReportBody | function | 7452 | 21 | journal-health, ui, content | - | - |
-| parseSuggestedTaskTitle | function | 7475 | 5 | core | - | - |
-| addWeeklySuggestedTask | function | 7481 | 19 | state, journal-health, ui | projects, tasks | save |
-| visionDirectSecondsOfDate | function | 7510 | 18 | content | blocks | - |
-| visionAlignmentData | function | 7533 | 14 | content | blocks | clock |
-| visionHMText | function | 7548 | 4 | content | - | - |
-| renderVisionAlignment | function | 7553 | 27 | ui, content | settings | - |
-| renderVision | function | 7587 | 26 | ui, content | settings | render |
-| visionMdStatusLine | function | 7616 | 3 | content | - | - |
-| renderVisionMd | function | 7625 | 46 | ui, content | settings | fetch, render |
-| autoGrowVisionEditTextarea | function | 7677 | 11 | content | - | - |
-| renderVisionEdit | function | 7691 | 15 | ui, content | - | - |
-| visionTimeOfDay | function | 7707 | 4 | content | - | clock |
-| renderVisionBoard | function | 7745 | 29 | state, ui, content | settings | - |
-| renderVisionBoardImages | function | 7777 | 67 | ui, content | - | - |
-| renderVisionBoardPdfFallback | function | 7847 | 25 | ui, content | - | - |
-| loadVisionBoardPdf | function | 7877 | 22 | sync, state, ui, content | currentView, settings | fetch, render, file |
-| loadVisionManifest | function | 7906 | 28 | sync, state, ui, content | currentView, settings | fetch, render |
-| loadVisionBoardImages | function | 7945 | 37 | sync, state, ui, content | currentView, settings | fetch, render, file |
-| sanitizeHTML | function | 8019 | 30 | core | - | render, dom |
-| renderMarkdown | function | 8059 | 17 | ui | - | - |
-| renderMarkdownUncached | function | 8077 | 10 | ui | - | - |
-| renderSettingsProfilePanel | function | 8091 | 15 | ui | settings | - |
-| renderSettingsBufferPanel | function | 8107 | 23 | ui | settings | - |
-| renderSettingsBatteryPanel | function | 8131 | 34 | journal-health, ui | settings | - |
-| renderSettingsDataGroupRows | function | 8170 | 38 | state, ui | settings | render, file |
-| renderSettingsCloudPanel | function | 8209 | 50 | sync, ui | json | - |
-| renderSettingsDraftSchedulePanel | function | 8260 | 9 | execution, ui | - | - |
-| renderSettingsThemePanel | function | 8275 | 25 | ui, content | settings | - |
-| renderSettingsFileStructurePanel | function | 8301 | 20 | ui | json | - |
-| renderSettingsCategoryPanel | function | 8322 | 13 | ui | - | - |
-| renderSettingsPagesPanel | function | 8336 | 7 | ui | - | - |
-| settingsExpandRow | function | 8352 | 13 | core | - | - |
-| settingsToggleRow | function | 8369 | 14 | core | - | - |
-| renderSettings | function | 8384 | 90 | sync, execution, journal-health, ui, content | settings | - |
-| renderSettingsConnectPanel | function | 8477 | 34 | sync, ui | settings | - |
-| renderSettingsSyncGroup | function | 8515 | 14 | sync, ui | - | - |
-| renderCategoriesSettings | function | 8531 | 25 | ui | settings | - |
-| moreGroupLabelFor | function | 8574 | 3 | core | - | - |
-| renderMore | function | 8578 | 13 | ui, content | - | - |
-| weekDays | function | 8595 | 1 | core | - | - |
-| statsTimeLogData | function | 8597 | 29 | core | blocks | clock |
-| statsHMS | function | 8627 | 4 | core | - | - |
-| makeQuestion | function | 8632 | 16 | content | - | - |
-| questionEntryCount | function | 8650 | 3 | content | zeroThinking | - |
-| renderQuestionCard | function | 8656 | 28 | ui, content | - | - |
-| renderZtQuestionTab | function | 8685 | 29 | ui, content | questions | - |
-| openQuestionEditor | function | 8716 | 5 | ui, content | modal, questions | - |
-| buildQuestionModal | function | 8722 | 28 | ui, content | - | - |
-| saveQuestionFromModal | function | 8751 | 21 | state, ui, content | questions | save |
-| questionToTheme | function | 8774 | 8 | state, content | questions, zeroThinking | save |
-| settleQuestion | function | 8783 | 8 | state, ui, content | questions | save, render |
-| openQuestionBridge | function | 8793 | 6 | ui, content | modal, questions | - |
-| buildQuestionBridgeModal | function | 8799 | 25 | ui, content | projects | - |
-| submitQuestionBridge | function | 8824 | 29 | state, ui, content | modal, projects, questions, settings, tasks | save, dom |
-| reopenQuestion | function | 8854 | 6 | state, ui, content | questions | save |
-| deleteQuestion | function | 8861 | 6 | state, ui, content | questions | save |
-| entryToQuestion | function | 8869 | 7 | state, ui, content | questions, settings, zeroThinking | save |
-| makeExperiment | function | 8883 | 15 | core | - | - |
-| activeExperiment | function | 8900 | 3 | core | experiments | - |
-| latestKeptExperiment | function | 8905 | 5 | core | experiments | - |
-| addExperimentOrGuard | function | 8912 | 7 | ui | - | - |
-| openExperimentEditor | function | 8920 | 5 | ui | experiments, modal | - |
-| buildExperimentModal | function | 8926 | 33 | ui | - | - |
-| saveExperimentFromModal | function | 8960 | 23 | state, ui | experiments | save |
-| deleteExperiment | function | 8986 | 5 | state, ui | experiments | save |
-| readExperimentConclusionInput | function | 8994 | 3 | core | - | dom |
-| keepExperiment | function | 8998 | 8 | state, ui | experiments | save |
-| dropExperiment | function | 9007 | 8 | state, ui | experiments | save |
-| copyExperimentConclusion | function | 9017 | 17 | ui | experiments | dom |
-| renderExperimentSection | function | 9036 | 38 | ui | - | - |
-| renderZeroThinking | function | 9082 | 29 | ui, content | questions, settings, zeroThinking | - |
-| ztRenderThemeItem | function | 9115 | 16 | ui, content | - | - |
-| ztRenderGroupSection | function | 9133 | 14 | ui, content | - | - |
-| ztSortByImportance | function | 9149 | 3 | core | - | - |
-| ztThemeListHTML | function | 9155 | 20 | ui, content | - | - |
-| renderZtSuggestions | function | 9177 | 25 | ui | - | - |
-| renderZtThemeTab | function | 9203 | 56 | ui, content | zeroThinking | - |
-| renderZtWrite | function | 9260 | 24 | ui | - | - |
-| renderZtEdit | function | 9288 | 22 | ui | zeroThinking | - |
-| ztFilteredHistory | function | 9312 | 7 | core | zeroThinking | - |
-| ztHistoryCountLabel | function | 9319 | 6 | core | zeroThinking | - |
-| ztHistoryListHTML | function | 9325 | 16 | core | zeroThinking | - |
-| ztFormatDate | function | 9342 | 4 | core | - | - |
-| ztAddSubmit | function | 9348 | 11 | state, ui | zeroThinking | save, dom |
-| ztPendingSuggestions | function | 9362 | 3 | core | zeroThinking | - |
-| ztSuggestionAdopt | function | 9368 | 16 | state, ui | zeroThinking | save |
-| ztSuggestionDismiss | function | 9386 | 7 | state, ui | zeroThinking | save |
-| ztToggleFav | function | 9394 | 6 | state, ui | zeroThinking | save |
-| ztToggleImportance | function | 9402 | 6 | state, ui | zeroThinking | save |
-| deleteZtTheme | function | 9415 | 13 | state, ui, content | zeroSecThemeLog, zeroThinking | save |
-| ztGroupAdd | function | 9435 | 10 | state, ui | zeroThinking | save |
-| ztGroupRename | function | 9452 | 9 | state, ui | zeroThinking | save |
-| ztGroupDelete | function | 9465 | 13 | state, ui | zeroThinking | save |
-| ztThemeSetGroup | function | 9480 | 5 | state, content | zeroThinking | save |
-| ztGroupIsOpen | function | 9487 | 3 | core | - | - |
-| ztGroupToggleOpen | function | 9490 | 4 | ui | - | render |
-| beginZtWrite | function | 9495 | 9 | core | zeroThinking | clock |
-| openZtWrite | function | 9505 | 7 | ui | - | render, timer, dom |
-| discardZtWrite | function | 9513 | 9 | ui | - | render |
-| saveZtEntry | function | 9523 | 7 | state, ui | - | - |
-| applyZtEntry | function | 9531 | 7 | ui | - | render |
-| zeroConnectionKey | function | 9539 | 4 | core | settings | - |
-| runZeroEntry | function | 9544 | 15 | ui | modal | dom, clock |
-| openZtEntry | function | 9563 | 11 | ui | zeroThinking | render, timer, dom |
-| closeZtEdit | function | 9576 | 4 | ui | - | render |
-| saveZtEdit | function | 9584 | 7 | state, ui | - | - |
-| applyZtEdit | function | 9592 | 11 | state, ui | zeroThinking | save, dom |
-| startZtTimer | function | 9605 | 17 | core | - | timer, dom |
-| updateZtTimerDisplay | function | 9622 | 5 | core | - | dom |
-| stopZtTimer | function | 9627 | 4 | core | - | - |
-| renderDateBar | function | 9632 | 13 | ui | selectedDate | - |
-| addProject | function | 9646 | 19 | state, ui | projects, settings | save, dom |
-| deleteProject | function | 9666 | 16 | state, ui | projects, tracks | save |
-| addTask | function | 9683 | 8 | state, ui | tasks | save, dom |
-| makeTask | function | 9692 | 53 | core | projects, selectedDate | - |
-| addTaskToProject | function | 9748 | 3 | core | - | - |
-| addSubtask | function | 9753 | 11 | ui | tasks | - |
-| openTaskCreator | function | 9766 | 19 | ui | modal, tasks | timer, dom |
-| getTaskDepth | function | 9786 | 10 | core | tasks | - |
-| toggleTask | function | 9797 | 25 | state, ui | blocks, tasks | save |
-| deleteTask | function | 9823 | 6 | state, ui | blocks, tasks | save |
-| plannedEndFromStart | function | 9833 | 6 | core | - | - |
-| createBlockFromTask | function | 9840 | 23 | state, execution, ui | blocks, selectedDate, tasks | save |
-| hhmmFromMinute | function | 9873 | 3 | core | - | - |
-| minuteFromHHMM | function | 9877 | 4 | core | - | - |
-| fillGapTaskPool | function | 9883 | 3 | core | - | - |
-| fillGapTaskEstimate | function | 9889 | 3 | core | - | - |
-| fillGapHasEstimate | function | 9893 | 3 | core | - | - |
-| fillGapEstimateLabel | function | 9897 | 3 | core | - | - |
-| fillGapDueCompare | function | 9901 | 5 | core | - | - |
-| fillGapSortCompare | function | 9909 | 5 | core | - | - |
-| captureFillGapLayoutInputs | function | 9921 | 15 | core | currentView, modal, selectedDate | dom |
-| restoreFillGapLayoutInputs | function | 9936 | 20 | core | currentView, modal, selectedDate | render, dom |
-| fillGapExecDesktop | function | 9957 | 3 | core | currentView | - |
-| openFillGapSheet | function | 9961 | 6 | ui | modal, selectedDate | render |
-| closeFillGapAware | function | 9970 | 4 | core | - | - |
-| closeFillGapNow | function | 9975 | 5 | ui | modal | render |
-| fillGapRowHTML | function | 9981 | 12 | core | - | - |
-| fillGapProjectTaskOptionsHTML | function | 9999 | 9 | core | projects, tasks | - |
-| fillGapNewBlockHTML | function | 10012 | 18 | execution | recurrences | - |
-| fillGapPrefillFromRoutine | function | 10033 | 17 | execution | recurrences | dom |
-| buildFillGapModal | function | 10051 | 17 | execution, ui | - | - |
-| fillGapPlace | function | 10072 | 24 | state, execution, ui | blocks, modal, tasks | save, render |
-| fillGapCreate | function | 10099 | 34 | state, execution, ui | blocks, modal | save, dom |
-| nextFillGapWindow | function | 10139 | 7 | execution | - | clock |
-| execFillGapAddButtonHTML | function | 10147 | 5 | core | selectedDate | - |
-| getOtherTask | function | 10154 | 3 | core | tasks | - |
-| defaultPlannedTimes | function | 10164 | 11 | core | selectedDate | clock |
-| addBlock | function | 10176 | 22 | state, execution, ui | blocks, selectedDate | save, dom |
-| subtractMinutesFromDateTime | function | 10202 | 4 | core | - | clock |
-| quickCompleteActualStart | function | 10216 | 13 | execution, ui | - | - |
-| transferIronLogToCompletedBlock | function | 10232 | 38 | execution, ui | blocks, condition, settings | - |
-| toggleBlock | function | 10288 | 88 | sync, state, execution, journal-health, ui, content | blocks, tasks | save |
-| completedTaskRecord | function | 10384 | 3 | core | - | - |
-| toggleTaskCompleteFromBlock | function | 10388 | 56 | sync, state, execution, ui, content | blocks, modal, tasks | save, render, dom |
-| toggleMIT | function | 10446 | 16 | state, ui | blocks | save |
-| triggerCompletionEffect | function | 10464 | 27 | core | - | timer, dom |
-| resetPomodoroForBlock | function | 10496 | 13 | execution | pomodoro | - |
-| autoCloseStaleRoutineRuns | function | 10510 | 19 | state, execution | blocks, pomodoro | save |
-| setBlockTime | function | 10530 | 9 | execution, journal-health, ui | - | render |
-| bulkApproveAsPlanned | function | 10544 | 28 | sync, state, execution, ui, content | blocks, tasks | save |
-| nowConveyorComplete | function | 10578 | 7 | execution | pomodoro | - |
-| commitBlockChanges | function | 10587 | 30 | sync, state, execution, ui | blocks, dataModifiedAt, recurrences | save |
-| updateBlockField | function | 10618 | 8 | execution | blocks | - |
-| deleteBlock | function | 10627 | 13 | execution, ui | blocks, recurrences | render |
-| generateReport | function | 10649 | 12 | journal-health, ui, content | reports, selectedDate | - |
-| downloadReport | function | 10662 | 5 | state, ui, content | selectedDate | file |
-| downloadData | function | 10668 | 5 | sync, state | - | file |
-| downloadLifeData | function | 10684 | 10 | state, ui | - | file |
-| importData | function | 10695 | 27 | state, execution, ui, content | settings, singleSchedules | save, file |
-| hoursSinceLocalDateTime | function | 10733 | 4 | core | - | - |
-| syncAlertMessage | function | 10741 | 15 | sync | dataModifiedAt, settings | - |
-| syncAlertBanner | function | 10757 | 5 | sync | - | - |
-| syncBannerHash | function | 10774 | 8 | sync | - | - |
-| dismissedSyncBanner | function | 10783 | 4 | sync | - | localStorage |
-| dismissSyncBanner | function | 10788 | 9 | sync | - | localStorage, dom |
-| clearSyncBannerDismissal | function | 10798 | 3 | sync | - | localStorage |
-| syncErrorDetailHTML | function | 10802 | 3 | sync | - | - |
-| renderSyncBanner | function | 10806 | 13 | sync, ui | - | render, dom |
-| syncDotClass | function | 10819 | 4 | sync | dataModifiedAt, settings | - |
-| updateSyncDot | function | 10823 | 4 | sync | - | dom |
-| updateAutoSaveStatus | function | 10828 | 13 | state | settings | dom |
-| syncGitHubFieldsFromDOM | function | 10848 | 14 | sync, content | settings | dom |
-| personalDataReady | function | 10872 | 4 | core | settings | - |
-| personalDataConn | function | 10878 | 10 | sync | settings | - |
-| personalDataPath | function | 10889 | 3 | core | - | - |
-| personalDataFileConfig | function | 10894 | 4 | core | json, settings | - |
-| fetchGitHubRawResult | function | 10912 | 23 | sync | settings | fetch |
-| fetchGitHubRawText | function | 10936 | 4 | sync | - | fetch |
-| fetchGitHubRawTextAtRoot | function | 10943 | 4 | sync | - | fetch |
-| fetchGitHubRawBlob | function | 10949 | 4 | sync | - | fetch, file |
-| fetchPersonalDataDirList | function | 10958 | 23 | sync | settings | fetch |
-| setPersonalDataAuthError | function | 10985 | 5 | ui | - | - |
-| clearPersonalDataAuthError | function | 10990 | 5 | ui | - | - |
-| renderPersonalDataAuthBanner | function | 10995 | 8 | ui | - | dom |
-| requireGitHubConfig | function | 11004 | 9 | sync, ui | json, settings | - |
-| fetchGitHubFileSHA | function | 11014 | 9 | sync | - | fetch |
-| gitHubContentsURL | function | 11024 | 3 | sync | - | - |
-| githubHeaders | function | 11028 | 16 | sync | - | - |
-| gitHubErrorMessage | function | 11045 | 56 | sync | json | fetch |
-| sanitizedStateForGitHub | function | 11102 | 9 | sync, state, execution | singleSchedules | save |
-| invalidateFeedbackConnection | function | 11122 | 1 | content | - | - |
-| feedbackInputOwner | function | 11123 | 7 | content | currentView, selectedDate | dom |
-| ownsFeedbackInput | function | 11130 | 4 | content | currentView, selectedDate | dom |
-| reflectFeedbackInput | function | 11134 | 9 | journal-health, content | journalMeta, journals | - |
-| ensureFeedbackClients | function | 11143 | 33 | sync, state, execution, ui, content | journals, selectedDate, settings | save, clock |
-| feedbackCanonicalNotice | function | 11176 | 4 | content | - | - |
-| renderFeedbackUiSlot | function | 11180 | 4 | ui, content | - | - |
-| patchFeedbackUi | function | 11184 | 9 | ui, content | currentView, selectedDate | render, dom |
-| markFeedbackReadKeepingScroll | function | 11197 | 9 | content | - | dom |
-| toBase64 | function | 11217 | 6 | core | - | - |
-| fromBase64 | function | 11224 | 5 | core | - | - |
-| gitHubBackupURL | function | 11240 | 4 | sync | - | - |
-| writeBackupSnapshotNow | function | 11248 | 28 | sync, state | settings | fetch, localStorage |
-| maybeWriteBackupSnapshot | function | 11277 | 13 | core | settings | localStorage |
-| writeBackupSnapshotBeforeLoad | function | 11298 | 22 | sync, state | settings | fetch, clock |
-| listBackups | function | 11321 | 18 | sync | - | fetch |
-| pruneOldBackups | function | 11340 | 16 | sync | - | fetch |
-| openBackupListModal | function | 11357 | 12 | sync, ui | modal | - |
-| buildBackupListModal | function | 11370 | 18 | ui | - | - |
-| restoreBackup | function | 11389 | 38 | sync, state, execution, ui | settings, singleSchedules | fetch, save |
-| gitHubFileURL | function | 11438 | 3 | sync | - | - |
-| fetchGitHubJSONFile | function | 11443 | 20 | sync | - | fetch |
-| collectArchivable | function | 11465 | 13 | core | blocks, feedback, journals, reports | - |
-| runArchive | function | 11479 | 99 | sync, state, ui | archivedDates, blocks, feedback, journals, reports, settings | fetch, save, render |
-| maybeAutoArchive | function | 11579 | 10 | core | settings | localStorage |
-| stateSizeLabel | function | 11591 | 8 | state | - | - |
-| refreshSearchResults | function | 11604 | 5 | core | - | render, dom |
-| loadArchiveForSearch | function | 11610 | 35 | sync, state, ui | settings | fetch |
-| resetDemoData | function | 11646 | 9 | state, ui, content | - | save |
-| isIOSDevice | function | 11660 | 5 | core | - | - |
-| maybeShowGuidedAccessHint | function | 11672 | 6 | ui | modal, settings | - |
-| buildGuidedAccessHintModal | function | 11679 | 24 | ui | - | - |
-| startPomodoro | function | 11704 | 29 | state, execution, journal-health, ui | pomodoro | save, render, clock |
-| forceResetPomodoroSession | function | 11736 | 11 | execution | pomodoro | - |
-| pausePomodoro | function | 11749 | 6 | state, execution, ui | pomodoro | save, clock |
-| resumePomodoro | function | 11756 | 14 | state, execution, ui | pomodoro | save, clock |
-| pomodoroFlightTime | function | 11771 | 4 | execution | - | - |
-| openPomodoroLinkModal | function | 11776 | 15 | execution, ui | modal, pomodoro | - |
-| recordBlockInterruption | function | 11797 | 6 | execution | blocks | - |
-| interruptReasonPickerHTML | function | 11806 | 10 | core | - | - |
-| renderPomodoroInterruptControls | function | 11820 | 5 | execution, ui | pomodoro | - |
-| stopPomodoro | function | 11826 | 18 | state, execution, ui | blocks, pomodoro | save |
-| completePomodoro | function | 11847 | 39 | sync, state, execution, ui, content | blocks, pomodoro | save |
-| openBodyScanModal | function | 11898 | 14 | ui | blocks, modal | dom |
-| bodyScanSyncCommentFromDom | function | 11915 | 4 | sync | - | dom |
-| bodyScanScaleRow | function | 11920 | 7 | core | - | - |
-| buildBodyScanModal | function | 11928 | 37 | ui | - | - |
-| bodyScanSelectFatigue | function | 11966 | 7 | sync, ui | - | - |
-| bodyScanSelectRecovery | function | 11974 | 6 | sync, ui | - | - |
-| bodyScanTogglePart | function | 11981 | 8 | sync, ui | - | - |
-| bodyScanRecord | function | 11992 | 28 | sync, execution | blocks, bodyScans | - |
-| bodyScanDiscard | function | 12022 | 3 | core | - | - |
-| closeBodyScanFlow | function | 12026 | 7 | state, ui | - | save, render |
-| hasIncompleteReason | function | 12046 | 3 | core | - | - |
-| openIncompleteReasonModal | function | 12052 | 11 | execution, ui, content | modal | - |
-| writeMeditationUnsavedToday | function | 12073 | 4 | state | - | - |
-| maybeGateWriteMeditationThenGenerateReport | function | 12078 | 9 | state, ui, content | modal, selectedDate | - |
-| buildWriteMeditationGateModal | function | 12088 | 15 | ui | - | - |
-| writeMeditationGateDoIt | function | 12106 | 12 | ui | - | dom |
-| writeMeditationGateSkip | function | 12120 | 5 | ui, content | - | - |
-| buildIncompleteReasonModal | function | 12126 | 24 | ui | - | - |
-| recordIncompleteReasonChip | function | 12152 | 8 | execution, ui | blocks | dom |
-| skipIncompleteReasonModal | function | 12164 | 5 | ui | - | - |
-| advanceIncompleteReasonQueue | function | 12170 | 18 | execution, ui, content | modal | render |
-| estimateMinutesForBlock | function | 12199 | 9 | execution | - | - |
-| logDeclaration | function | 12210 | 3 | journal-health | - | - |
-| reportForBlock | function | 12215 | 9 | execution, content | - | dom |
-| buildDeclareFeedback | function | 12226 | 17 | ui, content | declarations | - |
-| openDeclareModal | function | 12246 | 12 | execution, journal-health, ui | blocks, modal | - |
-| buildDeclareModal | function | 12259 | 17 | ui | - | - |
-| resumeLifecycleStart | function | 12277 | 11 | execution, journal-health, ui | - | - |
-| confirmDeclare | function | 12289 | 11 | execution, ui | blocks | dom |
-| skipDeclare | function | 12301 | 7 | journal-health, ui | - | - |
-| openReportModal | function | 12317 | 12 | journal-health, ui, content | blocks, modal | - |
-| buildReportModal | function | 12330 | 21 | ui, content | declarations | - |
-| resumeLifecycleFinish | function | 12352 | 4 | execution, journal-health, content | - | - |
-| finishReport | function | 12358 | 14 | execution, ui, content | - | - |
-| goBreakPomodoro | function | 12378 | 20 | state, execution, ui | blocks, pomodoro | save, clock |
-| endBreakPomodoro | function | 12400 | 13 | state, execution, ui | pomodoro | save |
-| updatePomodoroTick | function | 12418 | 22 | execution | pomodoro | dom, clock |
-| startTimerTicker | function | 12441 | 40 | execution, journal-health, ui, content | currentView, pomodoro, settings | fetch, render, timer, dom, clock |
-| setView | function | 12482 | 25 | state, execution, ui | currentView, modal | save |
-| setSelectedDate | function | 12508 | 7 | state, execution, journal-health, ui | selectedDate | save, render |
-| shiftSelectedDate | function | 12516 | 3 | core | selectedDate | - |
-| saveAndRender | function | 12521 | 11 | state, ui | - | save, render |
-| autoIngestFeedback | function | 12543 | 27 | content | feedbackIngestedDates, zeroThinking | - |
-| parseAiInsights | function | 12574 | 33 | core | - | - |
-| aiInsightsFreshnessHTML | function | 12608 | 11 | core | - | clock |
-| aiInsightsPanelHTML | function | 12620 | 20 | core | - | - |
-| hydrateStaticMarkdown | function | 12641 | 170 | sync, state, journal-health, ui, content | currentView, feedback, feedbackFiles, feedbackIngestedDates, selectedDate, settings, view | fetch, save, render, clock |
-| maybeRefreshFeedback | function | 12816 | 11 | content | settings | clock |
-| reloadStaticMarkdown | function | 12828 | 13 | state, ui | settings | render |
-| openMdInGithub | function | 12847 | 11 | sync, ui | settings | - |
-| setVisionSection | function | 12859 | 5 | state, execution, ui, content | settings | save, render |
-| setVisionBoardIndex | function | 12865 | 5 | state, execution, ui, content | settings | save, render |
-| setAiReportType | function | 12872 | 8 | state, execution, ui, content | settings | save, render |
-| openUnreadAiReport | function | 12882 | 24 | state, execution, ui, content | settings | save, render |
-| showToast | function | 12923 | 32 | ui | - | render, timer, dom |
-| upsertMorningLine | function | 12961 | 15 | core | - | - |
-| computeMetrics | function | 12977 | 16 | core | selectedDate, settings | - |
-| metric | function | 12994 | 11 | core | - | - |
-| ageMetric | function | 13006 | 14 | core | - | - |
-| isTouchedBlock | function | 13028 | 14 | execution | recurrences | - |
-| removeUntouchedInstances | function | 13045 | 8 | execution | blocks | - |
-| archiveHabitPinPeriod | function | 13054 | 8 | core | habitPinHistory | - |
-| endRecurrenceSeries | function | 13065 | 10 | core | recurrences | - |
-| endGateRecurrence | function | 13076 | 4 | state, ui | - | save |
-| addTowerGate | function | 13081 | 19 | state, ui | recurrences | save, dom |
-| moveTowerGate | function | 13101 | 18 | state, ui | recurrences | save |
-| toggleEarlyBird | function | 13120 | 15 | state, ui | earlyBird, settings | save |
-| recordHabitStreakDone | function | 13137 | 9 | core | habitStreaks, recurrences | - |
-| removeHabitStreakDone | function | 13147 | 6 | core | habitStreaks | - |
-| syncHabitStreakForBlock | function | 13154 | 5 | sync, execution | - | - |
-| habitStreakEdit | function | 13160 | 14 | core | recurrences | - |
-| recurrenceKindLabel | function | 13175 | 3 | core | - | - |
-| inferRecurrenceKind | function | 13187 | 17 | core | - | - |
-| migrateRecurrencesIfNeeded | function | 13205 | 40 | execution | - | - |
-| blocksForDate | function | 13246 | 5 | execution | blocks | - |
-| blockById | function | 13252 | 3 | execution | blocks | - |
-| projectName | function | 13256 | 4 | core | projects | - |
-| taskProgress | function | 13262 | 5 | core | - | - |
-| isProjectSuspended | function | 13274 | 1 | core | - | - |
-| isTaskSuspended | function | 13275 | 1 | core | - | - |
-| isTaskCountable | function | 13277 | 4 | core | - | - |
-| isTaskDead | function | 13282 | 4 | core | - | - |
-| projectStatusLabel | function | 13287 | 3 | core | - | - |
-| taskStatusLabel | function | 13290 | 3 | core | - | - |
-| setEntityStatus | function | 13295 | 5 | state, ui | - | save |
-| suspendProject | function | 13300 | 1 | core | - | - |
-| resumeProject | function | 13301 | 1 | core | - | - |
-| suspendTask | function | 13302 | 1 | core | - | - |
-| resumeTask | function | 13303 | 1 | core | - | - |
-| rangeOptions | function | 13305 | 7 | core | - | - |
-| emptyPanel | function | 13313 | 3 | core | - | - |
-| todayISO | function | 13317 | 3 | core | - | clock |
-| nowDateTime | function | 13321 | 3 | core | - | clock |
-| dateToISO | function | 13325 | 3 | core | - | - |
-| dateToLocalDateTime | function | 13329 | 5 | core | - | - |
-| roundDateTimeTo5Min | function | 13338 | 23 | core | - | - |
-| parseDate | function | 13362 | 4 | core | - | clock |
-| localDateTimeToMs | function | 13371 | 9 | core | - | clock |
-| addDays | function | 13381 | 5 | core | - | - |
-| effectiveDueDate | function | 13392 | 5 | core | - | - |
-| addYears | function | 13398 | 5 | core | - | - |
-| daysBetween | function | 13404 | 4 | core | - | - |
-| minutesOf | function | 13409 | 11 | core | - | - |
-| timeFromDateTime | function | 13421 | 7 | core | - | - |
-| formatDisplayDate | function | 13429 | 3 | core | - | - |
-| weekdayLabel | function | 13433 | 3 | core | - | - |
-| remainingText | function | 13437 | 8 | core | - | clock |
-| signed | function | 13446 | 3 | core | - | - |
-| pad2 | function | 13450 | 3 | core | - | - |
-| clamp | function | 13454 | 3 | core | - | - |
-| escapeHTML | function | 13458 | 8 | core | - | - |
-| downloadText | function | 13467 | 9 | state | - | dom, file |
-| registerServiceWorker | function | 13477 | 28 | ui | - | - |
-| modalHeaderHTML | function | 13519 | 8 | ui | - | - |
-| openTwyCommitSheet | function | 13528 | 12 | execution, ui | modal | - |
-| buildTwyCommitSheetHTML | function | 13541 | 8 | ui | - | - |
-| twyCommitPreHTML | function | 13550 | 9 | execution | - | - |
-| twyCommitCountLabel | function | 13560 | 3 | core | - | - |
-| scoredWeeklyCommitmentItemsForWeek | function | 13567 | 9 | journal-health | weeklyCommitments | - |
-| twyCommitPostHTML | function | 13577 | 11 | journal-health | weeklyCommitments | - |
-| twyCommitScoreLabel | function | 13589 | 5 | core | - | - |
-| twyCommitItemRowHTML | function | 13595 | 12 | core | - | - |
-| twyExcuseFormHTML | function | 13608 | 5 | core | - | - |
-| twyAddCandidates | function | 13614 | 5 | execution | weeklyCommitments | - |
-| twyAddItemPanelHTML | function | 13620 | 10 | core | - | - |
-| twyCommitGroups | function | 13631 | 11 | core | projects, recurrences, tasks | - |
-| twyCommitGroupRowHTML | function | 13643 | 13 | core | tracks | - |
-| twyCommitSubRowsHTML | function | 13657 | 7 | core | - | - |
-| twyCommitSelectionFor | function | 13665 | 3 | core | - | - |
-| twyCommittedWeekMeta | function | 13669 | 4 | core | weeklyCommitments | - |
-| twyCurrentCommitModalWeek | function | 13674 | 4 | ui | modal | - |
-| twyCommitItemForWeek | function | 13679 | 4 | core | weeklyCommitments | - |
-| twyDateLabel | function | 13684 | 3 | core | - | - |
-| twyCommitGroupByTaskId | function | 13688 | 6 | execution | modal | - |
-| twyCommitRefreshFooter | function | 13695 | 6 | core | modal | dom |
-| twyCommitUpdateCaret | function | 13702 | 6 | core | - | dom |
-| openProjectEditor | function | 13709 | 6 | ui | modal, projects | - |
-| openTaskEditor | function | 13716 | 6 | ui | modal, tasks | - |
-| openBlockEditor | function | 13723 | 6 | execution, ui | blocks, modal | - |
-| modalDraftSnapshot | function | 13759 | 9 | ui | - | dom |
-| readDailyDraft | function | 13769 | 20 | ui | modal, settings, zeroThinking | dom |
-| requestDraftLeave | function | 13791 | 50 | state, ui | currentView, modal, zeroThinking | dom, clock |
-| renderModal | function | 13842 | 22 | ui | modal | render |
-| closeModal | function | 13865 | 18 | ui | modal | render |
-| readModalFields | function | 13884 | 14 | ui | - | dom |
-| submitModal | function | 13899 | 20 | state, ui | modal | - |
-| modalDeleteMessage | function | 13920 | 15 | ui | modal | - |
-| deleteFromModal | function | 13936 | 13 | ui | modal | - |
-| trackMilestoneRowHTML | function | 13953 | 6 | core | - | - |
-| trackCarryMilestoneRowsHTML | function | 13960 | 8 | core | - | - |
-| readCarryDraft | function | 13969 | 12 | core | - | dom |
-| canCarryProjectCycle | function | 13983 | 5 | journal-health | settings | - |
-| confirmCarryProjectCycle | function | 13989 | 22 | state, journal-health, ui | modal, projects, settings, tracks | save, dom |
-| readTrackDraft | function | 14012 | 10 | core | - | dom |
-| trackDraftMatchesExisting | function | 14023 | 15 | core | - | - |
-| trackGuardHTML | function | 14039 | 23 | core | blocks, recurrences, tasks | - |
-| refreshTrackForm | function | 14063 | 13 | ui | modal | render, dom |
-| setTrackKind | function | 14077 | 4 | core | - | dom |
-| saveProjectTrackFromModal | function | 14082 | 21 | state, ui | tracks | dom |
-| legacyDetailFrame | function | 14106 | 7 | ui | currentView | - |
-| buildProjectModal | function | 14114 | 136 | journal-health, ui | settings, trackMeasurements, tracks | - |
-| saveProjectFromModal | function | 14251 | 38 | state, ui | projects, settings, tracks | save |
-| twyWeekOptionsHTML | function | 14293 | 7 | core | - | - |
-| twyPlanSectionHTML | function | 14303 | 32 | state | projects | - |
-| buildTaskModal | function | 14336 | 106 | ui | projects, tasks | - |
-| isDescendantOf | function | 14444 | 10 | core | tasks | - |
-| twyPlanFromFields | function | 14458 | 9 | state | - | - |
-| saveTaskFromModal | function | 14468 | 79 | state, ui | tasks | save |
-| buildBlockModal | function | 14554 | 205 | execution, ui | declarations, recurrences, tasks | - |
-| saveBlockFromModal | function | 14760 | 245 | sync, state, execution, ui, content | blocks, recurrences | save |
-| openTimelineNewBlock | function | 15007 | 42 | execution, ui | blocks, modal, selectedDate | timer, dom |
-| toLocalInput | function | 15052 | 6 | core | - | - |
-| fromLocalInput | function | 15059 | 26 | core | - | - |
-| event:keydown@15087 | event-listener | 15087 | 34 | execution | modal, selectedDate | - |
-| recordFeedbackFile | function | 15129 | 7 | state, content | feedbackFiles | save |
-| pushReportToGitHub | function | 15137 | 14 | sync, ui, content | selectedDate, settings | - |
-| pushFileToGitHub | function | 15163 | 44 | sync, ui | settings | fetch, clock |
-| completeBlockWithActual | function | 15237 | 9 | execution, ui | blocks, modal | - |
-| buildActualEntryModal | function | 15247 | 49 | journal-health, ui | - | - |
-| saveActualEntryFromModal | function | 15297 | 46 | sync, state, execution, ui, content | blocks, pomodoro, tasks, timelineMode | save |
-| runDailyOpen | function | 15352 | 19 | state, journal-health | selectedDate, settings | save |
-| _energyMedian | function | 15373 | 6 | journal-health | - | - |
-| _actualDurationMin | function | 15379 | 5 | core | - | - |
-| resolveEstimateMin | function | 15385 | 11 | journal-health | blocks | - |
-| computeProjectedEnd | function | 15397 | 16 | execution | - | - |
-| projectedEndText | function | 15414 | 12 | execution | selectedDate | clock |
-| updateProjectedEndTick | function | 15428 | 4 | core | - | dom |
-| updateBatteryTick | function | 15439 | 18 | execution, journal-health, ui | currentView, selectedDate, timelineZoom | dom, clock |
-| computeBufferRemaining | function | 15467 | 19 | execution | settings | - |
-| bufferMeterLevel | function | 15487 | 6 | core | - | - |
-| computeDailyOverload | function | 15506 | 16 | state, execution | settings | - |
-| bufferMeterHTML | function | 15527 | 20 | state | currentView, selectedDate | - |
-| prefillEnergy | function | 15550 | 13 | journal-health | blocks | - |
+| pruneExpiredSuggestedThemes | function | 249 | 7 | content | - | clock |
+| invalidateKaradaConnection | function | 404 | 5 | journal-health | - | - |
+| twyEditorCommitted | function | 719 | 4 | state, ui, content | - | save |
+| scrollToSettingsGroup | function | 1317 | 6 | core | - | dom |
+| visionConnectionKey | function | 1335 | 3 | content | settings | - |
+| invalidateVisionConnection | function | 1338 | 14 | content | - | - |
+| ensureVisionConnection | function | 1352 | 5 | content | - | - |
+| isFocusInEditableElement | function | 1451 | 6 | core | - | dom |
+| renderDeferringForFocus | function | 1459 | 8 | ui | - | render, clock |
+| isVisionEditTextareaFocused | function | 1468 | 4 | content | - | dom |
+| attemptFlushDeferredRender | function | 1481 | 9 | ui, content | - | render, clock |
+| readFoldMap | function | 1531 | 3 | core | - | localStorage |
+| isFoldOpen | function | 1534 | 4 | core | - | - |
+| setFoldOpen | function | 1538 | 7 | core | - | localStorage |
+| foldSection | function | 1546 | 8 | core | - | - |
+| event:click@1662 | event-listener | 1662 | 106 | sync, state, ui, content | modal | file |
+| event:toggle@1772 | event-listener | 1772 | 5 | core | - | - |
+| event:compositionstart@1782 | event-listener | 1782 | 1 | core | - | - |
+| event:compositionend@1783 | event-listener | 1783 | 6 | ui | - | - |
+| event:focusout@1789 | event-listener | 1789 | 10 | ui | - | timer |
+| event:input@1800 | event-listener | 1800 | 88 | state, ui, content | settings | save, render, timer, dom |
+| event:change@1889 | event-listener | 1889 | 202 | sync, state, execution, journal-health, ui, content | settings, tasks, wishFilter | save, render, timer, dom |
+| event:input@2093 | event-listener | 2093 | 9 | core | - | - |
+| saveGlobalInput | function | 2110 | 29 | state, ui | condition, journalMeta, journals, settings | - |
+| restoreGlobalInputs | function | 2140 | 10 | core | - | dom |
+| saveState | function | 2151 | 18 | sync, state, execution, ui | dataModifiedAt | save |
+| resolveTheme | function | 2179 | 4 | content | - | - |
+| applyTheme | function | 2183 | 7 | content | settings | dom |
+| compactArr | function | 2197 | 3 | core | - | - |
+| compactMap | function | 2200 | 8 | core | - | - |
+| validateStateContainers | function | 2209 | 11 | state, execution | - | - |
+| normalizeState | function | 2221 | 752 | sync, state, execution, journal-health, content | declarations, journals, json, settings, sleep | - |
+| defaultCategories | function | 2982 | 10 | core | - | - |
+| defaultLifeAreas | function | 2994 | 12 | core | - | - |
+| getRandomCelebrate | function | 3022 | 3 | core | - | - |
+| addCategory | function | 3033 | 17 | state, ui | settings | save |
+| deleteCategory | function | 3052 | 16 | state, ui | settings | save |
+| countCategoryUsage | function | 3070 | 7 | core | blocks, projects, tasks | - |
+| updateCategoryField | function | 3079 | 32 | core | blocks, projects, recurrences, settings, tasks | - |
+| toggleVisionDirectCategory | function | 3112 | 10 | state, content | settings | save |
+| getCategoryColor | function | 3124 | 6 | core | settings | - |
+| getCategoryNames | function | 3132 | 3 | core | settings | - |
+| defaultGitHubSettings | function | 3136 | 16 | sync | json | - |
+| handleAddCategoryFromModal | function | 3154 | 28 | state, ui | settings | save, timer, dom |
+| rerenderActiveModal | function | 3188 | 24 | execution, ui | modal | dom |
+| renderCategorySelect | function | 3212 | 16 | ui | - | - |
+| seedState | function | 3229 | 103 | sync, state, execution, journal-health | - | - |
+| makeBlock | function | 3333 | 31 | execution | - | - |
+| render | function | 3365 | 43 | sync, execution, ui, content | _justStartedBlockId, currentView, settings | render, dom, clock |
+| renderGate | function | 3412 | 43 | sync, ui | settings | render |
+| renderSidebar | function | 3456 | 31 | sync, ui, content | currentView, settings | render |
+| renderBottomNav | function | 3488 | 11 | ui, content | currentView | render |
+| tasksViewRenderedBlocks | function | 3504 | 12 | execution, ui | tasks | - |
+| currentOrNextTaskchuteBlockId | function | 3516 | 12 | execution, ui | - | clock |
+| renderMain | function | 3537 | 61 | execution, journal-health, ui, content | currentView, selectedDate | render, timer, dom |
+| renderHeader | function | 3602 | 18 | ui | currentView | - |
+| plannedRange | function | 3621 | 5 | core | - | - |
+| pushGitHubPath | function | 3638 | 36 | sync, ui | settings | fetch, clock |
+| cycleWeekProgress | function | 3676 | 13 | journal-health | projects, selectedDate, tasks | - |
+| isStaleBlock | function | 3695 | 6 | execution | tasks | - |
+| taskchuteBlocks | function | 3702 | 14 | execution | tasks | - |
+| stampEverStarted | function | 3721 | 4 | core | - | - |
+| deferrableBlocks | function | 3730 | 10 | execution | - | - |
+| blockEverStarted | function | 3742 | 3 | execution | - | - |
+| deferralStats | function | 3747 | 5 | execution | - | - |
+| taskchuteStartRate | function | 3754 | 5 | execution | - | - |
+| taskchuteUnstartedCount | function | 3761 | 3 | execution, ui | - | - |
+| weekRange | function | 3772 | 6 | core | - | clock |
+| candidateBlocksForWeek | function | 3781 | 18 | execution, journal-health | - | - |
+| twyPaceLabel | function | 3801 | 8 | core | - | - |
+| twyMetaLabel | function | 3810 | 9 | core | - | - |
+| buildTrackDigest | function | 3821 | 28 | execution, journal-health, ui | projects, settings, trackMeasurements, tracks, weeklyCommitments | - |
+| commitmentItemForBlock | function | 3852 | 36 | execution | - | - |
+| upsertWeeklyCommitment | function | 3889 | 6 | journal-health | weeklyCommitments | - |
+| commitWeek | function | 3896 | 21 | state, execution, journal-health | settings, weeklyCommitments | save |
+| autoCommitWeekIfNeeded | function | 3918 | 20 | state, execution, journal-health | settings, weeklyCommitments | save |
+| stampCommitmentCompletion | function | 3939 | 14 | state, journal-health | weeklyCommitments | save |
+| trackOnBlockStarted | function | 3954 | 3 | execution | - | - |
+| trackOnBlockCompletionChanged | function | 3958 | 5 | execution, ui | - | - |
+| excuseCommitmentItem | function | 3964 | 13 | state, journal-health | weeklyCommitments | save |
+| unexcuseCommitmentItem | function | 3978 | 11 | state, journal-health | weeklyCommitments | save |
+| addCommitmentItems | function | 3990 | 13 | state, execution, journal-health | weeklyCommitments | save |
+| closeTracksForOwner | function | 4005 | 10 | core | tracks | - |
+| trackRecord | function | 4016 | 21 | core | settings | - |
+| mergeEditedMilestones | function | 4038 | 18 | core | - | - |
+| saveTrackFromForm | function | 4057 | 24 | state | tracks | save |
+| closeActiveTrackManual | function | 4082 | 5 | state | - | save |
+| carryProjectToNewCycle | function | 4088 | 50 | state, journal-health | projects, trackMeasurements, tracks | save |
+| recordTrackMeasurement | function | 4140 | 17 | state | trackMeasurements, tracks | save, clock |
+| updateTrackMilestone | function | 4159 | 37 | state | tracks | save |
+| copyReportToClipboard | function | 4199 | 22 | ui, content | selectedDate | dom |
+| shareReport | function | 4221 | 5 | ui, content | selectedDate | - |
+| scheduleDraftActive | function | 4246 | 3 | execution | - | - |
+| minToHHMM | function | 4250 | 4 | core | - | - |
+| blockOccupiedRange | function | 4260 | 14 | execution | - | - |
+| subtractOccupiedIntervals | function | 4279 | 12 | core | - | - |
+| computeFreeGaps | function | 4298 | 6 | core | - | - |
+| isWeekdayDate | function | 4317 | 4 | core | - | - |
+| aiRearrangeWindowFor | function | 4323 | 4 | core | - | - |
+| movableBlockMinutes | function | 4332 | 8 | execution | - | - |
+| runAiSchedule | function | 4346 | 77 | execution, ui | selectedDate, timelineMode | render, clock |
+| renderDraftLayer | function | 4425 | 26 | state, ui | selectedDate | - |
+| rearrangeSkipMessage | function | 4456 | 8 | core | - | - |
+| draftBarHTML | function | 4465 | 25 | core | selectedDate | - |
+| snapshotDraftForUndo | function | 4495 | 4 | core | - | - |
+| confirmScheduleDraft | function | 4509 | 70 | state, execution, ui | blocks | save |
+| extractZeroSecThemesFromReport | function | 4586 | 22 | content | - | - |
+| event:pointerdown@4611 | event-listener | 4611 | 16 | core | - | - |
+| event:pointermove@4627 | event-listener | 4627 | 17 | core | - | dom |
+| endDraftDrag | function | 4644 | 6 | ui | - | render |
+| openSearchModal | function | 4668 | 5 | ui | modal | timer, dom |
+| buildSearchModal | function | 4674 | 20 | ui | settings | - |
+| searchSnippet | function | 4696 | 6 | core | - | - |
+| crossSearchHits | function | 4703 | 33 | core | feedback, journals, questions, reports, zeroThinking | dom |
+| crossSearchResultsHTML | function | 4737 | 24 | core | - | - |
+| wbsSearchHits | function | 4763 | 19 | core | projects, tasks | - |
+| wbsSearchResultsHTML | function | 4783 | 16 | core | - | - |
+| jumpToWbsSearchResult | function | 4800 | 38 | state, ui | projects, settings, tasks | save, timer, dom |
+| carryableBlocks | function | 4843 | 6 | execution | blocks | - |
+| carryOverPanel | function | 4849 | 12 | state, execution | selectedDate | - |
+| leverageTypeLabel | function | 4866 | 3 | core | - | - |
+| leverageTypeMarkHTML | function | 4870 | 4 | core | - | - |
+| leverageTypeOptionsHTML | function | 4875 | 10 | core | - | - |
+| leverageJudgeHelperHTML | function | 4891 | 18 | core | - | - |
+| migrationBadgeHTML | function | 4922 | 4 | state | - | - |
+| migrationNextCount | function | 4928 | 4 | state, execution | - | - |
+| requestCarryOver | function | 4934 | 10 | state, execution | - | - |
+| carryOverBlock | function | 4945 | 26 | execution, ui | blocks | render |
+| postponeBlockToNextDay | function | 4973 | 6 | execution | - | - |
+| moveBlockToWish | function | 4986 | 11 | execution, content | tasks | - |
+| logMigrationRitual | function | 5001 | 16 | state | migrationRitualLog | - |
+| openMigrationRitual | function | 5018 | 7 | state, execution, ui | modal | - |
+| buildMigrationRitualModal | function | 5026 | 20 | state, ui | - | - |
+| resolveMigrationRitual | function | 5047 | 73 | state, execution, ui, content | blocks | save, render |
+| updateTaskField | function | 5130 | 7 | core | tasks | - |
+| deriveStatusFromProgress | function | 5142 | 7 | core | - | - |
+| fillProgressOnComplete | function | 5150 | 4 | core | - | - |
+| updateTaskProgress | function | 5155 | 16 | core | tasks | - |
+| toggleCriteriaRequest | function | 5175 | 6 | ui | tasks | render |
+| renderWipBanner | function | 5185 | 19 | ui | projects | - |
+| wbsCategoryOptions | function | 5207 | 11 | core | - | - |
+| isWbsProjectDone | function | 5221 | 5 | core | tasks | - |
+| wbsFilteredProjects | function | 5228 | 11 | core | projects, settings | - |
+| wbsWeekRange | function | 5241 | 5 | core | - | - |
+| wbsThisWeekProjects | function | 5249 | 4 | core | projects | - |
+| wbsThisWeekTasks | function | 5254 | 20 | journal-health | tasks | - |
+| renderWbsThisWeek | function | 5275 | 14 | ui | - | - |
+| renderWBS | function | 5290 | 63 | journal-health, ui | projects, settings, tasks | - |
+| nextSiblingOrder | function | 5354 | 5 | core | - | - |
+| midpointOrder | function | 5360 | 4 | core | - | - |
+| siblingTaskCompare | function | 5369 | 6 | core | - | - |
+| planParentFor | function | 5377 | 5 | core | tasks | - |
+| planStepSiblings | function | 5383 | 5 | core | tasks | - |
+| planStepVisibleSiblings | function | 5392 | 8 | core | settings, tasks | - |
+| ensurePlanSiblingOrders | function | 5401 | 17 | core | tasks | - |
+| maybeQueueNextAiStep | function | 5423 | 23 | ui | tasks | - |
+| closeAiStepConfirmIfUndone | function | 5449 | 4 | ui | modal | - |
+| openAiStepConfirm | function | 5454 | 6 | ui | modal | - |
+| buildAiStepConfirmModal | function | 5461 | 20 | ui | - | - |
+| resolveAiStepConfirmSend | function | 5484 | 39 | ui | aiStepPendingRequests, tasks | dom, clock |
+| putAiStepRequest | function | 5529 | 4 | ui | - | - |
+| compensateAiStepRequest | function | 5537 | 11 | core | aiStepDismissedIds, aiStepPendingRequests, tasks | - |
+| togglePlanStepOwner | function | 5549 | 12 | state, ui | tasks | save |
+| movePlanStep | function | 5562 | 23 | state, ui | tasks | save |
+| addPlanStepBelow | function | 5586 | 17 | core | tasks | - |
+| aiStepStatusLabel | function | 5604 | 3 | core | - | - |
+| buildPlanStepRequestTask | function | 5610 | 11 | ui | tasks | - |
+| validatePlanStepDraftSteps | function | 5624 | 21 | core | - | - |
+| setPlanStepUi | function | 5646 | 4 | ui | - | - |
+| refreshPlanStepModalIfOpen | function | 5655 | 5 | ui | modal, tasks | - |
+| stopPlanStepPolling | function | 5661 | 4 | core | - | - |
+| schedulePlanStepPoll | function | 5666 | 5 | execution | - | timer |
+| finishPlanStep | function | 5672 | 6 | ui | - | - |
+| requestPlanStep | function | 5679 | 34 | sync, execution, ui | settings, tasks | clock |
+| pollPlanStepResponse | function | 5714 | 53 | sync, execution, ui | - | fetch, clock |
+| approvePlanStepDraft | function | 5770 | 38 | state, ui | selectedDate, tasks | save |
+| discardPlanStepDraft | function | 5809 | 5 | ui | - | - |
+| renderPlanStepSectionHTML | function | 5817 | 36 | ui | settings | - |
+| wbsTaskCompare | function | 5855 | 8 | core | - | - |
+| taskBlockStats | function | 5865 | 10 | execution | blocks | - |
+| fmtMinShort | function | 5875 | 5 | core | - | - |
+| taskProgressPct | function | 5883 | 6 | core | - | - |
+| projectProgressAgg | function | 5890 | 6 | core | - | - |
+| renderProjectProgressAgg | function | 5897 | 9 | ui | - | - |
+| renderTwyTrackBlock | function | 5908 | 5 | execution, journal-health, ui | tracks | - |
+| renderTwyStaleNote | function | 5914 | 5 | ui | - | - |
+| roundToStep | function | 5920 | 7 | core | - | - |
+| mdFmt | function | 5928 | 4 | core | - | - |
+| twyNumericValueHTML | function | 5933 | 16 | core | - | - |
+| twyMilestoneValueHTML | function | 5950 | 15 | core | - | - |
+| twyBarHTML | function | 5966 | 11 | core | - | - |
+| twyMilestoneProgressHTML | function | 5978 | 11 | state | - | - |
+| twyMilestoneChainHTML | function | 5990 | 17 | execution | - | - |
+| twyEditorHTML | function | 6009 | 4 | core | - | - |
+| twyNumericEditorHTML | function | 6014 | 11 | core | trackMeasurements | - |
+| twyMilestoneEditorHTML | function | 6026 | 33 | state | - | - |
+| renderTwyTrackRow | function | 6060 | 27 | execution, ui | trackMeasurements | - |
+| renderTwyTrackReadOnly | function | 6089 | 24 | execution, ui | trackMeasurements | - |
+| twyTrackIsDone | function | 6116 | 8 | core | trackMeasurements | - |
+| wbsProjectTaskModel | function | 6125 | 16 | core | settings, tasks | - |
+| renderWbsProjectMeta | function | 6142 | 4 | ui | - | - |
+| renderWbsDesktopProjects | function | 6147 | 8 | ui | projects | - |
+| wbsSearchModel | function | 6156 | 26 | core | - | - |
+| wbsSearchRows | function | 6183 | 11 | journal-health, ui | projects, settings | - |
+| renderWbsProjectDetail | function | 6195 | 12 | execution, journal-health, ui | settings | - |
+| renderProjectTree | function | 6208 | 34 | execution, journal-health, ui | settings | - |
+| toggleProjectCollapse | function | 6244 | 5 | state, ui | projects | save |
+| toggleTaskCollapse | function | 6249 | 5 | state, ui | tasks | save |
+| renderTaskTree | function | 6255 | 13 | ui | settings | - |
+| renderTaskRow | function | 6269 | 82 | execution, ui | blocks, settings, tasks | - |
+| execTargetBlocks | function | 6353 | 18 | execution | selectedDate, tasks | - |
+| execBlockAddHTML | function | 6374 | 13 | execution | - | - |
+| execHeaderHTML | function | 6391 | 13 | execution | selectedDate | - |
+| dailyBlockDetails | function | 6409 | 4 | execution, ui | tasks | - |
+| renderExecDoneRow | function | 6414 | 19 | execution, ui | - | - |
+| execDoneListHTML | function | 6434 | 9 | core | blocks, selectedDate | - |
+| renderExecView | function | 6459 | 59 | execution, ui | modal, selectedDate, timelineMode | - |
+| renderTasks | function | 6519 | 6 | ui | - | - |
+| renderExecNowRow | function | 6528 | 30 | execution, ui | - | - |
+| renderExecUpcomingRow | function | 6561 | 27 | execution, ui | tasks | - |
+| renderOpenTasks | function | 6589 | 29 | ui, content | blocks, projects, selectedDate, tasks | - |
+| renderExecTaskRow | function | 6621 | 30 | ui | selectedDate | - |
+| renderCircularProgress | function | 6661 | 16 | ui | - | - |
+| remainingTextNormal | function | 6678 | 4 | core | - | - |
+| parseSleepCsv | function | 6705 | 27 | journal-health | - | - |
+| hmsToHours | function | 6733 | 5 | core | - | - |
+| sleepNumOrNull | function | 6739 | 4 | journal-health | - | - |
+| parseSleepDateTime | function | 6745 | 7 | journal-health | - | - |
+| parseSleepTime | function | 6753 | 4 | journal-health | - | - |
+| shortSleepDate | function | 6758 | 4 | journal-health | - | - |
+| latestSleepLogWithin | function | 6767 | 8 | journal-health | sleep | - |
+| median | function | 6792 | 5 | core | - | - |
+| toNumber | function | 6803 | 5 | core | - | - |
+| conditionBudgetBaseline | function | 6811 | 16 | core | sleep | - |
+| conditionBudget | function | 6834 | 31 | journal-health | - | - |
+| defaultBatterySettings | function | 6877 | 8 | journal-health | - | - |
+| clampBatteryFieldValue | function | 6894 | 9 | journal-health | - | - |
+| parseTimeInputToMinutes | function | 6906 | 5 | core | - | - |
+| minutesToTimeInputValue | function | 6913 | 4 | core | - | - |
+| computeBatteryLevel | function | 6930 | 22 | execution, journal-health | settings | - |
+| batteryEventMinuteForDate | function | 6957 | 6 | journal-health | - | - |
+| batteryCurvePoints | function | 6971 | 41 | execution, journal-health | settings | - |
+| importSleepCsv | function | 7013 | 53 | state, journal-health, ui | sleep | save, clock |
+| aiReportFilesForType | function | 7113 | 10 | content | - | - |
+| fundJournalSummaryForDate | function | 7125 | 1 | journal-health | - | - |
+| parseUtcIsoToMs | function | 7132 | 6 | core | - | - |
+| fetchReportIndex | function | 7154 | 17 | sync, content | - | fetch, clock |
+| aiReportUnreadEntries | function | 7173 | 16 | content | aiReportReadIds | - |
+| aiReportUnreadCount | function | 7190 | 3 | content | - | - |
+| renderAiReportUnreadList | function | 7194 | 11 | ui, content | - | - |
+| patchAiReportUnreadList | function | 7206 | 7 | ui, content | currentView | dom |
+| markAiReportRead | function | 7214 | 10 | state, ui, content | aiReportReadIds | save |
+| maybeMarkAiReportRead | function | 7225 | 6 | content | currentView | dom |
+| unionAiReportEntries | function | 7236 | 1 | content | - | - |
+| knownFutureLetterEntries | function | 7244 | 5 | core | - | - |
+| unionKnownFutureLetters | function | 7249 | 6 | core | - | - |
+| triggerAiReportDirLoad | function | 7261 | 35 | sync, state, ui, content | currentView | fetch, render |
+| triggerAiReportBodyLoad | function | 7303 | 19 | sync, state, ui, content | currentView | fetch, render, clock |
+| refreshAiReports | function | 7330 | 26 | ui, content | settings | render |
+| renderAiReports | function | 7357 | 23 | ui, content | settings | - |
+| renderAiReportBody | function | 7381 | 45 | state, journal-health, ui, content | - | render |
+| splitWeeklyReviewMd | function | 7428 | 19 | journal-health, ui | - | - |
+| renderAiWeeklyReportBody | function | 7450 | 21 | journal-health, ui, content | - | - |
+| parseSuggestedTaskTitle | function | 7473 | 5 | core | - | - |
+| addWeeklySuggestedTask | function | 7479 | 19 | state, journal-health, ui | projects, tasks | save |
+| visionDirectSecondsOfDate | function | 7508 | 18 | content | blocks | - |
+| visionAlignmentData | function | 7531 | 14 | content | blocks | clock |
+| visionHMText | function | 7546 | 4 | content | - | - |
+| renderVisionAlignment | function | 7551 | 27 | ui, content | settings | - |
+| renderVision | function | 7585 | 26 | ui, content | settings | render |
+| visionMdStatusLine | function | 7614 | 3 | content | - | - |
+| renderVisionMd | function | 7623 | 46 | ui, content | settings | fetch, render |
+| autoGrowVisionEditTextarea | function | 7675 | 11 | content | - | - |
+| renderVisionEdit | function | 7689 | 15 | ui, content | - | - |
+| visionTimeOfDay | function | 7705 | 4 | content | - | clock |
+| renderVisionBoard | function | 7743 | 29 | state, ui, content | settings | - |
+| renderVisionBoardImages | function | 7775 | 67 | ui, content | - | - |
+| renderVisionBoardPdfFallback | function | 7845 | 25 | ui, content | - | - |
+| loadVisionBoardPdf | function | 7875 | 22 | sync, state, ui, content | currentView, settings | fetch, render, file |
+| loadVisionManifest | function | 7904 | 28 | sync, state, ui, content | currentView, settings | fetch, render |
+| loadVisionBoardImages | function | 7943 | 37 | sync, state, ui, content | currentView, settings | fetch, render, file |
+| sanitizeHTML | function | 8017 | 30 | core | - | render, dom |
+| renderMarkdown | function | 8057 | 17 | ui | - | - |
+| renderMarkdownUncached | function | 8075 | 10 | ui | - | - |
+| renderSettingsProfilePanel | function | 8089 | 15 | ui | settings | - |
+| renderSettingsBufferPanel | function | 8105 | 23 | ui | settings | - |
+| renderSettingsBatteryPanel | function | 8129 | 34 | journal-health, ui | settings | - |
+| renderSettingsDataGroupRows | function | 8168 | 38 | state, ui | settings | render, file |
+| renderSettingsCloudPanel | function | 8207 | 50 | sync, ui | json | - |
+| renderSettingsDraftSchedulePanel | function | 8258 | 9 | execution, ui | - | - |
+| renderSettingsThemePanel | function | 8273 | 25 | ui, content | settings | - |
+| renderSettingsFileStructurePanel | function | 8299 | 20 | ui | json | - |
+| renderSettingsCategoryPanel | function | 8320 | 13 | ui | - | - |
+| renderSettingsPagesPanel | function | 8334 | 7 | ui | - | - |
+| settingsExpandRow | function | 8350 | 13 | core | - | - |
+| settingsToggleRow | function | 8367 | 14 | core | - | - |
+| renderSettings | function | 8382 | 90 | sync, execution, journal-health, ui, content | settings | - |
+| renderSettingsConnectPanel | function | 8475 | 34 | sync, ui | settings | - |
+| renderSettingsSyncGroup | function | 8513 | 14 | sync, ui | - | - |
+| renderCategoriesSettings | function | 8529 | 25 | ui | settings | - |
+| moreGroupLabelFor | function | 8572 | 3 | core | - | - |
+| renderMore | function | 8576 | 13 | ui, content | - | - |
+| weekDays | function | 8593 | 1 | core | - | - |
+| statsTimeLogData | function | 8595 | 29 | core | blocks | clock |
+| statsHMS | function | 8625 | 4 | core | - | - |
+| makeQuestion | function | 8630 | 16 | content | - | - |
+| questionEntryCount | function | 8648 | 3 | content | zeroThinking | - |
+| renderQuestionCard | function | 8654 | 28 | ui, content | - | - |
+| renderZtQuestionTab | function | 8683 | 29 | ui, content | questions | - |
+| openQuestionEditor | function | 8714 | 5 | ui, content | modal, questions | - |
+| buildQuestionModal | function | 8720 | 28 | ui, content | - | - |
+| saveQuestionFromModal | function | 8749 | 21 | state, ui, content | questions | save |
+| questionToTheme | function | 8772 | 8 | state, content | questions, zeroThinking | save |
+| settleQuestion | function | 8781 | 8 | state, ui, content | questions | save, render |
+| openQuestionBridge | function | 8791 | 6 | ui, content | modal, questions | - |
+| buildQuestionBridgeModal | function | 8797 | 25 | ui, content | projects | - |
+| submitQuestionBridge | function | 8822 | 29 | state, ui, content | modal, projects, questions, settings, tasks | save, dom |
+| reopenQuestion | function | 8852 | 6 | state, ui, content | questions | save |
+| deleteQuestion | function | 8859 | 6 | state, ui, content | questions | save |
+| entryToQuestion | function | 8867 | 7 | state, ui, content | questions, settings, zeroThinking | save |
+| makeExperiment | function | 8881 | 15 | core | - | - |
+| activeExperiment | function | 8898 | 3 | core | experiments | - |
+| latestKeptExperiment | function | 8903 | 5 | core | experiments | - |
+| addExperimentOrGuard | function | 8910 | 7 | ui | - | - |
+| openExperimentEditor | function | 8918 | 5 | ui | experiments, modal | - |
+| buildExperimentModal | function | 8924 | 33 | ui | - | - |
+| saveExperimentFromModal | function | 8958 | 23 | state, ui | experiments | save |
+| deleteExperiment | function | 8984 | 5 | state, ui | experiments | save |
+| readExperimentConclusionInput | function | 8992 | 3 | core | - | dom |
+| keepExperiment | function | 8996 | 8 | state, ui | experiments | save |
+| dropExperiment | function | 9005 | 8 | state, ui | experiments | save |
+| copyExperimentConclusion | function | 9015 | 17 | ui | experiments | dom |
+| renderExperimentSection | function | 9034 | 38 | ui | - | - |
+| renderZeroThinking | function | 9080 | 29 | ui, content | questions, settings, zeroThinking | - |
+| ztRenderThemeItem | function | 9113 | 16 | ui, content | - | - |
+| ztRenderGroupSection | function | 9131 | 14 | ui, content | - | - |
+| ztSortByImportance | function | 9147 | 3 | core | - | - |
+| ztThemeListHTML | function | 9153 | 20 | ui, content | - | - |
+| renderZtSuggestions | function | 9175 | 25 | ui | - | - |
+| renderZtThemeTab | function | 9201 | 56 | ui, content | zeroThinking | - |
+| renderZtWrite | function | 9258 | 24 | ui | - | - |
+| renderZtEdit | function | 9286 | 22 | ui | zeroThinking | - |
+| ztFilteredHistory | function | 9310 | 7 | core | zeroThinking | - |
+| ztHistoryCountLabel | function | 9317 | 6 | core | zeroThinking | - |
+| ztHistoryListHTML | function | 9323 | 16 | core | zeroThinking | - |
+| ztFormatDate | function | 9340 | 4 | core | - | - |
+| ztAddSubmit | function | 9346 | 11 | state, ui | zeroThinking | save, dom |
+| ztPendingSuggestions | function | 9360 | 3 | core | zeroThinking | - |
+| ztSuggestionAdopt | function | 9366 | 16 | state, ui | zeroThinking | save |
+| ztSuggestionDismiss | function | 9384 | 7 | state, ui | zeroThinking | save |
+| ztToggleFav | function | 9392 | 6 | state, ui | zeroThinking | save |
+| ztToggleImportance | function | 9400 | 6 | state, ui | zeroThinking | save |
+| deleteZtTheme | function | 9413 | 13 | state, ui, content | zeroSecThemeLog, zeroThinking | save |
+| ztGroupAdd | function | 9433 | 10 | state, ui | zeroThinking | save |
+| ztGroupRename | function | 9450 | 9 | state, ui | zeroThinking | save |
+| ztGroupDelete | function | 9463 | 13 | state, ui | zeroThinking | save |
+| ztThemeSetGroup | function | 9478 | 5 | state, content | zeroThinking | save |
+| ztGroupIsOpen | function | 9485 | 3 | core | - | - |
+| ztGroupToggleOpen | function | 9488 | 4 | ui | - | render |
+| beginZtWrite | function | 9493 | 9 | core | zeroThinking | clock |
+| openZtWrite | function | 9503 | 7 | ui | - | render, timer, dom |
+| discardZtWrite | function | 9511 | 9 | ui | - | render |
+| saveZtEntry | function | 9521 | 7 | state, ui | - | - |
+| applyZtEntry | function | 9529 | 7 | ui | - | render |
+| zeroConnectionKey | function | 9537 | 4 | core | settings | - |
+| runZeroEntry | function | 9542 | 15 | ui | modal | dom, clock |
+| openZtEntry | function | 9561 | 11 | ui | zeroThinking | render, timer, dom |
+| closeZtEdit | function | 9574 | 4 | ui | - | render |
+| saveZtEdit | function | 9582 | 7 | state, ui | - | - |
+| applyZtEdit | function | 9590 | 11 | state, ui | zeroThinking | save, dom |
+| startZtTimer | function | 9603 | 17 | core | - | timer, dom |
+| updateZtTimerDisplay | function | 9620 | 5 | core | - | dom |
+| stopZtTimer | function | 9625 | 4 | core | - | - |
+| renderDateBar | function | 9630 | 13 | ui | selectedDate | - |
+| addProject | function | 9644 | 19 | state, ui | projects, settings | save, dom |
+| deleteProject | function | 9664 | 16 | state, ui | projects, tracks | save |
+| addTask | function | 9681 | 8 | state, ui | tasks | save, dom |
+| makeTask | function | 9690 | 53 | core | projects, selectedDate | - |
+| addTaskToProject | function | 9746 | 3 | core | - | - |
+| addSubtask | function | 9751 | 11 | ui | tasks | - |
+| openTaskCreator | function | 9764 | 19 | ui | modal, tasks | timer, dom |
+| getTaskDepth | function | 9784 | 10 | core | tasks | - |
+| toggleTask | function | 9795 | 25 | state, ui | blocks, tasks | save |
+| deleteTask | function | 9821 | 6 | state, ui | blocks, tasks | save |
+| plannedEndFromStart | function | 9831 | 6 | core | - | - |
+| createBlockFromTask | function | 9838 | 23 | state, execution, ui | blocks, selectedDate, tasks | save |
+| hhmmFromMinute | function | 9871 | 3 | core | - | - |
+| minuteFromHHMM | function | 9875 | 4 | core | - | - |
+| fillGapTaskPool | function | 9881 | 3 | core | - | - |
+| fillGapTaskEstimate | function | 9887 | 3 | core | - | - |
+| fillGapHasEstimate | function | 9891 | 3 | core | - | - |
+| fillGapEstimateLabel | function | 9895 | 3 | core | - | - |
+| fillGapDueCompare | function | 9899 | 5 | core | - | - |
+| fillGapSortCompare | function | 9907 | 5 | core | - | - |
+| captureFillGapLayoutInputs | function | 9919 | 15 | core | currentView, modal, selectedDate | dom |
+| restoreFillGapLayoutInputs | function | 9934 | 20 | core | currentView, modal, selectedDate | render, dom |
+| fillGapExecDesktop | function | 9955 | 3 | core | currentView | - |
+| openFillGapSheet | function | 9959 | 6 | ui | modal, selectedDate | render |
+| closeFillGapAware | function | 9968 | 4 | core | - | - |
+| closeFillGapNow | function | 9973 | 5 | ui | modal | render |
+| fillGapRowHTML | function | 9979 | 12 | core | - | - |
+| fillGapProjectTaskOptionsHTML | function | 9997 | 9 | core | projects, tasks | - |
+| fillGapNewBlockHTML | function | 10010 | 18 | execution | recurrences | - |
+| fillGapPrefillFromRoutine | function | 10031 | 17 | execution | recurrences | dom |
+| buildFillGapModal | function | 10049 | 17 | execution, ui | - | - |
+| fillGapPlace | function | 10070 | 24 | state, execution, ui | blocks, modal, tasks | save, render |
+| fillGapCreate | function | 10097 | 34 | state, execution, ui | blocks, modal | save, dom |
+| nextFillGapWindow | function | 10137 | 7 | execution | - | clock |
+| execFillGapAddButtonHTML | function | 10145 | 5 | core | selectedDate | - |
+| getOtherTask | function | 10152 | 3 | core | tasks | - |
+| defaultPlannedTimes | function | 10162 | 11 | core | selectedDate | clock |
+| addBlock | function | 10174 | 22 | state, execution, ui | blocks, selectedDate | save, dom |
+| subtractMinutesFromDateTime | function | 10200 | 4 | core | - | clock |
+| quickCompleteActualStart | function | 10214 | 13 | execution, ui | - | - |
+| transferIronLogToCompletedBlock | function | 10230 | 38 | execution, ui | blocks, condition, settings | - |
+| toggleBlock | function | 10286 | 88 | sync, state, execution, journal-health, ui, content | blocks, tasks | save |
+| completedTaskRecord | function | 10382 | 3 | core | - | - |
+| toggleTaskCompleteFromBlock | function | 10386 | 56 | sync, state, execution, ui, content | blocks, modal, tasks | save, render, dom |
+| toggleMIT | function | 10444 | 16 | state, ui | blocks | save |
+| triggerCompletionEffect | function | 10462 | 27 | core | - | timer, dom |
+| resetPomodoroForBlock | function | 10494 | 13 | execution | pomodoro | - |
+| autoCloseStaleRoutineRuns | function | 10508 | 19 | state, execution | blocks, pomodoro | save |
+| setBlockTime | function | 10528 | 9 | execution, journal-health, ui | - | render |
+| bulkApproveAsPlanned | function | 10542 | 28 | sync, state, execution, ui, content | blocks, tasks | save |
+| nowConveyorComplete | function | 10576 | 7 | execution | pomodoro | - |
+| commitBlockChanges | function | 10585 | 30 | sync, state, execution, ui | blocks, dataModifiedAt, recurrences | save |
+| updateBlockField | function | 10616 | 8 | execution | blocks | - |
+| deleteBlock | function | 10625 | 13 | execution, ui | blocks, recurrences | render |
+| generateReport | function | 10647 | 12 | journal-health, ui, content | reports, selectedDate | - |
+| downloadReport | function | 10660 | 5 | state, ui, content | selectedDate | file |
+| downloadData | function | 10666 | 5 | sync, state | - | file |
+| downloadLifeData | function | 10682 | 10 | state, ui | - | file |
+| importData | function | 10693 | 27 | state, execution, ui, content | settings, singleSchedules | save, file |
+| hoursSinceLocalDateTime | function | 10731 | 4 | core | - | - |
+| syncAlertMessage | function | 10739 | 15 | sync | dataModifiedAt, settings | - |
+| syncAlertBanner | function | 10755 | 5 | sync | - | - |
+| syncBannerHash | function | 10772 | 8 | sync | - | - |
+| dismissedSyncBanner | function | 10781 | 4 | sync | - | localStorage |
+| dismissSyncBanner | function | 10786 | 9 | sync | - | localStorage, dom |
+| clearSyncBannerDismissal | function | 10796 | 3 | sync | - | localStorage |
+| syncErrorDetailHTML | function | 10800 | 3 | sync | - | - |
+| renderSyncBanner | function | 10804 | 13 | sync, ui | - | render, dom |
+| syncDotClass | function | 10817 | 4 | sync | dataModifiedAt, settings | - |
+| updateSyncDot | function | 10821 | 4 | sync | - | dom |
+| updateAutoSaveStatus | function | 10826 | 13 | state | settings | dom |
+| syncGitHubFieldsFromDOM | function | 10846 | 14 | sync, content | settings | dom |
+| personalDataReady | function | 10870 | 4 | core | settings | - |
+| personalDataConn | function | 10876 | 10 | sync | settings | - |
+| personalDataPath | function | 10887 | 3 | core | - | - |
+| personalDataFileConfig | function | 10892 | 4 | core | json, settings | - |
+| fetchGitHubRawResult | function | 10910 | 23 | sync | settings | fetch |
+| fetchGitHubRawText | function | 10934 | 4 | sync | - | fetch |
+| fetchGitHubRawTextAtRoot | function | 10941 | 4 | sync | - | fetch |
+| fetchGitHubRawBlob | function | 10947 | 4 | sync | - | fetch, file |
+| fetchPersonalDataDirList | function | 10956 | 23 | sync | settings | fetch |
+| setPersonalDataAuthError | function | 10983 | 5 | ui | - | - |
+| clearPersonalDataAuthError | function | 10988 | 5 | ui | - | - |
+| renderPersonalDataAuthBanner | function | 10993 | 8 | ui | - | dom |
+| requireGitHubConfig | function | 11002 | 9 | sync, ui | json, settings | - |
+| fetchGitHubFileSHA | function | 11012 | 9 | sync | - | fetch |
+| gitHubContentsURL | function | 11022 | 3 | sync | - | - |
+| githubHeaders | function | 11026 | 16 | sync | - | - |
+| gitHubErrorMessage | function | 11043 | 56 | sync | json | fetch |
+| sanitizedStateForGitHub | function | 11100 | 9 | sync, state, execution | singleSchedules | save |
+| invalidateFeedbackConnection | function | 11120 | 1 | content | - | - |
+| feedbackInputOwner | function | 11121 | 7 | content | currentView, selectedDate | dom |
+| ownsFeedbackInput | function | 11128 | 4 | content | currentView, selectedDate | dom |
+| reflectFeedbackInput | function | 11132 | 9 | journal-health, content | journalMeta, journals | - |
+| ensureFeedbackClients | function | 11141 | 33 | sync, state, execution, ui, content | journals, selectedDate, settings | save, clock |
+| feedbackCanonicalNotice | function | 11174 | 4 | content | - | - |
+| renderFeedbackUiSlot | function | 11178 | 4 | ui, content | - | - |
+| patchFeedbackUi | function | 11182 | 9 | ui, content | currentView, selectedDate | render, dom |
+| markFeedbackReadKeepingScroll | function | 11195 | 9 | content | - | dom |
+| toBase64 | function | 11215 | 6 | core | - | - |
+| fromBase64 | function | 11222 | 5 | core | - | - |
+| gitHubBackupURL | function | 11238 | 4 | sync | - | - |
+| writeBackupSnapshotNow | function | 11246 | 28 | sync, state | settings | fetch, localStorage |
+| maybeWriteBackupSnapshot | function | 11275 | 13 | core | settings | localStorage |
+| writeBackupSnapshotBeforeLoad | function | 11296 | 22 | sync, state | settings | fetch, clock |
+| listBackups | function | 11319 | 18 | sync | - | fetch |
+| pruneOldBackups | function | 11338 | 16 | sync | - | fetch |
+| openBackupListModal | function | 11355 | 12 | sync, ui | modal | - |
+| buildBackupListModal | function | 11368 | 18 | ui | - | - |
+| restoreBackup | function | 11387 | 38 | sync, state, execution, ui | settings, singleSchedules | fetch, save |
+| gitHubFileURL | function | 11436 | 3 | sync | - | - |
+| fetchGitHubJSONFile | function | 11441 | 20 | sync | - | fetch |
+| collectArchivable | function | 11463 | 13 | core | blocks, feedback, journals, reports | - |
+| runArchive | function | 11477 | 99 | sync, state, ui | archivedDates, blocks, feedback, journals, reports, settings | fetch, save, render |
+| maybeAutoArchive | function | 11577 | 10 | core | settings | localStorage |
+| stateSizeLabel | function | 11589 | 8 | state | - | - |
+| refreshSearchResults | function | 11602 | 5 | core | - | render, dom |
+| loadArchiveForSearch | function | 11608 | 35 | sync, state, ui | settings | fetch |
+| resetDemoData | function | 11644 | 9 | state, ui, content | - | save |
+| isIOSDevice | function | 11658 | 5 | core | - | - |
+| maybeShowGuidedAccessHint | function | 11670 | 6 | ui | modal, settings | - |
+| buildGuidedAccessHintModal | function | 11677 | 24 | ui | - | - |
+| startPomodoro | function | 11702 | 29 | state, execution, journal-health, ui | pomodoro | save, render, clock |
+| forceResetPomodoroSession | function | 11734 | 11 | execution | pomodoro | - |
+| pausePomodoro | function | 11747 | 6 | state, execution, ui | pomodoro | save, clock |
+| resumePomodoro | function | 11754 | 14 | state, execution, ui | pomodoro | save, clock |
+| pomodoroFlightTime | function | 11769 | 4 | execution | - | - |
+| openPomodoroLinkModal | function | 11774 | 15 | execution, ui | modal, pomodoro | - |
+| recordBlockInterruption | function | 11795 | 6 | execution | blocks | - |
+| interruptReasonPickerHTML | function | 11804 | 10 | core | - | - |
+| renderPomodoroInterruptControls | function | 11818 | 5 | execution, ui | pomodoro | - |
+| stopPomodoro | function | 11824 | 18 | state, execution, ui | blocks, pomodoro | save |
+| completePomodoro | function | 11845 | 39 | sync, state, execution, ui, content | blocks, pomodoro | save |
+| openBodyScanModal | function | 11896 | 14 | ui | blocks, modal | dom |
+| bodyScanSyncCommentFromDom | function | 11913 | 4 | sync | - | dom |
+| bodyScanScaleRow | function | 11918 | 7 | core | - | - |
+| buildBodyScanModal | function | 11926 | 37 | ui | - | - |
+| bodyScanSelectFatigue | function | 11964 | 7 | sync, ui | - | - |
+| bodyScanSelectRecovery | function | 11972 | 6 | sync, ui | - | - |
+| bodyScanTogglePart | function | 11979 | 8 | sync, ui | - | - |
+| bodyScanRecord | function | 11990 | 28 | sync, execution | blocks, bodyScans | - |
+| bodyScanDiscard | function | 12020 | 3 | core | - | - |
+| closeBodyScanFlow | function | 12024 | 7 | state, ui | - | save, render |
+| hasIncompleteReason | function | 12044 | 3 | core | - | - |
+| openIncompleteReasonModal | function | 12050 | 11 | execution, ui, content | modal | - |
+| writeMeditationUnsavedToday | function | 12071 | 4 | state | - | - |
+| maybeGateWriteMeditationThenGenerateReport | function | 12076 | 9 | state, ui, content | modal, selectedDate | - |
+| buildWriteMeditationGateModal | function | 12086 | 15 | ui | - | - |
+| writeMeditationGateDoIt | function | 12104 | 12 | ui | - | dom |
+| writeMeditationGateSkip | function | 12118 | 5 | ui, content | - | - |
+| buildIncompleteReasonModal | function | 12124 | 24 | ui | - | - |
+| recordIncompleteReasonChip | function | 12150 | 8 | execution, ui | blocks | dom |
+| skipIncompleteReasonModal | function | 12162 | 5 | ui | - | - |
+| advanceIncompleteReasonQueue | function | 12168 | 18 | execution, ui, content | modal | render |
+| estimateMinutesForBlock | function | 12197 | 9 | execution | - | - |
+| logDeclaration | function | 12208 | 3 | journal-health | - | - |
+| reportForBlock | function | 12213 | 9 | execution, content | - | dom |
+| buildDeclareFeedback | function | 12224 | 17 | ui, content | declarations | - |
+| openDeclareModal | function | 12244 | 12 | execution, journal-health, ui | blocks, modal | - |
+| buildDeclareModal | function | 12257 | 17 | ui | - | - |
+| resumeLifecycleStart | function | 12275 | 11 | execution, journal-health, ui | - | - |
+| confirmDeclare | function | 12287 | 11 | execution, ui | blocks | dom |
+| skipDeclare | function | 12299 | 7 | journal-health, ui | - | - |
+| openReportModal | function | 12315 | 12 | journal-health, ui, content | blocks, modal | - |
+| buildReportModal | function | 12328 | 21 | ui, content | declarations | - |
+| resumeLifecycleFinish | function | 12350 | 4 | execution, journal-health, content | - | - |
+| finishReport | function | 12356 | 14 | execution, ui, content | - | - |
+| goBreakPomodoro | function | 12376 | 20 | state, execution, ui | blocks, pomodoro | save, clock |
+| endBreakPomodoro | function | 12398 | 13 | state, execution, ui | pomodoro | save |
+| updatePomodoroTick | function | 12416 | 22 | execution | pomodoro | dom, clock |
+| startTimerTicker | function | 12439 | 40 | execution, journal-health, ui, content | currentView, pomodoro, settings | fetch, render, timer, dom, clock |
+| setView | function | 12480 | 25 | state, execution, ui | currentView, modal | save |
+| setSelectedDate | function | 12506 | 7 | state, execution, journal-health, ui | selectedDate | save, render |
+| shiftSelectedDate | function | 12514 | 3 | core | selectedDate | - |
+| saveAndRender | function | 12519 | 11 | state, ui | - | save, render |
+| autoIngestFeedback | function | 12541 | 27 | content | feedbackIngestedDates, zeroThinking | - |
+| parseAiInsights | function | 12572 | 33 | core | - | - |
+| aiInsightsFreshnessHTML | function | 12606 | 11 | core | - | clock |
+| aiInsightsPanelHTML | function | 12618 | 20 | core | - | - |
+| hydrateStaticMarkdown | function | 12639 | 170 | sync, state, journal-health, ui, content | currentView, feedback, feedbackFiles, feedbackIngestedDates, selectedDate, settings, view | fetch, save, render, clock |
+| maybeRefreshFeedback | function | 12814 | 11 | content | settings | clock |
+| reloadStaticMarkdown | function | 12826 | 13 | state, ui | settings | render |
+| openMdInGithub | function | 12845 | 11 | sync, ui | settings | - |
+| setVisionSection | function | 12857 | 5 | state, execution, ui, content | settings | save, render |
+| setVisionBoardIndex | function | 12863 | 5 | state, execution, ui, content | settings | save, render |
+| setAiReportType | function | 12870 | 8 | state, execution, ui, content | settings | save, render |
+| openUnreadAiReport | function | 12880 | 24 | state, execution, ui, content | settings | save, render |
+| showToast | function | 12921 | 32 | ui | - | render, timer, dom |
+| upsertMorningLine | function | 12959 | 15 | core | - | - |
+| computeMetrics | function | 12975 | 16 | core | selectedDate, settings | - |
+| metric | function | 12992 | 11 | core | - | - |
+| ageMetric | function | 13004 | 14 | core | - | - |
+| isTouchedBlock | function | 13026 | 14 | execution | recurrences | - |
+| removeUntouchedInstances | function | 13043 | 8 | execution | blocks | - |
+| archiveHabitPinPeriod | function | 13052 | 8 | core | habitPinHistory | - |
+| endRecurrenceSeries | function | 13063 | 10 | core | recurrences | - |
+| endGateRecurrence | function | 13074 | 4 | state, ui | - | save |
+| addTowerGate | function | 13079 | 19 | state, ui | recurrences | save, dom |
+| moveTowerGate | function | 13099 | 18 | state, ui | recurrences | save |
+| toggleEarlyBird | function | 13118 | 15 | state, ui | earlyBird, settings | save |
+| recordHabitStreakDone | function | 13135 | 9 | core | habitStreaks, recurrences | - |
+| removeHabitStreakDone | function | 13145 | 6 | core | habitStreaks | - |
+| syncHabitStreakForBlock | function | 13152 | 5 | sync, execution | - | - |
+| habitStreakEdit | function | 13158 | 14 | core | recurrences | - |
+| recurrenceKindLabel | function | 13173 | 3 | core | - | - |
+| inferRecurrenceKind | function | 13185 | 17 | core | - | - |
+| migrateRecurrencesIfNeeded | function | 13203 | 40 | execution | - | - |
+| blocksForDate | function | 13244 | 5 | execution | blocks | - |
+| blockById | function | 13250 | 3 | execution | blocks | - |
+| projectName | function | 13254 | 4 | core | projects | - |
+| taskProgress | function | 13260 | 5 | core | - | - |
+| isProjectSuspended | function | 13272 | 1 | core | - | - |
+| isTaskSuspended | function | 13273 | 1 | core | - | - |
+| isTaskCountable | function | 13275 | 4 | core | - | - |
+| isTaskDead | function | 13280 | 4 | core | - | - |
+| projectStatusLabel | function | 13285 | 3 | core | - | - |
+| taskStatusLabel | function | 13288 | 3 | core | - | - |
+| setEntityStatus | function | 13293 | 5 | state, ui | - | save |
+| suspendProject | function | 13298 | 1 | core | - | - |
+| resumeProject | function | 13299 | 1 | core | - | - |
+| suspendTask | function | 13300 | 1 | core | - | - |
+| resumeTask | function | 13301 | 1 | core | - | - |
+| rangeOptions | function | 13303 | 7 | core | - | - |
+| emptyPanel | function | 13311 | 3 | core | - | - |
+| todayISO | function | 13315 | 3 | core | - | clock |
+| nowDateTime | function | 13319 | 3 | core | - | clock |
+| dateToISO | function | 13323 | 3 | core | - | - |
+| dateToLocalDateTime | function | 13327 | 5 | core | - | - |
+| roundDateTimeTo5Min | function | 13336 | 23 | core | - | - |
+| parseDate | function | 13360 | 4 | core | - | clock |
+| localDateTimeToMs | function | 13369 | 9 | core | - | clock |
+| addDays | function | 13379 | 5 | core | - | - |
+| effectiveDueDate | function | 13390 | 5 | core | - | - |
+| addYears | function | 13396 | 5 | core | - | - |
+| daysBetween | function | 13402 | 4 | core | - | - |
+| minutesOf | function | 13407 | 11 | core | - | - |
+| timeFromDateTime | function | 13419 | 7 | core | - | - |
+| formatDisplayDate | function | 13427 | 3 | core | - | - |
+| weekdayLabel | function | 13431 | 3 | core | - | - |
+| remainingText | function | 13435 | 8 | core | - | clock |
+| signed | function | 13444 | 3 | core | - | - |
+| pad2 | function | 13448 | 3 | core | - | - |
+| clamp | function | 13452 | 3 | core | - | - |
+| escapeHTML | function | 13456 | 8 | core | - | - |
+| downloadText | function | 13465 | 9 | state | - | dom, file |
+| registerServiceWorker | function | 13475 | 28 | ui | - | - |
+| modalHeaderHTML | function | 13517 | 8 | ui | - | - |
+| openTwyCommitSheet | function | 13526 | 12 | execution, ui | modal | - |
+| buildTwyCommitSheetHTML | function | 13539 | 8 | ui | - | - |
+| twyCommitPreHTML | function | 13548 | 9 | execution | - | - |
+| twyCommitCountLabel | function | 13558 | 3 | core | - | - |
+| scoredWeeklyCommitmentItemsForWeek | function | 13565 | 9 | journal-health | weeklyCommitments | - |
+| twyCommitPostHTML | function | 13575 | 11 | journal-health | weeklyCommitments | - |
+| twyCommitScoreLabel | function | 13587 | 5 | core | - | - |
+| twyCommitItemRowHTML | function | 13593 | 12 | core | - | - |
+| twyExcuseFormHTML | function | 13606 | 5 | core | - | - |
+| twyAddCandidates | function | 13612 | 5 | execution | weeklyCommitments | - |
+| twyAddItemPanelHTML | function | 13618 | 10 | core | - | - |
+| twyCommitGroups | function | 13629 | 11 | core | projects, recurrences, tasks | - |
+| twyCommitGroupRowHTML | function | 13641 | 13 | core | tracks | - |
+| twyCommitSubRowsHTML | function | 13655 | 7 | core | - | - |
+| twyCommitSelectionFor | function | 13663 | 3 | core | - | - |
+| twyCommittedWeekMeta | function | 13667 | 4 | core | weeklyCommitments | - |
+| twyCurrentCommitModalWeek | function | 13672 | 4 | ui | modal | - |
+| twyCommitItemForWeek | function | 13677 | 4 | core | weeklyCommitments | - |
+| twyDateLabel | function | 13682 | 3 | core | - | - |
+| twyCommitGroupByTaskId | function | 13686 | 6 | execution | modal | - |
+| twyCommitRefreshFooter | function | 13693 | 6 | core | modal | dom |
+| twyCommitUpdateCaret | function | 13700 | 6 | core | - | dom |
+| openProjectEditor | function | 13707 | 6 | ui | modal, projects | - |
+| openTaskEditor | function | 13714 | 6 | ui | modal, tasks | - |
+| openBlockEditor | function | 13721 | 6 | execution, ui | blocks, modal | - |
+| modalDraftSnapshot | function | 13757 | 9 | ui | - | dom |
+| readDailyDraft | function | 13767 | 20 | ui | modal, settings, zeroThinking | dom |
+| requestDraftLeave | function | 13789 | 50 | state, ui | currentView, modal, zeroThinking | dom, clock |
+| renderModal | function | 13840 | 22 | ui | modal | render |
+| closeModal | function | 13863 | 18 | ui | modal | render |
+| readModalFields | function | 13882 | 14 | ui | - | dom |
+| submitModal | function | 13897 | 20 | state, ui | modal | - |
+| modalDeleteMessage | function | 13918 | 15 | ui | modal | - |
+| deleteFromModal | function | 13934 | 13 | ui | modal | - |
+| trackMilestoneRowHTML | function | 13951 | 6 | core | - | - |
+| trackCarryMilestoneRowsHTML | function | 13958 | 8 | core | - | - |
+| readCarryDraft | function | 13967 | 12 | core | - | dom |
+| canCarryProjectCycle | function | 13981 | 5 | journal-health | settings | - |
+| confirmCarryProjectCycle | function | 13987 | 22 | state, journal-health, ui | modal, projects, settings, tracks | save, dom |
+| readTrackDraft | function | 14010 | 10 | core | - | dom |
+| trackDraftMatchesExisting | function | 14021 | 15 | core | - | - |
+| trackGuardHTML | function | 14037 | 23 | core | blocks, recurrences, tasks | - |
+| refreshTrackForm | function | 14061 | 13 | ui | modal | render, dom |
+| setTrackKind | function | 14075 | 4 | core | - | dom |
+| saveProjectTrackFromModal | function | 14080 | 21 | state, ui | tracks | dom |
+| legacyDetailFrame | function | 14104 | 7 | ui | currentView | - |
+| buildProjectModal | function | 14112 | 136 | journal-health, ui | settings, trackMeasurements, tracks | - |
+| saveProjectFromModal | function | 14249 | 38 | state, ui | projects, settings, tracks | save |
+| twyWeekOptionsHTML | function | 14291 | 7 | core | - | - |
+| twyPlanSectionHTML | function | 14301 | 32 | state | projects | - |
+| buildTaskModal | function | 14334 | 106 | ui | projects, tasks | - |
+| isDescendantOf | function | 14442 | 10 | core | tasks | - |
+| twyPlanFromFields | function | 14456 | 9 | state | - | - |
+| saveTaskFromModal | function | 14466 | 79 | state, ui | tasks | save |
+| buildBlockModal | function | 14552 | 205 | execution, ui | declarations, recurrences, tasks | - |
+| saveBlockFromModal | function | 14758 | 245 | sync, state, execution, ui, content | blocks, recurrences | save |
+| openTimelineNewBlock | function | 15005 | 42 | execution, ui | blocks, modal, selectedDate | timer, dom |
+| toLocalInput | function | 15050 | 6 | core | - | - |
+| fromLocalInput | function | 15057 | 26 | core | - | - |
+| event:keydown@15085 | event-listener | 15085 | 34 | execution | modal, selectedDate | - |
+| recordFeedbackFile | function | 15127 | 7 | state, content | feedbackFiles | save |
+| pushReportToGitHub | function | 15135 | 14 | sync, ui, content | selectedDate, settings | - |
+| pushFileToGitHub | function | 15161 | 44 | sync, ui | settings | fetch, clock |
+| completeBlockWithActual | function | 15235 | 9 | execution, ui | blocks, modal | - |
+| buildActualEntryModal | function | 15245 | 49 | journal-health, ui | - | - |
+| saveActualEntryFromModal | function | 15295 | 46 | sync, state, execution, ui, content | blocks, pomodoro, tasks, timelineMode | save |
+| runDailyOpen | function | 15350 | 19 | state, journal-health | selectedDate, settings | save |
+| _energyMedian | function | 15371 | 6 | journal-health | - | - |
+| _actualDurationMin | function | 15377 | 5 | core | - | - |
+| resolveEstimateMin | function | 15383 | 11 | journal-health | blocks | - |
+| computeProjectedEnd | function | 15395 | 16 | execution | - | - |
+| projectedEndText | function | 15412 | 12 | execution | selectedDate | clock |
+| updateProjectedEndTick | function | 15426 | 4 | core | - | dom |
+| updateBatteryTick | function | 15437 | 19 | execution, journal-health, ui | currentView, selectedDate, timelineZoom | dom, clock |
+| computeBufferRemaining | function | 15466 | 19 | execution | settings | - |
+| bufferMeterLevel | function | 15486 | 6 | core | - | - |
+| computeDailyOverload | function | 15505 | 16 | state, execution | settings | - |
+| bufferMeterHTML | function | 15526 | 20 | state | currentView, selectedDate | - |
+| prefillEnergy | function | 15549 | 13 | journal-health | blocks | - |
 | event:visibilitychange@15628 | event-listener | 15628 | 15 | sync, ui, content | currentView, settings | timer, dom, clock |
