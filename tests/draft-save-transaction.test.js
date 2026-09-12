@@ -24,6 +24,7 @@ assert(init, 'actual app transaction dependency wiring exists');
 const { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } = require('../src/features/zero-entry.js');
 const { createDailyDraftStore } = require('../src/features/daily-draft.js');
 const { runDailyOperation } = require('../src/features/daily-operations.js');
+const { buildBlockDetailDraft } = require('../src/features/block-detail.js');
 const copy = value => JSON.parse(JSON.stringify(value));
 function setup(mode, { storageFail = true, completed = false, track = false } = {}) {
   const effects = { persisted: [], schedules: 0, renders: 0, stops: 0, post: [], toasts: [], sequence: [], dialogs: [] };
@@ -85,7 +86,7 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
       ctx.state.modal = { type: 'bodyScan', id }; effects.post.push(id); effects.sequence.push('post');
     }
   });
-  Object.assign(ctx, { runDailyOperation, stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
+  Object.assign(ctx, { runDailyOperation, buildBlockDetailDraft, stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
     dailyDrafts: createDailyDraftStore({ storage: () => ({ setItem() {} }) }),
     dailyOperationDeps: { state: data, commitCandidate, now: ctx.nowDateTime,
       persist: () => { ctx.persistLocalNoSchedule(); return !ctx._lastSaveError; },

@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "block-detail": {
+      "paths": ["^src/features/block-detail\\.js$"],
+      "suites": ["three-screen-connection-e2e", "draft-save-transaction", "v359", "v366"]
+    },
     "mutation-stamp": {
       "paths": [
         "^src/core/mutation-stamp\\.js$",

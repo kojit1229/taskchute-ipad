@@ -238,6 +238,56 @@ const today = '2026-09-06', selected = '2026-09-07';
     await page.locator('[data-action="draft-leave-discard"]').click();
     assert.equal(await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state.tasks.find(t => t.id === 'child'))), savedTask, 'discard leaves saved task unchanged');
     console.log('PASS S3-03: all fields, vertical editor, native date, hidden values, no fixed estimate, failure DOM and cancel/discard');
+    // S3-05: one transaction owns Block, Task and the end report; no planned time is invented.
+    await page.evaluate(async today => {
+      const { state } = await import('/src/state/store.js');
+      state.tasks.push({ id: 'detail-task', title: '架空完了対象', status: 'todo', order: 123 });
+      state.blocks.push({ id: 'detail-block', title: '架空未定枠', date: today, taskId: 'detail-task',
+        category: '作業', plannedStartAt: '', plannedEndAt: '', actualStartAt: '', actualEndAt: '',
+        completed: false, comment: '既存メモ', externalRef: 'fixture-reference', source: 'fixture', retained: 'keep' });
+    }, today);
+    const detailState = () => page.evaluate(async () => {
+      const { state } = await import('/src/state/store.js');
+      return JSON.stringify([state.blocks.find(b => b.id === 'detail-block'), state.tasks.find(t => t.id === 'detail-task'), state.declarations]);
+    });
+    const detailBefore = await detailState();
+    await taskAction('edit-block', 'detail-block');
+    assert.equal(await page.locator('#modalRoot details').count(), 0, 'all detail fields are permanent');
+    assert(await modalField('actualStartAt').isVisible());
+    await modalField('plannedStartAt').fill(today + 'T23:50');
+    await modalField('plannedEndAt').fill(selected + 'T00:00');
+    await page.locator('[data-action="block-date-shift"][data-days="1"]').click();
+    assert.equal(await modalField('plannedEndAt').inputValue(), '2026-09-08T00:00', 'date shift retains next-day midnight');
+    await modalField('date').fill(today);
+    await modalField('plannedStartAt').fill(''); await modalField('plannedEndAt').fill('');
+    await modalField('actualStartAt').fill(today + 'T10:00');
+    await modalField('actualEndAt').fill(today + 'T10:25');
+    await modalField('completed').check();
+    await modalField('outcome').selectOption('done');
+    await modalField('resultNote').fill('架空の終了結果');
+    await page.locator('[data-action="toggle-task-complete"]').click();
+    assert.equal(await detailState(), detailBefore, 'Task completion remains in the draft');
+    await page.evaluate(() => {
+      window.detailSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (key === 'taskchute-journal-pwa-state-v1') throw new DOMException('fixture quota', 'QuotaExceededError');
+        return window.detailSetItem.call(this, key, value);
+      };
+    });
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    assert.equal(await detailState(), detailBefore, 'failure rolls back Block, Task and report together');
+    assert.equal(await modalField('resultNote').inputValue(), '架空の終了結果');
+    await page.evaluate(() => { Storage.prototype.setItem = window.detailSetItem; });
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    const [savedBlock, savedLinked, declarations] = JSON.parse(await detailState());
+    assert.equal(savedLinked.status, 'completed'); assert.equal(savedLinked.order, 123);
+    assert.equal(savedBlock.actualEndAt, today + 'T10:25:00'); assert.equal(savedBlock.completed, true);
+    assert.equal(savedBlock.plannedStartAt, ''); assert.equal(savedBlock.plannedEndAt, '');
+    assert.equal(savedBlock.retained, 'keep'); assert.equal(savedBlock.externalRef, 'fixture-reference');
+    assert.equal(savedBlock.source, 'fixture'); assert.equal(savedBlock.comment, '既存メモ\n架空の終了結果');
+    assert.equal(declarations.filter(d => d.blockId === 'detail-block' && d.resultNote === '架空の終了結果').length, 1);
+    if (await page.locator('[data-action="body-scan-discard"]').count()) await page.locator('[data-action="body-scan-discard"]').first().click();
+    console.log('PASS S3-05: permanent completion, unscheduled times, atomic failure/retry, retained metadata and end result');
     assert.deepEqual(errors, []);
     console.log('PASS S3-01: explicit dates, occurrences, candidates, groups, zero actuals, IME, responsive execution and no mutation');
   } finally {

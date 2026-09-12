@@ -38,6 +38,7 @@ import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js
 import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
+import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -993,10 +994,11 @@ registerActions({
     const card = target.closest(".modal-card");
     const toDate = addDays(todayISO(), Number(target.dataset.days) || 0);
     const dateInput = card?.querySelector('[data-modal-field="date"]');
+    const fromDate = dateInput?.value || toDate;
     if (dateInput) dateInput.value = toDate;
     ["plannedStartAt", "plannedEndAt"].forEach((field) => {
       const input = card?.querySelector(`[data-modal-field="${field}"]`);
-      if (input && input.value) input.value = `${toDate}${input.value.slice(10)}`;
+      if (input && input.value) input.value = `${addDays(toDate, daysBetween(fromDate, input.value.slice(0, 10)))}${input.value.slice(10)}`;
     });
   }
 });
@@ -4873,12 +4875,12 @@ function leverageTypeOptionsHTML(current) {
 // v147(UI改善計画Phase2 2-4a): 既定closedの<details>自体は既存どおり(v65から変更なし)。
 // 判定済み(leverageType設定済み)なら、summary行に「未判定への招待文」ではなく判定結果を出す
 // (currentType引数、任意。呼び出し元がTask/BlockそれぞれのleverageTypeを渡す)。
-function leverageJudgeHelperHTML(currentType) {
+function leverageJudgeHelperHTML(currentType, permanent = false) {
   const judgedLabel = leverageTypeLabel(currentType || "");
   const summaryText = judgedLabel ? `10秒判定: 「${judgedLabel}」と判定済み(変更する)` : "10秒で判定する(任意)";
   return `
-    <details class="lev-helper">
-      <summary>${escapeHTML(summaryText)}</summary>
+    <${permanent ? "section" : "details"} class="lev-helper">
+      <${permanent ? "h4" : "summary"}>${escapeHTML(summaryText)}</${permanent ? "h4" : "summary"}>
       <div class="lev-helper-body">
         <label class="checkbox-line"><input type="checkbox" data-lev-q="1"> 今日で終わらず、明日以降も自分の代わりに働き続けるか</label>
         <label class="checkbox-line"><input type="checkbox" data-lev-q="2"> やった後、同じ問題が来たとき自分の時間はもう要らなくなっているか</label>
@@ -4888,7 +4890,7 @@ function leverageJudgeHelperHTML(currentType) {
           <span class="muted" style="font-size:11px">2問以上Yesなら「資産」。迷うなら未設定のままでOK。</span>
         </div>
       </div>
-    </details>
+    </${permanent ? "section" : "details"}>
   `;
 }
 // v61: マイグレーション儀式(提案1)==============================
@@ -10368,6 +10370,13 @@ function completedTaskRecord(task) {
 }
 
 function toggleTaskCompleteFromBlock(blockId) {
+  const draftTask = modalRoot.querySelector('[data-modal-field="taskCompleted"]');
+  if (state.modal?.type === "block" && state.modal.id === blockId && draftTask) {
+    draftTask.checked = !draftTask.checked;
+    const button = modalRoot.querySelector('[data-action="toggle-task-complete"]');
+    if (button) button.textContent = draftTask.checked ? "🏁 Task完了（保存で反映）" : "🏁 Task未完了（保存で反映）";
+    return;
+  }
   if (state.modal?.type === "block" && state.modal.id === blockId
       && requestDraftLeave(() => toggleTaskCompleteFromBlock(blockId), { allowDiscard: false })) return;
   const block = state.blocks.find((b) => b.id === blockId);
@@ -14520,6 +14529,8 @@ function saveTaskFromModal(id, fields) {
 // Block編集シートを基本→時間→エネルギー→繰り返し→メモの5節へ再編。
 // data-modal-field の名前・意味・保存ロジックは不変(節分けとDOM順序のみ変更)。
 function buildBlockModal(block) {
+  const endReports = (state.declarations || []).filter(row => !row.deleted && row.blockId === block.id && block.actualEndAt && row.reportedAt === block.actualEndAt);
+  const endReport = endReports.length === 1 ? endReports[0] : null;
   const taskOptions = [
     `<option value="" ${!block.taskId ? "selected" : ""}>単発(Task紐づけなし)</option>`,
     ...state.tasks
@@ -14528,9 +14539,11 @@ function buildBlockModal(block) {
   ].join("");
   // v146(UI改善計画Phase1-3): 🏁(タスク完了)はタスクシュート行から誤タップ対策で撤去し、
   // ここ(Block編集モーダル)へ移設した。挙動(toggleTaskCompleteFromBlock)自体は無変更。
-  const linkedTask = block.taskId ? state.tasks.find((t) => t.id === block.taskId) : null;
+  const linkedTask = block.taskId ? state.tasks.find((t) => t.id === block.taskId && !t.deleted) : null;
   const taskCompleteHTML = linkedTask ? `
         <div class="field">
+          <input type="hidden" data-modal-field="completionTaskId" value="${escapeHTML(linkedTask.id)}">
+          <input type="checkbox" hidden data-modal-field="taskCompleted" ${linkedTask.status === "completed" ? "checked" : ""}>
           <button class="btn task-complete-toggle-btn ${linkedTask.status === "completed" ? "green" : "orange"}"
             data-action="toggle-task-complete" data-id="${block.id}" style="min-height:44px; width:100%">
             🏁 ${linkedTask.status === "completed" ? "タスク完了済み(タップで戻す)" : "紐づくTaskも完了にする"}
@@ -14547,6 +14560,29 @@ function buildBlockModal(block) {
       <div class="modal-body">
     ${placementBackHTML(block)}
         <div class="detail-columns"><div class="detail-column">
+        <section class="tower-section">
+          <h4 class="tower-section-title">実績・完了</h4>
+          <div class="field-row block-time-row">
+            <div class="field">
+              <label class="field-label">実績開始</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+            </div>
+            <div class="field">
+              <label class="field-label">実績終了</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
+            </div>
+          </div>
+          <div class="field">
+            <label class="checkbox-line">
+              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
+              完了済み(Block)
+            </label>
+          </div>
+          ${taskCompleteHTML}
+
+          <div class="field"><label class="field-label">終了時の結果</label><select class="select" data-modal-field="outcome"><option value="">未設定</option>${[["done", "できた"], ["partial", "一部できた"], ["derailed", "予定外"]].map(([value, label]) => `<option value="${value}" ${endReport?.outcome === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
+          <div class="field"><label class="field-label">終了時の一言</label><textarea class="textarea" data-modal-field="resultNote">${escapeHTML(endReport?.resultNote || "")}</textarea></div>
+        </section>
         <section class="tower-section">
           <h4 class="tower-section-title">基本</h4>
           <div class="field">
@@ -14595,16 +14631,6 @@ function buildBlockModal(block) {
               ${[15, 25, 40, 60].map((min) => `
               <button type="button" class="btn ghost estimate-chip${Number(block.estimateMin) === min ? " active" : ""}" data-action="estimate-chip" data-min="${min}" style="min-height:44px">${min}分</button>
               `).join("")}
-            </div>
-          </div>
-          <div class="field-row block-time-row">
-            <div class="field">
-              <label class="field-label">実績開始</label>
-              <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
-            </div>
-            <div class="field">
-              <label class="field-label">実績終了</label>
-              <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
             </div>
           </div>
         </section>
@@ -14691,25 +14717,18 @@ function buildBlockModal(block) {
             <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
           </div>
         </section>
-        <details class="tower-fold">
-          <summary class="tower-section-title">詳細 ›</summary>
+        <section class="tower-section">
+          <h4 class="tower-section-title">効果の分類</h4>
           <div class="tower-fold-body">
           <div class="field">
             <label class="field-label">レバレッジ(10x機構・任意)</label>
             <select class="select" data-modal-field="leverageType">
               ${leverageTypeOptionsHTML(block.leverageType || "")}
             </select>
-            ${leverageJudgeHelperHTML(block.leverageType)}
+            ${leverageJudgeHelperHTML(block.leverageType, true)}
           </div>
-          <div class="field">
-            <label class="checkbox-line">
-              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
-              完了済み(Block)
-            </label>
           </div>
-          ${taskCompleteHTML}
-          </div>
-        </details>
+        </section>
         </div></div>
       </div>
   `);
@@ -14727,6 +14746,7 @@ function saveBlockFromModal(id, fields) {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
   const updated = {
+    ...existing,
     id: isNew ? id : existing.id,
     title: (fields.title || "").trim() || (existing?.title || "新規Block"),
     date: fields.date || existing?.date || todayISO(),
@@ -14777,7 +14797,13 @@ function saveBlockFromModal(id, fields) {
     }
     updated.isMIT = true;
   }
+  let lifecycle;
+  try { lifecycle = buildBlockDetailDraft(state, existing, updated, fields, dailyOperationDeps); }
+  catch (error) { showToast(error.message); return; }
+  Object.assign(updated, lifecycle.block);
   const trackSavedBlockTransitions = () => {
+    lifecycle.apply(state);
+    lifecycle.effects.forEach(effect => draftSaveTransaction.defer(effect, { post: true }));
     const savedBlock = state.blocks.find((block) => block.id === id);
     saveState();
     if (!existing?.actualStartAt && savedBlock?.actualStartAt) trackOnBlockStarted(savedBlock);
@@ -14787,11 +14813,7 @@ function saveBlockFromModal(id, fields) {
       if (!existing?.completed && savedBlock?.completed) _bodyScanBlockId = savedBlock.id;
     }
   };
-  // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
-  if (!updated.plannedStartAt || !updated.plannedEndAt) {
-    showToast("予定の開始・終了日時を入力してください");
-    return;
-  }
+  // Planned times were validated as a pair by the registered detail builder.
   const currentRule = existing?.recurrenceGroupId
     ? (state.recurrences || []).find((r) => r.id === existing.recurrenceGroupId && !r.deleted)
     : null;

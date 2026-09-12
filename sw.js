@@ -706,6 +706,7 @@ const APP_SHELL = [
 
   "./src/features/draft-leave.js",
   "./src/features/daily-draft.js",
+  "./src/features/block-detail.js",
   "./src/features/three-screen-rows.js",
   "./src/features/zero-entry.js",
   "./src/features/zero-session.js",
