@@ -68,6 +68,9 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, tasks, projects, TODAY, view });
     await page.reload();
+    if (view === "wbs" && projects.length) {
+      await page.locator(`[data-action="wbs-select-project"][data-id="${projects[0].id}"]`).click();
+    }
     await page.waitForTimeout(400);
   }
 

@@ -152,6 +152,7 @@ const HEALTH_FIXTURE = {
         { id: "step-v318", projectId: "project-v318", parentTaskId: "task-v318", title: "担当ボタン確認", status: "todo", kind: "normal", owner: "k", deleted: false, updatedAt: `${TODAY}T09:00:00` }
       ]
     });
+    await page.locator('[data-action="wbs-select-project"][data-id="project-v318"]').click();
     await page.locator('[data-wbs-row-id="step-v318"] .wbs-row-menu-toggle').click();
     await page.waitForSelector('[data-wbs-row-id="step-v318"] .wbs-row-menu-panel:not([hidden])');
     const wbsButtons = await page.locator('[data-wbs-row-id="step-v318"] .wbs-row-menu-panel > button').evaluateAll((elements) => elements.map((element) => {

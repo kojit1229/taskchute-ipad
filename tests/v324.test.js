@@ -74,7 +74,7 @@ function check(name, condition, extra = "") {
     }, { key: STATE_KEY, today: TODAY, body: towerBody, oldRequest: OLD_REQUEST });
 
     console.log("[1][2] ジャーナル: 旧AI依頼UIなし・既存state非破壊");
-    await page.locator('#bottomNav [data-action="nav"][data-view="journal"]').click();
+    await page.locator('[data-work-list="today"] [data-action="nav"][data-view="journal"]').click();
     await page.waitForSelector(".journal-tower #journalFreeText");
     await assertAiUiAbsent("ジャーナル");
     check("ジャーナルの案内placeholder", (await page.locator("#journalFreeText").getAttribute("placeholder")).includes(REQUEST_GUIDE));

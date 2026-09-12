@@ -308,9 +308,10 @@ function check(name, cond, extra = "") {
       el.dispatchEvent(new Event("change", { bubbles: true }));
     }, YESTERDAY);
     await page.waitForTimeout(200);
-    // viewport 390px(mobile)ではサイドバーnavが非表示になり#bottomNav側だけが可視のため、
-    // #bottomNav配下を明示して2要素ヒットの曖昧さを避ける
-    await page.click('#bottomNav [data-action="nav"][data-view="journal"]');
+    // S-B1: モバイルは今日画面の「記録へ」から専用ジャーナルへ進む。
+    // 選択した閲覧日を保ったまま、前日本文のキャッシュを検査する。
+    await page.click('#bottomNav [data-action="nav"][data-view="today"]');
+    await page.click('[data-work-list="today"] [data-action="nav"][data-view="journal"]');
     await page.waitForTimeout(200);
     const journalTextInitial = await page.locator(".journal-grid").textContent();
     check("初期表示(前日パネル)にテキストAが表示されている", (journalTextInitial || "").includes("v83キャッシュ検証テキストA_"), (journalTextInitial || "").slice(0, 200));
