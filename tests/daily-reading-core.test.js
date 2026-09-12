@@ -90,3 +90,58 @@ const { isDailyReadingBlock, markDailyReadingEdit, excludedReadingRule } = requi
   state.recurrences[0].deleted = true; assert.equal(excludedReadingRule(state, 'board', DAY, deps), false);
 }
 console.log('PASS explicit provenance, original date on deletion/move, orphan/legacy copy refusal, exact valid exclusion');
+
+// S3-12: report capture must retain historical provenance independently of current settings.
+{
+  const { captureReportInput } = require('../src/features/feedback/report-input.js');
+  const { buildReportMarkdown } = require('../src/features/feedback/report-builder.js');
+  const { deriveReportValues } = require('../src/features/feedback/report-derived.js');
+  const { routineRate } = require('../src/core/recurrence.js');
+  const { buildDailyReport, REPORT_PENDING } = require('../src/core/daily-report.js');
+  const state = fixture();
+  const auto = buildDailyReading(state, input(state), deps).records[0].after;
+  const ai = buildDailyReading(state, input(state, 'feedback'), deps).records[0].after;
+  Object.assign(state, { projects: [], reports: {}, journals: { [DAY]: '架空の本文' }, singleSchedules: [] });
+  state.settings = { dailyReadingRecordEnabled: false, dailyReadingRoutineIds: {} };
+  const capture = () => captureReportInput(state, DAY, deriveReportValues);
+  const scenarios = [
+    [auto, 0], [{ ...auto, plannedStartAt: '', plannedEndAt: '' }, 0], [ai, 0],
+    [{ ...auto, source: 'daily-reading-manual', actualEndAt: DAY + 'T10:12:00' }, 12],
+    [{ ...auto, source: 'daily-reading-manual' }, 0],
+    [{ ...auto, source: '', externalRef: '' }, 30],
+  ];
+  for (const [block, minutes] of scenarios) {
+    state.blocks = [block]; const snapshot = structuredClone(state), captured = capture();
+    assert.equal(captured.blocks[0].externalRef, block.externalRef);
+    const markdown = buildReportMarkdown(captured), duration = minutes ? '0h' + minutes + 'm' : '0h';
+    assert(markdown.includes('| 時間実行 | ' + duration + ' /'), markdown);
+    assert(markdown.includes('- ルーティン: ' + duration), markdown);
+    assert.equal(captured.actuals[0].minutes, block.source ? minutes : 0);
+    assert.deepEqual(state, snapshot);
+    const capturedMark = captured.blocks[0].externalRef;
+    const detached = structuredClone(block); detached.externalRef = 'other';
+    assert.equal(captured.blocks[0].externalRef, capturedMark);
+  }
+  state.blocks = [{ ...ai, oneTap: false }, auto];
+  assert.deepEqual(routineRate(state.blocks, state.recurrences), { done: 1, total: 1, pct: 100 });
+  assert.deepEqual(capture().derived.rateRoutine, { done: 1, total: 1, pct: 100 });
+  state.recurrences[0].protection = true;
+  assert.deepEqual(capture().derived.rateRoutine, { done: 0, total: 0, pct: 0 });
+  for (const patch of [{ externalRef: 42 }, { externalRef: 'daily-reading:v1:{}' },
+    { actualEndAt: DAY + 'T25:00:00' }, { actualStartAt: DAY + 'T11:00:00' },
+    { actualEndAt: DAY + 'T10:12:00' }, { actualStartAt: '', actualEndAt: '' }]) {
+    state.blocks = [{ ...auto, ...patch }];
+    assert.throws(capture, /閲覧記録|invalid_report_field/);
+  }
+  state.blocks = [{ ...auto, source: 'daily-reading-manual', completed: false, actualEndAt: '' }];
+  assert.equal(capture().actuals.length, 0);
+  assert(buildReportMarkdown(capture()).includes('| 時間実行 | 0h /'));
+  state.blocks[0].actualEndAt = DAY + 'T10:12:00';
+  assert.equal(capture().actuals[0].minutes, 12, 'ended incomplete remains an actual under stage 2');
+  state.blocks = [auto]; const saved = structuredClone(state.blocks);
+  const failed = buildDailyReport(state, { reportDate: DAY }, { captureReport: capture, buildReport: () => { throw Error('fixture report failure'); } });
+  assert.equal(failed.report, REPORT_PENDING); assert.equal(failed.pending, true);
+  const retried = buildDailyReport(state, { reportDate: DAY }, { captureReport: capture, buildReport: buildReportMarkdown });
+  assert.equal(retried.pending, false); assert.deepEqual(retried.records, []); assert.deepEqual(state.blocks, saved);
+  console.log('PASS S3-12 report: provenance, 0/12 minutes, ordinary fallback, AI rate exclusion, invalid timestamps, timer and report-only retry');
+}

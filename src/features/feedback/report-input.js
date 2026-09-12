@@ -1,9 +1,11 @@
 import { reportActuals } from "../../core/daily-report.js";
 import { normalizeSingleSchedules } from "../../core/single-schedule.js";
 import { plannedMinute } from "../../core/planned-occupancy.js";
+import { readingMark } from "../../core/daily-reading.js";
+import { actualDurationMinutes } from "../../core/daily-actuals.js";
 // Capture only report dependencies. No application globals, authentication, persistence, or async work.
 const fields = {
-  blocks: 'id date title taskId category completed charge discharge isMIT pomodoroCount plannedStartAt plannedEndAt actualStartAt actualEndAt comment source recurrenceGroupId migratedTo deleted everStartedAt oneTap',
+  blocks: 'id date title taskId category completed charge discharge isMIT pomodoroCount plannedStartAt plannedEndAt actualStartAt actualEndAt comment source externalRef recurrenceGroupId migratedTo deleted everStartedAt oneTap',
   tasks: 'id title projectId parentTaskId status deleted kind dueDate',
   projects: 'id title kind status deleted twelveWeekStartDate',
   recurrences: 'id deleted protection',
@@ -13,6 +15,24 @@ const fields = {
   meditation: 'date deleted dischargeTalk chargeTalk',
 };
 const fail = reason => { throw new Error(reason); };
+// null means an ordinary record: keep its existing planned-duration fallback.
+export function readingReportMinutes(block) {
+  const marked = typeof block.externalRef === 'string' && block.externalRef.startsWith('daily-reading:v1:');
+  const manual = block.source === 'daily-reading-manual';
+  if (!marked && !manual && block.source !== 'daily-reading-auto') return null;
+  const mark = readingMark(block, manual);
+  const invalid = () => fail('閲覧記録の日付・実績時刻・出所を訂正してください');
+  if (!mark || !manual && block.source !== 'daily-reading-auto'
+      || actualDurationMinutes({ actualStartAt: block.date + 'T00:00', actualEndAt: block.date + 'T00:00' }) == null) invalid();
+  if (!manual && (!block.completed || block.actualStartAt !== mark.recordedAt || block.actualEndAt !== mark.recordedAt)) invalid();
+  if (!block.actualEndAt && !block.completed) {
+    if (block.actualStartAt && actualDurationMinutes({ ...block, actualEndAt: block.actualStartAt }) == null) invalid();
+    return 0;
+  }
+  const minutes = actualDurationMinutes(block);
+  if (minutes == null) invalid();
+  return minutes;
+}
 function pick(value, keys) {
   const result = {};
   for (const key of keys.split(' ')) if (Object.hasOwn(value || {}, key)) {
@@ -55,6 +75,8 @@ export function captureReportInput(source, date, derive) {
   const state = {};
   for (const key of ['blocks', 'tasks', 'projects', 'recurrences', 'questions', 'bodyScans']) state[key] = rows(source[key] || [], fields[key]);
   state.blocks.forEach((block, i) => {
+    if (block.externalRef != null && typeof block.externalRef !== 'string') fail('invalid_report_field');
+    if (!block.deleted && block.date === date) readingReportMinutes(block);
     if (source.blocks[i].incompleteReason) block.incompleteReason = pick(source.blocks[i].incompleteReason, 'chip note at');
   });
   state.zeroThinking = { entries: rows(source.zeroThinking?.entries || [], fields.zero) };
