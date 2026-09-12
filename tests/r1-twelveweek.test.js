@@ -353,7 +353,7 @@ async function seed(page, values) {
     check("MEDIUM-5: 旧サイクルのプロジェクトはGOALSに出ない",
       !(await page.locator(".twy-goal-title").allTextContents()).some((t) => t.includes("旧サイクル")));
     check("見出しの件数表示が1/最大3", (await page.locator(".twy-goals-panel h2").textContent()).includes("1 / 最大3"));
-    check("★Keystoneの行動タスク名が出る", (await page.locator(".twy-goal-act").textContent()).includes("★") && (await page.locator(".twy-goal-act").textContent()).includes("検定の勉強をする"));
+    check("★Keystoneの行動タスク名が出る", (await page.locator(".twy-goal-act").textContent()).includes("★ 重要な行動:") && (await page.locator(".twy-goal-act").textContent()).includes("検定の勉強をする"));
     check("今週コマ数が3(プロジェクト配下t1×2+t2×1の合計)", (await page.locator(".twy-goal-count b").textContent()).trim() === "3");
     // A-M3: GOALSカードは読み取り専用(更新ボタン・エディタを出さない)。
     check("A-M3: GOALSカードに更新ボタン(twy-open-editor)が無い",
@@ -517,7 +517,7 @@ async function seed(page, values) {
     await seed(page, { settings: { twelveWeekStartDate: "" }, currentView: "twelveweek" });
     check("MEDIUM-7: cycleStartDate未設定はバーを出さない(.twy-week 0件)", await page.locator(".twy-week").count() === 0);
     check("MEDIUM-7: cycleStartDate未設定は13 WEEKSパネル自体を出さない", await page.locator(".twy-weeks-panel").count() === 0);
-    check("MEDIUM-7: GOALSは誘導1行のみ", (await page.locator(".twy-goal-empty").textContent()).includes("12WYサイクルが未設定"));
+    check("MEDIUM-7: GOALSは誘導1行のみ", (await page.locator(".twy-goal-empty").textContent()).includes("12週のサイクルが未設定"));
     await seed(page, {
       settings: { twelveWeekStartDate: CYCLE_START, twelveWeekScoreTarget: 85 },
       currentView: "twelveweek"
@@ -565,7 +565,7 @@ async function seed(page, values) {
     // includes("1")&&includes("/ 1")で、done=0でも"達成トラック 0 / 1"の後半一致で
     // 必ずPASSしていた(構造的に空振り)。ここでは完全一致+未達トラックのnegative caseを足す。
     check("トラック到達(達成トラック=1/1・goalValue到達で完了)",
-      (await page.locator(".twy-goal-review").textContent()).trim() === "達成トラック 1 / 1",
+      (await page.locator(".twy-goal-review").textContent()).trim() === "達成した目標 1 / 1",
       await page.locator(".twy-goal-review").textContent());
 
     // negative case: 未達トラックを持つ2件目のプロジェクトを混ぜると「1 / 2」になる
@@ -583,7 +583,7 @@ async function seed(page, values) {
     });
     await page.waitForFunction(() => document.querySelector(".twy-goal-review"));
     check("HIGH-1: 未達トラックを混ぜると分母だけ増えて1 / 2になる(分子=1は変わらない)",
-      (await page.locator(".twy-goal-review").textContent()).trim() === "達成トラック 1 / 2",
+      (await page.locator(".twy-goal-review").textContent()).trim() === "達成した目標 1 / 2",
       await page.locator(".twy-goal-review").textContent());
 
     // ============================================================

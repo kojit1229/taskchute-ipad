@@ -14,14 +14,14 @@ function configureTwelveWeek(deps) {
 // 上部チップ(CYCLE|PLAN|WEEK|REVIEW)。R2でPLANを有効化(design §2.1b)。WEEK/REVIEWは準備中のまま。
 // 面切替はstateへ保存しない非永続の表示状態(design §A。_wbsSelectedProjectIdと同じ方式)。
 const TWY_FACES = [
-  { id: "cycle", label: "CYCLE", note: "俯瞰" }, { id: "plan", label: "PLAN", note: "計画" },
-  { id: "week", label: "WEEK", note: "準備中" }, { id: "review", label: "REVIEW", note: "準備中" }
+  { id: "cycle", label: "サイクル", note: "俯瞰" }, { id: "plan", label: "計画", note: "計画" },
+  { id: "week", label: "今週", note: "準備中" }, { id: "review", label: "振り返り", note: "準備中" }
 ];
 const TWY_ENABLED_FACES = new Set(["cycle", "plan"]);
 let _twyActiveFace = "cycle";
 
 function twyFaceChipsHTML(activeFace) {
-  return `<div class="segmented twy-face-segmented" role="tablist" aria-label="12WY面切替">
+  return `<div class="segmented twy-face-segmented" role="tablist" aria-label="12週計画の面切替">
     ${TWY_FACES.map((face) => TWY_ENABLED_FACES.has(face.id)
     ? `<button type="button" class="${face.id === activeFace ? "active" : ""}" aria-current="${face.id === activeFace}"
         data-action="twy-face-select" data-face="${face.id}">${escapeHTML(face.label)}<small>${escapeHTML(face.note)}</small></button>`
@@ -76,10 +76,10 @@ function twyGoalCardHTML(project, index, weekStart) {
   const track = activeTrackForProject(state.tracks || [], project.id);
   const keystone = twyKeystoneTask(project.id);
   const count = twyWeeklyBlockCount(project.id, weekStart);
-  const actText = keystone ? `${keystone.isKeystone ? "★ " : ""}${escapeHTML(keystone.task.title || "")}` : "未設定";
+  const actText = keystone ? `${keystone.isKeystone ? "★ 重要な行動: " : ""}${escapeHTML(keystone.task.title || "")}` : "未設定";
   return `<article class="twy-goal">
     <div class="twy-goal-title"><span class="twy-goal-num">${index + 1}</span>${escapeHTML(project.title || "")}</div>
-    ${track ? renderTwyTrackReadOnly(track) : `<p class="twy-goal-no-track">トラック未設定</p>`}
+    ${track ? renderTwyTrackReadOnly(track) : `<p class="twy-goal-no-track">進捗の記録が未設定</p>`}
     <div class="twy-goal-foot"><span class="twy-goal-act">行動: ${actText}</span><span class="twy-goal-count">今週 <b>${count}</b>コマ</span></div>
   </article>`;
 }
@@ -91,7 +91,7 @@ function twyReviewNoteHTML(eligible) {
     const track = activeTrackForProject(state.tracks || [], project.id);
     return track && twyTrackIsDone(track);
   }).length;
-  return `<p class="twy-goal-review">達成トラック <b>${done}</b> / ${eligible.length}</p>`;
+  return `<p class="twy-goal-review">達成した目標 <b>${done}</b> / ${eligible.length}</p>`;
 }
 
 // order-r1-cycle.md §B: 「今週を確定」導線は既存openTwyCommitSheet(WBS側と文言統一)。
@@ -106,9 +106,9 @@ function twyGoalsPanelHTML(cycleStart, weekStart, inReview) {
     ? `<p class="twy-goal-warn">3件を超えています(全${eligible.length}件中3件を表示)</p>` : "";
   const body = shown.length
     ? shown.map((project, index) => twyGoalCardHTML(project, index, weekStart)).join("")
-    : `<p class="twy-goal-empty">対象の12WYプロジェクトがありません</p>`;
+    : `<p class="twy-goal-empty">対象の12週のプロジェクトがありません</p>`;
   return `<section class="panel tower-panel-box twy-goals-panel">
-    <h2>12WY GOALS<span>${shown.length} / 最大3</span></h2>
+    <h2>12週の目標<span>${shown.length} / 最大3</span></h2>
     ${twyCommitLinkHTML()}
     <div class="twy-goal-grid">${body}</div>${warn}${inReview && eligible.length ? twyReviewNoteHTML(eligible) : ""}
   </section>`;
@@ -133,7 +133,7 @@ function twyWeekBarPx(pct) {
 // cycleStartDateでは暦週とweekNo判定(cycleWeekForDate基準)が最大6日ずれうるため、バー側にも
 // 実際の日付範囲を出して利用者が確認できるようにする(plan.js側コメント参照)。
 function twyWeekSpanText(week) {
-  return `W${week.weekNo}(${week.weekStart}〜${week.weekEnd}` + (week.isCurrent ? "・今週" : "") + `)`;
+  return `${week.weekNo}週${week.isReviewWeek ? "・振り返り" : ""}(${week.weekStart}〜${week.weekEnd}` + (week.isCurrent ? "・今週" : "") + `)`;
 }
 
 function twyWeekColHTML(week) {
@@ -146,7 +146,7 @@ function twyWeekColHTML(week) {
 }
 
 function twyWeekLabelHTML(week) {
-  return `<span class="twy-week-lab"${week.isCurrent ? ` data-current="1"` : ""} title="${escapeHTML(twyWeekSpanText(week))}">W${week.weekNo}</span>`;
+  return `<span class="twy-week-lab"${week.isCurrent ? ` data-current="1"` : ""} title="${escapeHTML(twyWeekSpanText(week))}">${week.weekNo}週</span>`;
 }
 
 function twyWeeksBarHTML(summary) {
@@ -157,7 +157,7 @@ function twyWeeksBarHTML(summary) {
   const refText = summary.avgWithReview !== null
     ? `参考: 振り返り週込み <b>${summary.avgWithReview}%</b>`
     : `振り返り週: 確定${summary.reviewWeek.committedCount}件(参考算入なし)`;
-  return `<section class="panel tower-panel-box twy-weeks-panel"><h2>13 WEEKS</h2>
+  return `<section class="panel tower-panel-box twy-weeks-panel"><h2>12週と振り返り週</h2>
     <div class="twy-weeks-wrap">
       <div class="twy-weeks">
         <div class="twy-weeks-line" style="bottom:${twyWeekBarPx(summary.target)}px"><span>${summary.target}%</span></div>
@@ -172,10 +172,10 @@ function twyWeeksBarHTML(summary) {
 function twyCycleFaceHTML(cycleStart, weekStart, inReview, summary) {
   const settings = state.settings || {};
   const goalsHTML = cycleStart ? twyGoalsPanelHTML(cycleStart, weekStart, inReview)
-    : `<section class="panel tower-panel-box twy-goals-panel"><h2>12WY GOALS</h2>
-      <p class="twy-goal-empty">12WYサイクルが未設定です(設定 › サイクル開始日)</p></section>`;
+    : `<section class="panel tower-panel-box twy-goals-panel"><h2>12週の目標</h2>
+      <p class="twy-goal-empty">12週のサイクルが未設定です(設定 › サイクル開始日)</p></section>`;
   const weeksHTML = summary ? twyWeeksBarHTML(summary) : "";
-  return `<section class="panel tower-panel-box twy-vision-panel"><h2>VISION</h2>${twyVisionBandHTML(settings)}</section>
+  return `<section class="panel tower-panel-box twy-vision-panel"><h2>ビジョン</h2>${twyVisionBandHTML(settings)}</section>
     ${goalsHTML}
     ${weeksHTML}`;
 }
@@ -196,7 +196,7 @@ function renderTwelveWeek() {
     ? twyPlanFaceHTML(cycleStart, summary)
     : twyCycleFaceHTML(cycleStart, weekStart, inReview, summary);
   return `<div class="today-tower twy-tower" data-twy-face="${face}">
-    ${renderHeader(headline, "12WY")}
+    ${renderHeader(headline, "12週計画")}
     ${twyFaceChipsHTML(face)}
     ${bodyHTML}
   </div>`;
@@ -206,11 +206,11 @@ function renderTwelveWeek() {
 // 読み取り専用(taskPlanGrid/remainingTarget/cycleWeeksSummaryだけを使う。Block自動生成なし)。
 // 各ノード下の「編集する画面」導線は既存nav/twy-open-commit/twy-face-selectを再利用する。
 const TWY_PLAN_LINK_NODES = [
-  { label: "12WYプロジェクト", editLabel: "WBS", attrs: `data-action="nav" data-view="wbs"` },
-  { label: "WBSタスク(戦術)", editLabel: "WBS", attrs: `data-action="nav" data-view="wbs"` },
-  { label: "Block(コマ)", editLabel: "タイムライン", attrs: `data-action="nav" data-view="timeline"` },
-  { label: "週次コミット", editLabel: "今週を確定", attrs: `data-action="twy-open-commit"` },
-  { label: "weeklyScore", editLabel: "CYCLE", attrs: `data-action="twy-face-select" data-face="cycle"` }
+  { label: "12週のプロジェクト", editLabel: "作業一覧", attrs: `data-action="nav" data-view="wbs"` },
+  { label: "タスク", editLabel: "作業一覧", attrs: `data-action="nav" data-view="wbs"` },
+  { label: "予定・実行記録", editLabel: "タイムライン", attrs: `data-action="nav" data-view="timeline"` },
+  { label: "今週の確定分", editLabel: "今週を確定", attrs: `data-action="twy-open-commit"` },
+  { label: "今週の進み具合", editLabel: "サイクル", attrs: `data-action="twy-face-select" data-face="cycle"` }
 ];
 
 function twyPlanLinkHTML() {
@@ -218,7 +218,7 @@ function twyPlanLinkHTML() {
       <span class="twy-plan-link-label">${escapeHTML(node.label)}</span>
       <button type="button" class="twy-plan-link-edit" ${node.attrs}>編集する画面: ${escapeHTML(node.editLabel)} ›</button>
     </div>${index < TWY_PLAN_LINK_NODES.length - 1 ? `<span class="twy-plan-link-arrow" aria-hidden="true">→</span>` : ""}`).join("");
-  return `<section class="panel tower-panel-box twy-plan-link-panel"><h2>LINK</h2>
+  return `<section class="panel tower-panel-box twy-plan-link-panel"><h2>計画と記録のつながり</h2>
     <div class="twy-plan-link-row">${nodes}</div>
   </section>`;
 }
@@ -258,7 +258,7 @@ function twyPlanTaskRowHTML(task, weekStarts, cycleStart, currentWeekNo) {
   const totalDone = countedRows.reduce((sum, row) => sum + row.done, 0);
   const remaining = remainingTarget(task, currentWeekNo);
   return `<tr class="twy-plan-task-row" data-task-id="${escapeHTML(task.id)}">
-    <td class="twy-plan-task-name">${plan.keystone ? "★ " : ""}${escapeHTML(task.title || "")}</td>
+    <td class="twy-plan-task-name">${plan.keystone ? "★ 重要な行動: " : ""}${escapeHTML(task.title || "")}</td>
     ${rows.map((row) => twyPlanCellHTML(row, plan)).join("")}
     <td class="twy-plan-total"><span class="twy-plan-total-km">${totalDone}/${totalConfirmed}</span><span class="twy-plan-remaining">残${remaining}</span></td>
   </tr>`;
@@ -273,9 +273,9 @@ function twyPlanGridHTML(projects, weeks12, cycleStart, currentWeekNo) {
     return `<tr class="twy-plan-project-row"><td class="twy-plan-project-head" colspan="${colCount}">${escapeHTML(project.title || "")}</td></tr>
       ${tasks.map((task) => twyPlanTaskRowHTML(task, weekStarts, cycleStart, currentWeekNo)).join("")}`;
   }).join("");
-  const headCols = weeks12.map((week, index) => `<th data-current="${index + 1 === currentWeekNo ? "1" : "0"}">W${index + 1}</th>`).join("");
+  const headCols = weeks12.map((week, index) => `<th data-current="${index + 1 === currentWeekNo ? "1" : "0"}">${index + 1}週</th>`).join("");
   return `<div class="twy-plan-grid-wrap"><table class="twy-plan-grid">
-    <thead><tr><th class="twy-plan-th-task">戦術</th>${headCols}<th>累計/残</th></tr></thead>
+    <thead><tr><th class="twy-plan-th-task">行動</th>${headCols}<th>累計/残</th></tr></thead>
     <tbody>${bodyRows || `<tr><td class="twy-plan-guide" colspan="${colCount}">目安を設定したタスクがありません</td></tr>`}</tbody>
   </table></div>`;
 }
@@ -294,8 +294,8 @@ function twyPlanNoneListHTML(projects) {
 
 function twyPlanFaceHTML(cycleStart, summary) {
   if (!cycleStart) {
-    return `<section class="panel tower-panel-box twy-plan-link-panel"><h2>PLAN</h2>
-      <p class="twy-plan-guide">12WYサイクルが未設定です(設定 › サイクル開始日)</p></section>`;
+    return `<section class="panel tower-panel-box twy-plan-link-panel"><h2>計画</h2>
+      <p class="twy-plan-guide">12週のサイクルが未設定です(設定 › サイクル開始日)</p></section>`;
   }
   const weeks12 = (summary?.weeks || []).slice(0, 12);
   const currentIdx = weeks12.findIndex((week) => week.isCurrent);
@@ -309,15 +309,15 @@ function twyPlanFaceHTML(cycleStart, summary) {
   const currentWeekNo = currentIdx >= 0 ? currentIdx + 1 : ((inReviewWeek || summary?.cycleEnded) ? 13 : 0);
   const projects = twyGoalCandidates(cycleStart);
   return `${twyPlanLinkHTML()}
-    <section class="panel tower-panel-box twy-plan-grid-panel"><h2>12-WEEK PLAN</h2>
+    <section class="panel tower-panel-box twy-plan-grid-panel"><h2>12週の計画</h2>
       ${projects.length ? twyPlanGridHTML(projects, weeks12, cycleStart, currentWeekNo)
-      : `<p class="twy-plan-guide">対象の12WYプロジェクトがありません</p>`}
+      : `<p class="twy-plan-guide">対象の12週のプロジェクトがありません</p>`}
     </section>
     ${projects.length ? twyPlanNoneListHTML(projects) : ""}`;
 }
 
 function buildTwyVisionModalHTML(settings) {
-  return `${modalHeaderHTML("VISION")}
+  return `${modalHeaderHTML("ビジョン")}
     <div class="field"><label class="field-label">3年ビジョン</label>
       <input class="input" style="font-size:16px" data-twy-vision-field="twelveWeekVision"
         value="${escapeHTML(settings.twelveWeekVision || "")}" placeholder="3年後にどうなっていたいか"></div>
@@ -343,7 +343,7 @@ registerActions({
     state.settings.twelveWeekVision = vision;
     state.settings.twelveWeekFocus = focus;
     closeModal();
-    saveAndRender("VISIONを保存しました");
+    saveAndRender("ビジョンを保存しました");
   },
   // R2: 面切替(CYCLE/PLAN)。design §A「面切替は非永続」どおりstateへ保存せずrender()のみ。
   "twy-face-select": ({ target }) => {

@@ -5,18 +5,42 @@ async function twelveWeek(page) {
   await nav(page, "twelveweek");
   const root = page.locator(".twy-tower");
   assert.ok((await root.innerText()).includes("12週間実行サイクル"));
+  assert.equal(await root.locator("h1").innerText(), "12週計画");
+  assert.equal(await root.locator(".twy-face-segmented").getAttribute("aria-label"), "12週計画の面切替");
+  assert.deepEqual(await root.locator(".twy-face-segmented button").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent)),
+    ["サイクル", "計画", "今週", "振り返り"]);
+  assert.deepEqual(await root.locator(".twy-face-segmented button:disabled small").allTextContents(), ["準備中", "準備中"]);
+  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent)),
+    ["ビジョン", "12週の目標", "12週と振り返り週"]);
+  assert.equal(await root.locator(".twy-goal-no-track").innerText(), "進捗の記録が未設定");
+  assert.ok((await root.locator(".twy-goal-act").innerText()).includes("★ 重要な行動: 毎週の作業"));
+  assert.deepEqual(await root.locator(".twy-week-lab").allTextContents(), Array.from({ length: 13 }, (_, i) => `${i + 1}週`));
+  assert.ok((await root.locator(".twy-week-lab").last().getAttribute("title")).startsWith("13週・振り返り("));
   assert.equal(await root.locator('[data-action="twy-face-select"]').count(), 2);
   assert.equal(await root.locator(".twy-face-segmented button:disabled").count(), 2);
   for (const [action, text] of [["twy-vision-open", "架空の3年ビジョン"], ["twy-open-commit", "今週を確定"]]) {
     assert.ok((await root.locator('[data-action="' + action + '"]').innerText()).includes(text));
   }
   await root.locator('[data-action="twy-vision-open"]').click();
+  assert.equal(await page.locator('[role="dialog"] .modal-title').innerText(), "ビジョン");
   assert.ok(await page.locator('[data-action="twy-vision-save"]').isVisible());
   const closeButtons = page.locator('[data-action="modal-close"]');
   assert.equal(await closeButtons.count(), 2);
   for (const button of await closeButtons.all()) assert.ok(await button.isVisible());
   await page.locator('[data-action="modal-close"]').first().click();
+  await root.locator('[data-action="twy-open-commit"]').click();
+  assert.ok(await page.getByText(/^今週の確定分 /).isVisible());
+  assert.equal(await page.locator(".twy-commit-meta").innerText(), "今週の12週のプロジェクトに確定できる予定がありません。");
+  await page.locator('[data-action="modal-close"]').first().click();
   await root.locator('[data-action="twy-face-select"][data-face="plan"]').click();
+  assert.deepEqual(await root.locator("h2").allTextContents(), ["計画と記録のつながり", "12週の計画", "目安なし"]);
+  assert.deepEqual(await root.locator(".twy-plan-link-label").allTextContents(),
+    ["12週のプロジェクト", "タスク", "予定・実行記録", "今週の確定分", "今週の進み具合"]);
+  assert.deepEqual(await root.locator(".twy-plan-link-edit").allTextContents(),
+    ["作業一覧", "作業一覧", "タイムライン", "今週を確定", "サイクル"].map(label => `編集する画面: ${label} ›`));
+  assert.deepEqual(await root.locator(".twy-plan-grid thead th").allTextContents(),
+    ["行動", ...Array.from({ length: 12 }, (_, i) => `${i + 1}週`), "累計/残"]);
+  assert.equal(await root.locator(".twy-plan-task-name").innerText(), "★ 重要な行動: 毎週の作業");
   assert.equal(await root.locator(".twy-plan-link-edit").count(), 5);
   for (const [selector, count] of [
     ['.twy-plan-link-edit[data-action="nav"][data-view="wbs"]', 2],

@@ -13475,7 +13475,7 @@ function openTwyCommitSheet() {
 function buildTwyCommitSheetHTML(weekStart) {
   const meta = twyCommittedWeekMeta(weekStart);
   const range = weekRange(weekStart);
-  const title = `WEEKLY COMMIT <span>${escapeHTML(twyDateLabel(range.weekStart))}〜${escapeHTML(twyDateLabel(range.weekEnd))}</span>`;
+  const title = `今週の確定分 <span>${escapeHTML(twyDateLabel(range.weekStart))}〜${escapeHTML(twyDateLabel(range.weekEnd))}</span>`;
   return modalHeaderHTML(title) + `<div class="twy-commit-sheet">
     ${meta ? twyCommitPostHTML(weekStart) : twyCommitPreHTML(weekStart)}
     </div></div></div>`;
@@ -13483,16 +13483,16 @@ function buildTwyCommitSheetHTML(weekStart) {
 
 function twyCommitPreHTML(weekStart) {
   const candidates = candidateBlocksForWeek(state, weekStart);
-  if (!candidates.length) return `<div class="twy-commit-meta">今週範囲に12WY候補Blockがありません。</div>`;
+  if (!candidates.length) return `<div class="twy-commit-meta">今週の12週のプロジェクトに確定できる予定がありません。</div>`;
   const rows = twyCommitGroups(candidates).map((group) => twyCommitGroupRowHTML(group, "commit")).join("");
-  return `<div class="twy-commit-meta">候補 = 今週範囲の12WYプロジェクト配下の予定Block(自動列挙・タスク単位に集約表示)。集約行のチェック=配下Block一括 / ▸で展開してBlock個別チェック</div>
+  return `<div class="twy-commit-meta">候補は12週のプロジェクトにある今週の予定です。タスクのチェックで予定をまとめて選択し、▸で開くと予定を個別に選べます。</div>
     <div data-twy-commit-list>${rows}</div><div class="twy-commit-foot">
       <span class="twy-commit-count" data-twy-commit-count>${twyCommitCountLabel(candidates.length)}</span>
       <button type="button" class="commit-btn" data-action="twy-commit-week">今週を確定</button></div>`;
 }
 
 function twyCommitCountLabel(total) {
-  return `選択中 ${_twyCommitSelectedBlockIds.size}コマ / 候補 ${total}コマ(Block単位で保存)`;
+  return `選択中 ${_twyCommitSelectedBlockIds.size}コマ / 候補 ${total}コマ(予定ごとに保存)`;
 }
 
 // v330修正: 「今週を確定」で確定されスコア対象になるitemの判定をここへ集約する。
@@ -13514,7 +13514,7 @@ function twyCommitPostHTML(weekStart) {
   const scoreItemIds = new Set(scoreItems.map((item) => item.id));
   const rows = sortedItems.map((item) => twyCommitItemRowHTML(item, scoreItemIds.has(item.id))).join("");
   return `<div class="twy-commit-meta">確定済 ${escapeHTML((meta?.committedAt || "").replace("T", " ").slice(0, 16))}</div>
-    <div data-twy-commit-list>${rows || `<div class="twy-commit-meta">確定itemがありません。</div>`}</div>
+    <div data-twy-commit-list>${rows || `<div class="twy-commit-meta">確定した予定がありません。</div>`}</div>
     <div class="twy-commit-foot"><span class="twy-commit-count">${twyCommitScoreLabel(weeklyScore(state.weeklyCommitments || [], weekStart), Boolean(meta), scoreItems.filter((item) => item.excused).length)}</span>
       <button type="button" class="commit-btn" data-action="twy-add-item">+ 計画追加</button></div>
     ${_twyAddPanelOpen ? twyAddItemPanelHTML(weekStart) : ""}`;
@@ -13553,7 +13553,7 @@ function twyAddCandidates(weekStart) {
 
 function twyAddItemPanelHTML(weekStart) {
   const candidates = twyAddCandidates(weekStart);
-  if (!candidates.length) return `<div class="twy-add-panel" data-twy-add-panel><div class="twy-commit-meta">追加できる未コミット候補がありません。</div>
+  if (!candidates.length) return `<div class="twy-add-panel" data-twy-add-panel><div class="twy-commit-meta">追加できる未確定の予定がありません。</div>
     <button type="button" class="btn" data-action="twy-add-item-cancel">閉じる</button></div>`;
   const rows = twyCommitGroups(candidates).map((group) => twyCommitGroupRowHTML(group, "add")).join("");
   return `<div class="twy-add-panel" data-twy-add-panel><div data-twy-commit-list>${rows}</div><div class="twy-commit-foot">
