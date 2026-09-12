@@ -38,10 +38,19 @@ export function configureScheduleView(deps) {
 // Same source records/IDs on all three surfaces, including the previous day's continuation.
 export function scheduleDisplay(state, date) {
   try {
+    if (state.singleSchedules === undefined) return { records: [], warnings: [], error: "単発予定は未取得です。配置を停止しています" };
+    if (!Array.isArray(state.singleSchedules)) throw new TypeError("単発予定の容器が不正です");
     const { records, warnings } = normalizeSingleSchedules(state.singleSchedules);
     return { records: records.filter(row => !row.deleted && plannedMinute(row.plannedStartAt, date) < 1440
       && plannedMinute(row.plannedEndAt, date) > 0), warnings, error: "" };
   } catch (error) { return { records: [], warnings: [], error: "単発予定の保存形式を確認してください" }; }
+}
+
+export function renderScheduleSection(state, date, escapeHTML) {
+  const display = scheduleDisplay(state, date);
+  if (!display.records.length && !display.warnings.length && !display.error) return "";
+  return `<section class="today-single-schedules" data-schedule-date="${escapeHTML(date)}"><h3>単発予定</h3>
+    ${scheduleWarning(display, escapeHTML)}${display.records.map(record => renderSchedule(record, date, escapeHTML)).join("")}</section>`;
 }
 
 export function scheduleWarning(display, escapeHTML) {
@@ -53,13 +62,14 @@ export function scheduleWarning(display, escapeHTML) {
 export function renderSchedule(record, date, escapeHTML, { detail = false, style = "" } = {}) {
   const { display, plan, note } = buildDailyViewModel(record, { kind: "schedule", date });
   const id = escapeHTML(record.id), key = escapeHTML(contentKey(record));
-  const time = `${record.plannedStartAt} – ${record.plannedEndAt}`;
+  const time = `${record.plannedStartAt} – ${record.plannedEndAt}${plan.end === 1440 ? "（24:00）" : ""}`;
+  const continuation = [plan.range && plan.start < 240 ? "前から継続" : "", plan.end > 1440 ? "翌日へ継続" : ""].filter(Boolean).join(" / ");
   return `<article class="single-schedule ${style ? "timeline-card" : ""} ${plan.planCompleted ? "completed" : ""}"
     data-kind="schedule" data-schedule-id="${id}" data-completed="${plan.planCompleted}" style="${style}${plan.planCompleted ? "opacity:.55;" : ""}">
     <button type="button" data-action="schedule-view-details" data-id="${id}" data-date="${escapeHTML(date)}">${escapeHTML(display.title)}</button>
-    <span>${escapeHTML(time)} · ${display.statusLabel}${plan.outsideWindow ? " · 時間軸外（4〜24時）" : ""}</span>
+    <span>単発予定 · ${escapeHTML(time)} · ${display.statusLabel}${plan.outsideWindow ? " · 時間軸外（4〜24時）" : ""}${continuation ? ` · ${continuation}` : ""}</span>
     <button type="button" data-action="schedule-view-complete" data-id="${id}" data-date="${escapeHTML(date)}"
-      data-fingerprint="${key}" data-completed="${!plan.planCompleted}">${plan.planCompleted ? "予定完了を解除" : "予定を完了"}</button>
+      data-fingerprint="${key}" data-completed="${!plan.planCompleted}" aria-label="${plan.planCompleted ? "予定完了を解除" : "予定を完了"}">${style ? (plan.planCompleted ? "↺" : "○") : plan.planCompleted ? "予定完了を解除" : "予定を完了"}</button>
     ${detail ? `<p>${escapeHTML(note)}</p>` : ""}</article>`;
 }
 
@@ -69,6 +79,6 @@ export function scheduleTimelineRows(state, date) {
     if (!plan.range) return [];
     const time = minute => `${date}T${String(Math.floor(minute / 60)).padStart(2,"0")}:${String(Math.floor(minute % 60)).padStart(2,"0")}`;
     // Layout-only proxies. Original timestamps stay in the source record and all labels.
-    return [{ ...record, scheduleRecord: record, plannedStartAt: time(plan.range[0]), plannedEndAt: time(plan.range[1]) }];
+    return [{ ...record, scheduleRecord: record, timelineRange: plan.range, plannedStartAt: time(plan.range[0]), plannedEndAt: time(plan.range[1]) }];
   });
 }

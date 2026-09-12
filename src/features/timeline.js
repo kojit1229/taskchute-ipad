@@ -405,15 +405,16 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
   const schedules = mode === "planned" ? scheduleDisplay(state, state.selectedDate) : null;
   const allBlocks = blocksForDate(state.selectedDate);
   const availability = plannedAvailability(state, state.selectedDate, { draftIntervals: plannedDraftIntervals() });
+  const timelineBlocks = state.blocks.filter(block => block && !block.deleted);
   const planned = new Map(availability.intervals.filter(row => row.kind === "block").map(row => [row.id, row]));
   const clock = new Date(), nowAt = `${todayISO()}T${pad2(clock.getHours())}:${pad2(clock.getMinutes())}:${pad2(clock.getSeconds())}`;
   // モードに応じてフィルタリングと表示位置決定
   let blocksToRender;
   if (mode === "actual") {
-    blocksToRender = allBlocks.filter((b) => b.actualStartAt);
+    blocksToRender = timelineBlocks.filter((b) => b.actualStartAt);
   } else {
     // 予定モード: 未完了 + plannedStartAt あり(完了済みは予定から消す)
-    blocksToRender = allBlocks.filter((b) => b.plannedStartAt && !b.migratedTo);
+    blocksToRender = timelineBlocks.filter((b) => b.plannedStartAt && !b.migratedTo);
   }
   blocksToRender = blocksToRender.flatMap(block => {
     const interval = planned.get(block.id);
@@ -515,7 +516,7 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
     }).join("")}</div>` : ""}
     ${mode === "planned" && availability.overlaps.length ? `<p role="status">計画の重複 ${availability.overlaps.length}件（保存された時刻を保持）</p>` : ""}
     ${isToday && nowMinutes < 240 ? '<p class="muted">現在は表示範囲外です（4:00〜24:00）</p>' : ""}
-    ${positioned.some(row => row.isOverflow) ? `<details><summary>重なった予定の全件（${positioned.length}件）</summary>${positioned.map(row => `<button class="btn" data-action="edit-block" data-id="${escapeHTML(row.block.id)}">${escapeHTML(row.block.title)}</button>`).join("")}</details>` : ""}
+    ${positioned.some(row => row.isOverflow) ? `<details><summary>重なった予定の全件（${positioned.length}件）</summary>${positioned.map(row => `<button class="btn" data-action="${row.block.scheduleRecord ? "schedule-view-details" : "edit-block"}" data-date="${state.selectedDate}" data-id="${escapeHTML(row.block.id)}">${escapeHTML(row.block.title)}</button>`).join("")}</details>` : ""}
     ${schedules ? scheduleWarning(schedules, escapeHTML) : ""}
     ${schedules?.records.length ? `<details class="timeline-schedule-list"><summary>単発予定の一覧</summary>${schedules.records.map(record => renderSchedule(record, state.selectedDate, escapeHTML)).join("")}</details>` : ""}
     <div class="timeline" data-date="${state.selectedDate}" data-row-height="${rowHeight}" style="position:relative; min-height:${rowHeight * (endHour - startHour)}px">

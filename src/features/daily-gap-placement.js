@@ -63,7 +63,11 @@ export function plannedAvailability(state, date, options = {}) {
   if (!Array.isArray(state.blocks)) return stopped("Blockの容器が不正です。配置を停止しています");
   const schedules = normalizeSingleSchedules(source.value);
   const result = plannedOccupancy({ blocks: state.blocks.filter(row =>
-    (row?.date === date || (typeof row?.plannedStartAt === "string" && row.plannedStartAt.slice(0, 10) === date))
+    (!row || typeof row !== "object" || !row.id || row?.date === date || (typeof row?.plannedStartAt === "string" && row.plannedStartAt.slice(0, 10) === date)
+      || row?.plannedStartAt && (!Number.isFinite(plannedMinute(row.plannedStartAt, date))
+        || row.plannedEndAt && (!Number.isFinite(plannedMinute(row.plannedEndAt, date))
+          || plannedMinute(row.plannedStartAt, date) < 1440 && plannedMinute(row.plannedEndAt, date) > 240))
+      || !row?.plannedStartAt && Boolean(row?.plannedEndAt))
     && !options.excludeBlockIds?.has(row?.id)),
     schedules: schedules.records, draftIntervals: options.draftIntervals === undefined ? [] : options.draftIntervals }, date, options.window || [240,1440]);
   return { ...result, warnings: schedules.warnings, error: result.invalid.length

@@ -5833,7 +5833,12 @@ details.settings-row > .fold-summary.settings-row-summary {
 [data-daily-view="exec"] { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 [data-daily-view="exec"] > .timeline-tower { order: -1; }
 .timeline[data-date] .timeline-card { min-height: 0; padding-top: 0; padding-bottom: 0; }
+.timeline[data-date] .timeline-card small { font-size: 11px; }
 .timeline-gap-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.single-schedule.timeline-card { padding-left: 4px !important; display: grid; grid-template-columns: minmax(0, 1fr) 44px; grid-template-rows: minmax(0, 1fr) 14px; }
+.single-schedule.timeline-card > span { grid-column: 1 / -1; grid-row: 2; white-space: nowrap; overflow: hidden; font-size: 11px; }
+.single-schedule.timeline-card > button { padding: 0; min-width: 0; overflow: hidden; font-size: 11px; }
+.single-schedule.timeline-card > button:last-of-type { grid-column: 2; grid-row: 1; }
 [data-daily-view="exec"] :is(.exec-pane-left, .exec-pane-right) { min-width: 0; }
 [data-daily-view="exec"] .exec-two-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 [data-daily-view="exec"] .exec-pane-right { order: -1; }

@@ -2,7 +2,7 @@ import { validateDailyContract } from "../ui/daily-parts/contract.js";
 import { renderPlanRow } from "../ui/daily-parts/plan-row.js";
 import { renderActualRow } from "../ui/daily-parts/actual-row.js";
 import { isValidSingleSchedule } from "../core/single-schedule.js";
-import { plannedMinute } from "../core/planned-occupancy.js";
+import { plannedMinute, plannedOccupancy } from "../core/planned-occupancy.js";
 
 // Read-only projection. app.js supplies live Task lookup and the existing time/estimate helpers.
 // No draft, action registration or persistence belongs to this adapter.
@@ -50,6 +50,11 @@ export function buildDailyViewModel(block, deps, actual = false) {
     canEnd: running, canDuplicate: false, highlighted: block.isMIT === true,
     saving: false, undoAvailable: false, draftId: null, draft: null
   };
+  if (!actual) {
+    const timing = plannedOccupancy({ blocks: [block] }, block.date);
+    plan.overlapLabel = timing.invalid.length ? "予定時刻を訂正してください" : timing.intervals[0]?.estimatedEnd
+      ? "終了未定・仮の長さ" : plannedStartText && !timing.intervals[0]?.range ? "時間軸外（4〜24時）" : "";
+  }
   const actualStartText = time(block.actualStartAt), actualEndText = time(block.actualEndAt);
   const duration = actualStartText && actualEndText
     ? (deps.localDateTimeToMs(block.actualEndAt) - deps.localDateTimeToMs(block.actualStartAt)) / 60000 : NaN;
@@ -74,7 +79,7 @@ function buildScheduleModel(record, date, actual) {
   const start = plannedMinute(record.plannedStartAt, date), end = plannedMinute(record.plannedEndAt, date);
   const range = [Math.max(240, start), Math.min(1440, end)];
   return { display: { key: `schedule:${record.id}`, kind: "schedule", id: record.id,
-    dateLabel: record.date, title: `${start < 0 ? "前日から · " : ""}${record.title}`,
+    dateLabel: record.date, title: `${start <= -1440 ? "以前から · " : start < 0 ? "前日から · " : ""}${record.title}`,
     subtitle: "単発予定", statusLabel: record.completed ? "予定完了" : "予定", busy: false, error: "", actions: {} },
     plan: { planCompleted: Boolean(record.completed), canStart: false, canEnd: false,
       plannedStartText: record.plannedStartAt.slice(11,16), plannedEndText: record.plannedEndAt.slice(11,16),
