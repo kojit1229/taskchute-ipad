@@ -81,6 +81,24 @@ try {
     assert.equal(f.run('zero-complete').ok, false); assert.equal(f.state.zeroThinking.entries.length, 0);
     console.log('PASS restored pending question reconciles later state; renamed theme cannot be consumed');
   }
+  {
+    const f = fixture();
+    f.state.questions[0].lastTouchedAt = '2026-09-10';
+    f.configure({ stateFails: true });
+    assert.equal(f.run('zero-draft-save', 'pending status-only change').ok, false);
+    assert.equal(f.draft.questionRequest.done, false);
+    assert.equal(f.deps.zeroDrafts.get(f.draft).body, 'pending status-only change');
+    Object.assign(f.state.questions[0], { status: 'closed', updatedAt: '2026-09-12T10:00:00' });
+    const advanced = structuredClone(f.state.questions[0]);
+    f.configure({ stateFails: false });
+    assert.equal(f.run('zero-draft-save').ok, true);
+    assert.deepEqual(f.state.questions[0], advanced, 'status, timestamp and old touch date are not rolled back');
+    assert.equal(f.draft.questionRequest.done, true);
+    assert.equal(f.deps.zeroDrafts.get(f.draft).questionRequest.done, true);
+    assert.equal(zeroNeedsSave(f.draft, f.draft.body), false);
+    assert.equal(f.counts().saves, 1, 'status-only progress needs no second state save');
+    console.log('PASS pending question acknowledges status-only progress with an unchanged old touch date');
+  }
   for (const change of ['deleted', 'content', 'owner', 'blank']) {
     const f = fixture();
     if (change !== 'blank') { f.configure({ stateFails: true }); f.run('zero-draft-save', 'pending'); f.configure({ stateFails: false }); }

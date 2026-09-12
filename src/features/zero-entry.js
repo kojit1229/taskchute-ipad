@@ -68,8 +68,8 @@ function questionRecords(state, draft) {
     if (request.done) throw invalid("問いが保存済みの基準から変わりました");
     return [{ kind: "questions", before: current, after: request.planned }];
   }
-  if (current.lastTouchedAt >= request.date && (current.status === request.planned.status
-      || current.updatedAt > (request.before.updatedAt || request.before.createdAt || ""))) return [];
+  if (current.lastTouchedAt >= request.date || current.status !== request.before.status
+      || current.updatedAt > (request.before.updatedAt || request.before.createdAt || "")) return [];
   throw invalid("問い更新待ちです。変更を確認してください");
 }
 

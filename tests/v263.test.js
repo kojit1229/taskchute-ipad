@@ -278,7 +278,7 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
       && saved.weeklyCommitments.filter((record) => record.recordType === "item").length === 0 && await saveCount() === 2);
 
     await seed({ blocks: [], recurrences: [] }); await openSheet();
-    check("#2 候補0件は案内のみ・確定ボタンなし", (await page.locator(".twy-commit-meta").textContent()).includes("候補Blockがありません")
+    check("#2 候補0件は案内のみ・確定ボタンなし", (await page.locator(".twy-commit-meta").textContent()).includes("今週の12週のプロジェクトに確定できる予定がありません") /* 4回-02 の日本語化に追随(2026-09-12 CHANGELOG) */
       && await page.locator('[data-action="twy-commit-week"]').count() === 0);
 
     const autoMeta = { id: `wcw_${WEEK}`, recordType: "week", weekStart: WEEK, cycleStartDate: CYCLE,
