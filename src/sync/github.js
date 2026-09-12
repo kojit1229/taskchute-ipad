@@ -55,6 +55,7 @@ import {
   mergeRecords, mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
 import { commitCandidate } from "../core/commit.js";
+import { mergeReadingEvidence, readingSyncConflict } from "../core/daily-reading-sync.js";
 import { mergeStoredSingleSchedules, singleSchedulesEqual, validateSingleScheduleContainer } from "../core/single-schedule.js";
 import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
 import { persistLocalNoSchedule, _lastSaveError } from "../storage/local.js";
@@ -107,7 +108,7 @@ export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
     ["dataModifiedAt", "updatedAt", "lastPushedAt", "lastPulledAt", "lastSavedAt"].includes(key) ? undefined : item);
   if (remoteNorm && mode !== "pushed") {
     const keys = [...SYNC_CORE_COMPARE_KEYS, "journals", "journalMeta", "feedback", "condition.logs",
-      "sleep.logs", "settings.morningEnergyLog", "blocks", "dailyDeclarations", "weeklyWishes",
+      "sleep.logs", "settings.morningEnergyLog", "settings.dailyReadingRoutineIds", "blocks", "dailyDeclarations", "weeklyWishes",
       "bodyScans", "writeMeditations", "tasks", "projects", "storeVisits", "tracks", "trackMeasurements",
       "weeklyCommitments", "swipeTriageLog", "gardenLog", "coachLog.meals", "aiStepProcessedIds",
       "aiStepDismissedIds", "aiReportReadIds", "aiStepPendingRequests", "archivedDates", "reports",
@@ -252,6 +253,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
     await prepareArchiveMerge(null, archiveConnection);
     if (captureProof && captureProof.isCurrent() !== true) return;
     archiveProof.assert(null);
+    mergeReadingEvidence(state, state, state.blocks);
     const content = JSON.stringify(sanitizedStateForGitHub(), null, 2);
     const sentStamp = state.dataModifiedAt;
     if (captureProof && (captureProof.isCurrent() !== true || content !== captureProof.expectedContent)) return;
@@ -300,7 +302,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
     maybeWriteBackupSnapshot();
     if (captureProof && captureProof.isCurrent() === true) return { ok: true, content };  // v49: 保存成功後、1日1回の世代スナップショット(await しない)
   } catch (error) {
-    if (["PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
+    if (["PrimarySettingsConflict", "ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) setSyncBanner(error.message);
     if (!silent) showToast(`GitHub保存失敗: ${error.message}`);
     else updateAutoSaveStatus(`失敗: ${error.message}`);
   } finally {
@@ -390,7 +392,7 @@ async function runAutoSyncPush() {
     await saveToGitHub(true);
     updateSyncDot();
   } catch (error) {
-    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
+    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) setSyncBanner(error.message);
     // オフライン/APIエラーは次のデバウンスで再試行する。
   }
 }
@@ -618,7 +620,9 @@ function syncCoreEqual(remoteNorm) {
     // Schedules merge independently; content differences must not become a core conflict.
     validateSingleScheduleContainer(state.singleSchedules);
     validateSingleScheduleContainer(remoteNorm.singleSchedules);
-    return SYNC_CORE_COMPARE_KEYS.every((k) =>
+    const reading = computeSyncMerge(remoteNorm, "local")?.values.reading;
+    if (!reading) return false;
+    return SYNC_CORE_COMPARE_KEYS.every((k) => k === "habitStreaks" && reading.active ||
       JSON.stringify(getByPath(remoteNorm, k) ?? null) === JSON.stringify(getByPath(state, k) ?? null));
   } catch { return false; }
 }
@@ -917,6 +921,9 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
     const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks);
+    const reading = mergeReadingEvidence(state, remoteNorm, blocksRaw);
+    if (reading.active && SYNC_CORE_COMPARE_KEYS.filter(key => key !== "habitStreaks").some(key =>
+      JSON.stringify(getByPath(state, key) ?? null) !== JSON.stringify(getByPath(remoteNorm, key) ?? null))) throw readingSyncConflict();
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
     // v117(A): 今日の宣言もマージ可能コレクションへ追加
     const dailyDeclarations = mergeDailyDeclarationMaps(state.dailyDeclarations, remoteNorm.dailyDeclarations);
@@ -1007,6 +1014,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const zeroThinkingGroups = mergeById(state.zeroThinking?.groups, remoteNorm.zeroThinking?.groups);
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
+      reading.changed[0] ||
       !singleSchedulesEqual(schedules.stored, state.singleSchedules) ||
       journals.changedVsLocal ||
       jsonChanged(journalMeta, state.journalMeta) ||
@@ -1049,6 +1057,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(aiWorkProcessedIds, state.aiWorkProcessedIds || []) ||
       !sameArrayByReference(zeroThinkingGroups, state.zeroThinking?.groups || []);
     const changedVsRemote =
+      reading.changed[1] ||
       !singleSchedulesEqual(schedules.stored, remoteNorm.singleSchedules) ||
       journals.changedVsRemote ||
       jsonChanged(journalMeta, remoteNorm.journalMeta) ||
@@ -1088,6 +1097,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(zeroThinkingGroups, remoteNorm.zeroThinking?.groups || []);
     const merged = {
       values: {
+        reading,
         singleSchedules: schedules.stored,
         journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
         archivedDates,  // 単位16
@@ -1099,13 +1109,23 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     archiveMergeGuards.set(merged, () => archiveProof.assert(remoteNorm));
     return merged;
   } catch (error) {
-    if (error?.name === "ArchiveTextConflict") throw error;
+    if (["ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) throw error;
     console.warn("同期マージをスキップ:", error.message);
     return null;
   }
 }
 
 // マージ結果をローカルstateへ適用(「ローカルを基準に残す」経路用)。変化があればtrue。
+function adoptLocalSyncMerge(merged, remoteNorm, remoteT) {
+  if (!merged?.changedVsLocal) return false;
+  const before = beginSyncCandidate();
+  try {
+    applySyncMergeToLocal(merged);
+    adoptSyncResult(before, remoteT, "adopt", remoteNorm);
+  } catch (error) { setState(before); throw error; }
+  scheduleAutoSave(); scheduleAutoSync();
+  return true;
+}
 function applySyncMergeToLocal(merged) {
   if (!merged) return false;
   const archiveGuard = archiveMergeGuards.get(merged);
@@ -1113,6 +1133,8 @@ function applySyncMergeToLocal(merged) {
   archiveGuard();
   if (!merged.changedVsLocal) return false;
   const v = merged.values;
+  state.settings.dailyReadingRoutineIds = v.reading.routineIds;
+  if (v.reading.active) state.habitStreaks = v.reading.habitStreaks;
   state.journals = v.journals;
   state.journalMeta = v.journalMeta;
   state.feedback = v.feedback;
@@ -1167,6 +1189,8 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   archiveGuard();
   if (!merged.changedVsRemote) return false;
   const v = merged.values;
+  remoteNorm.settings.dailyReadingRoutineIds = v.reading.routineIds;
+  if (v.reading.active) remoteNorm.habitStreaks = v.reading.habitStreaks;
   remoteNorm.journals = v.journals;
   remoteNorm.journalMeta = v.journalMeta;
   remoteNorm.feedback = v.feedback;
@@ -1274,6 +1298,7 @@ async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn, rej
     // normalizeState mutates its input: normalize the detached candidate before adopting core values.
     const candidate = JSON.parse(JSON.stringify(state));
     for (const key of SYNC_CORE_COMPARE_KEYS) setByPath(candidate, key, coreValues[key]);
+    if (syncMerge.values.reading.active) candidate.habitStreaks = syncMerge.values.reading.habitStreaks;
     setState(normalizeState(candidate));
     adoptSyncResult(before, remoteT, "adopt", remoteNorm);
     setLastSyncedSha(sha);
@@ -1281,7 +1306,7 @@ async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn, rej
     if (before) setState(before);
     console.warn("autoMergeRemote failed:", error.message, origin);
     if (rejectInvalid) {
-      if (["PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) throw error;
+      if (["PrimarySettingsConflict", "ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) throw error;
       throw invalidRemoteState();
     }
     return false;
@@ -1327,8 +1352,7 @@ async function runAutoSyncPull() {
       // v106でジャーナル/blocks/体調/睡眠へ一般化。PC側が新しくてもiPhone分が見える)。
       // tieWinner="local": ローカルを基準に残す経路。
       const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
-      const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
-      if (changed) saveState();
+      const changed = adoptLocalSyncMerge(syncMerge, remoteNorm, remoteT);
       if (changed || runDailyOpen()) render();
       recordSyncPullSuccess();
       return;
@@ -1357,8 +1381,7 @@ async function runAutoSyncPull() {
       // v364: コアが不一致でも、レコード単位の新しい方勝ち和集合で自動解消する(K指示2026-09-06)。
       if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "pull", rejectInvalid: true, renderFn: renderDeferringForFocus })) return;
       const fallbackMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
-      const changed = fallbackMerge ? applySyncMergeToLocal(fallbackMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
-      if (changed) saveState();
+      const changed = adoptLocalSyncMerge(fallbackMerge, remoteNorm, remoteT);
       setSyncBanner("リモートに新しいデータ。ローカルにも未pushの変更があります。設定から手動で確認してください");
       if (changed || runDailyOpen()) render();
       recordSyncPullSuccess();
@@ -1403,7 +1426,7 @@ async function runAutoSyncPull() {
     render();
     showToast("最新データを取り込みました");
   } catch (error) {
-    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) { setSyncBanner(error.message); return; }
+    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) { setSyncBanner(error.message); return; }
     if (runDailyOpen()) render();
   }
 }
@@ -1477,8 +1500,10 @@ async function loadFromGitHub() {
     // routineChains/weeklyReviews/cycleReviewsを加えたもの)を使う。fail-close比較の対象自体
     // (SYNC_CORE_COMPARE_KEYS)は増やさない=これらの3キーだけの差分でsyncCoreEqualが
     // falseになることはない(自動解決経路の頻度は変えない)。
+    const readingProof = requireSyncMerge(remoteNorm, "local").values.reading;
     const diffCount = remoteNorm
       ? LOSS_RISK_KEYS.filter((k) =>
+          !(k === "habitStreaks" && readingProof.active) &&
           JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)
         ).length
       : 0;
@@ -1602,8 +1627,8 @@ async function syncFromGitHubOnStartup() {
         // renderDeferringForFocus経由(IME/フォーカス保護)で守る。
         if (remoteNorm && await autoMergeRemote(remoteNorm, remoteT, sha, { origin: "startup", rejectInvalid: true, renderFn: renderDeferringForFocus })) return;
         const fallbackMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
-        const changed = fallbackMerge ? applySyncMergeToLocal(fallbackMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
-        if (changed) { saveState(); renderDeferringForFocus(); }
+        const changed = adoptLocalSyncMerge(fallbackMerge, remoteNorm, remoteT);
+        if (changed) renderDeferringForFocus();
         setSyncBanner("リモートに新しいデータがあります。編集中に取得したため自動取込を中止しました。設定から手動で確認してください");
         return;
       }
@@ -1649,14 +1674,14 @@ async function syncFromGitHubOnStartup() {
       // ローカルへ合流させる(iPhoneで書いた記録がPC起動pullで見えなくなる事故対策)。
       // tieWinner="local": ここもapplySyncMergeToLocal(ローカルを基準に残す)経路。
       const syncMerge = remoteNorm ? requireSyncMerge(remoteNorm, "local") : null;
-      const changed = syncMerge ? applySyncMergeToLocal(syncMerge) : mergeZeroThinkingIntoLocal(remote.zeroThinking);
-      if (changed) { saveState(); render(); }
+      const changed = adoptLocalSyncMerge(syncMerge, remoteNorm, remoteT);
+      if (changed) render();
       recordSyncPullSuccess();
       setLastSyncedSha(sha);
     }
   } catch (error) {
     // 起動時の同期失敗は致命的でない(ローカルで動作継続)
-    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict"].includes(error?.name)) setSyncBanner(error.message);
+    if (["InvalidRemoteStateError", "PrimarySettingsConflict", "ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) setSyncBanner(error.message);
     console.warn("起動時の GitHub 同期をスキップ:", error.message);
   }
 }

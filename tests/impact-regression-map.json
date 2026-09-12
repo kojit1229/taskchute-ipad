@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "daily-reading-sync": {
+      "paths": ["^src/core/daily-reading-sync\\.js$"],
+      "suites": ["daily-reading-sync"]
+    },
     "daily-reading": {
       "paths": ["^src/(core|features)/daily-reading\\.js$"],
       "suites": ["daily-reading-core", "daily-reading-e2e"]

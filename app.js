@@ -2234,6 +2234,8 @@ function normalizeState(value) {
     twelveWeekReviewWeekMinItems: 3,  // v357: 13 WEEKSバーの振り返り週(W13)参考平均の閾値(design.md §2.1裁定7)
     ...actualSettings
   };
+  if (actualSettings.dailyReadingRoutineIds && typeof actualSettings.dailyReadingRoutineIds === "object" && !Array.isArray(actualSettings.dailyReadingRoutineIds))
+    value.settings.dailyReadingRoutineIds = { affirmation: "", visionBoard: "", ...actualSettings.dailyReadingRoutineIds };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
     "today", "wbs", "wish", "tasks", "timeline", "exec",
@@ -13033,7 +13035,7 @@ function isTouchedBlock(b) {
     : null;
   const renamed = rule ? b.title !== rule.title : false;
   return Boolean(
-    b.completed || b.actualStartAt || b.actualEndAt ||
+    b.deleted || b.source === "daily-reading-manual" || b.completed || b.actualStartAt || b.actualEndAt ||
     Number(b.pomodoroCount || 0) > 0 || (b.comment || "").trim() ||
     b.isMIT || Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0 ||
     renamed
