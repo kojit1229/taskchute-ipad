@@ -291,3 +291,12 @@ process.once('beforeExit', async () => {
   } catch (error) { console.error(error); process.exitCode = 1; }
   finally { if (browser) await browser.close(); if (server) await new Promise(resolve => server.close(resolve)); }
 });
+
+// S3-08: Japanese subtitles retain their full rendered contents.
+dailyLayoutChecks.push(async (page, root) => {
+  assert(await root.locator('.so-item small').evaluateAll(nodes => {
+    const expected = ['??????100%????', '??????????', '?????????'];
+    return nodes.length === 3 && nodes.every((el, i) => el.textContent === expected[i] && el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis');
+  }), 'three Japanese creed subtitles are displayed without clipping');
+  console.log('PASS S3-08: Japanese subtitles without clipping');
+});
