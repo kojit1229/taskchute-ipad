@@ -11,6 +11,7 @@ import { singleScheduleOperation } from "./single-schedule.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
 import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 import { gapPlacementOperation } from "./daily-gap-placement.js";
+import { zeroEntryOperation } from "./zero-entry.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -23,6 +24,9 @@ const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); }
 const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](input) });
 
 export const DAILY_OPERATIONS = {
+  "zero-draft-save": zeroEntryOperation("draft"),
+  "zero-complete": zeroEntryOperation("complete"),
+  "zero-leave": zeroEntryOperation("leave"),
   "daily-plan-times-save": { build: buildDailyTimes, effects: dailyTimesEffects },
   "daily-plan-times-cancel": { build: cancelDailyTimes, effects: dailyTimesEffects },
   "daily-plan-complete": { build: buildPlanCompletion, effects: planCompletionEffects },

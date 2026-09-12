@@ -59,6 +59,10 @@
         "today-detail-integration-e2e"
       ]
     },
+    "zero-entry": {
+      "paths": ["^src/features/zero-entry\\.js$"],
+      "suites": ["zero-save-boundary", "zero-draft-e2e", "draft-leave", "draft-save-transaction", "daily-operations-registry", "daily-parts-contract"]
+    },
     "daily-parts": {
       "paths": [
         "^src/ui/daily-parts/",

@@ -27,7 +27,8 @@ for (const name of DAILY_ACTIONS) {
 }
 for (const name of ['missing', 'toString', '__proto__']) assert.throws(() => run(name, {}, deps), /unknown operation/);
 assert.equal(saves, 0); assert.equal(schedules, 0);
-console.log('PASS all 22 rows, 16 invalid-input rejections, 6 legacy delegates and unknown names');
+// 124/R3-03 adds three candidate rows; derive counts from the actual registry.
+console.log(`PASS all ${DAILY_ACTIONS.length} rows, ${Object.values(rows).filter(row => !row.legacy).length} invalid-input rejections, 6 legacy delegates and unknown names`);
 const fixture = '__fixture';
 try {
   rows[fixture] = { build: () => ({ records: [] }) };
