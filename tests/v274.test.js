@@ -95,7 +95,7 @@ function check(name, condition, extra = "") {
     }, { stateKey: STATE_KEY, blurKey: BLUR_KEY });
     await page.reload();
     await page.waitForFunction(() => [
-      ".life-band", ".clock-box", ".so-row", ".today-focus-bar", ".tower-panel-box", ".tower-runway",
+      ".life-band", ".daily-today-clock", ".so-row", ".tower-runway", ".tower-panel-box", ".tower-runway",
       ".tower-gates", '[data-work-list="today"].tower-panel-box', ".today-panel"
     ].every((selector) => document.querySelector(selector)));
 
@@ -112,7 +112,7 @@ function check(name, condition, extra = "") {
       const rootStyle = getComputedStyle(root);
       const aurora = getComputedStyle(root, "::before");
       const panelStyles = [
-        ["LIFE BAND", ".life-band"], ["clock", ".clock-box"], ["STANDING ORDERS", ".so-row"], ["FOCUS", ".today-focus-bar"],
+        ["LIFE BAND", ".life-band"], ["clock", ".daily-today-clock"], ["STANDING ORDERS", ".so-row"], ["JOURNAL", ".sec-journal"],
         ["GATE", ".tower-gates"], ["legacy ARRIVALS CSS fixture", '[data-v274-synthetic="arrivals"]'],
         ["今日の予定・実績 実DOM", '[data-work-list="today"].tower-panel-box'],
         ["CABIN TIMER", ".today-panel"], ["tower-glass-panel", ".tower-glass-panel"]

@@ -44,7 +44,7 @@ function runningBlock() {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, blocksValue: blocks, today: TODAY });
     await page.reload();
-    await page.waitForSelector('.today-tower[data-focus-mode="0"]');
+    await page.waitForSelector('.today-tower[data-daily-view="today"]');
   }
 
   try {
@@ -52,30 +52,22 @@ function runningBlock() {
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
 
-    console.log("[1] NOW LANDING 70% + ポモドーロ 30%を上帯2へ固定配置する");
+    console.log("[1] 現在作業領域へ主役とタイマーを収める");
     await seed([runningBlock()]);
-    check("上帯2直下にNOW LANDINGとポモドーロを各1つ描画",
-      await page.locator(".tower-band2 > .tower-runway.now-hero").count() === 1
-      && await page.locator(".tower-band2 > .today-pomodoro.pomo").count() === 1);
-    check("左列は全件一覧/FLIGHT LOG、身体は中央へ移しNOWは上帯に保持",
-      await page.locator(".tower-col-left > .tower-runway").count() === 0
-      && await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
-      && await page.locator('.tower-col-left > .sec-log').count() === 1
-      && await page.locator('.tower-col-center > .sec-bodymind').count() === 1
-      && await page.locator('.tower-col-left > *').count() === 2);
+    check("現在作業/主役/ポモドーロは各1つ", await page.locator('.tower-runway.now-hero').count() === 1
+      && await page.locator('.tower-runway > .today-pomodoro.pomo').count() === 1 && await page.locator('.tower-runway > .tower-mit').count() === 1);
+    check("予定は左、実績/ルーティン/本文は記録列、健康は別画面", await page.locator('#dailyTodayPlans > [data-work-list="today"]').count() === 1
+      && await page.locator('.daily-today-records > .sec-log').count() === 1 && await page.locator('.daily-today-records > .sec-gates').count() === 1
+      && await page.locator('.daily-today-records > .sec-journal').count() === 1 && await page.locator('.sec-bodymind').count() === 0);
     const layout = await page.evaluate(() => {
-      const tower = document.querySelector(".today-tower");
-      const band = document.querySelector(".tower-band2");
-      const runway = band.querySelector(".tower-runway").getBoundingClientRect();
-      const timer = band.querySelector(".today-pomodoro").getBoundingClientRect();
-      return { areas: getComputedStyle(tower).gridTemplateAreas, runwayWidth: runway.width, timerWidth: timer.width };
+      const r = s => document.querySelector(s).getBoundingClientRect();
+      return { life: r('.life-band').toJSON(), creed: r('.so-row').toJSON(), current: r('.tower-runway').toJSON(), timer: r('.today-pomodoro').toJSON(), plans: r('#dailyTodayPlans').toJSON() };
     });
-    const nowShare = layout.runwayWidth / (layout.runwayWidth + layout.timerWidth);
-    check("PCグリッドはlife/so直後・focus直前にband2を持ちtimer専用行を持たない",
-      layout.areas.includes("band2 band2 band2") && !layout.areas.includes("timer"), layout.areas);
-    check("上帯2の実測比率は約70%/30%", nowShare > 0.69 && nowShare < 0.71, JSON.stringify({ ...layout, nowShare }));
+    check("現在作業は人生/信条の下、予定の上", layout.current.top >= Math.max(layout.life.bottom, layout.creed.bottom) && layout.plans.top >= layout.current.bottom, JSON.stringify(layout));
+    check("タイマーは現在作業の内側で正の寸法", layout.timer.width > 0 && layout.timer.height > 0 && layout.timer.left >= layout.current.left && layout.timer.right <= layout.current.right
+      && layout.timer.top >= layout.current.top && layout.timer.bottom <= layout.current.bottom, JSON.stringify(layout));
 
-    console.log("[2] NOWヒーロー強調とポモドーロ 112px SVGリングを適用する");
+    console.log("[2] NOWヒーロー強調とポモドーロ 56px SVGリングを適用する");
     const visual = await page.evaluate(() => {
       const hero = document.querySelector(".now-hero");
       const title = hero.querySelector(".tower-now-title");
@@ -107,10 +99,10 @@ function runningBlock() {
     check("amber縁・発光・明るめ地・上端アクセントラインを持つ",
       visual.heroBorder !== "rgba(0, 0, 0, 0)" && visual.heroShadow !== "none"
       && visual.heroBackground.includes("gradient") && visual.accentLine.includes("gradient"), JSON.stringify(visual));
-    check("PCのタスク名22px・残り時間26px", visual.titleSize === 22 && visual.remainSize === 26, JSON.stringify(visual));
-    check("ポモドーロ見出し・112px SVG円弧・--tower-purpleと厳密一致するstrokeを使う",
+    check("PCの共通タスク名1rem・残り時間26px", visual.titleSize === 16 && visual.remainSize === 26, JSON.stringify(visual));
+    check("ポモドーロ見出し・56px SVG円弧・--tower-purpleと厳密一致するstrokeを使う",
       (await page.locator(".today-pomodoro .today-panel-title").textContent()).includes("ポモドーロ")
-      && Math.abs(visual.ringWidth - 112) < 0.5 && visual.ringTag === "svg"
+      && Math.abs(visual.ringWidth - 56) < 0.5 && visual.ringTag === "svg"
       && visual.progressStroke === visual.purpleColor, JSON.stringify(visual));
 
     console.log('[2b] data-glass-blur="off"でもNOW LANDINGヒーローはGLASS縮退契約の半透明白背景を保つ');
@@ -132,18 +124,18 @@ function runningBlock() {
     await page.reload();
     await page.waitForSelector('.today-tower:not([data-glass-blur="off"])');
 
-    console.log('[3] data-view-life="0"フックでリングだけ156pxへ拡大する');
+    console.log('[3] 旧表示属性で新配置のリングを変形させない');
     const expanded = await page.evaluate(() => {
       const ring = document.querySelector(".pomo-circle-wrap");
       ring.style.transition = "none";
       document.querySelector(".today-tower").dataset.viewLife = "0";
       return ring.getBoundingClientRect().width;
     });
-    check("LIFE BAND非表示用フックで156px", Math.abs(expanded - 156) < 0.5, `${expanded}px`);
+    check("旧LIFE属性でも56pxリング", Math.abs(expanded - 56) < 0.5, `${expanded}px`);
 
     console.log("[4] 実行便なしでも上帯2内の既存empty分岐を維持する");
     await seed([]);
-    const empty = page.locator('.tower-band2 .tower-nowhud[data-status="empty"]');
+    const empty = page.locator('.tower-runway .tower-nowhud[data-status="empty"]');
     check("empty HUDが上帯2内に1つ", await empty.count() === 1);
     check("未計画の空表示は追加案内、開始操作は無い", (await empty.textContent()).includes("本日の予定はありません")
       && await empty.locator('[data-action="nav"][data-view="exec"]').count() === 1

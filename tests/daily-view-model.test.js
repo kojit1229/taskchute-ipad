@@ -244,7 +244,7 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
         .evaluateAll(els => els.map(el => el.dataset.action));
       assert.ok(actions.length >= 4 && actions.every(action => DAILY_ACTIONS.includes(action) && registry.includes(action)));
       const sample = await todayRow.locator('[data-daily-key]').evaluate(el => {
-        const rect = el.getBoundingClientRect();
+        const rect = (getComputedStyle(el).display === "contents" ? el.closest("[data-work-key]") : el).getBoundingClientRect();
         return { scope: "today", width: innerWidth, left: rect.left, right: rect.right, height: rect.height,
           documentWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth };
       });

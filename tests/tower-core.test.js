@@ -140,7 +140,7 @@ function check(name, cond, extra = "") {
       const cs = getComputedStyle(root);
       const tokens = ["bg", "panel", "line", "text", "amber", "green", "cyan", "purple"]
         .map((key) => [`--tower-${key}`, cs.getPropertyValue(`--tower-${key}`).trim()]);
-      const els = [".clock-box time", ".clock-box .dayleft", ".life-title", ".tower-beacon i", ".tower-runway h2"]
+      const els = [".clock-box time", ".clock-box .dayleft", ".life-title", ".tower-beacon i", ".tower-runway > h2"]
         .map((sel) => { const el = root.querySelector(sel); return [sel, el ? getComputedStyle(el).color : ""]; });
       return { tokens, els };
     });
@@ -404,7 +404,7 @@ function check(name, cond, extra = "") {
     });
     await seedBoard([landing]);
     check(".tower-runwayと#towerPlaneが存在", await page.locator(".tower-runway #towerPlane").count() === 1);
-    check("滑走路パネル名はNOW LANDING", ((await page.locator(".tower-runway h2").textContent()) || "").includes("NOW LANDING"));
+    check("滑走路パネル名はNOW LANDING", ((await page.locator(".tower-runway > h2").textContent()) || "").includes("NOW LANDING"));
     const landingX = await page.locator("#towerPlane").evaluate((el) => parseFloat(el.style.getPropertyValue("--tower-plane-x")));
     check("11:30開始・60分見積の12:00位置は約50%", Math.abs(landingX - 50) < 0.1, String(landingX));
     check("実開始11:30と開始+見積の着陸予定12:30を表示", (await page.locator(".tower-rwy-mark.start").textContent()) === "11:30 開始"
@@ -907,7 +907,7 @@ function check(name, cond, extra = "") {
         return { x: box.x, top: box.top, bottom: box.bottom, right: box.right, width: box.width, height: box.height };
       };
       return { columns: getComputedStyle(root.querySelector('.daily-today-main')).gridTemplateColumns,
-        life: rect('.life-band'), so: rect('.so-row'), runway: rect('.tower-runway'), board: rect('#dailyTodayPlans'),
+        life: rect('.life-band'), so: rect('.so-row'), runway: rect('.tower-runway'), timer: rect('.today-pomodoro'), mit: rect('.tower-mit'), board: rect('#dailyTodayPlans'),
         log: rect('.sec-log'), gates: rect('.sec-gates'), journal: rect('.sec-journal'), input: rect('.sec-journal textarea'),
         rows: [...root.querySelectorAll('[data-work-list="today"] [data-work-key]')].map(el => {
           const r = el.getBoundingClientRect(); return { x: r.x, top: r.top, right: r.right, bottom: r.bottom, height: r.height };
@@ -918,6 +918,7 @@ function check(name, cond, extra = "") {
       await page.evaluate(() => window.scrollTo(0, 0));
       const m = await measureLayout();
       console.log('SL2A_MEASURE ' + JSON.stringify({ width, ...m }));
+      check(width + 'pxはタイマーと主役を現在作業内に表示', [m.timer, m.mit].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom), JSON.stringify(m));
       const columns = m.columns.split(/\s+/).map(Number.parseFloat);
       check(width + 'pxは正幅2列', columns.length === 2 && columns.every(value => value > 0), m.columns);
       check(width + 'pxは人生・信条が同じ段・同じ高さの2枠', m.life.width > 0 && m.life.height > 0
@@ -938,6 +939,7 @@ function check(name, cond, extra = "") {
       await page.setViewportSize(viewport);
       const m = await measureLayout();
       const panels = [m.life, m.so, m.runway, m.board, m.log, m.gates, m.journal];
+      check(viewport.width + 'pxはタイマーと主役を現在作業内に表示', [m.timer, m.mit].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom), JSON.stringify(m));
       check(viewport.width + 'pxはboard/runwayが縦積み', Math.abs(m.board.x - m.runway.x) < 1, JSON.stringify(m));
       check(viewport.width + 'pxは横はみ出しなし', m.scrollWidth <= m.innerWidth, JSON.stringify(m));
       check(viewport.width + 'pxは人生→信条→現在作業→予定→実績→ルーティン→本文',

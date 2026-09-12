@@ -4935,6 +4935,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   font-size: 11px;
 }
 .instr-view * { font-size: max(11px, 1em); }
+.instr-view > .sec-bodymind { order: 0; grid-area: bodymind; }
 
 /* ============ パネル共通(tower-panel-boxと同形) ============ */
 .instr-panel-box {
@@ -5172,7 +5173,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   .instr-view {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-areas: "header header" "today today" "week week" "continuation continuation" "iron iron" "monthly monthly" "archive archive";
+    grid-template-areas: "header header" "today today" "bodymind bodymind" "week week" "continuation continuation" "iron iron" "monthly monthly" "archive archive";
     align-items: start;
     max-width: 1000px;
   }
@@ -5188,7 +5189,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 
 @media (min-width: 1280px) {
   .instr-view {
-    grid-template-areas: "header header" "today today" "week continuation" "week iron" "monthly monthly" "archive archive";
+    grid-template-areas: "header header" "today today" "bodymind bodymind" "week continuation" "week iron" "monthly monthly" "archive archive";
     align-items: stretch;
   }
   .instr-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -5906,3 +5907,18 @@ details.settings-row > .fold-summary.settings-row-summary {
   #app[data-view="today"] [data-daily-view="today"] .work-list-row { padding-block: 0; }
 }
 #app[data-view="instruments"] .instr-panel-box h2 { font-size: 13px; }
+
+/* fixV392b: keep MIT and the live timer inside the current-work region. */
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > :is(.tower-mit, .today-pomodoro) { margin: 0; min-width: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro { padding: 6px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro-stage { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro .pomo-circle-wrap { width: 56px; height: 56px; flex: 0 0 56px; margin: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro .pomo-time-overlay { font-size: 16px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro-info { min-width: 0; flex: 1; gap: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro .today-panel-title { margin: 0; padding: 0; }
+@media (min-width: 1280px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 4px 8px; padding: 6px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > :is(h2, .tower-runway-strip, .tower-nowhud) { grid-column: 1; margin: 0; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .tower-mit { grid-column: 2; grid-row: 1 / 4; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .today-pomodoro { grid-column: 3; grid-row: 1 / 4; }
+}

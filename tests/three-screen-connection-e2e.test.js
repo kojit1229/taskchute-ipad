@@ -271,9 +271,9 @@ process.once('beforeExit', async () => {
     await page.reload();
     const root = page.locator('[data-daily-view="today"]');
     await root.waitFor();
-    for (const selector of ['#towerClock', '#towerDayLeft', '.life-band', '.so-row', '.tower-runway', '[data-work-list="today"]', '#towerFlightLog', '#towerGateStrip', '#towerJournalFree'])
+    for (const selector of ['#towerClock', '#towerDayLeft', '.life-band', '.so-row', '.tower-runway', '[data-work-list="today"]', '#towerFlightLog', '#towerGateStrip', '#towerJournalFree', '.today-pomodoro', '.tower-mit'])
       assert.equal(await root.locator(selector).count(), 1, 'permanent: ' + selector);
-    assert.equal(await root.locator('.today-pomodoro,.sec-bm,.tower-condition').count(), 0);
+    assert.equal(await root.locator('.sec-bm,.tower-condition').count(), 0);
     assert.equal(await root.locator('#towerDate').textContent(), today + ' (日)');
     assert(await root.locator('header.daily-today-clock').isVisible());
     assert.equal(await root.locator('header.daily-today-clock').getAttribute('aria-label'), '今日の時計');
@@ -321,7 +321,7 @@ dailyLayoutChecks.push(async page => {
     assert.equal(await page.locator('[data-daily-view="' + view + '"]').count(), 1, view + ' production parent');
     const result = await page.evaluate(view => {
       const root = document.querySelector('[data-daily-view="' + view + '"]');
-      const selectors = view === 'today' ? ['.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.daily-today-records', '.tower-journal']
+      const selectors = view === 'today' ? ['.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.daily-today-records', '.tower-journal', '.today-pomodoro', '.tower-mit']
         : view === 'wbs' ? ['.wbs-project-list', '.wbs-project-detail']
         : view === 'exec' ? (root.querySelector('.exec-two-pane') ? ['.exec-pane-left', '.exec-pane-right'] : ['.timeline-tower', '[data-work-list="exec"]', '[data-work-list="exec-candidates"]']) : ['.detail-column'];
       const regions = [...new Set(selectors.flatMap(s => [...root.querySelectorAll(s)]))].map(el => {
@@ -331,6 +331,7 @@ dailyLayoutChecks.push(async page => {
       for (let i = 0; i < regions.length; i++) for (let j = i + 1; j < regions.length; j++) {
         const a = regions[i], b = regions[j];
         if (a.name.includes('daily-today-records') || b.name.includes('daily-today-records')) continue;
+        if ([a, b].some(r => r.name.includes('tower-runway')) && [a, b].some(r => /today-pomodoro|tower-mit/.test(r.name))) continue;
         if (Math.min(a.right, b.right) - Math.max(a.x, b.x) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y) > 1) overlaps.push([a.name, b.name]);
       }
       const inputs = [...root.querySelectorAll('input:not([type="hidden"]),select,textarea')];
@@ -356,8 +357,9 @@ dailyLayoutChecks.push(async page => {
     const leftOf = (a, b) => assert(a.right <= b.x + 1 && Math.abs(a.y - b.y) <= 1, view + ' left/right placement');
     const above = (a, b) => assert(a.bottom <= b.y + 1 && Math.abs(a.x - b.x) <= 1, view + ' vertical placement');
     if (view === 'today') {
-      assert.equal(result.regions.length, 6, 'Today required regions');
-      const [life, creed, current, plans, records, journal] = result.regions;
+      assert.equal(result.regions.length, 8, 'Today required regions');
+      const [life, creed, current, plans, records, journal, timer, mit] = result.regions;
+      for (const region of [timer, mit]) assert(region.x >= current.x && region.right <= current.right + 1 && region.y >= current.y && region.bottom <= current.bottom + 1, "current-work child inside region");
       if (twoColumns) { leftOf(life, creed); leftOf(plans, records); }
       else { above(life, creed); above(creed, current); above(current, plans); above(plans, records); }
       assert(journal.y >= records.y && journal.bottom <= records.bottom + 1, 'journal inside records');

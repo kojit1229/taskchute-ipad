@@ -34,143 +34,58 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForSelector(".today-tower");
 
-    console.log("[1] 専用キー未設定の既定は全表示で、固定GATEを含む既存DOM構造を維持する");
-    check("専用キー未設定では3系統と固定GATEを描画",
-      await page.locator(".tower-col-left > *").count() === 2
-      && await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
-      && await page.locator('.tower-col-left > .sec-log').count() === 1
-      && await page.locator('.tower-col-center > .sec-bodymind').count() === 1
-      && await page.locator(".tower-col-center > .sec-gates").count() === 1
-      && await page.locator(".tower-col-right > .sec-journal").count() === 1);
-    check("右カラム直下はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
-    check("CABIN TIMERはNOW LANDINGと同じ上帯2直下",
-      await page.locator(".today-tower > .tower-band2 > .today-pomodoro").count() === 1
-      && await page.locator(".today-tower > .tower-band2 > .tower-runway").count() === 1);
-    check("既定値の読取だけでは専用キーを書かない", await page.evaluate((key) => localStorage.getItem(key) === null, FOCUS_KEY));
-    const focusButtonSelectors = [
-      '[data-action="focus-mode"]',
-      '[data-action="focus-toggle-side"]',
-      '[data-action="focus-toggle-journal"]',
-      '[data-action="focus-toggle-life"]'
-    ];
-    let focusWaitError = "";
-    await page.waitForFunction((selectors) => selectors.every((selector) => {
-      const button = document.querySelector(`.today-focus-bar ${selector}`);
-      if (!button || !button.isConnected) return false;
-      const rect = button.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    }), focusButtonSelectors).catch((error) => { focusWaitError = error.message; });
-    const tapRects = await page.evaluate((selectors) => selectors.map((selector) => {
-      const button = document.querySelector(`.today-focus-bar ${selector}`);
-      if (!button) return { selector, missing: true, x: 0, y: 0, width: 0, height: 0 };
-      const rect = button.getBoundingClientRect();
-      return { selector, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    }), focusButtonSelectors);
-    check("FOCUSと3チップはすべて44px以上",
-      !focusWaitError && tapRects.length === 4 && tapRects.every(({ width, height }) => width >= 44 && height >= 44),
-      JSON.stringify({ focusWaitError, tapRects }));
+    console.log("[1] 必須8項目と主役/タイマーは単一DOMで常設する");
+    const sections = ['.daily-today-clock', '.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.sec-log', '.sec-gates', '.sec-journal'];
+    const allPresent = () => page.evaluate(selectors => selectors.every(s => document.querySelectorAll(s).length === 1), sections);
+    check("必須8項目は全て1つ", await allPresent());
+    check("予定欄は共通一覧1つ", await page.locator('#dailyTodayPlans > [data-work-list="today"]').count() === 1);
+    check("記録列は実績/ルーティン/本文の3つ", JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => ['sec-log', 'sec-gates', 'sec-journal'].find(c => el.classList.contains(c))))) === JSON.stringify(['sec-log', 'sec-gates', 'sec-journal']));
+    check("主役とタイマーは現在作業の内側に各1つ", await page.locator('.tower-runway > .tower-mit').count() === 1 && await page.locator('.tower-runway > .today-pomodoro').count() === 1);
+    check("既定値の読取だけでは専用キーを書かない", await page.evaluate(key => localStorage.getItem(key) === null, FOCUS_KEY));
+    const jumpActions = ['today-plans-jump', 'today-journal-jump'];
+    const tapRects = await page.locator('.daily-today-clock nav button').evaluateAll(nodes => nodes.map(el => ({ action: el.dataset.action, width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height })));
+    check("移動操作の集合は予定へ/記録へで44px以上", JSON.stringify(tapRects.map(r => r.action)) === JSON.stringify(jumpActions) && tapRects.every(r => r.width >= 44 && r.height >= 44), JSON.stringify(tapRects));
 
-    console.log("[2] 個別トグルはDOM生成を省略し、状態をリロード後も維持する");
-    await page.click('[data-action="focus-toggle-side"]');
-    await page.waitForSelector('.today-tower[data-view-side="0"]');
-    check("左列だけ消え、固定GATEとJOURNALは残る",
-      await page.locator(".tower-col-left > *, .sec-bodymind").count() === 0
-      && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 1);
-    await page.reload();
-    await page.waitForSelector(".today-tower");
-    check("左列非表示はリロード後も維持", await page.locator(".tower-col-left > *, .sec-bodymind").count() === 0);
-    await page.click('[data-action="focus-toggle-side"]');
-    await page.waitForSelector('.today-tower[data-view-side="1"]');
-    await page.click('[data-action="focus-toggle-journal"]');
-    await page.waitForSelector(".sec-journal", { state: "detached" });
-    check("ジャーナルチップでJOURNALだけ消え、GATEは残る", await page.locator(".sec-gates").count() === 1);
+    console.log("[2] 旧非表示値を消去せず無視しリロード後も8項目を保持");
+    for (const sections of [{ side: false, journal: true, life: true }, { side: true, journal: false, life: true }, { side: false, journal: false, life: false }]) {
+      const legacy = JSON.stringify({ sections, restore: sections });
+      await page.evaluate(({ key, legacy }) => localStorage.setItem(key, legacy), { key: FOCUS_KEY, legacy });
+      await page.reload();
+      await page.waitForSelector('.today-tower');
+      check('旧値でも全項目表示 ' + legacy, await allPresent());
+      check('旧値を保持 ' + legacy, await page.evaluate(key => localStorage.getItem(key), FOCUS_KEY) === legacy);
+      check('旧設定でも固定GATEとタイマーは1つ', await page.locator('.sec-gates').count() === 1 && await page.locator('.today-pomodoro').count() === 1);
+    }
+    console.log("[3] 新移動操作は同期state/旧表示設定を変えない");
+    const beforeNavigation = await page.evaluate(({ STATE_KEY, FOCUS_KEY }) => [localStorage.getItem(STATE_KEY), localStorage.getItem(FOCUS_KEY)], { STATE_KEY, FOCUS_KEY });
+    for (const action of jumpActions) {
+      await page.click('[data-action="' + action + '"]');
+      check(action + ' 後も8項目常設', await allPresent());
+      check(action + ' は保存を書き換えない', JSON.stringify(await page.evaluate(({ STATE_KEY, FOCUS_KEY }) => [localStorage.getItem(STATE_KEY), localStorage.getItem(FOCUS_KEY)], { STATE_KEY, FOCUS_KEY })) === JSON.stringify(beforeNavigation));
+    }
+    check('記録へは本文をフォーカス', await page.locator('#towerJournalFree').evaluate(el => el === document.activeElement));
 
-    console.log("[3] FOCUSは3系統を一括非表示にし、直前の個別状態へ復元する");
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector('.today-tower[data-focus-mode="1"]');
-    check("FOCUSで3系統のDOMがすべて無く固定GATEだけ残る",
-      await page.locator(".tower-col-left > *, .sec-bodymind, .sec-journal, .tower-band1, .so-row").count() === 0
-      && await page.locator(".sec-gates").count() === 1);
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector('.today-tower[data-focus-mode="0"]');
-    check("解除で直前状態(side/life表示・journal非表示)へ復元",
-      await page.locator(".tower-col-left > *").count() === 2
-      && await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
-      && await page.locator('.tower-col-left > .sec-log').count() === 1
-      && await page.locator('.tower-col-center > .sec-bodymind').count() === 1 && await page.locator(".tower-band1, .so-row").count() === 2
-      && await page.locator(".sec-gates").count() === 1 && await page.locator(".sec-journal").count() === 0);
-    await page.click('[data-action="focus-toggle-journal"]');
-    await page.waitForSelector(".sec-journal");
-
-    console.log("[4] 1280px以上ではFOCUS状態に関係なくCABIN TIMERを上帯2の30%側へ固定する");
-    const desktopNormalLayout = await page.evaluate(() => {
-      const band = document.querySelector(".tower-band2").getBoundingClientRect();
-      const runway = document.querySelector(".tower-band2 > .tower-runway").getBoundingClientRect();
-      const timer = document.querySelector(".tower-band2 > .today-pomodoro").getBoundingClientRect();
-      const ring = document.querySelector(".today-pomodoro .pomo-circle-wrap").getBoundingClientRect();
-      return { bandX: band.x, bandWidth: band.width, runwayX: runway.x, runwayWidth: runway.width,
-        timerX: timer.x, timerWidth: timer.width, ringWidth: ring.width };
-    });
-    check("PC非FOCUS時はNOW 70% / CABIN TIMER 30%の上帯2",
-      desktopNormalLayout.runwayX === desktopNormalLayout.bandX
-      && desktopNormalLayout.runwayWidth > desktopNormalLayout.timerWidth
-      && desktopNormalLayout.timerX > desktopNormalLayout.runwayX
-      && Math.abs(desktopNormalLayout.ringWidth - 112) < 0.5,
-      JSON.stringify(desktopNormalLayout));
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector('.today-tower[data-focus-mode="1"]');
-    const desktopFocusLayout = await page.evaluate(() => {
-      const timer = document.querySelector(".today-pomodoro");
-      const rect = timer.getBoundingClientRect();
-      const ring = timer.querySelector(".pomo-circle-wrap").getBoundingClientRect();
-      const tower = document.querySelector(".today-tower");
-      const legacyAttr = ["data-focus", "pomodoro-right"].join("-");
-      return { timerX: rect.x, timerWidth: rect.width, ringWidth: ring.width,
-        inBand2: timer.parentElement.classList.contains("tower-band2"), legacyAttr: tower.hasAttribute(legacyAttr) };
-    });
-    check("PCフォーカス時もCABIN TIMERは上帯2の同じ位置・幅を維持し、life OFFで156pxリング",
-      desktopFocusLayout.inBand2 && !desktopFocusLayout.legacyAttr
-      && Math.abs(desktopFocusLayout.timerX - desktopNormalLayout.timerX) < 1
-      && Math.abs(desktopFocusLayout.timerWidth - desktopNormalLayout.timerWidth) < 1
-      && Math.abs(desktopFocusLayout.ringWidth - 156) < 0.5, JSON.stringify(desktopFocusLayout));
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector(".sec-journal");
-
-    console.log("[5] iPhone幅では上帯2をNOW LANDING→CABIN TIMERの縦一列にする");
-    await page.setViewportSize({ width: 390, height: 844 });
-    const mobileNormal = await page.evaluate(() => {
-      const timer = document.querySelector(".today-pomodoro");
-      const runway = document.querySelector(".tower-runway").getBoundingClientRect();
-      const timerRect = timer.getBoundingClientRect();
-      const mit = document.querySelector(".tower-mit").getBoundingClientRect();
-      const standing = document.querySelector(".so-row").getBoundingClientRect();
-      const focus = document.querySelector(".today-focus-bar").getBoundingClientRect();
-      return { mitTop: mit.top, mitBottom: mit.bottom, mitWidth: mit.width, mitHeight: mit.height,
-        inBand2: timer.parentElement.classList.contains("tower-band2"), standingTop: standing.top, standingBottom: standing.bottom,
-        runwayTop: runway.top, runwayBottom: runway.bottom, timerTop: timerRect.top, timerBottom: timerRect.bottom,
-        focusTop: focus.top, ringWidth: timer.querySelector(".pomo-circle-wrap").getBoundingClientRect().width };
-    });
-    check("iPhoneはNOW LANDING→CABIN TIMER→STANDING ORDERS→FOCUSの縦順",
-      mobileNormal.inBand2 && mobileNormal.timerBottom <= mobileNormal.standingTop && mobileNormal.standingBottom <= mobileNormal.focusTop
-      && mobileNormal.runwayBottom <= mobileNormal.timerTop && mobileNormal.timerBottom <= mobileNormal.focusTop
-      && Math.abs(mobileNormal.ringWidth - 112) < 0.5, JSON.stringify(mobileNormal));
-    check("iPhoneの独立MITは可視でタイマー後・信条前に重ならず配置",
-      mobileNormal.mitWidth > 0 && mobileNormal.mitHeight > 0
-      && mobileNormal.timerBottom <= mobileNormal.mitTop && mobileNormal.mitBottom <= mobileNormal.standingTop,
-      JSON.stringify(mobileNormal));
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector('.today-tower[data-focus-mode="1"]');
-    const mobileLayout = await page.evaluate(() => {
-      const timer = document.querySelector(".today-pomodoro");
-      const timerRect = timer.getBoundingClientRect();
-      return { inBand2: timer.parentElement.classList.contains("tower-band2"), timerTop: timerRect.top,
-        timerWidth: timerRect.width, ringWidth: timer.querySelector(".pomo-circle-wrap").getBoundingClientRect().width };
-    });
-    check("iPhoneフォーカス時も上帯2内・life OFFの156pxリングを維持",
-      mobileLayout.inBand2 && Math.abs(mobileLayout.ringWidth - 156) < 0.5,
-      JSON.stringify(mobileLayout));
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector(".sec-journal");
+    console.log("[4/5] PC/狭幅で順序・包含・寸法と非重複を保持");
+    for (const width of [1440, 1280, 768, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const layout = await page.evaluate(selectors => {
+        const rect = s => document.querySelector(s).getBoundingClientRect().toJSON();
+        return { panels: selectors.map(rect), mit: rect('.tower-mit'), timer: rect('.today-pomodoro'), ring: rect('.pomo-circle-wrap'), overflow: document.documentElement.scrollWidth > innerWidth };
+      }, sections);
+      const [clock, life, creed, current, plans, log, gate, journal] = layout.panels;
+      check(width + 'pxは8項目全て正の寸法・横溢れなし', layout.panels.length === 8 && layout.panels.every(r => r.width > 0 && r.height > 0) && !layout.overflow, JSON.stringify(layout));
+      check(width + 'pxで時計→人生/信条→現在作業→予定の順', life.top >= clock.bottom && current.top >= Math.max(life.bottom, creed.bottom) && plans.top >= current.bottom, JSON.stringify(layout));
+      check(width + 'pxで主役とタイマーは現在作業の内側', [layout.mit, layout.timer].every(r => r.width > 0 && r.height > 0 && r.left >= current.left && r.right <= current.right && r.top >= current.top && r.bottom <= current.bottom), JSON.stringify(layout));
+      check(width + 'pxで主役とタイマーは重ならない', layout.mit.right <= layout.timer.left || layout.mit.bottom <= layout.timer.top, JSON.stringify(layout));
+      check(width + 'pxでも56pxの円形タイマー', Math.abs(layout.ring.width - 56) < .5 && Math.abs(layout.ring.height - 56) < .5, JSON.stringify(layout));
+      if (width >= 1280) {
+        check(width + 'pxは人生/信条が同高・同幅の2枠', Math.abs(life.top - creed.top) < 1 && Math.abs(life.height - creed.height) < 1 && Math.abs(life.width - creed.width) < 1 && creed.left > life.right, JSON.stringify(layout));
+        check(width + 'pxは左予定・右記録', Math.abs(plans.top - log.top) < 1 && log.left > plans.right && gate.top >= log.bottom && journal.top >= gate.bottom, JSON.stringify(layout));
+      } else {
+        check(width + 'pxは人生→信条→現在作業→予定→実績→ルーティン→本文', layout.panels.every((r, i, all) => !i || r.top >= all[i - 1].bottom), JSON.stringify(layout));
+        check(width + 'pxは8項目の左端が揃う', layout.panels.every(r => Math.abs(r.left - current.left) < 1), JSON.stringify(layout));
+      }
+    }
 
     console.log("[6] ポモドーロ実行中の切替でもstateと1秒tickerが継続する");
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -187,15 +102,15 @@ function check(name, cond, extra = "") {
     await page.goto(`http://localhost:${PORT}/`);
     await page.waitForSelector(".today-pomodoro .pomo-time-overlay");
     const beforeTick = await page.locator(".today-pomodoro .pomo-time-overlay").textContent();
-    await page.click('[data-action="focus-mode"]');
-    await page.waitForSelector('.today-tower[data-focus-mode="1"] .today-pomodoro');
+    await page.click('[data-action="today-plans-jump"]');
+    await page.waitForSelector('.tower-runway .today-pomodoro');
     const timerState = await page.evaluate(({ STATE_KEY, FOCUS_KEY }) => {
       const state = JSON.parse(localStorage.getItem(STATE_KEY));
       const focus = JSON.parse(localStorage.getItem(FOCUS_KEY));
       return { running: state.pomodoro.running, blockId: state.pomodoro.blockId, focus, leaked: "todayFocus" in state || "focusVisibility" in state };
     }, { STATE_KEY, FOCUS_KEY });
     check("切替後もポモドーロstateは実行中の同一Block", timerState.running && timerState.blockId === "focus-timer-block", JSON.stringify(timerState));
-    check("表示状態は専用キーだけに保存され同期stateへ混入しない", !!timerState.focus && !timerState.leaked, JSON.stringify(timerState));
+    check("旧表示状態は専用キーに残り同期stateへ混入しない", !!timerState.focus && !timerState.leaked, JSON.stringify(timerState));
     await page.clock.setFixedTime(new Date(2026, 7, 23, 10, 1, 0, 0));
     await page.waitForFunction((before) => document.querySelector(".today-pomodoro .pomo-time-overlay")?.textContent !== before, beforeTick);
     const afterTick = await page.locator(".today-pomodoro .pomo-time-overlay").textContent();

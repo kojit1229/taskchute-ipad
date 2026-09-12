@@ -271,6 +271,7 @@ function renderTowerRunway(now, blocks, flights) {
       <span class="tower-rwy-mark end">${escapeHTML(metrics.landing)} 着陸予定</span>` : ""}
     </div>
     ${hud}
+    ${renderTowerMIT(blocks)}${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
   </section>`;
 }
 
@@ -567,7 +568,7 @@ function renderTodayTower() {
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
     <div class="daily-today-main">
-      <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
+      <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}${renderTowerBoard()}</section>
       <div class="daily-today-records">${renderFlightLog(today, blocks)}${renderTowerGates(blocks)}${renderTowerJournal(today)}</div>
     </div>
   </div>`;
@@ -693,5 +694,5 @@ function updateTodayTowerTick() {
 
 export {
   configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick,
-  toggleTowerBodyMindWeekly, toggleTowerGateShowDone, pomodoroLinkFlights, flightLogBlocks, bmSummary
+  toggleTowerBodyMindWeekly, toggleTowerGateShowDone, pomodoroLinkFlights, flightLogBlocks, bmSummary, renderTowerBodyMind
 };

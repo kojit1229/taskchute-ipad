@@ -138,7 +138,7 @@ function check(name, condition, extra = "") {
     const todayState = await openView("today", ".today-tower");
     const todayHeadings = await page.locator(".today-tower").evaluate((root) => ({
       runway: root.querySelector(".tower-runway h2")?.textContent.trim() || "",
-      arrivals: root.querySelector(".sec-arrivals h2")?.textContent.trim() || "",
+      arrivals: root.querySelector('[data-work-list="today"] h2')?.textContent.trim() || "",
       log: root.querySelector(".sec-log h2")?.textContent.trim() || "",
       gate: root.querySelector(".sec-gates h2")?.textContent.trim() || "",
       body: root.querySelector(".sec-bodymind h2")?.textContent.trim() || "",
@@ -152,12 +152,17 @@ function check(name, condition, extra = "") {
       todayHeadings.runway.includes("NOW LANDING") && todayHeadings.runway.includes("いま")
       && todayHeadings.arrivals === `今日の予定・実績 今日 ${TODAY}`
       && todayHeadings.log.includes("やったこと") && todayHeadings.log.includes("本日の終了実績")
-      && todayHeadings.gate.includes("ルーティン") && todayHeadings.body.includes("からだのきろく")
+      && todayHeadings.gate.includes("ルーティン") && todayHeadings.body === ""
       && todayHeadings.journal.includes("ジャーナル") && todayHeadings.journal.includes("本日")
       && todayHeadings.free === "自由記述" && todayHeadings.aiCount === 0
       && todayHeadings.timer.includes("ポモドーロ"), JSON.stringify(todayHeadings));
     check("Today DOMに旧英語見出しが残らない",
       !/ARRIVALS|FLIGHT LOG|GATE ROUTINE|BODY \/ MIND|CABIN TIMER/.test(todayHeadings.all));
+
+    await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+    await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
+    await page.waitForSelector(".instr-view .sec-bodymind");
+    check("健康画面に日本語の身体記録見出しを保持", (await page.locator(".sec-bodymind h2").textContent()).includes("からだのきろく"));
 
     console.log("[2] ジャーナルタブの日本語見出し");
     const journalState = await openView("journal", ".journal-tower");

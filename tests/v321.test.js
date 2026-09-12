@@ -95,15 +95,15 @@ function block(id, title, start, end, extra = {}) {
     ];
     await seed(mitTwo);
     const mitLayout = await page.locator(".tower-mit").evaluate((mit) => {
-      const band = document.querySelector(".tower-band1");
+      const band = document.querySelector("#dailyTodayPlans");
       const style = getComputedStyle(mit);
       const rowStyle = getComputedStyle(mit.querySelector(".tower-mit-row"));
       return {
-        beforeBand: Boolean(mit.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
+        beforeBand: !!mit.closest(".tower-runway") && Boolean(mit.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
         borderColor: style.borderColor, rowHeight: parseFloat(rowStyle.minHeight), fontSize: parseFloat(rowStyle.fontSize)
       };
     });
-    check(".tower-mitはtower-band1より前に2行・各行★付き", mitLayout.beforeBand
+    check(".tower-mitは現在作業内・予定より前に2行・各行★付き", mitLayout.beforeBand
       && await page.locator(".tower-mit-row").count() === 2
       && await page.locator(".tower-mit-row .mit-star").count() === 2, JSON.stringify(mitLayout));
     check("MIT行は44px・11px以上でアンバー枠", mitLayout.rowHeight >= 44 && mitLayout.fontSize >= 11
@@ -126,9 +126,9 @@ function block(id, title, start, end, extra = {}) {
     console.log("[2] LIFE BAND OFFでもMITカードを残し、同期stateへ書かない");
     await seed(mitTwo);
     const beforeLifeToggle = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
-    await page.click('[data-action="focus-toggle-life"]');
-    await page.waitForSelector('.today-tower[data-view-life="0"]');
-    check("tower-band1/SOだけが消えてtower-mitは残る", await page.locator(".tower-band1, .so-row").count() === 0
+    await page.click('[data-action="today-plans-jump"]');
+    await page.waitForSelector('[data-work-list="today"]');
+    check("予定へ移動しても人生/信条とMITを常設", await page.locator(".life-band, .so-row").count() === 2
       && await page.locator(".tower-mit").count() === 1);
     check("LIFE表示切替は同期state非書込", await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === beforeLifeToggle
       && await changedStateWrites() === 0);
@@ -178,13 +178,6 @@ function block(id, title, start, end, extra = {}) {
     check("今日の全件一覧の完了MIT行にも★", await page.locator('[data-work-list="today"] [data-work-key="block:star-done"] .mit-star').count() === 1);
     check("NOW LANDINGのMITタイトルに★", await page.locator('.tower-now-title[data-id="star-running"] .mit-star').count() === 1);
 
-    console.log("[5] スキャン0件の健康行あり/なしで空状態文言を分ける");
-    check("健康行なしは旧文言", (await page.locator(".bm-empty").textContent()).trim() === "今日の記録はまだありません");
-    healthReady = true;
-    await page.reload();
-    await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-03時点"));
-    check("健康行ありは身体スキャンの事実文言", (await page.locator(".bm-empty").textContent()).trim() === "身体スキャンは作業の完了時に記録");
-
     console.log("[6][7] 予定0件HUD・390px横スクロール・pageerror・state非書込");
     await seed([]);
     const beforeDisplay = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
@@ -198,6 +191,17 @@ function block(id, title, start, end, extra = {}) {
     check("表示のみで同期state非書込", await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === beforeDisplay
       && await changedStateWrites() === 0);
     check("pageerror 0", pageErrors.length === 0, JSON.stringify(pageErrors));
+    console.log("[5] スキャン0件の健康行あり/なしで空状態文言を分ける");
+    await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+    await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
+    await page.waitForSelector('.instr-view .sec-bodymind');
+    check("健康画面に身体記録を1つ表示", await page.locator('.instr-view .sec-bodymind').count() === 1);
+    check("健康行なしは旧文言", (await page.locator(".bm-empty").textContent()).trim() === "今日の記録はまだありません");
+    healthReady = true;
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-03時点"));
+    check("健康行ありは身体スキャンの事実文言", (await page.locator(".bm-empty").textContent()).trim() === "身体スキャンは作業の完了時に記録");
+
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

@@ -167,22 +167,23 @@ function scoreRecords(done, total) {
     console.log("[3] PCでLIFE BANDとSTANDING ORDERSを全幅の別行に置く");
     await page.setViewportSize({ width: 1280, height: 900 });
     const desktop = await page.evaluate(() => {
-      const life = document.querySelector(".tower-band1 > .life-band").getBoundingClientRect();
+      const life = document.querySelector(".daily-today-values > .life-band").getBoundingClientRect();
       const standing = document.querySelector(".so-row").getBoundingClientRect();
-      const parentElement = document.querySelector(".today-tower");
+      const parentElement = document.querySelector(".daily-today-values");
       const parent = parentElement.getBoundingClientRect(), style = getComputedStyle(parentElement);
       return { parent: { left: parent.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft), right: parent.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight) }, life: { top: life.top, bottom: life.bottom, left: life.left, right: life.right, width: life.width, height: life.height }, standing: { top: standing.top, bottom: standing.bottom, left: standing.left, right: standing.right, width: standing.width, height: standing.height } };
     });
-    check("1280pxでは実LIFEと信条が正の寸法で全幅を揃え上下に並ぶ", desktop.life.width > 0 && desktop.life.height > 0
+    check("1280pxでは人生/信条が同じ段・同高・同幅で親幅を満たす", desktop.life.width > 0 && desktop.life.height > 0
       && desktop.standing.width > 0 && desktop.standing.height > 0
-      && desktop.life.bottom <= desktop.standing.top
+      && Math.abs(desktop.life.top - desktop.standing.top) < 1
+      && Math.abs(desktop.life.height - desktop.standing.height) < 1
+      && Math.abs(desktop.life.width - desktop.standing.width) < 1
       && Math.abs(desktop.life.left - desktop.parent.left) < 1
-      && Math.abs(desktop.life.right - desktop.parent.right) < 1
-      && Math.abs(desktop.life.left - desktop.standing.left) < 1
-      && Math.abs(desktop.life.right - desktop.standing.right) < 1, JSON.stringify(desktop));
+      && Math.abs(desktop.standing.right - desktop.parent.right) < 1
+      && desktop.life.right < desktop.standing.left, JSON.stringify(desktop));
     await page.setViewportSize({ width: 390, height: 844 });
     const mobile = await page.evaluate(() => {
-      const life = document.querySelector(".tower-band1 > .life-band").getBoundingClientRect();
+      const life = document.querySelector(".daily-today-values > .life-band").getBoundingClientRect();
       const standing = document.querySelector(".so-row").getBoundingClientRect();
       return { lifeBottom: life.bottom, lifeWidth: life.width, lifeHeight: life.height, standingWidth: standing.width, standingHeight: standing.height, standingTop: standing.top, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth };
     });
@@ -191,9 +192,9 @@ function scoreRecords(done, total) {
 
     console.log("[4] LIFE BAND OFF契約・pageerror・state非書込");
     const stateBeforeFocus = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
-    await page.locator('[data-action="focus-toggle-life"]').click();
-    await page.waitForSelector(".tower-band1", { state: "detached" });
-    check("LIFE BAND OFFでtower-band1とso-rowが両方消える", await page.locator(".tower-band1, .so-row").count() === 0);
+    await page.locator('.daily-today-clock [data-action="today-plans-jump"]').click();
+    await page.waitForSelector(".daily-today-values");
+    check("予定へ移動しても人生/信条は両方常設", await page.locator(".life-band, .so-row").count() === 2);
     check("表示切替後も同期stateへ書き込まない", await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === stateBeforeFocus);
     check("pageerror 0", pageErrors.length === 0, JSON.stringify(pageErrors));
   } finally {

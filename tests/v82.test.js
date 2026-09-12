@@ -132,7 +132,7 @@ function check(name, cond, extra = "") {
       await page.locator('[data-fold-id="zone2"], [data-fold-id="zone2-degraded"], #homezone-1').count() === 0);
     check("縮退モードバナーが無い", await page.locator(".cond-degraded-banner").count() === 0);
     check("現行todayはTOWERを描画する", await page.locator(".today-tower").count() === 1);
-    check("右カラムにJOURNALを描画する", await page.locator(".tower-col-right > .sec-journal").count() === 1);
+    check("記録列にJOURNALを描画する", await page.locator(".daily-today-records > .sec-journal").count() === 1);
 
     console.log(failures === 0 ? "\n✅ v82 ALL PASS" : `\n❌ v82: ${failures} 件失敗`);
   } finally {

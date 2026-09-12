@@ -80,7 +80,7 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 import { configureToday, renderToday } from "./src/features/today.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
-  toggleTowerGateShowDone, flightLogBlocks, bmSummary
+  toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
 } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
@@ -349,6 +349,7 @@ configureIronLog({
   escapeHTML, todayISO, renderHeader, saveAndRender, registerActions
 });
 configureInstruments({
+  renderBodyMind: (date) => renderTowerBodyMind(date, blocksForDate(date)),
   getState: () => state,
   escapeHTML, todayISO, addDays, weekRange, renderHeader,
   // モジュールの凍結action名を保ち、プレースホルダだけ統合層の実遷移へ差し替える。

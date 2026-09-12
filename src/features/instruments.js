@@ -51,8 +51,10 @@ let addDays = (date) => date;
 let weekRange = (date) => ({ weekStart: date, weekEnd: date });
 let renderHeader = (eyebrow, title) => `<h1>${eyebrow} / ${title}</h1>`;
 let registerActions = () => {};
+let renderBodyMind = () => "";
 
 function configureInstruments(deps) {
+  renderBodyMind = deps?.renderBodyMind || (() => "");
   ({ getState, escapeHTML, todayISO, addDays, weekRange, renderHeader, registerActions } = deps || {});
   if (typeof registerActions === "function") {
     registerActions({
@@ -390,6 +392,7 @@ function renderInstruments() {
       ${renderHeader("からだと継続の記録", "健康")}
 
       ${todayPanelHTML(state, todayIso, health)}
+      ${renderBodyMind(todayIso)}
 
       ${weekPanelHTML(weekly)}
 
