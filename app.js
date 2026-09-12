@@ -15604,11 +15604,12 @@ if (window.matchMedia) {
     // v362(A2): 設定タブもPC 2列⇔1列がこの1280px境界で切り替わるため、幅跨ぎで再描画に乗せる。
     if (state.currentView === "wbs" || state.currentView === "exec" || state.currentView === "settings") render();
   };
-  if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onWbsLayoutChange);
-  else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onWbsLayoutChange);
-  // Exec layout also changes below 1280 when tablet landscape enters/leaves two panes.
-  const _execLandscapeMediaQuery = window.matchMedia("(min-width: 1024px) and (orientation: landscape)");
-  const _onExecLandscapeChange = () => { if (state.currentView === "exec" && !fillGapExecDesktop()) render(); };
+  const _onDesktopLayoutChange = () => { if (state.currentView !== "exec") _onWbsLayoutChange(); };
+  if (_wbsDesktopMediaQuery.addEventListener) _wbsDesktopMediaQuery.addEventListener("change", _onDesktopLayoutChange);
+  else if (_wbsDesktopMediaQuery.addListener) _wbsDesktopMediaQuery.addListener(_onDesktopLayoutChange);
+  // Rebuild exec only when its sheet destination changes.
+  const _execLandscapeMediaQuery = window.matchMedia("(min-width: 1280px), (min-width: 1024px) and (orientation: landscape)");
+  const _onExecLandscapeChange = () => { if (state.currentView === "exec") _onWbsLayoutChange(); };
   if (_execLandscapeMediaQuery.addEventListener) _execLandscapeMediaQuery.addEventListener("change", _onExecLandscapeChange);
   else if (_execLandscapeMediaQuery.addListener) _execLandscapeMediaQuery.addListener(_onExecLandscapeChange);
 }

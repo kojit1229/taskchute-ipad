@@ -40,8 +40,9 @@ function merged(local, remote) {
 }
 let clock = new Date(2026, 8, 12, 12).getTime();
 Date.now = () => clock;
-let remoteState, puts, confirms, failStorage, fetchEdit, saved;
+let remoteState, puts, confirms, failStorage, fetchEdit, saved, attempts, downloads, remoteSha;
 function configure(local, remote, options = {}) {
+  attempts = []; downloads = 0; remoteSha = 'remote';
   clock += 120000; remoteState = clone(remote); puts = []; confirms = 0; failStorage = options.failStorage; fetchEdit = options.fetchEdit;
   const memory = new Map([['taskchute-journal-last-synced-sha', 'prior']]);
   saved = clone(local);
@@ -52,19 +53,28 @@ function configure(local, remote, options = {}) {
   global.window = { confirm: () => { confirms++; return true; } };
   global.fetch = async (_url, init = {}) => {
     if (init.method === 'PUT') {
-      const payload = JSON.parse(init.body); puts.push(JSON.parse(payload.content)); remoteState = JSON.parse(payload.content);
+      const payload = JSON.parse(init.body); attempts.push({ sha: payload.sha, value: JSON.parse(payload.content) });
+      if (attempts.length <= (options.conflicts || 0)) {
+        if (options.conflictRemote) remoteState = clone(options.conflictRemote);
+        remoteSha = "conflicted";
+        options.onConflict?.();
+        return { ok: false, status: 409 };
+      }
+      puts.push(JSON.parse(payload.content)); remoteState = JSON.parse(payload.content);
       return { ok: true, json: async () => ({ content: { sha: 'sent' } }) };
     }
+    downloads++;
+    if (options.failRefresh && attempts.length) throw Error("refresh failed");
     const text = JSON.stringify(remoteState);
     if (fetchEdit) { const edit = fetchEdit; fetchEdit = null; edit(store.state); }
-    return { ok: true, json: async () => ({ content: text, encoding: 'base64', sha: 'remote' }) };
+    return { ok: true, json: async () => ({ content: text, encoding: 'base64', sha: remoteSha }) };
   };
   sync.configureGithubSync({ normalizeState: clone, nowDateTime: () => NOW, todayISO: () => DAY,
     addDays: (date, days) => { const value = parseDate(date); value.setDate(value.getDate() + days); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; },
     isTouchedBlock: b => !!(b.completed || b.actualStartAt || b.actualEndAt || b.deleted || b.source === 'daily-reading-manual'),
     RECURRENCE_KEEP_PAST_DAYS: 7, RECURRENCE_FUTURE_DAYS: 31, SWIPE_TRIAGE_LOG_MAX: 200,
     showToast: noop, maintainRecurrences: noop, render: noop, runDailyOpen: () => false, saveState: () => { throw Error('nontransactional save'); },
-    renderDeferringForFocus: noop, requireGitHubConfig: () => local.settings.github, fetchGitHubFileSHA: async () => 'remote',
+    renderDeferringForFocus: noop, requireGitHubConfig: () => local.settings.github, fetchGitHubFileSHA: async () => remoteSha,
     personalDataReady: () => true, personalDataFileConfig: () => ({ owner: 'fixture', repo: 'fixture', branch: 'fixture', token: 'fixture' }),
     gitHubContentsURL: () => 'https://fixture.invalid/state', githubHeaders: () => ({}), gitHubErrorMessage: async () => 'fixture failure',
     fromBase64: x => x, toBase64: x => x, sanitizedStateForGitHub: () => clone(store.state), maybeWriteBackupSnapshot: noop,
@@ -134,6 +144,25 @@ async function run() {
     await sync[entry](); assert.deepEqual(store.state.blocks, []); assert.equal(puts.length, 0);
   }
   console.log('PASS storage failure keeps originals; edits during fetch are rechecked');
+  for (const entry of ['saveToGitHub', 'runAutoSyncPush']) {
+    const newer = success(fixture(), NOW);
+    configure(fixture(), a, { conflicts: 1, conflictRemote: newer });
+    await sync[entry]();
+    assert.equal(attempts.length, 2, entry); assert.equal(puts.length, 1); assert.ok(downloads >= 2);
+    assert.deepEqual(attempts.map(row => row.sha), ['remote', 'conflicted']);
+    assert.deepEqual(puts[0].blocks, newer.blocks);
+    assert.equal(puts[0].habitStreaks.a.logs[DAY].doneAt, NOW);
+    assert.deepEqual(store.state.blocks, newer.blocks);
+    for (const options of [{ conflicts: 2 }, { conflicts: 1, failRefresh: true },
+      { conflicts: 1, conflictRemote: { ...newer, habitStreaks: {} } },
+      { conflicts: 1, onConflict: () => { store.state.recurrences[0].exceptionDates = [DAY]; } }]) {
+      configure(fixture(), a, options);
+      await sync[entry]();
+      assert.equal(puts.length, 0, entry); assert.equal(attempts.length, options.conflicts === 2 ? 2 : 1);
+      assert.deepEqual(store.state.blocks, a.blocks); assert.equal(store.state.habitStreaks.a.logs[DAY].doneAt, LATE);
+    }
+  }
+  console.log('PASS 409 refreshes SHA and reading/habit proof once; repeated conflict, failed refresh and changed evidence stop');
   for (const reverse of [false, true]) {
     const configured = fixture(), empty = fixture(); delete empty.settings.dailyReadingRoutineIds;
     const pair = reverse ? [configured, empty] : [empty, configured], result = merged(...pair);
@@ -151,6 +180,49 @@ async function run() {
   const same = merged(a, clone(a));
   assert.equal(same.values.reading.changed[0], false); assert.deepEqual(same.values.blocks, a.blocks);
   console.log('PASS setting pair selection, AI, timestamp fallback and idempotent proof');
+  for (const reverse of [false, true]) for (const markedWins of [false, true]) {
+    const marked = success(fixture(false), LATE, 'feedback'), other = clone(marked);
+    other.blocks[0].source = 'other'; other.blocks[0].externalRef = '';
+    other.blocks[0].updatedAt = markedWins ? EARLY : NOW;
+    const pair = reverse ? [other, marked] : [marked, other];
+    for (const entry of ['loadFromGitHub', 'runAutoSyncPull', 'saveToGitHub', 'runAutoSyncPush', 'syncFromGitHubOnStartup']) {
+      configure(clone(pair[0]), pair[1]); const originals = clone([store.state, remoteState, saved]);
+      assert.throws(() => merged(store.state, remoteState), { name: 'DailyReadingSyncConflict' });
+      await sync[entry]();
+      assert.deepEqual([store.state, remoteState, saved], originals, `${entry}/${reverse}/${markedWins}`);
+      assert.equal(attempts.length, 0); assert.equal(confirms, 0);
+    }
+  }
+  console.log('PASS feedback ID with foreign provenance stops adoption and sending: both sides and timestamp winners');
+  for (const reverse of [false, true]) for (const difference of ['core', 'habit']) {
+    const older = success(fixture(), EARLY), newer = success(fixture(), LATE);
+    if (difference === 'core') newer.recurrences.push({ ...newer.recurrences[0], id: 'unrelated', title: 'unrelated' });
+    else newer.habitStreaks.unrelated = { logs: { [DAY]: { doneAt: NOW } } };
+    const pair = reverse ? [newer, older] : [older, newer], originals = clone(pair);
+    assert.doesNotThrow(() => merged(...pair)); assert.deepEqual(pair, originals);
+    assert.equal(sync.syncCoreEqual(pair[1]), false, 'unrelated differences still use v364');
+    for (const entry of ['runAutoSyncPull', 'runAutoSyncPush', 'syncFromGitHubOnStartup']) {
+      configure(clone(pair[0]), pair[1]); await sync[entry]();
+      assert.deepEqual(store.state.recurrences, newer.recurrences, entry);
+      assert.deepEqual(store.state.habitStreaks, newer.habitStreaks, entry);
+      assert.deepEqual(store.state.blocks, newer.blocks, entry); assert.equal(confirms, 0);
+      for (const value of puts) assert.deepEqual(value.habitStreaks, newer.habitStreaks);
+    }
+  }
+  console.log('PASS unrelated core/habit differences reach v364 and retain its winning values plus reading evidence');
+  for (const reverse of [false, true]) {
+    const unpinned = success(fixture()), other = fixture(false);
+    for (const rule of unpinned.recurrences) rule.streakSince = '';
+    const pair = reverse ? [other, unpinned] : [unpinned, other], originals = clone(pair);
+    assert.doesNotThrow(() => merged(...pair)); assert.deepEqual(pair, originals);
+    for (const entry of ['loadFromGitHub', 'runAutoSyncPull', 'saveToGitHub', 'runAutoSyncPush', 'syncFromGitHubOnStartup']) {
+      configure(clone(pair[0]), pair[1]); await sync[entry]();
+      assert.deepEqual(store.state.blocks, unpinned.blocks, entry);
+      assert.deepEqual(store.state.habitStreaks, unpinned.habitStreaks, entry);
+      for (const value of puts) assert.deepEqual(value.habitStreaks, unpinned.habitStreaks);
+    }
+  }
+  console.log('PASS unpinning allows residual current-day logs and keeps their original values');
   const { chromium, launchOptions, defaultContextOptions, startServer, randomPort, STATE_KEY, passGithubGate } = require('./helpers');
   const server = startServer(randomPort()), browser = await chromium.launch(launchOptions());
   try {

@@ -86,13 +86,13 @@ for (const legacy of [false, true]) {
     h.ctx._scheduleDraft = { date: h.state.selectedDate };
     const before = JSON.stringify(h.state);
     for (const [w, height, two, left] of [
-      [390, 844, false, false], [1279, 900, true, false], [1280, 900, true, true],
-      [1024, 768, true, false], [1024, 1366, false, false], [1024, 768, true, false],
+      [390, 844, false, false], [1279, 900, true, true], [1280, 900, true, true],
+      [1024, 768, true, true], [1024, 1366, false, false], [1024, 768, true, true],
       [1023, 768, false, false], [1280, 900, true, true], [1279, 1300, false, false]
     ]) {
       h.resize(w, height);
       assert.equal(h.html.includes("exec-two-pane"), two, `${legacy}/${mode}/${w}x${height}: layout`);
-      assert.equal(h.html.includes("fill-gap-sheet"), left, "left sheet must match 1280 contract");
+      assert.equal(h.html.includes("fill-gap-sheet"), left, "left sheet must match wide or tablet-landscape contract");
       assert.equal(h.overlay.includes("fill-gap-sheet"), !left, "sheet must have exactly one destination");
       assert.equal(JSON.stringify(h.state), before, "resize must preserve full state and selected gap");
       checked++;
@@ -114,16 +114,31 @@ for (const legacy of [false, true]) {
   const h = harness(legacy); h.state.modal.date = "2026-09-03";
   h.resize(390, 844); h.resize(1280, 900);
   assert(!h.html.includes("fill-gap-sheet"), "different-date gap cannot replace selected-date list"); checked++;
-  const input = harness(legacy);
+  const input = harness(legacy, true);
   input.resize(1024, 768);
-  input.ctx.renderModal('<input value="typed unsaved gap title">');
-  const writes = input.overlayWrites, element = input.ctx.document.activeElement;
-  for (const [w, height] of [[1024, 1366], [1279, 900], [390, 844]]) {
+  const inputValues = ["未保存の日本語タイトル", "25", "開発", "task:t1", "r1"];
+  Object.values(input.fields).forEach((field, i) => { field.value = inputValues[i]; });
+  input.fields.fillGapTitle.focus(); input.fields.fillGapTitle.setSelectionRange(2, 5);
+  const inputState = JSON.stringify(input.state);
+  for (const [w, height, left] of [[1024, 1366, false], [1279, 900, true], [390, 844, false]]) {
     input.resize(w, height);
-    assert.equal(input.overlayWrites, writes, "landscape-only event cannot rebuild overlay");
-    assert.equal(input.overlay, '<input value="typed unsaved gap title">');
+    assert.equal(input.html.includes("fill-gap-sheet"), left);
+    assert.equal(input.overlay.includes("fill-gap-sheet"), !left, "rotation keeps exactly one sheet");
+    assert.deepEqual(Object.values(input.fields).map(field => field.value), inputValues);
+    assert.equal(input.ctx.document.activeElement, input.fields.fillGapTitle);
+    assert.equal(input.fields.fillGapTitle.selectionStart, 2);
+    assert.equal(input.fields.fillGapTitle.selectionEnd, 5);
+    assert.equal(JSON.stringify(input.state), inputState); checked++;
+  }
+  const writes = input.overlayWrites, element = input.ctx.document.activeElement, overlay = input.overlay;
+  for (const [w, height] of [[1023, 768], [1024, 1366], [1279, 1300]]) {
+    input.resize(w, height);
+    assert.equal(input.overlayWrites, writes, "unchanged destination cannot rebuild overlay");
+    assert.equal(input.overlay, overlay);
     assert.equal(input.ctx.document.activeElement, element);
-    assert.equal(element.value, "typed gap title"); checked++;
+    assert.deepEqual(Object.values(input.fields).map(field => field.value), inputValues);
+    assert.equal(element.selectionStart, 2); assert.equal(element.selectionEnd, 5);
+    assert.equal(JSON.stringify(input.state), inputState); checked++;
   }
   const wide = harness(legacy), rendered = wide.renders;
   wide.resize(1280, 1600);
@@ -135,7 +150,7 @@ for (const legacy of [false, true]) {
   const set = vals => Object.values(h.fields).forEach((field, i) => { field.value = vals[i]; });
   const get = () => Object.values(h.fields).map(field => field.value);
   set(values); h.fields.fillGapTitle.focus(); h.fields.fillGapTitle.setSelectionRange(2, 5);
-  for (const [w, height] of [[1279, 900], [1280, 900], [390, 844], [1280, 900]]) {
+  for (const [w, height] of [[1279, 900], [1280, 900], [1023, 768], [1024, 768], [1024, 1366], [390, 844], [1280, 900]]) {
     h.resize(w, height); assert.deepEqual(get(), values);
     assert.equal(h.ctx.document.activeElement, h.fields.fillGapTitle);
     assert.equal(h.fields.fillGapTitle.selectionStart, 2); assert.equal(h.fields.fillGapTitle.selectionEnd, 5);

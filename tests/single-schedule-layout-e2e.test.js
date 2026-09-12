@@ -20,7 +20,8 @@ for (const completed of [false, true]) {
   const availability = plannedAvailability(model, DAY);
   assert.equal(availability.error, ''); assert.deepEqual(availability.occupied, [[240, 300], [1380, 1440]]);
   assert.deepEqual(availability.gaps, [[300, 1380]]); assert.deepEqual(model, before);
-  assert.deepEqual(scheduleTimelineRows(model, DAY).map(row => [row.id, row.timelineRange]), [['previous', [240, 300]], ['older', [240, 300]], ['next', [1380, 1440]]]);
+  assert.equal(scheduleDisplay(model, DAY).warnings.reduce((sum, row) => sum + row.count, 0), 2);
+  assert.deepEqual(scheduleTimelineRows(model, DAY).map(row => [row.id, row.timelineRange]), [['previous', [240, 300]], ['next', [1380, 1440]]]);
 }
 for (const value of [undefined, null, {}, 'failed']) {
   assert.ok(plannedAvailability({ blocks: [], singleSchedules: value }, DAY).error);
@@ -55,7 +56,9 @@ console.log(`CHECKED multi-day collection, clipping, completion occupancy, inval
     await page.evaluate(async key => { const { state } = await import('/src/state/store.js'); localStorage.setItem(key, JSON.stringify(state)); }, STATE_KEY);
     await page.reload(); await page.locator('[data-work-list="today"] .today-single-schedules').waitFor();
     const dayList = page.locator('[data-work-list="today"] .today-single-schedules');
-    assert.equal(await dayList.locator('[data-schedule-id]').count(), 4);
+    assert.match(await dayList.innerText(), /不正な単発予定2件を表示から除外/);
+    assert.equal(await dayList.locator('[data-schedule-id="older"]').count(), 0);
+    assert.equal(await dayList.locator('[data-schedule-id]').count(), 3);
     assert.match(await dayList.locator('[data-schedule-id="early"]').innerText(), /時間軸外/);
     assert.equal(await page.locator('[data-action="daily-schedule-add"]').count(), 0);
     const sideBefore = await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.blocks, state.tasks]); });
@@ -66,7 +69,7 @@ console.log(`CHECKED multi-day collection, clipping, completion occupancy, inval
     await page.locator('.timeline[data-date]').waitFor();
     const geometry = await page.locator('.timeline [data-schedule-id]').evaluateAll(nodes => nodes.map(el =>
       [el.dataset.scheduleId, parseFloat(el.style.top), el.getBoundingClientRect().height]).sort());
-    assert.deepEqual(geometry, [['next', 1140, 60], ['older', 0, 60], ['previous', 0, 60]]);
+    assert.deepEqual(geometry, [['next', 1140, 60], ['previous', 0, 60]]);
     assert.equal(await page.locator('.timeline-card[data-id="old-block"]').evaluate(el => parseFloat(el.style.top)), 0);
     assert.match(await page.locator('.timeline-availability').innerText(), /空き 1080分/);
     await page.locator('.timeline-schedule-list summary').click();
@@ -93,6 +96,7 @@ console.log(`CHECKED multi-day collection, clipping, completion occupancy, inval
     await page.reload(); await page.locator('#app').waitFor();
     const saved = await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return { rows: state.singleSchedules, side: JSON.stringify([state.blocks, state.tasks]) }; });
     assert.equal(saved.side, sideBefore);
+    assert.deepEqual(saved.rows.find(row => row.id === 'older'), rows[1]);
     assert.deepEqual(saved.rows.find(row => row.id === 'bad'), rows.at(-1));
     assert.equal(saved.rows.find(row => row.id === 'early').plannedEndAt, DAY + 'T02:10:00');
     assert.equal(saved.rows.find(row => row.id === 'next').deleted, true);

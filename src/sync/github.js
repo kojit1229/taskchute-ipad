@@ -55,7 +55,7 @@ import {
   mergeRecords, mergeById, mergeByIdPreferNewer, mergeGymSets, mergeTracksPreferNewer, mergeWeeklyCommitments
 } from "../core/merge.js";
 import { commitCandidate } from "../core/commit.js";
-import { mergeReadingEvidence, readingSyncConflict } from "../core/daily-reading-sync.js";
+import { mergeReadingEvidence } from "../core/daily-reading-sync.js";
 import { mergeStoredSingleSchedules, singleSchedulesEqual, validateSingleScheduleContainer } from "../core/single-schedule.js";
 import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
 import { persistLocalNoSchedule, _lastSaveError } from "../storage/local.js";
@@ -179,6 +179,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
   // 手動・自動どちらでも、これから保存するのだから待機中の自動保存は不要
   clearTimeout(autoSaveTimer);
   try {
+    for (let attempt = 0; attempt < 2; attempt++) {
     const config = requireGitHubConfig();
     const sha = await fetchGitHubFileSHA(config);
     if (captureProof && captureProof.isCurrent() !== true) return;
@@ -241,6 +242,8 @@ async function saveToGitHub(silent = false, captureProof = null) {
           const before = beginSyncCandidate();
           applySyncMergeToLocal(syncMerge);
           adoptSyncResult(before, remoteNorm.dataModifiedAt, "adopt", remoteNorm);
+        } else if (syncMerge.values.reading.active && await autoMergeRemote(remoteNorm, remoteNorm.dataModifiedAt, sha,
+          { origin: "push", rejectInvalid: true, renderFn: renderDeferringForFocus })) {
         } else {
           const msg = "GitHub側にこの端末とは別の変更があります。「GitHubから読込」で取り込んでから保存してください";
           if (silent) { updateAutoSaveStatus(`見送り: ${msg}`); return; }
@@ -253,7 +256,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
     await prepareArchiveMerge(null, archiveConnection);
     if (captureProof && captureProof.isCurrent() !== true) return;
     archiveProof.assert(null);
-    mergeReadingEvidence(state, state, state.blocks);
+    const readingProof = mergeReadingEvidence(state, state, state.blocks);
     const content = JSON.stringify(sanitizedStateForGitHub(), null, 2);
     const sentStamp = state.dataModifiedAt;
     if (captureProof && (captureProof.isCurrent() !== true || content !== captureProof.expectedContent)) return;
@@ -269,6 +272,7 @@ async function saveToGitHub(silent = false, captureProof = null) {
       })
     });
 
+    if (response.status === 409 && attempt === 0 && readingProof.active) continue; // Refresh reading evidence only; ordinary sync retries on the next save.
     if (!response.ok) {
       throw new Error(await gitHubErrorMessage(response));
     }
@@ -301,6 +305,8 @@ async function saveToGitHub(silent = false, captureProof = null) {
     if (silent) updateAutoSaveStatus();
     maybeWriteBackupSnapshot();
     if (captureProof && captureProof.isCurrent() === true) return { ok: true, content };  // v49: 保存成功後、1日1回の世代スナップショット(await しない)
+    return;
+    }
   } catch (error) {
     if (["PrimarySettingsConflict", "ArchiveTextConflict", "DailyReadingSyncConflict"].includes(error?.name)) setSyncBanner(error.message);
     if (!silent) showToast(`GitHub保存失敗: ${error.message}`);
@@ -622,7 +628,8 @@ function syncCoreEqual(remoteNorm) {
     validateSingleScheduleContainer(remoteNorm.singleSchedules);
     const reading = computeSyncMerge(remoteNorm, "local")?.values.reading;
     if (!reading) return false;
-    return SYNC_CORE_COMPARE_KEYS.every((k) => k === "habitStreaks" && reading.active ||
+    return SYNC_CORE_COMPARE_KEYS.every((k) => k === "habitStreaks" && reading.active
+      ? JSON.stringify(reading.compareHabits[0]) === JSON.stringify(reading.compareHabits[1]) :
       JSON.stringify(getByPath(remoteNorm, k) ?? null) === JSON.stringify(getByPath(state, k) ?? null));
   } catch { return false; }
 }
@@ -923,8 +930,6 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks);
     const reading = mergeReadingEvidence(state, remoteNorm, blocksRaw,
       block => normalizeState(JSON.parse(JSON.stringify({ ...state, blocks: [block] }))).blocks[0]);
-    if (reading.active && SYNC_CORE_COMPARE_KEYS.filter(key => key !== "habitStreaks").some(key =>
-      JSON.stringify(getByPath(state, key) ?? null) !== JSON.stringify(getByPath(remoteNorm, key) ?? null))) throw readingSyncConflict();
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
     // v117(A): 今日の宣言もマージ可能コレクションへ追加
     const dailyDeclarations = mergeDailyDeclarationMaps(state.dailyDeclarations, remoteNorm.dailyDeclarations);
@@ -1299,7 +1304,8 @@ async function autoMergeRemote(remoteNorm, remoteT, sha, { origin, renderFn, rej
     // normalizeState mutates its input: normalize the detached candidate before adopting core values.
     const candidate = JSON.parse(JSON.stringify(state));
     for (const key of SYNC_CORE_COMPARE_KEYS) setByPath(candidate, key, coreValues[key]);
-    if (syncMerge.values.reading.active) candidate.habitStreaks = syncMerge.values.reading.habitStreaks;
+    if (syncMerge.values.reading.active) candidate.habitStreaks = syncMerge.values.reading.compareHabits[
+      normalizeDataStamp(before.dataModifiedAt || "") <= normalizeDataStamp(remoteT || "") ? 1 : 0];
     setState(normalizeState(candidate));
     adoptSyncResult(before, remoteT, "adopt", remoteNorm);
     setLastSyncedSha(sha);
@@ -1504,7 +1510,8 @@ async function loadFromGitHub() {
     const readingProof = requireSyncMerge(remoteNorm, "local").values.reading;
     const diffCount = remoteNorm
       ? LOSS_RISK_KEYS.filter((k) =>
-          !(k === "habitStreaks" && readingProof.active) &&
+          !(k === "habitStreaks" && readingProof.active &&
+            JSON.stringify(readingProof.compareHabits[0]) === JSON.stringify(readingProof.compareHabits[1])) &&
           JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)
         ).length
       : 0;

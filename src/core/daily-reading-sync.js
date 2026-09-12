@@ -46,12 +46,17 @@ export function mergeReadingEvidence(local, remote, blocks, normalizeBlock = blo
     if (sides.some(side => (side.archivedDates || []).includes(date))) stop();
     if (records.some((block, i) => block?.source === "daily-reading-auto" &&
         (block.deleted || block.date !== date || !block.completed || block.actualStartAt !== marks[i].recordedAt || block.actualEndAt !== marks[i].recordedAt))) stop();
-    if (mark.kind === "feedback") continue;
+    if (mark.kind === "feedback") {
+      if (records.some((block, i) => block && !marks[i])) stop();
+      continue;
+    }
     const ruleId = routineIds[mark.kind];
     if (!ruleId || records.some(block => block && block.recurrenceGroupId !== ruleId)) stop();
     const rules = sides.map(side => side.recurrences.find(rule => rule.id === ruleId));
+    if (!equal(...rules)) stop();
     if (rules.some(rule => !recurrenceMatchesDate(rule, date))) stop();
     const rule = rules[0], fixed = rule.streakSince && ["daily", "weekdays"].includes(rule.kind) && date >= rule.streakSince;
+    if (fixed && !equal(local.habitPinHistory?.[ruleId], remote.habitPinHistory?.[ruleId])) stop();
     for (let i = 0; i < 2; i++) {
       const block = records[i], log = habits[i][ruleId]?.logs?.[date];
       if (block && !marks[i]) {
@@ -62,7 +67,7 @@ export function mergeReadingEvidence(local, remote, blocks, normalizeBlock = blo
       if (fixed && marks[i]) {
         if (block.source === "daily-reading-auto" && !equal(log, { doneAt: marks[i].recordedAt })) stop();
         if (log && !equal(log, { doneAt: marks[i].recordedAt })) stop();
-      } else if (log) stop();
+      } else if (fixed && log) stop();
     }
     if (!fixed) continue;
     const wi = records.indexOf(winner), winningMark = marks[wi];
@@ -81,8 +86,9 @@ export function mergeReadingEvidence(local, remote, blocks, normalizeBlock = blo
     for (const habit of habits) { if (stamp) habit[id].updatedAt = stamp; }
   }
   const active = recordIds.size > 0;
-  if (active && !equal(...habits)) stop();
-  return { routineIds, habitStreaks: active ? habits[0] : local.habitStreaks,
+  if ([...touched].some(id => !equal(habits[0][id], habits[1][id]))) stop();
+  const mergedHabits = habits[(local.dataModifiedAt || "") <= (remote.dataModifiedAt || "") ? 1 : 0];
+  return { routineIds, habitStreaks: active ? mergedHabits : local.habitStreaks,
     compareHabits: habits, active,
-    changed: sides.map((side, i) => !equal(routineIds, ids[i]) || active && !equal(habits[0], side.habitStreaks || {})) };
+    changed: sides.map((side, i) => !equal(routineIds, ids[i]) || active && !equal(mergedHabits, side.habitStreaks || {})) };
 }

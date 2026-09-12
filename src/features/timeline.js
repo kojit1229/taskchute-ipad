@@ -425,6 +425,9 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
     return range[0] <= range[1] && start < 1440 && end >= 240 ? [{ ...block, timelineRange: range,
       timelineHint: `${start < 240 ? "前から継続 / " : ""}${end > 1440 ? "翌日へ継続 / " : ""}${interval?.estimatedEnd && mode === "planned" ? "終了未定・仮の長さ" : ""}` }] : [];
   });
+  const actualRanges = mode === "actual" ? blocksToRender.map(block => block.timelineRange).filter(([s, e]) => s < e) : [];
+  const actualOverlapCount = actualRanges.reduce((count, [start, end], index) => count
+    + actualRanges.slice(index + 1).filter(([s, e]) => start < e && s < end).length, 0);
   // v19: カテゴリ「ルーティン」は専用ルーティンタブで表示するためタイムラインから除外
   blocksToRender = blocksToRender.filter((b) => b.category !== "ルーティン");
   // v39: エネルギー構造分析からのカテゴリフィルタ(UI状態)
@@ -515,6 +518,7 @@ function renderTimeline({ compact, mode = "planned", embedded = false }) {
       return e-s < 15 ? `<span>${e-s}分・配置対象外</span>` : `<button class="btn ghost" data-action="fill-gap-open" data-basis="planned" data-date="${state.selectedDate}" data-start="${time(s)}" data-end="${time(e)}">${time(s)}–${time(e)} / ${e-s}分へ配置</button>`;
     }).join("")}</div>` : ""}
     ${mode === "planned" && availability.overlaps.length ? `<p role="status">計画の重複 ${availability.overlaps.length}件（保存された時刻を保持）</p>` : ""}
+    ${mode === "actual" && actualOverlapCount ? `<p role="status">実績の重複 ${actualOverlapCount}件（保存された時刻を保持）</p>` : ""}
     ${isToday && nowMinutes < 240 ? '<p class="muted">現在は表示範囲外です（4:00〜24:00）</p>' : ""}
     ${positioned.some(row => row.isOverflow) ? `<details><summary>重なった予定の全件（${positioned.length}件）</summary>${positioned.map(row => `<button class="btn" data-action="${row.block.scheduleRecord ? "schedule-view-details" : "edit-block"}" data-date="${state.selectedDate}" data-id="${escapeHTML(row.block.id)}">${escapeHTML(row.block.title)}</button>`).join("")}</details>` : ""}
     ${schedules ? scheduleWarning(schedules, escapeHTML) : ""}

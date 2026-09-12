@@ -64,6 +64,24 @@ const DAY = '2026-09-12';
     await page.evaluate(async () => (await import('/src/features/timeline.js')).updateTimelineClock());
     assert.equal(await page.locator('.timeline-card[data-id="running"]').evaluate(el => parseFloat(el.style.height)), 150);
     assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY), saved);
+    await seed([
+      block('actual-a', '09:00', '10:00', { completed: true, actualStartAt: DAY + 'T09:00', actualEndAt: DAY + 'T10:00' }),
+      block('actual-b', '10:00', '11:00', { category: '私用', completed: true, actualStartAt: DAY + 'T09:30', actualEndAt: DAY + 'T11:00' }),
+      block('actual-adjacent', '11:00', '12:00', { completed: true, actualStartAt: DAY + 'T11:00', actualEndAt: DAY + 'T12:00' }),
+      block('zero', '12:00', '12:00', { completed: true, actualStartAt: DAY + 'T09:45', actualEndAt: DAY + 'T09:45' })
+    ]);
+    await page.locator('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]').click();
+    const warning = page.locator('[role="status"]').filter({ hasText: '実績の重複' });
+    assert.match(await warning.innerText(), /1件/);
+    assert.equal(await page.locator('[role="status"]').filter({ hasText: '計画の重複' }).count(), 0);
+    await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); state.settings.timelineCategoryFilter = '仕事'; });
+    await page.locator('[data-action="tl-zoom"][data-zoom="2"]').click();
+    assert.match(await warning.innerText(), /1件/);
+    await seed([block('left', '09:00', '10:00', { actualStartAt: DAY + 'T09:00', actualEndAt: DAY + 'T10:00' }),
+      block('right', '10:00', '11:00', { actualStartAt: DAY + 'T10:00', actualEndAt: DAY + 'T11:00' })]);
+    await page.locator('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]').click();
+    assert.equal(await warning.count(), 0);
+    console.log('PASS actual overlap warning is half-open, excludes zero durations and stays separate from plans/filters');
     assert.equal(errors.length, 0, errors.join('\n'));
     console.log('PASS legacy 23:59 stays 14 minutes; clock updates actual height without saving');
   } finally { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); }

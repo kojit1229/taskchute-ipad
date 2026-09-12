@@ -173,7 +173,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
   "plan-step-request", "plan-step-approve", "plan-step-discard",  // v196: 実行計画の叩き台をAIに依頼
   "ai-step-confirm-send", "ai-step-confirm-later",  // v198: 完了トリガー→引き継ぎシート
-  "timeline-new-block", "timeline-mode", "complete-block-with-actual",
+  "timeline-new-block", "timeline-mode", "timeline-jump", "complete-block-with-actual",
   "drift-postpone",  // v186: F2 DRIFT(明日へ送る)の意図的追加
   "fill-gap-open", "fill-gap-place", "fill-gap-create", "fill-gap-prefill", "daily-gap-choose",  /* v388 契約追随(束B8 41b、監督者決定 2026-09-11) */  // v354/v357: 「空き時間を補う」シート(旧time-comb-fillを統合・置換。prefillはv357でルーティン雛形選択に追加)
 
@@ -234,7 +234,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "km-chip-candidate",
   // v181: src/features/timeline.js(configureTimeline)。ハンドラ実体(setTimelineMode)が
   // このファイルに既に存在するため、timeline系の中で唯一この動的実測方式で検証する。
-  "timeline-mode",
+  "timeline-mode", "timeline-jump",
   // v186: F2でtimeline.jsのregisterActionsへ意図的に追加(DRIFT送り)。
   // v354: 同居していたtime-comb-fillはfill-gap-open(app.js側の直接registerActions)へ
   // 統合・置換したためここから削除した(下のAPP_JS_REGISTERED_ACTIONS側で検証する)。
