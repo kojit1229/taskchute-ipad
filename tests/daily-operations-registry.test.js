@@ -141,8 +141,9 @@ const immediate = DAILY_ACTIONS.filter(name => !deferred.includes(name));
 // v386 契約追随(監督者決定 2026-09-11、fixB6): 33 の daily-report-refresh が即時経路に1行増えて 16→17
 // 38: add/complete/delete add three registry paths; edit replaces the existing unwired row.
 // B8/41: two ordered placement operations are added (20 + 2); keep exhaustive routing checks.
-assert.equal(immediate.length, 22);
-assert(immediate.every(name => routes.includes(name)), 'other 22 data-actions reach the registry immediately');
+// R3-A/3回-03(監督者の契約追随 2026-09-11): 0秒思考の登録行3件(zero-draft-save / zero-complete / zero-leave)追加(22→25)。design/CHANGELOG.md
+assert.equal(immediate.length, 25);
+assert(immediate.every(name => routes.includes(name)), 'other 25 data-actions reach the registry immediately');
 const confirmationActions = {};
 const visit = node => {
   if (!node || typeof node !== 'object') return;

@@ -10,6 +10,8 @@ const modulePath = path.join(root, "src/ui/daily-parts/contract.js");
 const source = fs.readFileSync(modulePath, "utf8");
 const kinds = ["block", "schedule", "actual", "task", "project"];
 const actions = [
+  // R3-A/3回-03(監督者の契約追随 2026-09-11): 0秒思考の下書き保存・完了・離脱の登録行3件(実物 contract.js と同じ先頭位置)。design/CHANGELOG.md
+  "zero-draft-save", "zero-complete", "zero-leave",
   "daily-plan-times-save", "daily-plan-times-cancel", "daily-plan-complete",
   "daily-block-start", "daily-block-end", "daily-block-duplicate", "daily-duplicate-undo",
   "edit-block", "daily-schedule-edit", "daily-actual-edit", "daily-task-complete",
