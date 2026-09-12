@@ -245,3 +245,49 @@ const today = '2026-09-06', selected = '2026-09-07';
     if (server) await new Promise(resolve => server.close(resolve));
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+
+// S-L2A: appended suite runs after the preceding browser/server have closed.
+const dailyLayoutChecks = [];
+process.once('beforeExit', async () => {
+  let server, browser;
+  try {
+    server = startServer(randomPort());
+    browser = await chromium.launch(launchOptions());
+    const context = await browser.newContext({ ...defaultContextOptions(), viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
+    const page = await context.newPage();
+    await page.route('**/*', route => new URL(route.request().url()).hostname === 'localhost' ? route.continue() : route.abort());
+    await page.clock.install({ time: new Date(2026, 8, 6, 10, 30) });
+    await page.goto('http://localhost:' + server.address().port + '/');
+    await passGithubGate(page);
+    await page.evaluate(({ key, today }) => {
+      const state = JSON.parse(localStorage.getItem(key));
+      state.currentView = 'today'; state.settings.lastOpenedDate = today;
+      state.settings.autoSync = false; state.settings.github.autoSave = false;
+      state.settings.birthDate = ''; state.selectedDate = '2026-09-01';
+      state.blocks = []; state.tasks = []; state.projects = []; state.recurrences = [];
+      localStorage.setItem(key, JSON.stringify(state));
+      localStorage.setItem('taskchute-journal-today-focus-v1', JSON.stringify({ sections: { side: false, journal: false, life: false } }));
+    }, { key: STATE_KEY, today });
+    await page.reload();
+    const root = page.locator('[data-daily-view="today"]');
+    await root.waitFor();
+    for (const selector of ['#towerClock', '#towerDayLeft', '.life-band', '.so-row', '.tower-runway', '[data-work-list="today"]', '#towerFlightLog', '#towerGateStrip', '#towerJournalFree'])
+      assert.equal(await root.locator(selector).count(), 1, 'permanent: ' + selector);
+    assert.equal(await root.locator('.today-pomodoro,.sec-bm,.tower-condition').count(), 0);
+    assert.equal(await root.locator('.life-band').getByText('45???').count(), 0);
+    assert((await root.locator('#towerDate').textContent()).includes(today));
+    const journal = root.locator('#towerJournalFree');
+    await journal.fill('????????????');
+    await journal.evaluate(el => { window.dailyJournalNode = el; window.dailyOrder = [...el.closest('[data-daily-view]').children]; });
+    await page.clock.runFor(2000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.clock.runFor(1000);
+    assert(await journal.evaluate(el => el === window.dailyJournalNode && el.value === '????????????' && window.dailyOrder.every((node, i) => node === el.closest('[data-daily-view]').children[i])));
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('taskchute-journal-today-focus-v1')).sections.life), false);
+    await root.locator('[data-action="save-tower-journal"]').click();
+    assert.equal(await page.evaluate(async date => (await import('/src/state/store.js')).state.journals[date], today), '????????????');
+    for (const check of dailyLayoutChecks) await check(page, root);
+    console.log('PASS S3-06: eight permanent sections, actual clock, missing birthday, retained settings/journal DOM, explicit save');
+  } catch (error) { console.error(error); process.exitCode = 1; }
+  finally { if (browser) await browser.close(); if (server) await new Promise(resolve => server.close(resolve)); }
+});
