@@ -5779,3 +5779,116 @@ details.settings-row > .fold-summary.settings-row-summary {
 .placement-form .input { min-height:44px; }
 
 .feedback-regeneration{margin-top:16px;min-width:0;overflow-wrap:anywhere}.feedback-controls{display:flex;flex-wrap:wrap;gap:8px}.feedback-regeneration button,.feedback-regeneration summary{min-height:44px;min-width:44px}.feedback-regeneration button{white-space:normal;max-width:100%}.feedback-regeneration ol{padding-inline-start:24px}.feedback-version-body{min-width:0;margin-block:16px}.feedback-version-body pre{max-width:100%;overflow:auto}@media(max-width:480px){.feedback-controls>button{flex:1 1 100%}}
+
+/* S3-09: daily parents only; existing TOWER paint and timeline coordinates remain inherited. */
+#app[data-view="today"] .today-tower[data-daily-view="today"] {
+  display: flex; flex-direction: column; align-items: stretch; gap: 12px;
+  grid-template-areas: none; grid-template-columns: minmax(0, 1fr);
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] > * { order: 0; grid-area: auto; min-width: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 10px;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock time { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock nav { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock button {
+  border: 1px solid var(--tower-line); color: var(--tower-cyan); background: transparent; padding: 6px 12px;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values,
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main,
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values > *,
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main > *,
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records > * { min-width: 0; margin: 0; grid-area: auto; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-row { overflow: visible; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-grid { grid-template-columns: minmax(0, 1fr); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-item { padding: 6px 10px; border-left: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-item > span:last-child { min-width: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-item em { font-size: .875rem; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-item small { font-size: .75rem; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .so-item :is(em, small) { white-space: normal; overflow-wrap: anywhere; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .life-band { align-content: center; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .life-sigs { gap: 8px 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway { order: 0; margin: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-nowhud { display: flex; flex-wrap: wrap; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-now-title { flex: 1 1 100%; min-width: 0; font-size: 1rem; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-arrival-select { flex: 1; width: 100%; min-width: 0; max-width: 100%; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-nowhud[data-status="empty"] { min-height: 44px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-journal-free { min-height: max(130px, 8rem); height: 10rem; width: 100%; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-journal-body { display: grid; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(#dailyTodayPlans, .tower-journal) { scroll-margin-top: 12px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-log-title, .tower-gate-edit-row > strong) { white-space: normal; overflow-wrap: anywhere; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-editor { min-width: 0; flex-basis: 100%; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-edit-row { grid-template-columns: 24px minmax(0, 1fr) repeat(4, 44px); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-edit-row > time { grid-column: 2; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-add { grid-template-columns: minmax(0, 1fr) 110px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-add button { grid-column: 1 / -1; }
+[data-daily-view] :is(input, select, textarea) { font-size: max(16px, 1rem); max-width: 100%; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(input, select, textarea) { font-size: max(16px, 1rem); }
+[data-daily-view] :is(button, .btn) { min-height: 44px; }
+[data-daily-view] :is(.search-frame, .work-list, .detail-column) { min-width: 0; }
+/* Integration contract: exec body alone owns this parent; header/date remain outside. */
+[data-daily-view="exec"] { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+[data-daily-view="exec"] > .timeline-tower { order: -1; }
+[data-daily-view="exec"] :is(.exec-pane-left, .exec-pane-right) { min-width: 0; }
+[data-daily-view="exec"] .exec-two-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+[data-daily-view="exec"] .exec-pane-right { order: -1; }
+[data-daily-view="wbs"] .wbs-projects { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 12px; }
+[data-daily-view="wbs"] :is(.wbs-project-list, .wbs-project-detail) { min-width: 0; }
+[data-daily-view="wbs"] :is(.wbs-task-title, .wbs-project-title) { white-space: normal; overflow-wrap: anywhere; }
+[data-daily-view="detail"] .detail-columns { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+[data-daily-view="detail"] .modal-body { overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+[data-daily-view="detail"] .modal-footer { flex-wrap: wrap; gap: 8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+[data-daily-view="detail"] :is(input, textarea, select) { min-width: 0; width: 100%; }
+[data-daily-view="detail"] :is(input[type="checkbox"], input[type="radio"]) { width: auto; }
+@media (max-width: 767px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock nav { margin-left: 0; flex-basis: 100%; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .life-sig { padding-inline: 8px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-edit-row { grid-template-columns: 24px minmax(0, 1fr) 44px 44px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-edit-row > strong { grid-column: 2 / -1; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-log-row { grid-template-columns: 90px minmax(0, 1fr) 44px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-log-state { grid-column: 2 / -1; }
+}
+@media (min-width: 1280px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values,
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { align-items: start; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values > * { height: 100%; box-sizing: border-box; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] #dailyTodayPlans [data-work-list-rows] { max-height: 32rem; overflow-y: auto; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] #towerFlightLog { max-height: 10rem; overflow-y: auto; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] #towerGateStrip { max-height: 12rem; overflow-y: auto; }
+  [data-daily-view="wbs"] .wbs-projects { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  [data-daily-view="detail"] .detail-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px), (min-width: 1024px) and (orientation: landscape) {
+  [data-daily-view="exec"] .exec-two-pane { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  [data-daily-view="exec"] .exec-pane-right { order: 0; }
+}
+
+/* Compact the duplicated adapter/row labels without hiding any action or input. */
+#app[data-view="today"] [data-daily-view="today"] .work-list-row :is(.daily-plan-heading, .daily-plan-meta) { display: none; }
+#app[data-view="today"] [data-daily-view="today"] .work-list-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0; }
+#app[data-view="today"] [data-daily-view="today"] :is(.daily-plan-times, .daily-plan-status, .daily-plan-actions) { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+#app[data-view="today"] [data-daily-view="today"] :is(.daily-plan-times, .daily-plan-status) { font-size: .75rem; }
+@media (min-width: 1280px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-nowhud[data-status="ready"] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-nowhud[data-status="ready"] .tower-now-title { grid-column: auto; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway-strip { height: 24px; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 6px; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-query { grid-column: 1 / 4; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-filters > button { grid-column: 4; grid-row: 1; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-count { margin-block: 6px; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 2px 6px; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-title { grid-column: 1; padding: 2px 0; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-meta { grid-column: 1 / -1; grid-row: 2; }
+  #app[data-view="today"] [data-daily-view="today"] .daily-plan-row { display: contents; }
+  #app[data-view="today"] [data-daily-view="today"] :is(.daily-plan-times, .daily-plan-status, .daily-plan-draft, .daily-plan-error) { grid-column: 1; min-width: 0; }
+  #app[data-view="today"] [data-daily-view="today"] .daily-plan-actions { grid-column: 2; grid-row: 1; align-content: center; padding-left: 6px; }
+  #app[data-view="today"] [data-daily-view="today"] .daily-plan-times { grid-column: 1; grid-row: 3; }
+  #app[data-view="today"] [data-daily-view="today"] .daily-plan-status { grid-column: 2; grid-row: 3; }
+}
+
+@media (max-width: 767px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock { position: sticky; top: 0; z-index: 5; }
+}

@@ -122,9 +122,9 @@ export function cycleWeekForDate(dateISO) {
 //      データ連動なし。文言はデザイン正mockup-today-home-v2.htmlの表記に合わせた) ----
 
 const CREEDS = [
-  { num: "一", text: "決めた一つは、必ずやり切れる", small: "??????100%????" },
-  { num: "二", text: "進んだ量で測る。実行率で自分を裁かない", small: "??????????" },
-  { num: "三", text: "朝に全部を注ぐ。夜は手放して充電する", small: "?????????" }
+  { num: "一", text: "決めた一つは、必ずやり切れる", small: "決めた一つを100%やり切る" },
+  { num: "二", text: "進んだ量で測る。実行率で自分を裁かない", small: "実行率より、進んだ量" },
+  { num: "三", text: "朝に全部を注ぐ。夜は手放して充電する", small: "朝は集中、夜は充電" }
 ];
 
 function creedRowHTML(creed) {

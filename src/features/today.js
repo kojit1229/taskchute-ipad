@@ -139,8 +139,11 @@ function focusTodaySection(selector) {
   const section = document.querySelector('[data-daily-view="today"] ' + selector);
   if (!section) return;
   section.scrollIntoView({ block: "start" });
-  const target = section.querySelector('[data-action="edit-block"], textarea, button, input');
-  if (target) target.focus({ preventScroll: true });
+  const target = section.querySelector('[data-action="edit-block"]') || section.querySelector('textarea, button, input');
+  if (target) {
+    target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
+  }
 }
 
 function runningBlockOf(blocks) {

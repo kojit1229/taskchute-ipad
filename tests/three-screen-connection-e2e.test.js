@@ -295,8 +295,133 @@ process.once('beforeExit', async () => {
 // S3-08: Japanese subtitles retain their full rendered contents.
 dailyLayoutChecks.push(async (page, root) => {
   assert(await root.locator('.so-item small').evaluateAll(nodes => {
-    const expected = ['??????100%????', '??????????', '?????????'];
+    const expected = ['決めた一つを100%やり切る', '実行率より、進んだ量', '朝は集中、夜は充電'];
     return nodes.length === 3 && nodes.every((el, i) => el.textContent === expected[i] && el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis');
   }), 'three Japanese creed subtitles are displayed without clipping');
   console.log('PASS S3-08: Japanese subtitles without clipping');
+});
+
+// S3-09: live Today plus explicitly labelled pending app.js parent contracts.
+dailyLayoutChecks.push(async page => {
+  const measurements = [], measurementFailures = [];
+  const action = (name, id = '') => page.evaluate(({ name, id }) => {
+    const button = document.createElement('button'); button.dataset.action = name; button.dataset.id = id;
+    document.body.append(button); button.click(); button.remove();
+  }, { name, id });
+  const measure = async (view, width, count, zoom, contract = false) => {
+    const result = await page.evaluate(({ view, contract }) => {
+      const root = document.querySelector('[data-daily-view="' + view + '"]');
+      const selectors = view === 'today' ? ['.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.daily-today-records', '.tower-journal']
+        : view === 'wbs' ? ['.wbs-project-list', '.wbs-project-detail']
+        : view === 'exec' ? ['.exec-pane-left', '.exec-pane-right', ':scope > .timeline-tower', ':scope > .work-list'] : ['.detail-column'];
+      const regions = [...new Set(selectors.flatMap(s => [...root.querySelectorAll(s)]))].map(el => {
+        const r = el.getBoundingClientRect(); return { name: el.className || el.id, x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+      });
+      const overlaps = [];
+      for (let i = 0; i < regions.length; i++) for (let j = i + 1; j < regions.length; j++) {
+        const a = regions[i], b = regions[j];
+        if (a.name.includes('daily-today-records') || b.name.includes('daily-today-records')) continue;
+        if (Math.min(a.right, b.right) - Math.max(a.x, b.x) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y) > 1) overlaps.push([a.name, b.name]);
+      }
+      const inputs = [...root.querySelectorAll('input:not([type="hidden"]),select,textarea')];
+      const buttons = [...root.querySelectorAll('button')].filter(el => el.getBoundingClientRect().height > 0);
+      const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
+      return { view, contract, regions, overlaps, rootWidth: root.getBoundingClientRect().width,
+        overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+        minInput: inputs.length ? Math.min(...inputs.map(el => parseFloat(getComputedStyle(el).fontSize))) : null,
+        minButton: buttons.length ? Math.min(...buttons.map(el => el.getBoundingClientRect().height)) : null,
+        duplicateIds: ids.filter((id, i) => ids.indexOf(id) !== i),
+        columns: view === 'today' ? getComputedStyle(root.querySelector('.daily-today-main')).gridTemplateColumns.split(' ').length : null };
+    }, { view, contract });
+    measurements.push({ width, count, zoom, ...result });
+    console.log('SL2A_MEASURE ' + JSON.stringify(measurements.at(-1)));
+    try {
+    assert.equal(result.overflow, 0, view + ' page overflow at ' + width + '/' + count + '/' + zoom);
+    assert.deepEqual(result.overlaps, [], view + ' region overlap');
+    assert.deepEqual(result.duplicateIds, [], view + ' unique IDs');
+    assert(result.minInput === null || result.minInput >= 16, view + ' native input size');
+    if (view === 'today') {
+      assert.equal(result.columns, width >= 1280 ? 2 : 1);
+      if (width >= 1280) assert(Math.abs(result.regions[0].height - result.regions[1].height) < 1, 'equal value panels');
+      assert(result.minButton >= 44, 'Today main actions at least 44px');
+    }
+    } catch (error) { measurementFailures.push({ view, width, count, zoom, message: error.message }); }
+  };
+  for (const count of [0, 300]) {
+    await page.evaluate(async ({ count, today }) => {
+      const { state } = await import('/src/state/store.js');
+      state.projects = [{ id: 'layout-project', title: '長いプロジェクト名'.repeat(12), status: 'active' }];
+      state.tasks = Array.from({ length: count }, (_, i) => ({ id: 'layout-task-' + i, title: '長い作業名ABCDEFGHIJ'.repeat(12) + i, projectId: 'layout-project', status: 'todo', kind: 'task' }));
+      state.blocks = state.tasks.map((task, i) => ({ id: 'layout-block-' + i, taskId: task.id, title: task.title, date: today, category: '作業', estimateMin: 5,
+        plannedStartAt: today + 'T' + String(4 + Math.floor((i % 200) / 12)).padStart(2, '0') + ':' + String(i % 12 * 5).padStart(2, '0') }));
+      state.selectedDate = today;
+    }, { count, today });
+    for (const width of [390, 768, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
+      for (const zoom of [100, 200]) {
+        await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
+        await measure('today', width, count, zoom);
+      }
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await page.locator('[data-action="nav"][data-view="exec"]:visible').first().click();
+      await page.locator('.timeline-tower').waitFor();
+      // Only the missing production wrapper is supplied in this fixture, never in product code.
+      await page.evaluate(() => {
+        const timeline = document.querySelector('.timeline-tower');
+        const pane = timeline.closest('.exec-two-pane');
+        const wrapper = document.createElement('div'); wrapper.dataset.dailyView = 'exec';
+        const first = pane || document.querySelector('[data-work-list="exec"]');
+        first.before(wrapper);
+        if (pane) wrapper.append(pane);
+        else for (const el of [first, document.querySelector('[data-work-list="exec-candidates"]'), timeline]) if (el) wrapper.append(el);
+      });
+      for (const zoom of [100, 200]) {
+        await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
+        await measure('exec', width, count, zoom, true);
+      }
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await page.locator('[data-action="nav"][data-view="wbs"]:visible').first().click();
+      await page.locator('[data-action="wbs-select-project"][data-id="layout-project"]').click();
+      await page.locator('.wbs-tower').evaluate(el => { el.dataset.dailyView = 'wbs'; });
+      for (const zoom of [100, 200]) {
+        await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
+        await measure('wbs', width, count, zoom, true);
+      }
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await action(count ? 'edit-task' : 'add-task-to-project', count ? 'layout-task-0' : 'layout-project');
+      await page.locator('.task-modal').evaluate(async el => { el.dataset.dailyView = 'detail'; await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished)); });
+      for (const zoom of [100, 200]) {
+        await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
+        await measure('detail', width, count, zoom, true);
+      }
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await page.locator('.task-modal [data-action="modal-close"]').last().click();
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(async () => {
+    const { state } = await import('/src/state/store.js'); state.blocks = state.blocks.slice(0, 4);
+    state.blocks.forEach((block, i) => { block.title = '画面内の予定 ' + i; });
+    state.tasks = state.tasks.slice(0, 4); state.tasks.forEach((task, i) => { task.title = '画面内の予定 ' + i; });
+  });
+  await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
+  await page.locator('[data-daily-view="today"]').evaluate(el => { el.scrollIntoView({ block: 'start' }); });
+  const fold = await page.evaluate(() => ({ plans: [...document.querySelectorAll('#dailyTodayPlans [data-work-key]')].map(el => el.getBoundingClientRect().bottom), journalTop: document.querySelector('#towerJournalFree').getBoundingClientRect().top, height: innerHeight }));
+  console.log('SL2A_FOLD ' + JSON.stringify(fold));
+  assert.equal(fold.plans.length, 4); assert(fold.plans.every(bottom => bottom <= fold.height) && fold.journalTop < fold.height, 'four plans and journal visible at 1440x1000');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-action="today-plans-jump"]').click();
+  const firstPlan = page.locator('#dailyTodayPlans [data-action="edit-block"]').first();
+  assert(await firstPlan.evaluate(el => el === document.activeElement && el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= innerHeight));
+  await firstPlan.click(); await page.locator('#modalRoot [data-action="modal-save"]').waitFor();
+  await page.locator('#modalRoot [data-action="modal-close"]').last().click();
+  for (const theme of ['light', 'dark', 'cockpit']) {
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    const paint = await page.locator('.daily-today-values .tower-glass-panel').first().evaluate(el => ({ background: getComputedStyle(el).backgroundColor, blur: getComputedStyle(el).backdropFilter }));
+    console.log('SL2A_THEME ' + JSON.stringify({ theme, ...paint }));
+    assert.notEqual(paint.background, 'rgb(255, 255, 255)', 'glass paint is inherited');
+  }
+  assert.deepEqual(measurementFailures, [], 'all measured configurations satisfy the same assertions');
+  console.log('PASS S3-09: 80 measured configurations, 200% root font simulation, long names, empty/300 items, fold and jump');
 });
