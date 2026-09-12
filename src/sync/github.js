@@ -119,6 +119,7 @@ export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
     mode = keys.some(key => content(getByPath(candidate, key) ?? null)
       !== content(getByPath(remoteNorm, key) ?? null)) || schedulesChanged ? "merge" : "adopt";
   }
+  if (mode === "adopt" && normalizeDataStamp(before.dataModifiedAt || "") > normalizeDataStamp(remoteT || "")) mode = "merge";
   const keepStamp = mode === "pushed" || (mode === "merge" && before.dataModifiedAt > remoteT
     && content(before) === content(candidate) && singleSchedulesEqual(before.singleSchedules, candidate.singleSchedules));
   setState(before);

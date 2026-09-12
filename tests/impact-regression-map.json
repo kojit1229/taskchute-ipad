@@ -31,8 +31,8 @@
   ],
   "areas": {
     "daily-reading-sync": {
-      "paths": ["^src/core/daily-reading-sync\\.js$"],
-      "suites": ["daily-reading-sync"]
+      "paths": ["^src/core/daily-reading-sync\\.js$", "^src/sync/github\\.js$"],
+      "suites": ["daily-reading-sync", "v106", "v364", "mutation-global-e2e", "feedback-save-proof"]
     },
     "daily-reading": {
       "paths": ["^src/(core|features)/daily-reading\\.js$"],
@@ -412,6 +412,7 @@
       "suites": [
         "timeline-layout-core",
         "timeline-render-core",
+        "v307",
         "today-core",
         "v50",
         "v70"

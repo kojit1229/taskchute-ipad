@@ -42,7 +42,7 @@ import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createDailyReading } from "./src/features/daily-reading.js";
 import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurrence.js";
-import { rememberTimelineOrigin, restoreTimelineOrigin, updateTimelineClock } from "./src/features/timeline.js";
+import { restoreTimelineOrigin, updateTimelineClock } from "./src/features/timeline.js";
 import { isDailyReadingBlock, markDailyReadingEdit } from "./src/core/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
@@ -3536,8 +3536,7 @@ let _lastScrollDate = null;
 
 function renderMain() {
   const view = state.currentView;
-  rememberTimelineOrigin();
-  const editingTimelineInput = isFocusInEditableElement();
+  const initialTimelineDisplay = _lastScrollView === null && !isFocusInEditableElement();
   // v146レビュー対応: フォーカスガードはmain.innerHTMLを差し替える「前」に評価する(差し替え後は
   // 旧main内のフォーカス要素がDOMごと消えてbodyへ戻ってしまい、判定が構造的に効かなくなるため)。
   // 自作ガードではなく既存のisFocusInEditableElement(input/textarea/contenteditable判定)を使う。
@@ -3580,7 +3579,11 @@ function renderMain() {
   }
   if (view === "exec") {
     main.innerHTML = renderExecView();
-    if (!editingTimelineInput) restoreTimelineOrigin(isNewViewOrDate, shouldAutoScroll);
+    if (initialTimelineDisplay) restoreTimelineOrigin(true, shouldAutoScroll);
+    if (_execMode !== "actual" && shouldAutoScroll) {
+      const targetId = currentOrNextTaskchuteBlockId(state.selectedDate);
+      if (targetId) setTimeout(() => document.querySelector(`[data-work-list="exec"] [data-work-key="block:${CSS.escape(targetId)}"]`)?.scrollIntoView({ block: "center" }), 50);
+    }
   }
   if (view === "journal") {
     main.innerHTML = renderJournal();

@@ -50,17 +50,10 @@ import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule 
 import { plannedAvailability, displayPlannedGaps } from "./daily-gap-placement.js";
 import { plannedMinute } from "../core/planned-occupancy.js";
 let plannedDraftIntervals = () => [];
-const timelineOrigins = new Map();
-export function rememberTimelineOrigin() {
-  const el = document.querySelector('.timeline[data-date]');
-  if (el) timelineOrigins.set(el.dataset.date, 240 - el.getBoundingClientRect().top * 60 / Number(el.dataset.rowHeight));
-}
 export function restoreTimelineOrigin(initial, current) {
   const el = document.querySelector('.timeline[data-date]');
   if (!el) return;
-  const minute = timelineOrigins.get(el.dataset.date);
-  if (minute !== undefined) window.scrollBy(0, el.getBoundingClientRect().top + (minute - 240) * Number(el.dataset.rowHeight) / 60);
-  else if (initial) (current ? document.querySelector('.now-line') || el : el).scrollIntoView({ block: current ? 'center' : 'start' });
+  if (initial) (current ? document.querySelector('.now-line') || el : el).scrollIntoView({ block: current ? 'center' : 'start' });
 }
 export function updateTimelineClock() {
   const now = new Date(), minute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
