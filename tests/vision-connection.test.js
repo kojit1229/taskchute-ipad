@@ -9,7 +9,11 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});retur
 function setup(){
  const sent=[],toasts=[];let feedbackReads=0,overviewRenders=0;
  const cfg={owner:'A',repo:'private',branch:'main',token:'synthetic'};
- const ctx=vm.createContext({state:{settings:{github:cfg,visionSection:'vision'},currentView:'vision',feedbackFiles:[],feedback:{},selectedDate:'2026-09-06'},
+ const ctx=vm.createContext({
+  dailyReading:{open(){},close(){},current:()=>null},
+  recurrenceMatchesDate:()=>false,makeRecurrenceInstance:()=>null,
+  isDailyReadingBlock:()=>false,markDailyReadingEdit:value=>value,
+  state:{settings:{github:cfg,visionSection:'vision'},currentView:'vision',feedbackFiles:[],feedback:{},selectedDate:'2026-09-06'},
   cachedVisionMd:'original A',cachedAffirmationMd:'affirmation A',visionLegacyKey:JSON.stringify(cfg),visionLegacyGeneration:0,visionConnectionGeneration:0,
   visionMdFetchStatus:{vision:{ok:true,attemptedAt:1},affirmation:{ok:true,attemptedAt:1}},visionEditDraft:null,visionEditSaving:false,
   visionOverview:{render:()=>'',hydrate:async()=>false,reset(){}},renderHeader:()=>'',renderVisionAlignment:()=>'',renderVisionBoard:()=>'',renderMarkdown:x=>x,escapeHTML:x=>x,

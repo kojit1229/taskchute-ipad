@@ -372,7 +372,7 @@ export function isRoutineGateBlock(block) {
 
 function orderedGateBlocks(blocks) {
   const order = new Map(orderedGateRules().map((rule, index) => [String(rule.id), Number.isFinite(rule.order) ? rule.order : index]));
-  return blocks.filter(block => isRoutineGateBlock(block) && !readingExcluded(block.recurrenceGroupId))
+  return blocks.filter(block => isRoutineGateBlock(block) && (!block.date || !readingExcluded(block.recurrenceGroupId)))
     .map((block, index) => ({ block, index }))
     .sort((a, b) => (order.get(String(a.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER)
       - (order.get(String(b.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
@@ -567,7 +567,8 @@ function renderTodayTower() {
     <header class="daily-today-clock tower-glass-panel" aria-label="今日の時計">
       <span id="towerDate">${date} (${weekday})</span><time id="towerClock">${clockText(now)}</time>
       <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
-      <nav aria-label="今日の閲覧と移動">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}<button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
+      <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
+      <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}

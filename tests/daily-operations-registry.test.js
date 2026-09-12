@@ -11,7 +11,8 @@ let commits = 0, saves = 0, schedules = 0;
 const deps = { state, now: () => '2026-09-10T12:00:00',
   commitCandidate: options => { commits++; return commitCandidate(options); },
   persist: () => { saves++; return true; }, scheduleSync: () => schedules++, legacy: {} };
-const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal'];
+// S-B2b/3段-10(監督者の契約追随 2026-09-12 20:35): 内部登録行 daily-reading-record(記録は旗で無効)を save-tower-journal と同じ扱いで追加。design/CHANGELOG.md
+const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record'];
 assert.deepEqual(Object.keys(rows).sort(), [...expectedActions].sort());
 for (const name of expectedActions) {
   const before = JSON.parse(JSON.stringify(state));
@@ -105,7 +106,11 @@ const ctx = { DAILY_ACTIONS, state: { modal: null },
   closeFillGapAware: () => calls.push(['modal-close']), deleteFromModal: () => calls.push(['modal-delete']),
   submitModal: () => { blockSaveCount++; return { ok: false }; }, rememberWorkListOrigin() {},
   document: { addEventListener: (name, handler) => { assert.equal(name, 'click'); listener = handler; } },
-  dispatchAction: name => { calls.push(['other', name]); return true; }
+  dispatchAction: name => { calls.push(['other', name]); return true; },
+  // S-B2b/3段-10(監督者の vm ハーネス追随 2026-09-12 21:05): 配線ブロックが module 定数 dailyReading(createDailyReading)を参照するので砂場に控えを注入(v387 fixV387 と同じ型)。design/CHANGELOG.md
+  dailyReading: { open: kind => calls.push(['daily-reading-open', kind]), close() {}, current: () => null },
+  todayISO: () => '2026-09-12', recurrenceMatchesDate: () => false, makeRecurrenceInstance: () => null,
+  isDailyReadingBlock: () => false, markDailyReadingEdit: value => value
 };
 const weeklyNames = ['weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock',
   'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs',
@@ -120,8 +125,9 @@ const fire = (action, disabled = false) => {
   listener({ target: { closest: selector => selector === '[data-action]' ? target : null } });
   return target;
 };
-for (const name of ['edit-block', 'edit-task', 'edit-project', 'modal-close', 'modal-delete']) fire(name);
-assert.deepEqual(routes, ['edit-block', 'edit-task', 'edit-project', 'modal-close', 'modal-delete']);
+// S-B2b/3段-10(監督者の契約追随 2026-09-12 21:25): legacy 行 daily-reading-open(上部3ボタンの「読む」)もクリック→登録表→deps.legacy の1回委譲で届くことを同じ形で検査。design/CHANGELOG.md
+for (const name of ['edit-block', 'edit-task', 'edit-project', 'modal-close', 'modal-delete', 'daily-reading-open']) fire(name);
+assert.deepEqual(routes, ['edit-block', 'edit-task', 'edit-project', 'modal-close', 'modal-delete', 'daily-reading-open']);
 assert.deepEqual(calls.map(row => row[0]), routes);
 ctx.state.modal = { type: 'block', id: 'b' };
 assert.equal(fire('modal-save').disabled, false, 'failed save re-enables button');
@@ -143,8 +149,9 @@ const immediate = DAILY_ACTIONS.filter(name => !deferred.includes(name));
 // 38: add/complete/delete add three registry paths; edit replaces the existing unwired row.
 // B8/41: two ordered placement operations are added (20 + 2); keep exhaustive routing checks.
 // R3-A/3回-03(監督者の契約追随 2026-09-11): 0秒思考の登録行3件(zero-draft-save / zero-complete / zero-leave)追加(22→25)。design/CHANGELOG.md
-assert.equal(immediate.length, 25);
-assert(immediate.every(name => routes.includes(name)), 'other 25 data-actions reach the registry immediately');
+// S-B2b/3段-10(監督者の契約追随 2026-09-12 21:10): 公開操作 daily-reading-open(legacy)が即時経路に1行増えて 25→26。design/CHANGELOG.md
+assert.equal(immediate.length, 26);
+assert(immediate.every(name => routes.includes(name)), 'other 26 data-actions reach the registry immediately');
 const confirmationActions = {};
 const visit = node => {
   if (!node || typeof node !== 'object') return;

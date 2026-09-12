@@ -5,6 +5,8 @@ assert.equal(buildReadingView(request, { ok: true, text: 'fixture' }, s => `<p>$
 for (const result of [{ ok: false, status: 401 }, { ok: false, status: 404 }, { ok: true, text: '  ' }])
   assert.throws(() => buildReadingView(request, result, s => s));
 console.log('PASS reading view requires successful, nonempty content');
+for (const [status, message] of [[404, '昨日の結果はまだありません'], [401, '接続状態を確認してください'], [500, '取得できませんでした／再試行']])
+  assert.throws(() => buildReadingView(request, { ok: false, status }, s => s), { message });
 
 const { buildDailyReading, readingMark, readingRule } = require('../src/core/daily-reading.js');
 const { configureRecurrence, recurrenceMatchesDate, makeRecurrenceInstance } = require('../src/core/recurrence.js');
@@ -18,6 +20,15 @@ function fixture() {
 }
 const input = (state, kind = 'affirmation') => ({ kind, date: DAY, referenceDate: kind === 'feedback' ? '2026-09-11' : DAY,
   recordedAt: AT, routineIds: { ...state.settings.dailyReadingRoutineIds }, displayed: true });
+{
+  for (const date of ['', undefined]) {
+    const state = fixture(), block = { ...makeRecurrenceInstance(state.recurrences[0], DAY), date };
+    state.blocks = [block]; const original = structuredClone(state);
+    assert.equal(buildDailyReading(state, input(state), deps).records.length, 0);
+    assert.deepEqual(state, original);
+  }
+  console.log('PASS fixSB2b4 empty attribution preserves existing Block');
+}
 {
   const state = fixture(), original = structuredClone(state), result = buildDailyReading(state, input(state), deps), block = result.records[0].after;
   assert.deepEqual(state, original); assert.equal(block.id, `rec_affirm_${DAY}`); assert.equal(block.source, 'daily-reading-auto');

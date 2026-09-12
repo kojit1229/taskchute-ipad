@@ -58,7 +58,7 @@ export function buildDailyReading(state, input, deps) {
     return stop("閲覧のみ（対応設定を確認してください）");
   const id = rule ? `rec_${rule.id}_${date}` : `daily-reading-feedback_${date}`;
   const matches = state.blocks.filter(block => block.id === id), before = matches[0];
-  if (matches.length > 1 || before?.deleted || before && before.category !== "ルーティン" || before?.date && before.date !== date
+  if (matches.length > 1 || before?.deleted || before && before.category !== "ルーティン" || before && before.date !== date
       || before && (before.recurrenceGroupId || "") !== (rule?.id || "")) return stop("閲覧のみ（対象を確認してください）");
   const mark = readingMark(before);
   if (before?.source === "daily-reading-auto" && mark && mark.kind === kind && before.completed

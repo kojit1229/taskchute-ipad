@@ -13,7 +13,23 @@ configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Numbe
   const deps = { state, commitCandidate, now: () => AT, today: () => DAY, readingCurrent: () => true,
     readingMatches: recurrenceMatchesDate, readingInstance: makeRecurrenceInstance,
     persist: () => { saves++; return !fail; }, scheduleSync: () => { syncs++; }, refreshActualReports: () => { throw Error('report is a later unit'); } };
-  const input = { kind: 'affirmation', date: DAY, referenceDate: DAY, recordedAt: AT, displayed: true, routineIds: { ...state.settings.dailyReadingRoutineIds } };
+  const input = { sequence: 1, kind: 'affirmation', date: DAY, referenceDate: DAY, recordedAt: AT, displayed: true, routineIds: { ...state.settings.dailyReadingRoutineIds } };
+  // fixSB2b2: kind/sequence are the reader's existing reading-kind/request-number fields.
+  const snapshot = structuredClone(state);
+  const invalidInputs = [{}, ...['kind', 'sequence', 'date', 'referenceDate', 'recordedAt', 'displayed'].map(key => {
+    const value = { ...input }; delete value[key]; return value;
+  }), ...[{ kind: 'unknown' }, { sequence: 0 }, { sequence: 1.5 }, { sequence: '1' },
+    { date: '2026-02-30' }, { referenceDate: '2026-13-01' }, { recordedAt: DAY + 'T25:00:00' },
+    { displayed: 'true' }].map(value => ({ ...input, ...value }))];
+  for (const value of invalidInputs) {
+    assert.equal(runDailyOperation('daily-reading-record', value, deps).status, 'invalid');
+    assert.deepEqual(state, snapshot); assert.equal(saves, 0); assert.equal(syncs, 0);
+  }
+  for (const value of [{ ...input, displayed: false }, { ...input, routineIds: undefined }]) {
+    const result = runDailyOperation('daily-reading-record', value, deps);
+    assert(result.ok); assert.match(result.message, /閲覧のみ/);
+    assert.deepEqual(state, snapshot); assert.equal(saves, 0); assert.equal(syncs, 0);
+  }
   const run = () => runDailyOperation('daily-reading-record', input, deps);
   const empty = structuredClone(state); assert(run().discarded); assert.deepEqual(state, empty); assert.equal(saves, 0); assert.equal(syncs, 0);
   state.settings.dailyReadingRecordEnabled = true; fail = true; const original = structuredClone(state), blocks = state.blocks, habits = state.habitStreaks;
@@ -75,6 +91,10 @@ configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Numbe
         show: (req, html) => { shown = req; document.querySelector('main').innerHTML = html; } });
       for (const kind of ['affirmation', 'feedback', 'visionBoard']) successes.push(Boolean((await reader.open(kind))?.displayed));
       const image = document.querySelector('img'), imageShown = Boolean(image?.naturalWidth && image.isConnected);
+      const retainedImage = (await fetch(image.src)).ok;
+      reader.close();
+      const releasedImage = await fetch(image.src).then(() => false, () => true);
+      if (!retainedImage || !releasedImage) throw new Error('fixSB2b4 image URL lifetime');
       let resolve;
       pending = new Promise(r => { resolve = r; }); const late = reader.open('feedback'); reader.close();
       resolve({ ok: true, text: 'late closed' }); const closed = await late;

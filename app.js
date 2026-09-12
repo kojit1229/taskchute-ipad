@@ -1635,6 +1635,7 @@ const dailyOperationDeps = {
     showToast("実績を訂正しました");
   },
   legacy: {
+    "daily-reading-open": input => dailyReading.open(input.readingKind),
     "edit-block": ({ id }) => openBlockEditor(id),
     "edit-task": ({ id }) => openTaskEditor(id),
     "edit-project": ({ id }) => openProjectEditor(id),
@@ -10584,7 +10585,10 @@ function nowConveyorComplete(id) {
 
 // Block adapter with optional recurrence changes; an active draft owns the commit.
 function commitBlockChanges(blocks, effects = () => {}, recurrences = state.recurrences) {
-  blocks = blocks.map(after => markDailyReadingEdit(state.blocks.find(before => before.id === after.id), after));
+  blocks = blocks.map(after => {
+    const before = state.blocks.find(row => row.id === after.id);
+    return before?.externalRef?.startsWith("daily-reading:v1:") ? markDailyReadingEdit(before, after) : after;
+  });
   if (draftSaveTransaction?.active) {
     state.blocks = blocks;
     if (recurrences !== state.recurrences) state.recurrences = recurrences;
@@ -13860,7 +13864,7 @@ function renderModal(innerHTML) {
 
 function closeModal() {
   if (draftSaveTransaction?.defer(() => closeModal())) return;
-  dailyReading.close();
+  if (state.modal?.type === "dailyReading") dailyReading.close();
   modalDraftBaseline = null;
   state.modal = null;
   modalRoot.classList.remove("open");
