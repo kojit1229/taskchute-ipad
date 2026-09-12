@@ -41,6 +41,7 @@ import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createDailyReading } from "./src/features/daily-reading.js";
+import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurrence.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -1554,6 +1555,8 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyReading = createDailyReading({ document, today: todayISO, addDays, now: nowDateTime,
+  routineIds: () => ({ ...state.settings.dailyReadingRoutineIds }),
+  record: input => runDailyOperation("daily-reading-record", input, dailyOperationDeps),
   connection: () => `${visionConnectionKey()}${visionConnectionKey() ? `:${visionConnectionGeneration}` : ""}`,
   board: () => ["now_vision.pdf", "45_vision.pdf", "80_vision.pdf"][clamp(state.settings.visionBoardIndex || 0, 0, 2)],
   readVision: visionReader.read, readRaw: (name, kind) => fetchGitHubRawResult(name, kind, { cache: "no-store" }),
@@ -1562,6 +1565,8 @@ const dailyReading = createDailyReading({ document, today: todayISO, addDays, no
 });
 const dailyOperationDeps = {
   reading: dailyReading,
+  today: todayISO, readingCurrent: input => dailyReading.current(input),
+  readingMatches: recurrenceMatchesDate, readingInstance: makeRecurrenceInstance,
   journalConnection: zeroConnectionKey,
   journalSaved: date => { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); },
   makeBlock: input => makeBlock(input), projectName: id => projectName(id),
@@ -2221,6 +2226,7 @@ function normalizeState(value) {
     ? value.settings
     : {};
   value.settings = {
+    dailyReadingRoutineIds: { affirmation: "", visionBoard: "" }, dailyReadingRecordEnabled: false,
     earlyRiseTarget: "06:00",
     ironDailyTarget: 2000,
     ironManualBaseKg: 0,

@@ -1,5 +1,7 @@
+import { buildDailyReading } from "../core/daily-reading.js";
 export const READING_LABELS = { affirmation: "アファメーション", visionBoard: "ビジョンボード", feedback: "昨日のAIフィードバック" };
 export const dailyReadingOpenOperation = { legacy: true, run: (input, deps) => deps.reading.open(input.readingKind) };
+export const dailyReadingRecordOperation = { prepare: input => input, build: buildDailyReading };
 
 export function buildReadingView(request, result, markdown) {
   if (!result?.ok) throw new Error(result?.status === 404 ? "対象の内容はまだありません" : "接続状態を確認して再試行してください");
@@ -10,24 +12,31 @@ export function buildReadingView(request, result, markdown) {
 // A request owns the day, connection and visible container, including image decoding.
 export function createDailyReading(deps) {
   let sequence = 0, active = null;
-  const previous = new Map();
+  const previous = new Map(), successes = new Map();
   const current = request => active === request && request.sequence === sequence
     && request.connection === deps.connection() && deps.visible(request);
   function close() { sequence++; active = null; }
   function status(request, text) { if (current(request)) deps.document.querySelector('[data-reading-status]').textContent = text; }
+  function record(request) {
+    const result = deps.record?.({ ...request, displayed: true });
+    status(request, result ? result.ok ? result.message : "保存できませんでした。同じ成功時刻で再試行できます" : "閲覧済み");
+    request.saved = Boolean(result?.ok);
+    return result;
+  }
   async function open(kind) {
     if (!Object.hasOwn(READING_LABELS, kind)) return;
     if (active?.pending && active.kind === kind && current(active)) return active.promise;
     const date = deps.today(), connection = deps.connection();
     const request = { kind, date, referenceDate: kind === "feedback" ? deps.addDays(date, -1) : date,
-      connection, sequence: ++sequence, board: deps.board(), pending: true };
+      connection, sequence: ++sequence, board: deps.board(), pending: true, routineIds: deps.routineIds?.() };
     active = request;
     deps.show(request, `<section class="modal-card"><h2>${READING_LABELS[kind]}</h2>
       <button type="button" data-action="modal-close">閉じる</button>
       <p>${request.referenceDate}</p><p role="status" data-reading-status>読み込んでいます</p>
       <article class="md-render" data-reading-body></article>
       <button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">再試行</button></section>`);
-    const key = JSON.stringify([connection, kind, request.referenceDate, request.board]);
+    const key = JSON.stringify([connection, kind, request.referenceDate, request.board, request.routineIds]);
+    const prior = successes.get(key);
     const body = deps.document.querySelector('[data-reading-body]');
     if (previous.has(key)) { body.innerHTML = previous.get(key); status(request, "読み込んでいます（前回取得分）"); }
     request.promise = (async () => {
@@ -65,8 +74,9 @@ export function createDailyReading(deps) {
         }
         if (!current(request)) return;
         if (deps.today() !== request.date) { request.pending = false; return open(kind); }
-        request.recordedAt = deps.now();
-        status(request, "閲覧済み");
+        request.recordedAt = prior?.recordedAt || deps.now();
+        successes.set(key, { recordedAt: request.recordedAt });
+        record(request);
         return { displayed: true, request };
       } catch (error) {
         status(request, `${previous.has(key) ? "前回取得分。" : ""}${error.message || "取得できませんでした"}`);
@@ -75,5 +85,5 @@ export function createDailyReading(deps) {
     })();
     return request.promise;
   }
-  return { open, close };
+  return { open, close, current: input => Boolean(active && input.sequence === active.sequence && current(active)) };
 }

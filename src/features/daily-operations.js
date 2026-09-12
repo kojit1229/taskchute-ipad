@@ -13,7 +13,7 @@ import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 import { gapPlacementOperation } from "./daily-gap-placement.js";
 import { zeroEntryOperation } from "./zero-entry.js";
 import { towerJournalOperation } from "./tower-journal.js";
-import { dailyReadingOpenOperation } from "./daily-reading.js";
+import { dailyReadingOpenOperation, dailyReadingRecordOperation } from "./daily-reading.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -27,6 +27,7 @@ const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](
 
 export const DAILY_OPERATIONS = {
   "daily-reading-open": dailyReadingOpenOperation,
+  "daily-reading-record": dailyReadingRecordOperation,
   "save-tower-journal": towerJournalOperation,
   "zero-draft-save": zeroEntryOperation("draft"),
   "zero-complete": zeroEntryOperation("complete"),
@@ -281,7 +282,7 @@ export function runDailyOperation(name, input, deps) {
         finally {
           if (!result.unchanged) {
             try {
-              if (deps.refreshActualReports && (name !== "daily-plan-times-save"
+              if (name !== "daily-reading-record" && deps.refreshActualReports && (name !== "daily-plan-times-save"
                   || result.records.some(row => row.before?.date !== row.after?.date))) {
                 const dates = affectedReportDates(deps.state, result);
                 if (dates.length) deps.refreshActualReports(dates);
