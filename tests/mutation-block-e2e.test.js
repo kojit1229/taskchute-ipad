@@ -203,6 +203,9 @@ async function fixture(extraNames = []) {
   const ctx = vm.createContext({ ...core, stamped, createDraftSaveTransaction, validatePlannedDraft, gapWarning, console: { error() {} },
     // v393: run the real detail builder; lifecycleFixture supplies the full app wiring.
     buildBlockDetailDraft, dailyOperationDeps: {},
+    dailyReading: { open() {}, close() {}, current: () => null },
+    recurrenceMatchesDate: () => false, makeRecurrenceInstance: () => null,
+    isDailyReadingBlock: () => false, markDailyReadingEdit: value => value,
     zeroConnectionKey: () => 'fixture-connection', feedbackUiController: null, feedbackReportController: null,
     nowDateTime: () => new Date(clock()).toISOString().slice(0, 19), todayISO: () => DATE,
     draftSaveTransaction: null, _lastSaveError: null, _quotaToastShown: false, _blockSaveInFlight: false,

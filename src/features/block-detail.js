@@ -1,4 +1,5 @@
 import { DAILY_OPERATIONS } from "./daily-operations.js";
+import { markDailyReadingEdit } from "../core/daily-reading.js";
 
 // Compose registered builders inside the existing editor's single transaction.
 export function buildBlockDetailDraft(state, before, edited, fields, deps) {
@@ -46,7 +47,7 @@ export function buildBlockDetailDraft(state, before, edited, fields, deps) {
     if (fields.taskCompleted) apply("daily-plan-complete", { desiredCompleted: true });
     if (result.records.length) effects.push(() => deps.taskCompletionEffect?.(result));
   }
-  const block = draft.blocks.find(row => row.id === edited.id);
+  const block = markDailyReadingEdit(before, draft.blocks.find(row => row.id === edited.id));
   return { block, apply(target) {
     // Only lifecycle owners are copied; recurrence edits remain owned by the legacy editor.
     for (const kind of ["tasks", "declarations", "weeklyCommitments", "pomodoro"]) target[kind] = draft[kind];

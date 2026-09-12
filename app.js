@@ -40,6 +40,9 @@ import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
+import { createDailyReading } from "./src/features/daily-reading.js";
+import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurrence.js";
+import { isDailyReadingBlock, markDailyReadingEdit } from "./src/core/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -1332,6 +1335,7 @@ function visionConnectionKey() {
   return personalDataReady(state.settings.github) ? JSON.stringify(personalDataConn(state.settings.github)) : "";
 }
 function invalidateVisionConnection() {
+  dailyReading.close();
   visionLegacyKey = visionConnectionKey();
   visionLegacyGeneration++;
   visionConnectionGeneration++;
@@ -1551,16 +1555,24 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      ここで render() を呼ぶと、後方で宣言される const(JOURNAL_PROMPTS 等)が
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
+const dailyReading = createDailyReading({ document, today: todayISO, addDays, now: nowDateTime,
+  routineIds: () => ({ ...state.settings.dailyReadingRoutineIds }),
+  record: input => runDailyOperation("daily-reading-record", input, dailyOperationDeps),
+  connection: () => `${visionConnectionKey()}${visionConnectionKey() ? `:${visionConnectionGeneration}` : ""}`,
+  board: () => ["now_vision.pdf", "45_vision.pdf", "80_vision.pdf"][clamp(state.settings.visionBoardIndex || 0, 0, 2)],
+  readVision: visionReader.read, readRaw: (name, kind) => fetchGitHubRawResult(name, kind, { cache: "no-store" }),
+  markdown: renderMarkdown, visible: request => state.modal?.type === "dailyReading" && state.modal.sequence === request.sequence,
+  show: (request, html) => { state.modal = { type: "dailyReading", sequence: request.sequence }; renderModal(html); }
+});
 const dailyOperationDeps = {
+  reading: dailyReading,
+  today: todayISO, readingCurrent: input => dailyReading.current(input),
+  readingMatches: recurrenceMatchesDate, readingInstance: makeRecurrenceInstance,
   journalConnection: zeroConnectionKey,
   journalSaved: date => { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); },
   makeBlock: input => makeBlock(input), projectName: id => projectName(id),
   draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
-  isReadingBlock: function isReadingBlock(block) {
-  return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
-    || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
-    || block?.id?.startsWith("daily-reading-feedback_"));
-  },
+  isReadingBlock: block => isDailyReadingBlock(block, state),
   get state() { return state; }, commitCandidate, now: nowDateTime, notify: showToast,
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
@@ -1623,6 +1635,7 @@ const dailyOperationDeps = {
     showToast("実績を訂正しました");
   },
   legacy: {
+    "daily-reading-open": input => dailyReading.open(input.readingKind),
     "edit-block": ({ id }) => openBlockEditor(id),
     "edit-task": ({ id }) => openTaskEditor(id),
     "edit-project": ({ id }) => openProjectEditor(id),
@@ -2211,6 +2224,7 @@ function normalizeState(value) {
     ? value.settings
     : {};
   value.settings = {
+    dailyReadingRoutineIds: { affirmation: "", visionBoard: "" }, dailyReadingRecordEnabled: false,
     earlyRiseTarget: "06:00",
     ironDailyTarget: 2000,
     ironManualBaseKg: 0,
@@ -10571,6 +10585,10 @@ function nowConveyorComplete(id) {
 
 // Block adapter with optional recurrence changes; an active draft owns the commit.
 function commitBlockChanges(blocks, effects = () => {}, recurrences = state.recurrences) {
+  blocks = blocks.map(after => {
+    const before = state.blocks.find(row => row.id === after.id);
+    return before?.externalRef?.startsWith("daily-reading:v1:") ? markDailyReadingEdit(before, after) : after;
+  });
   if (draftSaveTransaction?.active) {
     state.blocks = blocks;
     if (recurrences !== state.recurrences) state.recurrences = recurrences;
@@ -13846,6 +13864,7 @@ function renderModal(innerHTML) {
 
 function closeModal() {
   if (draftSaveTransaction?.defer(() => closeModal())) return;
+  if (state.modal?.type === "dailyReading") dailyReading.close();
   modalDraftBaseline = null;
   state.modal = null;
   modalRoot.classList.remove("open");

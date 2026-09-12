@@ -1,5 +1,6 @@
 import { scheduleDisplay, scheduleWarning, renderSchedule } from "./single-schedule-view.js";
 import { state } from "../state/store.js";
+import { READING_LABELS } from "./daily-reading.js";
 import { dailyActuals, actualDurationMinutes } from "../core/daily-actuals.js";
 import { karadaImportHTML } from "./karada-import.js";
 import { ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
@@ -17,6 +18,7 @@ let renderTodayPomodoro;
 let todayFocusVisibility, renderTodayFocusBar;
 let journalForDate;
 let gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, gateEditMode;
+let readingExcluded = () => false;
 let scheduledTasksForDate;
 let bodyScansForDate;
 let healthSummaryHTML, conditionFromCachedHealth, conditionCommentText, yesterdayGymKg;
@@ -60,6 +62,7 @@ function configureTodayTower(deps) {
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting, renderTodayPomodoro, todayFocusVisibility, renderTodayFocusBar, journalForDate,
     gateRules, earlyBirdLogForDate, earlyRiseTarget, linkedGymBlock, scheduledTasksForDate, gateEditMode,
+    readingExcluded = () => false,
     bodyScansForDate, healthSummaryHTML, conditionFromCachedHealth, conditionCommentText, yesterdayGymKg
   } = deps);
   if (!flipListenerBound && typeof document !== "undefined") {
@@ -353,9 +356,9 @@ function renderTowerJournal(date) {
   </section>`;
 }
 
-function orderedGateRules() {
+function orderedGateRules(includeReading = false) {
   return (gateRules() || []).map((rule, index) => ({ rule, index }))
-    .filter(({ rule }) => !rule.deleted && rule.category === "ルーティン")
+    .filter(({ rule }) => !rule.deleted && rule.category === "ルーティン" && (includeReading || !readingExcluded(rule.id)))
     .sort((a, b) => (Number.isFinite(a.rule.order) ? a.rule.order : a.index)
       - (Number.isFinite(b.rule.order) ? b.rule.order : b.index))
     .map(({ rule }) => rule);
@@ -369,7 +372,7 @@ export function isRoutineGateBlock(block) {
 
 function orderedGateBlocks(blocks) {
   const order = new Map(orderedGateRules().map((rule, index) => [String(rule.id), Number.isFinite(rule.order) ? rule.order : index]));
-  return blocks.filter(isRoutineGateBlock)
+  return blocks.filter(block => isRoutineGateBlock(block) && (!block.date || !readingExcluded(block.recurrenceGroupId)))
     .map((block, index) => ({ block, index }))
     .sort((a, b) => (order.get(String(a.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER)
       - (order.get(String(b.block.recurrenceGroupId)) ?? Number.MAX_SAFE_INTEGER) || a.index - b.index)
@@ -431,7 +434,7 @@ function gateCountHTML(incomplete, done, showDone) {
 }
 
 function gateEditorHTML(early) {
-  const rules = orderedGateRules();
+  const rules = orderedGateRules(true);
   const rows = rules.map((rule, index) => `<div class="tower-gate-edit-row" data-rule-id="${escapeHTML(rule.id)}">
     <span>G${String(index + 2).padStart(2, "0")}</span><strong>${escapeHTML(rule.title)}</strong><time>${escapeHTML(rule.startTime || "--:--")}</time>
     ${["daily", "weekdays"].includes(rule.kind) ? `<label class="tower-gate-streak-toggle" title="固定化">
@@ -564,6 +567,7 @@ function renderTodayTower() {
     <header class="daily-today-clock tower-glass-panel" aria-label="今日の時計">
       <span id="towerDate">${date} (${weekday})</span><time id="towerClock">${clockText(now)}</time>
       <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
+      <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
       <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>

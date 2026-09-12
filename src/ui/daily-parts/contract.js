@@ -1,6 +1,7 @@
 // Common envelopes only; component-specific fields and business rules belong to their adapters.
 export const DAILY_KINDS = Object.freeze(["block", "schedule", "actual", "task", "project"]);
 export const DAILY_ACTIONS = Object.freeze([
+  "daily-reading-open",
   // 124/R3-03: draft/question, explicit completion, and stopped-draft leave have distinct owners.
   "zero-draft-save", "zero-complete", "zero-leave",
   "daily-plan-times-save", "daily-plan-times-cancel", "daily-plan-complete",

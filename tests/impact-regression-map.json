@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "daily-reading": {
+      "paths": ["^src/(core|features)/daily-reading\\.js$"],
+      "suites": ["daily-reading-core", "daily-reading-e2e"]
+    },
     "tower-journal": {
       "paths": ["^src/features/tower-journal\\.js$"],
       "suites": ["three-screen-connection-e2e", "today-core", "tower-core", "day-cross-ticker"]
