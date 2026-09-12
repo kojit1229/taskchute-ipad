@@ -177,7 +177,12 @@ async function seed(page, values) {
     check("確認確定で今日の時刻なしBlockを1件だけ配置", placed.length === 1 && placed[0].date === TODAY && placed[0].plannedStartAt === "" && placed[0].plannedEndAt === "");
     check("配置後も元TaskをWBSに保持", await results.locator('[data-work-key="task:t-plus7"]').count() === 1);
     await page.locator('[data-action="nav"][data-view="exec"]:visible').first().click();
-    check("配置済みBlockは実行予定へ現れる", await page.locator(`[data-work-list="exec"] [data-work-key="block:${placed[0].id}"] .exec-row-upcoming`).count() === 1);
+    // v390(3段-01、設計06 §3.3 の契約追随・監督者 2026-09-12): 実行の一覧は選択日(ここでは昨日を閲覧中)を対象にし、
+    // 「今日へ」の追加先は実時計の今日。旧期待(昨日を閲覧したまま今日の Block が実行に出る)は新契約と食い違うため、
+    // 選択日を今日へ戻してから今日の Block が実行予定へ現れることを確認する(断言の内容は緩めない)。
+    await page.locator('[data-date-picker]').fill(TODAY);
+    await page.waitForFunction(async date => (await import('/src/state/store.js')).state.selectedDate === date, TODAY);
+    check("配置済みBlockは(選択日を今日へ戻すと)実行予定へ現れる", await page.locator(`[data-work-list="exec"] [data-work-key="block:${placed[0].id}"] .exec-row-upcoming`).count() === 1);
 
     console.log("[3.5] 前倒し期限は全件保持し実効日と外部期限を併記する");
     const tEff7 = task("t-eff7", { dueDate: addDaysISO(TODAY, 9), selfDueOff: false });

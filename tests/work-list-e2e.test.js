@@ -51,7 +51,9 @@ const checked={workflows:0,layouts:0};
    const scrolledTop=await rows.evaluate(el=>el.scrollTop);
    await query.evaluate(el=>el.dispatchEvent(new Event('change',{bubbles:true})));
    assert.equal(await rows.evaluate(el=>el.scrollTop),scrolledTop,'unchanged native change must not reset scroll');
-   const last=rows.locator(`[data-work-key="${scope==='wbs'?'task':'block'}:${scope==='wbs'?'task':'block'}-299"]`);
+   // v390(3段-01、設計06 §3 の契約追随・監督者 2026-09-12): today/exec は予定・実績などの群([data-screen-group])に分けて並べるため
+   // 「時刻順の一列で block-299 が末尾」は旧契約。末尾まで届くことの検査は「容器内で最後に描画された行」に対して行う(wbs は従来どおり task-299)。
+   const last=scope==='wbs'?rows.locator('[data-work-key="task:task-299"]'):rows.locator('[data-work-key]').last();
    const reachable=await last.evaluate(el=>{const r=el.getBoundingClientRect(),p=el.closest('[data-work-list-rows]').getBoundingClientRect();return r.top<p.bottom&&r.bottom>p.top;});
    assert(reachable,'last row scroll reachable '+scope);
    if(scope==='wbs') {
@@ -101,7 +103,9 @@ const checked={workflows:0,layouts:0};
    const root=page.locator(`[data-work-list="${scope}"]`);
    if(scope==='exec') await root.locator('[data-work-filter="mode"]').selectOption('today');
    await root.locator('[data-action="work-list-clear"]').click();
-   assert.equal(await root.locator('[data-work-key]').count(),300,scope+' uses real today when timeline date differs');
+   // v390(3段-01、設計06 §3.2/§3.3 の契約追随・監督者 2026-09-12): 今日は実時計の今日(300件のまま)、実行の一覧は選択日
+   // (2026-09-05 には固定資料の Block が無いので 0 件)。旧期待「実行も選択日を無視して今日を出す」は一方だけを出す旧画面の契約。
+   assert.equal(await root.locator('[data-work-key]').count(),scope==='today'?300:0,scope==='today'?'today uses real today when timeline date differs':'exec follows the selected timeline date');
   }
   await page.evaluate(async()=>{(await import('/src/state/store.js')).state.selectedDate= '2026-09-06';});
   const output=process.env.WORK_LIST_EVIDENCE_DIR;if(output)fs.mkdirSync(output,{recursive:true});

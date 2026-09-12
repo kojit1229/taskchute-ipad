@@ -87,7 +87,9 @@ async function seed(page, values) {
     check("execヘッダ「TOWER / 実行」が出る", (await page.textContent(".exec-header-line")).includes("TOWER / 実行"));
     check("初期表示は計画モードがactive", await page.locator('[data-action="exec-mode-toggle"][data-mode="plan"]').first().evaluate((el) => el.classList.contains("active")));
     check("計画モードで今日・これからの全件予定一覧が出る", await page.locator(".work-list[data-work-list=exec]").count() === 1);
-    check("計画モードでTIMELINE RADARは出ない", await page.locator(".tl-radar-panel").count() === 0);
+    // v390(3段-01、設計06 §3.3 L112 の契約追随・監督者 2026-09-12): 狭幅の実行は計画一覧と時間軸を縦に併置する
+    // (旧期待「計画モードでは時間軸を出さない」は一方だけを出す旧画面の契約)。一覧が出ていることは上の断言で維持。
+    check("計画モードでも時間軸(TIMELINE RADAR)を一覧と縦に併置する", await page.locator(".tl-radar-panel").count() === 1);
 
     await resetSetItemLog(page);
     const beforeToggle = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);

@@ -44,6 +44,7 @@ import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
+import { candidateTasks } from "./src/features/three-screen-rows.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
@@ -274,8 +275,8 @@ const navItems = [
 //       まとめ、「時間」を廃止する(PCサイドバー統合はv333b。navItemsは今回無改修)。
 const mobileNav = [
   { id: "today", label: "今日" },
-  { id: "journal", label: "ジャーナル" },
   { id: "exec", label: "実行" },
+  { id: "wbs", label: "作業一覧" },
   { id: "more", label: "その他" }
 ];
 
@@ -320,7 +321,7 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureWorkList({ escapeHTML, todayISO, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails,
+configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
@@ -6352,7 +6353,7 @@ function execHeaderHTML() {
 // 行= ☐(完了済み表示・非活性)/ タイトル+meta(実績HH:MM–HH:MM・充放電)/
 // 編集(既存edit-block、ロジック無改変)。
 function dailyBlockDetails(block, actual = false, canEdit = true) {
-  return renderDailyBlockDetails(block, { getTask: id => state.tasks.find(task => task.id === id),
+  return renderDailyBlockDetails(block, { getTask: id => state.tasks.find(task => task.id === id && task.kind !== "other"),
     projectName, estimateMinutesForBlock, timeFromDateTime, localDateTimeToMs, escapeHTML, canEdit }, actual);
 }
 
@@ -6419,7 +6420,7 @@ function renderExecView() {
   // 「✅実績」へ切替えても下書きが消えないようにする)。state.timelineModeは書き換えない。
   const draftActiveHere = Boolean(_scheduleDraft) && _scheduleDraft.date === state.selectedDate;
   const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: draftActiveHere ? "planned" : (isActual ? "actual" : timelineMode) })}</div>`;
-  const listHTML = isActual ? execDoneListHTML() : renderTasks({ embedded: true });
+  const listHTML = isActual ? renderWorkList("exec-actual") : renderTasks({ embedded: true });
   // v357(§3): PC(1280px以上)で「空き時間を補うシート」が開いている間は、左列を一覧ではなく
   // シート本体に差し替える(閉じる/置く/作るで一覧に戻る。右の時間軸は動かさない)。
   const fillGapDesktopActive = fillGapExecDesktop() && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate;
@@ -6432,7 +6433,7 @@ function renderExecView() {
   // Block/配置ロジックには触れない。
   const bodyHTML = desktop
     ? `<div class="exec-two-pane"><div class="exec-pane-left">${leftHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
-    : ((isActual || draftActiveHere) ? timelineHTML : listHTML);
+    : `${leftHTML}${timelineHTML}`;
   return `
     <div class="view-header exec-header">
       <div class="exec-header-line">
@@ -6463,7 +6464,7 @@ function renderExecView() {
 function renderTasks(opts = {}) {
   const embedded = opts.embedded === true;
   return `${embedded ? "" : execHeaderHTML() + renderDateBar()}
-    ${carryOverPanel()}${renderWorkList("exec")}
+    ${carryOverPanel()}${renderWorkList("exec")}${renderWorkList("exec-candidates")}
     ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="daily-gap-choose">計画の空きへ配置</button><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
 }
 // v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・
@@ -9821,12 +9822,9 @@ function minuteFromHHMM(hhmm) {
   return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
 }
 
-// v331のrenderOpenTasksと同じ母集団(未完了・その他Task除外・Wish除外・期限<=+7日 or なし)。
+// S3-01: 実行の追加候補と同じ母集団。期限・やりたいことの除外は既定オフ。
 function fillGapTaskPool(date) {
-  const limit = addDays(date, 7);
-  const isWishTask = (task) => Boolean(state.projects.find((p) => p.id === task.projectId)?.kind === "wish");
-  return state.tasks.filter((task) => !task.deleted && !isTaskDead(task) && task.kind !== "other" && !isWishTask(task))
-    .filter((task) => { const due = effectiveDueDate(task); return !due || due <= limit; });
+  return candidateTasks(state, date, {}, { addDays, isTaskDead, dueDate: effectiveDueDate });
 }
 
 // 見積の並べ替え/収まる判定用の内部既定値(未設定は30分とみなす)。表示にはこの値を
