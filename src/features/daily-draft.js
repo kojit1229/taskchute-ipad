@@ -1,5 +1,13 @@
 export const DAILY_DRAFT_KEY = "taskchute-journal-daily-draft-v1:";
 
+// Zero sessions share this namespace and connection owner; no independent storage key.
+export function createZeroDraftSection(options, connection) {
+  const store = createDailyDraftStore({ ...options, restore: true });
+  const owner = { kind: "zero", id: "session", draftId: "session", connection };
+  return { get: () => store.get(owner), put: value => store.put({ ...value, ...owner }),
+    clear: () => store.clear(owner, "discard") };
+}
+
 // Existing owners stay memory-only; single schedules opt into same-session restoration.
 export function createDailyDraftStore({ storage = () => globalThis.sessionStorage, restore = false } = {}) {
   const drafts = new Map();
