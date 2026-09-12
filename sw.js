@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v393";  // v393: プロジェクト詳細と予定枠詳細を Task 詳細と同じ一つの編集枠へ(全項目常設・完了操作を冒頭に)、ジャーナルの下書き保護と自動保存
+const CACHE_NAME = "taskchute-journal-pwa-v394";  // v394: 上部3ボタン(アファメーション・ビジョンボード・昨日のAIフィードバック)の表示成功と当日記録の接続(記録の保存は設定で無効のまま)
+// v393: プロジェクト詳細と予定枠詳細を Task 詳細と同じ一つの編集枠へ(全項目常設・完了操作を冒頭に)、ジャーナルの下書き保護と自動保存
 // v392: 今日画面の8項目とルーティン編集の配置、信条の日本語副題、3画面と詳細の幅別配置(390/768/1024/1280/1440px)
 // v391: 今日・実行・作業一覧が同じ対象・日付の分類から共通行を受け取る、作業一覧は左Project・右Taskの独立検索と選択保持、タスク詳細は切替タブなしの一つの編集枠
 
@@ -627,6 +628,8 @@ const CACHE_NAME = "taskchute-journal-pwa-v393";  // v393: プロジェクト詳
 // 「ビジョンボードが見れない」原因調査で見つかった同根の残骸なので合わせて削除する。
 
 const APP_SHELL = [
+  "./src/core/daily-reading.js",
+  "./src/features/daily-reading.js",
   "./src/features/daily-operations.js",
   "./src/features/feedback/feedback-coordinator.js",
   "./src/features/feedback/feedback-entry.js",
