@@ -1,4 +1,6 @@
 import { isArchivedDate } from "./archive-date-protection.js";
+import { excludedReadingRule } from "../core/daily-reading.js";
+import { recurrenceMatchesDate } from "../core/recurrence.js";
 // src/features/today.js — v229: TOWERのGATE編集状態と早起き正本を依存注入する。
 // stateはlive bindingで読み取り、TOWER描画層へ必要最小限の依存を注入する。
 
@@ -95,6 +97,7 @@ function configureToday(deps) {
     syncAlertBanner, gateEditMode, healthSummaryHTML, conditionFromCachedHealth, conditionCommentText
   } = deps);
   configureTodayTower({
+    readingExcluded: id => excludedReadingRule(state, id, todayISO(), { readingMatches: recurrenceMatchesDate }),
     escapeHTML, todayISO, syncAlertBanner, blocksForDate, towerFlights,
     runningBlockOf, queueBlocksOf, localDateTimeToMs, resolveEstimateMin, minutesOf, timeFromDateTime, clamp, isStaleBlock,
     towerMotionSetting: () => state.settings.towerMotion,

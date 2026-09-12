@@ -30,6 +30,20 @@ export function readingRule(state, kind, date, deps) {
   const rule = rules.flat().find(row => row.id === ids[kind]);
   return rule && deps.readingMatches(rule, date) ? rule : null;
 }
+export function isDailyReadingBlock(block, state) {
+  return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
+    || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
+    || block?.id?.startsWith("daily-reading-feedback_") || block?.recurrenceGroupId
+      && Object.values(state.settings?.dailyReadingRoutineIds || {}).includes(block.recurrenceGroupId));
+}
+export function markDailyReadingEdit(before, after) {
+  if (!after || !readingMark(before, true) || JSON.stringify(before) === JSON.stringify(after)) return after;
+  // Keep the original attribution in the marker (recordedAt) even after a move/deletion.
+  return { ...after, source: "daily-reading-manual", externalRef: before.externalRef };
+}
+export function excludedReadingRule(state, id, date, deps) {
+  return Boolean(id) && ["affirmation", "visionBoard"].some(kind => readingRule(state, kind, date, deps)?.id === id);
+}
 export function buildDailyReading(state, input, deps) {
   const { kind, date, referenceDate, recordedAt, routineIds } = input;
   const stop = message => ({ records: [], message });

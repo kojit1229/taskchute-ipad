@@ -1,4 +1,5 @@
 import { assertNotInsideBuild } from "../core/commit.js";
+import { markDailyReadingEdit } from "../core/daily-reading.js";
 import { buildDailyTimes, cancelDailyTimes } from "../core/daily-time.js";
 import { assertCopyable, buildBlockCopy } from "../core/block-copy.js";
 import { orderDailyBlocks } from "../core/daily-order.js";
@@ -273,7 +274,10 @@ export function runDailyOperation(name, input, deps) {
       build: (state, values) => {
         // Schedule owners validate candidate id/fingerprint, independent of the viewed date.
         if (!op.prepare) validateCurrent(state, values, deps);
-        return op.build(state, values, deps);
+        const candidate = op.build(state, values, deps);
+        if (name !== "daily-reading-record" && candidate.records) candidate.records = candidate.records.map(row =>
+          row.kind === "blocks" ? { ...row, after: markDailyReadingEdit(row.before, row.after) } : row);
+        return candidate;
       },
       effects: result => {
         // fixB3(73a F1): 保存はすでに成立しているので、同期予約は effects(描画・通知)の成否に依存させない。

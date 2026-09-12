@@ -3,6 +3,7 @@ const { chromium, launchOptions, defaultContextOptions, startServer, randomPort 
 const { runDailyOperation } = require('../src/features/daily-operations.js');
 const { commitCandidate } = require('../src/core/commit.js');
 const { configureRecurrence, recurrenceMatchesDate, makeRecurrenceInstance } = require('../src/core/recurrence.js');
+const { isDailyReadingBlock } = require('../src/core/daily-reading.js');
 const DAY = '2026-09-12', AT = `${DAY}T10:00:00`;
 configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }, nowDateTime: () => AT });
 {
@@ -25,6 +26,23 @@ configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Numbe
   state.blocks = []; state.habitStreaks = {}; state.weeklyCommitments = [{ id: `wci_${DAY}_rec_affirm_${DAY}`, recordType: 'item' }];
   deps.weekRange = () => ({ weekStart: DAY }); const beforeCount = saves;
   assert(run().ok); assert.equal(saves, beforeCount + 1); assert.equal(state.weeklyCommitments[0].completedAt, AT);
+  state.selectedDate = DAY;
+  deps.isReadingBlock = block => isDailyReadingBlock(block, state);
+  const refreshed = [], manualDeps = { ...deps, refreshActualReports: dates => refreshed.push(...dates) };
+  const auto = structuredClone(state.blocks[0]), atBefore = auto.updatedAt;
+  assert(runDailyOperation('daily-plan-times-save', { kind: 'block', id: auto.id, values: { start: '08:00', end: '08:30' } }, manualDeps).ok);
+  assert.equal(state.blocks[0].source, 'daily-reading-manual'); assert(state.blocks[0].updatedAt > atBefore);
+  state.blocks = [structuredClone(auto)];
+  assert(runDailyOperation('daily-plan-complete', { kind: 'block', id: auto.id, desiredCompleted: false }, manualDeps).ok);
+  assert.equal(state.blocks[0].source, 'daily-reading-manual');
+  assert.deepEqual(refreshed, [DAY], 'manual completion retains its existing report effect');
+  for (const block of [auto, { ...auto, externalRef: '', source: '' }]) {
+    state.blocks = [block]; const snapshot = structuredClone(state), count = saves;
+    assert.equal(runDailyOperation('daily-block-duplicate', { kind: 'block', id: auto.id }, deps).status, 'invalid');
+    assert.deepEqual(state, snapshot); assert.equal(saves, count);
+  }
+  state.recurrences = []; state.settings.dailyReadingRoutineIds = {}; state.blocks = [auto];
+  assert.equal(runDailyOperation('daily-block-duplicate', { kind: 'block', id: auto.id }, deps).status, 'invalid');
   console.log('PASS registry: flag off=0; failure rolls back Block/habit; same success retry; replay/reload=0; weekly single save');
 }
 (async () => {
@@ -33,6 +51,7 @@ configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Numbe
     browser = await chromium.launch(launchOptions());
     const context = await browser.newContext(defaultContextOptions()), page = await context.newPage();
     page.setDefaultTimeout(10000);
+    page.on('dialog', dialog => dialog.accept());
     await page.route('**/fixture', route => route.fulfill({ contentType: 'text/html', body: '<main></main>' }));
     await page.route('https://**/*', route => route.abort());
     await page.clock.install({ time: new Date(2026, 8, 12, 10) });
@@ -97,5 +116,32 @@ configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Numbe
     await page.locator('[data-action="modal-close"]').click();
     assert.equal(await page.locator('[data-reading-body]').count(), 0);
     console.log('PASS real app: delegated top button, limited affirmation transport, display, unconfigured read-only, close');
+    await page.evaluate(() => {
+      const key = 'taskchute-journal-pwa-state-v1', s = JSON.parse(localStorage.getItem(key)), day = '2026-09-12';
+      s.settings.dailyReadingRoutineIds = { affirmation: 'affirm', visionBoard: 'board' };
+      s.recurrences = ['affirm', 'board'].map(id => ({ id, title: id, kind: 'daily', category: 'ルーティン', anchorDate: day, deleted: false }));
+      s.blocks = [{ id: `rec_affirm_${day}`, date: day, title: 'Fixture reading', category: 'ルーティン', recurrenceGroupId: 'affirm',
+        actualStartAt: `${day}T10:00:00`, actualEndAt: `${day}T10:00:00`, completed: true, source: 'daily-reading-auto',
+        externalRef: 'daily-reading:v1:' + JSON.stringify({ kind: 'affirmation', referenceDate: day, recordedAt: `${day}T10:00:00` }) }];
+      localStorage.setItem(key, JSON.stringify(s));
+    });
+    await page.reload();
+    await page.waitForSelector('[data-action="tower-gate-edit-toggle"]');
+    assert.equal(await page.locator('.tower-gate[data-id="rec_affirm_2026-09-12"]').count(), 0);
+    assert.equal(await page.locator('.tower-gate[data-id="rec_board_2026-09-12"]').count(), 0);
+    assert.equal(await page.locator('[data-action="early-bird-check"]').count(), 1);
+    await page.locator('[data-action="tower-gate-edit-toggle"]').click();
+    assert.equal(await page.locator('.tower-gate-edit-row[data-rule-id="affirm"]').count(), 1);
+    assert.equal(await page.locator('.tower-gate-edit-row[data-rule-id="board"]').count(), 1);
+    await page.locator('[data-action="edit-block"][data-id="rec_affirm_2026-09-12"]').first().click();
+    await page.locator('[data-modal-field="comment"]').fill('Fixture explicit comment');
+    await page.locator('[data-action="modal-save"]').click();
+    await page.waitForFunction(async () => (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'rec_affirm_2026-09-12')?.source === 'daily-reading-manual');
+    await page.locator('[data-action="edit-block"][data-id="rec_affirm_2026-09-12"]').first().click();
+    await page.locator('[data-action="modal-delete"]').click();
+    await page.waitForFunction(async () => (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'rec_affirm_2026-09-12')?.deleted);
+    const tombstone = await page.evaluate(async () => (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'rec_affirm_2026-09-12'));
+    assert.equal(tombstone.source, 'daily-reading-manual'); assert.equal(tombstone.date, DAY); assert.match(tombstone.externalRef, /2026-09-12T10:00:00/);
+    console.log('PASS real app: normal exclusion, manager/early-bird/actual retained, detail comment provenance, deletion tombstone');
   } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

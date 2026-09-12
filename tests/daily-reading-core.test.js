@@ -57,3 +57,25 @@ for (const mutate of [
   assert.equal(readingRule(state, 'affirmation', DAY, deps).id, 'affirm');
 }
 console.log('PASS candidate identity, attribution, provenance, fixed habit, AI shape, existing values and refusal cases');
+const { isDailyReadingBlock, markDailyReadingEdit, excludedReadingRule } = require('../src/core/daily-reading.js');
+{
+  const state = fixture(), auto = buildDailyReading(state, input(state), deps).records[0].after;
+  for (const patch of [{ comment: 'edited' }, { completed: false }, { date: '2026-09-13' }, { plannedStartAt: `${DAY}T08:00` },
+    { actualStartAt: `${DAY}T09:30:00` }, { deleted: true }]) {
+    const manual = markDailyReadingEdit(auto, { ...auto, ...patch });
+    assert.equal(manual.source, 'daily-reading-manual'); assert.equal(manual.externalRef, auto.externalRef);
+    assert.equal(readingMark(manual, true).recordedAt.slice(0, 10), DAY);
+  }
+  assert.equal(markDailyReadingEdit(auto, auto), auto);
+  const ordinary = { id: 'normal', source: 'other' }; assert.equal(markDailyReadingEdit(ordinary, ordinary), ordinary);
+  assert.equal(isDailyReadingBlock(auto, { settings: {} }), true, 'orphan marker remains noncopyable');
+  assert.equal(isDailyReadingBlock({ recurrenceGroupId: 'affirm' }, state), true, 'unmarked existing definition is noncopyable');
+  assert.equal(isDailyReadingBlock(ordinary, state), false);
+  assert.equal(excludedReadingRule(state, 'affirm', DAY, deps), true); assert.equal(excludedReadingRule(state, 'board', DAY, deps), true);
+  assert.equal(excludedReadingRule(state, '__early_bird__', DAY, deps), false);
+  assert.equal(excludedReadingRule(state, undefined, DAY, deps), false, 'ordinary ungrouped routines are never excluded');
+  assert.equal(excludedReadingRule({ ...state, settings: {} }, undefined, DAY, deps), false, 'unconfigured settings never exclude ungrouped routines');
+  state.recurrences[0].exceptionDates = [DAY]; assert.equal(excludedReadingRule(state, 'affirm', DAY, deps), false);
+  state.recurrences[0].deleted = true; assert.equal(excludedReadingRule(state, 'board', DAY, deps), false);
+}
+console.log('PASS explicit provenance, original date on deletion/move, orphan/legacy copy refusal, exact valid exclusion');

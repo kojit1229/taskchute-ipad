@@ -42,6 +42,7 @@ import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createDailyReading } from "./src/features/daily-reading.js";
 import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurrence.js";
+import { isDailyReadingBlock, markDailyReadingEdit } from "./src/core/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -1571,11 +1572,7 @@ const dailyOperationDeps = {
   journalSaved: date => { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); },
   makeBlock: input => makeBlock(input), projectName: id => projectName(id),
   draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
-  isReadingBlock: function isReadingBlock(block) {
-  return Boolean(block?.externalRef?.startsWith("daily-reading:v1:")
-    || ["daily-reading-auto", "daily-reading-manual"].includes(block?.source)
-    || block?.id?.startsWith("daily-reading-feedback_"));
-  },
+  isReadingBlock: block => isDailyReadingBlock(block, state),
   get state() { return state; }, commitCandidate, now: nowDateTime, notify: showToast,
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
@@ -10587,6 +10584,7 @@ function nowConveyorComplete(id) {
 
 // Block adapter with optional recurrence changes; an active draft owns the commit.
 function commitBlockChanges(blocks, effects = () => {}, recurrences = state.recurrences) {
+  blocks = blocks.map(after => markDailyReadingEdit(state.blocks.find(before => before.id === after.id), after));
   if (draftSaveTransaction?.active) {
     state.blocks = blocks;
     if (recurrences !== state.recurrences) state.recurrences = recurrences;
