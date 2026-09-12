@@ -81,7 +81,16 @@ function check(name, condition, extra = "") {
       viewport: innerHeight,
       placeholder: document.querySelector(".tower-journal-free").placeholder
     }));
-    check("自由記述は表示高の38%以上", todayMobile.height >= todayMobile.viewport * .38, JSON.stringify(todayMobile));
+    await page.locator('.daily-today-clock [data-action="today-journal-jump"]').click();
+    check("今日の本文は常設され記録入口で編集可能", await page.locator('#towerJournalFree').evaluate(el => el === document.activeElement && el.getBoundingClientRect().height > 0));
+    // 広い本文の既存入口はPCサイドバー。開いた後に390pxの表示高を検査する。
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.locator('#sidebar [data-action="nav"][data-view="journal"]').click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForSelector('.journal-free');
+    check("本文を広く書くジャーナル画面では表示高の38%以上", await page.locator('.journal-free').evaluate(el => el.getBoundingClientRect().height >= innerHeight * .38));
+    await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
+    await page.waitForSelector('#towerJournalFree');
     check("TodayのAI依頼欄はDOMにない", await page.locator("#towerJournalAi, .tower-journal-ai-fold").count() === 0);
     check("Today自由記述のplaceholderが### 依頼へ案内", todayMobile.placeholder.includes("『### 依頼』見出しの下"), todayMobile.placeholder);
     const todayFonts = await inputSizes(".today-tower");
@@ -104,12 +113,12 @@ function check(name, condition, extra = "") {
       free: document.querySelector(".tower-journal-free").getBoundingClientRect().height,
       body: document.querySelector(".tower-journal-body").getBoundingClientRect().height,
       panel: document.querySelector(".tower-journal").getBoundingClientRect().height,
-      right: document.querySelector(".tower-col-right").getBoundingClientRect().height,
+      right: document.querySelector(".tower-journal-body").getBoundingClientRect().height,
       panelFlex: getComputedStyle(document.querySelector(".tower-journal")).flex,
       bodyFlex: getComputedStyle(document.querySelector(".tower-journal-body")).flex,
       freeFlex: getComputedStyle(document.querySelector(".tower-journal-free")).flex
     }));
-    check("PC自由記述は右列高の過半", todayPc.free > todayPc.right / 2, JSON.stringify(todayPc));
+    check("PC自由記述は本文領域高の過半", todayPc.free > todayPc.right / 2, JSON.stringify(todayPc));
 
     console.log("[4] ジャーナル 390px: 本文40vh・AI依頼欄なし・入力時保存");
     await page.setViewportSize({ width: 390, height: 844 });

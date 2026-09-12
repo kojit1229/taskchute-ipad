@@ -148,8 +148,8 @@ function check(name, cond, extra = "") {
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- テスト候補タスクX\n- テスト候補タスクY\n" },
       aiLinkFreshness: { feedbackAt: YESTERDAY, planAt: null }
     });
-    check("today/TOWERの右カラムはJOURNALだけを描画", await page.locator(".tower-col-right > .sec-journal").count() === 1);
-    check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
+    check("today/TOWERの記録列にJOURNALを描画", await page.locator(".daily-today-records > .sec-journal").count() === 1);
+    check("記録列のJOURNALは単一", await page.locator(".daily-today-records > .sec-journal").count() === 1);
     check("旧ATISセクションを描画しない", await page.locator(".sec-atis").count() === 0);
     check("旧ATIS data属性を描画しない", await page.locator("[data-atis-panel], [data-atis-task-candidates]").count() === 0);
     check("鮮度・候補の旧UIを描画しない", await page.locator('.ai-freshness-line, [data-action="mit-candidate-add"], [data-action="ai-mit-adopt"]').count() === 0);

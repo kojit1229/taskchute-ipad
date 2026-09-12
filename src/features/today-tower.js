@@ -271,6 +271,7 @@ function renderTowerRunway(now, blocks, flights) {
       <span class="tower-rwy-mark end">${escapeHTML(metrics.landing)} 着陸予定</span>` : ""}
     </div>
     ${hud}
+    ${renderTowerMIT(blocks)}${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
   </section>`;
 }
 
@@ -555,30 +556,21 @@ function renderTodayTower() {
   const blocks = blocksForDate(today);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
-  const focusVisibility = todayFocusVisibility();
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  const wide = window.matchMedia("(min-width: 1280px)").matches;
-  const band2 = `<div class="tower-band2 band2" aria-label="NOW LANDING とポモドーロ">
-      ${renderTowerRunway(now, blocks, flights)}
-      ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
-    </div>`;
-  return `<div class="today-tower" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}" data-focus-mode="${Object.values(focusVisibility).some(Boolean) ? 0 : 1}" data-view-side="${focusVisibility.side ? 1 : 0}" data-view-journal="${focusVisibility.journal ? 1 : 0}" data-view-life="${focusVisibility.life ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
-    ${wide ? "" : band2}
+  // 今日の必須8項目は旧フォーカス設定にかかわらず常設する。
+  return `<div class="today-tower" data-daily-view="today" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
-    ${renderTowerMIT(blocks)}
-    ${renderTowerCondition(today)}
-    ${focusVisibility.life ? `<div class="tower-band1 band1">${renderLifeBand()}<section class="tower-glass-panel clock-box" aria-label="現在時刻"><time id="towerClock">${clockText(now)}</time><span id="towerDate">${date} (${weekday})</span><strong class="dayleft" id="towerDayLeft">${dayLeftText(now)}</strong><span>本日残り</span></section>
-    </div>` : ""}
-    ${focusVisibility.life ? renderStandingOrders() : ""}
-    ${wide ? band2 : ""}
-    ${renderTodayFocusBar(focusVisibility)}
-    <div class="tower-col-left">
-      ${focusVisibility.side ? renderWorkList("today") : ""}
-      ${focusVisibility.side ? renderTowerBoard() : ""}
-      ${focusVisibility.side ? renderFlightLog(today, blocks) : ""}
+    <header class="daily-today-clock tower-glass-panel" aria-label="今日の時計">
+      <span id="towerDate">${date} (${weekday})</span><time id="towerClock">${clockText(now)}</time>
+      <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
+      <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
+    </header>
+    <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
+    ${renderTowerRunway(now, blocks, flights)}
+    <div class="daily-today-main">
+      <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}${renderTowerBoard()}</section>
+      <div class="daily-today-records">${renderFlightLog(today, blocks)}${renderTowerGates(blocks)}${renderTowerJournal(today)}</div>
     </div>
-    <div class="tower-col-center">${renderTowerGates(blocks)}${focusVisibility.side ? renderTowerBodyMind(today, blocks) : ""}</div>
-    <div class="tower-col-right">${focusVisibility.journal ? renderTowerJournal(today) : ""}</div>
   </div>`;
 }
 
@@ -642,6 +634,7 @@ function updateTodayTowerTick() {
   const root = document.querySelector(".today-tower");
   if (root) {
     // UI-A: resize時も既存ノードを移し、視覚上位順と読み上げ順を揃える。
+    if (root.dataset.dailyView !== "today") {
     const band = root.querySelector(".tower-band2");
     const anchor = window.matchMedia("(min-width: 1280px)").matches
       ? root.querySelector(".today-focus-bar") : root.firstElementChild;
@@ -652,6 +645,7 @@ function updateTodayTowerTick() {
       root.insertBefore(band, anchor);
       if (band.contains(focused)) focused.focus({ preventScroll: true });
       if (scroll) scroll.scrollTop = top;
+    }
     }
     const night = isNightHour(now.getHours()) ? "1" : "0";
     if (root.dataset.night !== night) root.dataset.night = night;
@@ -700,5 +694,5 @@ function updateTodayTowerTick() {
 
 export {
   configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick,
-  toggleTowerBodyMindWeekly, toggleTowerGateShowDone, pomodoroLinkFlights, flightLogBlocks, bmSummary
+  toggleTowerBodyMindWeekly, toggleTowerGateShowDone, pomodoroLinkFlights, flightLogBlocks, bmSummary, renderTowerBodyMind
 };

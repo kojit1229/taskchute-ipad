@@ -13,7 +13,8 @@ const block = (id, start, end, category = '') => ({ ...schedule(id, start, end),
   try {
     const page = await browser.newPage({ timezoneId: 'Asia/Tokyo', locale: 'ja-JP', serviceWorkers: 'block', viewport: { width: 1500, height: 1000 } });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
-    await page.clock.install({ time: new Date(2026, 8, 14, 7) });
+    // Install before the pause target so elapsed setup time cannot move it into the past.
+    await page.clock.install({ time: new Date(2026, 8, 14, 6) });
     await page.clock.pauseAt(new Date(2026, 8, 14, 7));
     await page.route('https://**', route => route.abort());
     await page.route('**/app.js', async route => {

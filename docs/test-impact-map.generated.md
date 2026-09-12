@@ -105,7 +105,7 @@
 | recurrence-core.test.js | node | full | sync-storage, planning-execution | 87 | 0 | 0 |
 | release-gate.test.js | node | full | legacy-crosscutting | 31 | 0 | 0 |
 | release-record.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
-| remaining-screen-labels.test.js | e2e | full | content-ai, ui-responsive | 87 | 0 | 0 |
+| remaining-screen-labels.test.js | e2e | full | content-ai, ui-responsive | 88 | 0 | 0 |
 | remaining-twelveweek-layout.test.js | e2e | full | content-ai, ui-responsive | 11 | 0 | 0 |
 | remote-invalid-fail-close.test.js | node | full | content-ai | 18 | 0 | 0 |
 | report-view.test.js | node | full | journal-health, content-ai | 30 | 0 | 0 |
@@ -131,14 +131,14 @@
 | sw-self-heal.test.js | e2e | full | content-ai | 53 | 0 | 0 |
 | sync-load-confirm-snapshot.test.js | e2e | full | sync-storage | 32 | 10 | 4550 |
 | test-manifest-generator.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
-| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 66 | 0 | 0 |
+| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 104 | 0 | 0 |
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
 | today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 150 | 4 | 4250 |
 | today-detail-integration-e2e.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 39 | 0 | 0 |
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 49 | 0 | 0 |
-| tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 165 | 0 | 0 |
+| tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 166 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 7 | 0 | 0 |
 | track-commit-core.test.js | node | full | planning-execution, journal-health | 51 | 0 | 0 |
 | track-core.test.js | node | full | planning-execution, journal-health | 51 | 0 | 0 |
@@ -146,7 +146,7 @@
 | track-merge-core.test.js | node | full | sync-storage | 20 | 0 | 0 |
 | track-normalize.test.js | e2e | full | sync-storage, security-offline | 22 | 0 | 0 |
 | track-sync-characterization.test.js | node | full | sync-storage | 15 | 0 | 0 |
-| ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 15 | 0 | 0 |
+| ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 22 | 0 | 0 |
 | unit9-carryover-fields.test.js | e2e | full | planning-execution | 40 | 5 | 1800 |
 | v100.test.js | e2e | full | content-ai, ui-responsive | 31 | 9 | 3300 |
 | v101.test.js | e2e | full | content-ai, ui-responsive | 22 | 6 | 1400 |
@@ -208,7 +208,7 @@
 | v231.test.js | e2e | full | journal-health | 9 | 0 | 0 |
 | v235.test.js | node | full | journal-health | 8 | 0 | 0 |
 | v240.test.js | node | full | planning-execution | 10 | 0 | 0 |
-| v241.test.js | e2e | full | ui-responsive | 21 | 0 | 0 |
+| v241.test.js | e2e | full | ui-responsive | 27 | 0 | 0 |
 | v247.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | v251.test.js | e2e | full | content-ai | 21 | 0 | 0 |
 | v252.test.js | e2e | full | sync-storage | 26 | 0 | 0 |
@@ -245,7 +245,7 @@
 | v294.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 42 | 0 | 0 |
 | v295.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 43 | 0 | 0 |
 | v296.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 51 | 0 | 0 |
-| v297.test.js | e2e | full | sync-storage, ui-responsive | 35 | 0 | 0 |
+| v297.test.js | e2e | full | sync-storage, ui-responsive | 36 | 0 | 0 |
 | v299.test.js | node | full | planning-execution, content-ai | 29 | 0 | 0 |
 | v300.test.js | node | full | content-ai | 18 | 0 | 0 |
 | v301.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 28 | 0 | 0 |
@@ -260,21 +260,21 @@
 | v310.test.js | e2e | full | planning-execution, ui-responsive | 17 | 0 | 0 |
 | v311.test.js | e2e | full | planning-execution, ui-responsive | 32 | 0 | 0 |
 | v312.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 19 | 0 | 0 |
-| v313.test.js | e2e | full | ui-responsive | 24 | 0 | 0 |
-| v314.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 27 | 0 | 0 |
+| v313.test.js | e2e | full | ui-responsive | 21 | 0 | 0 |
+| v314.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 28 | 0 | 0 |
 | v315.test.js | e2e | full | ui-responsive | 17 | 0 | 0 |
 | v316.test.js | e2e | full | sync-storage, journal-health | 15 | 0 | 0 |
 | v317.test.js | e2e | full | planning-execution, journal-health | 23 | 1 | 200 |
 | v318.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 38 | 0 | 0 |
-| v319.test.js | e2e | full | ui-responsive | 17 | 0 | 0 |
+| v319.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
 | v320.test.js | e2e | full | planning-execution, ui-responsive | 27 | 0 | 0 |
-| v321.test.js | e2e | full | planning-execution, ui-responsive | 23 | 0 | 0 |
-| v322.test.js | e2e | full | sync-storage, journal-health, content-ai | 19 | 0 | 0 |
+| v321.test.js | e2e | full | planning-execution, ui-responsive | 24 | 0 | 0 |
+| v322.test.js | e2e | full | sync-storage, journal-health, content-ai | 20 | 0 | 0 |
 | v323.test.js | e2e | full | ui-responsive | 14 | 0 | 0 |
 | v324.test.js | e2e | full | content-ai | 11 | 0 | 0 |
-| v325.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 24 | 0 | 0 |
+| v325.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 25 | 0 | 0 |
 | v326.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
-| v327.test.js | e2e | full | ui-responsive | 22 | 0 | 0 |
+| v327.test.js | e2e | full | ui-responsive | 23 | 0 | 0 |
 | v328.test.js | e2e | full | planning-execution, ui-responsive | 22 | 0 | 0 |
 | v329.test.js | e2e | full | planning-execution | 27 | 0 | 0 |
 | v330.test.js | e2e | full | planning-execution | 23 | 1 | 50 |
@@ -390,7 +390,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/normalize-null-defense.test.js | 44 |
 | fixed-date | 1 | tests/plan-core.test.js | 359 |
 | missing-timezone | 2 | tests/r0-twyplan.test.js | 29, 287 |
-| fixed-date | 3 | tests/remaining-screen-labels.test.js | 125, 134, 142 |
+| fixed-date | 3 | tests/remaining-screen-labels.test.js | 127, 136, 144 |
 | missing-timezone | 2 | tests/state-container-recovery-e2e.test.js | 7, 19 |
 | missing-timezone | 1 | tests/sw-integration.test.js | 28 |
 | missing-timezone | 1 | tests/sw-self-heal.test.js | 32 |
@@ -488,7 +488,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | fixed-date | 12 | tests/v283.test.js | 160, 243, 283, 316, 354, 379, 380, 416, 440, 444, 458, 470 |
 | missing-timezone | 2 | tests/v283.test.js | 113, 131 |
 | missing-timezone | 1 | tests/v284.test.js | 217 |
-| missing-timezone | 1 | tests/v285.test.js | 61 |
+| missing-timezone | 1 | tests/v285.test.js | 60 |
 | fixed-date | 7 | tests/v286.test.js | 131, 152, 166, 194, 242, 263, 291 |
 | missing-timezone | 1 | tests/v286.test.js | 81 |
 | fixed-date | 9 | tests/v287.test.js | 59, 124, 214, 242, 249, 273, 287, 309, 351 |

@@ -200,7 +200,8 @@ async function measure(page, label, inputSelector) {
     await setViewportAndWaitForStableLayout(page, { width, height: 900 }, inputSelector);
     const sample = await page.evaluate(({ label, zoom, inputSelector }) => {
       const controls = [...document.querySelectorAll('input,select,textarea')].filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
-      const row = document.querySelector('.daily-plan-row').getBoundingClientRect();
+      const shared = document.querySelector('.daily-plan-row');
+      const row = (getComputedStyle(shared).display === 'contents' ? shared.closest('[data-work-key]') : shared).getBoundingClientRect();
       return { page: label, width: innerWidth, zoom, documentWidth: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth, row: { left: row.left, right: row.right, height: row.height },
         fonts: controls.map(el => parseFloat(getComputedStyle(el).fontSize)), value: document.querySelector(inputSelector).value };

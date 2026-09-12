@@ -102,6 +102,8 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
     await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 2, 1, 0, 0)));
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
+    await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+    await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
     await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-02時点"));
     await seed();
 

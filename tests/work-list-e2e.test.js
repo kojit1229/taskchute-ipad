@@ -119,11 +119,12 @@ const checked={workflows:0,layouts:0};
     await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).evaluate(el=>el.click());
     await page.locator(`[data-work-list="${listScope}"]`).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no overflow '+scope+' '+width);
-    if(width===1024&&scope==='today') {
-     const columns=await page.evaluate(()=>{const a=document.querySelector('.tower-col-left').getBoundingClientRect(),b=document.querySelector('.tower-col-center').getBoundingClientRect();return b.x>a.x&&Math.abs(a.y-b.y)<2;});
-     assert(columns,'1024 landscape Today two columns');
+    // fixV392 / 設計06 §7: 今日1024pxは縦、1280pxから予定/記録の2列。
+    if(scope==='today') {
+     const columns=await page.evaluate(()=>{const a=document.querySelector('#dailyTodayPlans').getBoundingClientRect(),b=document.querySelector('.daily-today-records').getBoundingClientRect();return {stacked:b.top>=a.bottom&&Math.abs(a.x-b.x)<2,sideBySide:b.x>=a.right&&Math.abs(a.y-b.y)<2};});
+     assert(width<1280?columns.stacked:columns.sideBySide,'Today planned/record layout '+width);
+     assert(await page.evaluate(()=>document.querySelector('[data-action="today-plans-jump"]').getBoundingClientRect().top<document.querySelector('[data-work-list="today"]').getBoundingClientRect().top),'plans jump precedes Today list');
     }
-    if(scope==='today'&&width<1280) assert(await page.evaluate(()=>document.querySelector('.today-focus-bar').getBoundingClientRect().top<document.querySelector('[data-work-list="today"]').getBoundingClientRect().top),'focus controls precede Today list');
     if(width===1024&&scope==='exec') assert(await page.locator('.exec-pane-right').isVisible(),'1024 execution timeline accessible');
     if(output)await page.screenshot({path:path.join(output,`${scope}-${width}.png`),fullPage:true});
     checked.layouts++;

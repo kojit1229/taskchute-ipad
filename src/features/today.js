@@ -126,11 +126,20 @@ function configureToday(deps) {
     gateEditMode
   });
   registerActions({
-    "focus-toggle-side": () => toggleTodayFocusSection("side"),
-    "focus-toggle-journal": () => toggleTodayFocusSection("journal"),
-    "focus-toggle-life": () => toggleTodayFocusSection("life"),
-    "focus-mode": () => toggleTodayFocusMode()
+    "today-plans-jump": () => focusTodaySection("#dailyTodayPlans"),
+    "today-journal-jump": () => focusTodaySection(".tower-journal"),
   });
+}
+
+function focusTodaySection(selector) {
+  const section = document.querySelector('[data-daily-view="today"] ' + selector);
+  if (!section) return;
+  section.scrollIntoView({ block: "start" });
+  const target = section.querySelector('[data-action="edit-block"]') || section.querySelector('textarea, button, input');
+  if (target) {
+    target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
+  }
 }
 
 function runningBlockOf(blocks) {

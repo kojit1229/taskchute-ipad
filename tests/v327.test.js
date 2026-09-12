@@ -100,15 +100,19 @@ const stateFixture = {
     await passGithubGate(page);
 
     const todayState = await seedAndReload("today");
-    await page.waitForSelector(".tower-condition-text");
-    const towerComment = (await page.locator(".tower-condition-text").textContent()).trim();
+    // fixV392 / 設計06 §4: 健康画面で同じ計算結果・本文を検査する。
+    check("今日の健康欄は健康画面へ集約", await page.locator(".tower-condition-text").count() === 0);
+    const expectedComment = await page.evaluate(async ({ days, today }) => {
+      const { conditionFromHealth, conditionCommentText } = await import("/src/features/health.js");
+      return conditionCommentText({ ...conditionFromHealth(days, today), yGymKg: 3500 });
+    }, { days: health.days, today: TODAY });
     const instrumentsState = await seedAndReload("instruments");
     await page.waitForSelector(".instr-kpi");
     const kpiText = await page.locator(".instr-today").textContent();
     check("今日KPIとgenerated_at", ["7時間22分", "21:30→05:04", "69", "68", "4,584", "16", "439", "Apple Health 9/7 05:50"]
       .every((text) => kpiText.includes(text)), kpiText);
-    check("体調コメントはToday TOWERと同一", (await page.locator(".instr-condition-text").textContent()).trim() === towerComment,
-      JSON.stringify({ towerComment, instruments: await page.locator(".instr-condition-text").textContent() }));
+    check("体調コメントは既存の健康計算と同一", (await page.locator(".instr-condition-text").textContent()).trim() === expectedComment,
+      JSON.stringify({ expectedComment, instruments: await page.locator(".instr-condition-text").textContent() }));
 
     const pointCounts = await page.locator(".instr-week-row").evaluateAll((rows) => Object.fromEntries(rows.map((item) => [
       item.dataset.series, item.querySelectorAll(".instr-spark-point").length

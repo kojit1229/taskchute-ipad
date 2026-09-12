@@ -133,8 +133,8 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
     check("閲覧日を変更せず今日に配置する", await page.evaluate(async date => (await import('/src/state/store.js')).state.selectedDate === date, placementBrowsingDate));
 
     console.log("[3] PC 2ペイン・12WY優先の既定選択・選択は非永続");
-    check("1280pxは380px一覧+選択詳細", await page.locator(".wbs-projects.is-desktop").isVisible()
-      && await page.locator(".wbs-project-list").evaluate((element) => Math.abs(element.getBoundingClientRect().width - 380) < 1)
+    check("1280pxは一覧/選択詳細が1:2の2列", await page.locator(".wbs-projects.is-desktop").isVisible()
+      && await page.locator(".wbs-project-list").evaluate((element) => Math.abs(element.getBoundingClientRect().width * 2 - document.querySelector(".wbs-project-detail").getBoundingClientRect().width) < 1 && element.getBoundingClientRect().width > 0)
       && await page.locator('[data-wbs-detail-id="p-cycle"]').isVisible());
     check("既定選択は配列順ではなく12WY優先(先頭は!Alpha)", await page.locator('.wbs-project-choice').first().textContent()
       .then((text) => text.includes("!Alpha")) && await page.locator('[data-wbs-detail-id="p-cycle"]').isVisible());

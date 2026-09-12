@@ -210,10 +210,12 @@ function check(name, condition, extra = "") {
         return { overflowX: getComputedStyle(strip).overflowX, stripRect, rowRect, buttonRect,
           pageWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth };
       });
-      check(`${width}px編集モードは削除ボタンの44px領域をクリップしない`, editorLayout.overflowX === "visible"
+      check(`${width}px編集モードは削除ボタンの44px領域をクリップしない`, editorLayout.overflowX === (width >= 1280 ? "auto" : "visible")
         && editorLayout.buttonRect.width >= 44 && editorLayout.buttonRect.height >= 44
         && editorLayout.buttonRect.left >= editorLayout.stripRect.left - 1
         && editorLayout.buttonRect.right <= editorLayout.stripRect.right + 1
+        && editorLayout.buttonRect.top >= editorLayout.stripRect.top - 1
+        && editorLayout.buttonRect.bottom <= editorLayout.stripRect.bottom + 1
         && editorLayout.pageWidth <= editorLayout.viewportWidth + 1, JSON.stringify(editorLayout));
     }
     await page.setViewportSize({ width: 390, height: 900 });

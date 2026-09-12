@@ -43,7 +43,7 @@ function escapeHTML(value) {
     check("信条行が3件(so-item)", (html.match(/so-item/g) || []).length === 3);
     check("一/二/三の採番を含む", html.includes(">一<") && html.includes(">二<") && html.includes(">三<"));
     check("1行目の文言を含む", html.includes("決めた一つは、必ずやり切れる"));
-    check("1行目の英語ラベルを含む", html.includes("MIT COMPLETION 100%"));
+    check("1行目の日本語副題を含む(設計06 §4)", html.includes("決めた一つを100%やり切る"));
     check("3行目(充電)の文言を含む", html.includes("夜は手放して充電する"));
   }
   {

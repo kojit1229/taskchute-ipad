@@ -109,7 +109,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     currentDays = days;
     const expected = await page.evaluate(({ key, today, gym }) => {
       const state = JSON.parse(localStorage.getItem(key));
-      state.currentView = "today";
+      state.currentView = "instruments";
       state.selectedDate = today;
       state.settings.autoSync = false;
       state.settings.lastOpenedDate = today;
@@ -126,8 +126,9 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     await page.reload();
     await healthResponse;
     const sourceDate = days.some((day) => day.date === TODAY) ? "09-04時点" : "09-03時点";
-    await page.waitForFunction((expected) => document.querySelector(".bm-health-src")?.textContent.includes(expected), sourceDate);
-    await page.waitForFunction((expected) => document.querySelector(".tower-condition-text")?.textContent.includes(expected), expectedText);
+    await page.waitForSelector('#app[data-view="instruments"] .instr-today');
+    check('健康画面に取得日の表示を維持: ' + sourceDate, (await page.locator('.instr-today').textContent()).includes(sourceDate));
+    await page.waitForFunction(({ expected, selector }) => document.querySelector(selector)?.textContent.includes(expected), { expected: expectedText, selector: days.some(day => day.date === TODAY) ? ".instr-condition-text" : ".instr-today-empty" });
     return {
       expected,
       actual: await page.evaluate((key) => localStorage.getItem(key), STATE_KEY),
@@ -150,71 +151,70 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
 
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
     const deficitState = await seedAndOpen(healthDays({ sleepMin: 260 }), "睡眠 4時間20分");
-    check("260分はdeficit文言", (await page.locator(".tower-condition-text").textContent()).trim()
+    check("260分はdeficit文言", (await page.locator(".instr-condition-text").textContent()).trim()
       // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
       === "睡眠 4時間20分 と短めです。今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう");
-    check("knownは睡眠・HR・HRV・昨日歩数meta", (await page.locator(".tower-condition-meta").textContent()).trim()
-      // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
-      === "睡眠 4時間20分 ・ 安静時心拍数 60拍/分 ・ 心拍変動 100ミリ秒 ・ 昨日 7,000歩");
+    const healthMeta = await page.locator('.instr-kpi:not(.instr-kpi-wide)').evaluateAll(els => els.map(el => ({
+      label: el.querySelector('span').textContent,
+      values: el.querySelector('strong').textContent.replaceAll(',', '').match(/\d+/g)?.map(Number),
+      unit: el.querySelector('small').textContent
+    })));
+    check('knownは睡眠260分・HR60・HRV100・昨日7000歩', JSON.stringify(healthMeta) === JSON.stringify([
+      { label: '睡眠', values: [4, 20], unit: '21:30→04:52' }, { label: '安静時心拍数', values: [60], unit: '拍/分' },
+      { label: '心拍変動', values: [100], unit: 'ミリ秒' }, { label: '昨日の歩数', values: [7000], unit: '歩' }
+    ]), JSON.stringify(healthMeta));
 
     const gym = [{ id: "v325-gym", exercise: "スクワット", weight: 50, reps: 10,
       at: "2026-09-03T18:00", createdAt: "2026-09-03T18:00", updatedAt: "2026-09-03T18:00" }];
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
     await seedAndOpen(healthDays({ sleepMin: 380, yesterdaySteps: 9000, otherSteps: 5500 }), "睡眠 6時間20分", gym);
-    check("380分+昨日歩数1.5倍はlowで筋トレも活動句へ付加", (await page.locator(".tower-condition-text").textContent()).trim()
+    check("380分+昨日歩数1.5倍はlowで筋トレも活動句へ付加", (await page.locator(".instr-condition-text").textContent()).trim()
       // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
       === "睡眠 6時間20分。昨日は歩数 9,000・筋トレ 500kg と活動量が多め ─ 今日は詰め込まず最も大切なことを優先しましょう");
 
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
     await seedAndOpen(healthDays({ sleepMin: 442, yesterdaySteps: 4500, otherSteps: 8000 }), "睡眠 7時間22分");
-    check("442分+昨日歩数0.6倍はnormalで控えめ句", (await page.locator(".tower-condition-text").textContent()).trim()
+    check("442分+昨日歩数0.6倍はnormalで控えめ句", (await page.locator(".instr-condition-text").textContent()).trim()
       // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
       === "睡眠 7時間22分 で十分。昨日の活動は控えめ(歩数 4,500) ─ 今日は集中の山を1つ作る日に");
 
     const unknownState = await seedAndOpen(healthDays({ includeToday: false }), "今朝の睡眠データはまだありません");
-    const unknownText = (await page.locator(".tower-condition-text").textContent()).trim();
-    const unknownMetaCount = await page.locator(".tower-condition-meta").count();
+    const unknownText = (await page.locator(".instr-today-empty").textContent()).trim();
+    const unknownMetaCount = await page.locator(".instr-kpi").count();
     check("当日行なしはunknown文言のみ", unknownText === "今朝の睡眠データはまだありません" && unknownMetaCount === 0,
       JSON.stringify({ unknownText, unknownMetaCount }));
 
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
     await seedAndOpen(healthDays({ sleepMin: 442, hrv: 80 }), "心拍変動 −20%");
-    check("HRV −20%だけでもdeficit", (await page.locator(".tower-condition-text").textContent()).trim()
+    check("HRV −20%だけでもdeficit", (await page.locator(".instr-condition-text").textContent()).trim()
       // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
       === "心拍変動 −20% が低めです。今日は重要なこと1つに絞り、午後に15分の休憩を入れましょう");
 
-    const layout = await page.locator(".tower-condition").evaluate((condition) => {
-      const parent = condition.parentElement;
-      const style = getComputedStyle(condition);
-      const label = getComputedStyle(condition.querySelector(".tower-condition-label"));
-      const text = getComputedStyle(condition.querySelector(".tower-condition-text"));
-      const children = [...parent.children];
-      return {
-        afterMit: children[children.indexOf(condition) - 1]?.classList.contains("tower-mit"),
-        beforeBand: !parent.querySelector(".tower-band1") || children.indexOf(condition) < children.indexOf(parent.querySelector(".tower-band1")),
-        minHeight: parseFloat(style.minHeight), borderColor: style.borderColor,
-        labelSize: parseFloat(label.fontSize), textSize: parseFloat(text.fontSize),
-        metaSize: parseFloat(getComputedStyle(condition.querySelector(".tower-condition-meta")).fontSize),
-        metaOpacity: parseFloat(getComputedStyle(condition.querySelector(".tower-condition-meta")).opacity),
-        scrollWidth: document.documentElement.scrollWidth
-      };
+    const layout = await page.locator('.instr-today').evaluate(panel => {
+      const text = panel.querySelector('.instr-condition-text'), meta = panel.querySelector('.instr-kpi small');
+      const style = getComputedStyle(text), metadata = getComputedStyle(meta);
+      return { ordered: panel.querySelector('h2').compareDocumentPosition(panel.querySelector('.instr-kpis')) === Node.DOCUMENT_POSITION_FOLLOWING
+          && panel.querySelector('.instr-kpis').nextElementSibling === text,
+        minHeight: parseFloat(style.minHeight), textSize: parseFloat(style.fontSize), labelSize: parseFloat(getComputedStyle(panel.querySelector('h2')).fontSize),
+        metaSize: parseFloat(metadata.fontSize), metaOpacity: parseFloat(metadata.opacity), borderColor: getComputedStyle(panel).borderColor,
+        scrollWidth: document.documentElement.scrollWidth };
     });
-    check("MIT直後・LIFE BAND前に常設", layout.afterMit && layout.beforeBand, JSON.stringify(layout));
-    check("390pxで44px/13px・meta 11px/.7下限・横スクロールなし", layout.minHeight >= 44 && layout.labelSize >= 13
-      && layout.textSize >= 13 && layout.metaSize >= 11 && layout.metaOpacity >= 0.7 && layout.scrollWidth <= 391
-      && layout.borderColor === "rgb(31, 85, 96)", JSON.stringify(layout));
+    check('健康画面で見出し→健康値→状態文言を常設', layout.ordered, JSON.stringify(layout));
+    check('390pxで44px/13px・meta 11px/.7下限・横スクロールなし', layout.minHeight >= 44 && layout.labelSize >= 13
+      && layout.textSize >= 13 && layout.metaSize >= 11 && layout.metaOpacity >= .7 && layout.scrollWidth <= 391
+      && layout.borderColor === 'rgb(31, 85, 96)', JSON.stringify(layout));
     await page.setViewportSize({ width: 1280, height: 900 });
-    const pcLayout = await page.locator(".tower-condition").evaluate((condition) => {
-      const center = (selector) => { const rect = condition.querySelector(selector).getBoundingClientRect(); return rect.top + rect.height / 2; };
-      return { areas: getComputedStyle(condition).gridTemplateAreas,
-        centers: [center(".tower-condition-label"), center(".tower-condition-text"), center(".tower-condition-meta")] };
+    const pcLayout = await page.locator('.instr-today').evaluate(panel => {
+      const boxes = [...panel.querySelectorAll('.instr-kpi')].map(el => el.getBoundingClientRect());
+      const text = panel.querySelector('.instr-condition-text').getBoundingClientRect();
+      return { columns: getComputedStyle(panel.querySelector('.instr-kpis')).gridTemplateColumns.split(' ').length,
+        aligned: boxes.every(r => r.width > 0 && Math.abs(r.top - boxes[0].top) < 1),
+        textBelow: text.top >= Math.max(...boxes.map(r => r.bottom)), fullWidth: Math.abs(text.width - panel.clientWidth) < 1 };
     });
-    check("PCはcond全幅・ラベル/文言/metaを1行配置", pcLayout.areas.includes("label text meta")
-      && Math.max(...pcLayout.centers) - Math.min(...pcLayout.centers) < 1,
-      JSON.stringify(pcLayout));
-    const allText = await page.locator(".tower-condition").textContent();
-    check("禁止語と赤系クラスを使わない", !/要注意|疲労|危険|警告/.test(allText)
-      && await page.locator(".tower-condition.red, .tower-condition.deficit, .tower-condition.low").count() === 0);
+    check('PCは健康値6欄を1行、状態文言はその下に全幅', pcLayout.columns === 6 && pcLayout.aligned && pcLayout.textBelow && pcLayout.fullWidth, JSON.stringify(pcLayout));
+    const allText = await page.locator('.instr-today').textContent();
+    check('禁止語と赤系クラスを使わない', !/要注意|疲労|危険|警告/.test(allText)
+      && await page.locator('.instr-today.red, .instr-today.deficit, .instr-today.low').count() === 0);
     check("表示・健康取得はapp stateへ内容変更を書かない", [deficitState, unknownState].every((item) => item.expected === item.actual && item.changedWrites === 0),
       JSON.stringify({ deficitState, unknownState }));
     check("pageerror 0", pageErrors.length === 0, JSON.stringify(pageErrors));
@@ -243,13 +243,16 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
     const initialHealth = resumePage.waitForResponse((response) => response.url().includes("karada/health-daily.json"));
     await passGithubGate(resumePage);
     await initialHealth;
+    await resumePage.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
+    await resumePage.locator('.more-tower-grid [data-action="nav"][data-view="instruments"]').click();
+    await resumePage.waitForSelector('#app[data-view="instruments"]');
     // v374: CI(shard4)で`page.waitForFunction: Timeout 30000ms exceeded.`が
     // tests/v325.test.js:235で発生(ci-run-34066885834/shard4-101577103448.log 3012-3018行)。
     // health-daily.jsonのレスポンス自体は`initialHealth`で待機済み(=fetchは完了している)ため、
     // 残るのは応答後の再render(state反映→DOM更新)がCIの共有ランナーで既定30秒に収まらない
     // ケース。待つ条件(実際のDOM文言)は変えずタイムアウトのみ余裕を持たせる。
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
-    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 7時間22分"), null, { timeout: 45000 });
+    await resumePage.waitForFunction(() => document.querySelector(".instr-condition-text")?.textContent.includes("睡眠 7時間22分"), null, { timeout: 45000 });
     await resumePage.clock.pauseAt(new Date(Date.UTC(2026, 8, 4, 14, 59, 50, 0)));
     // 通信開始の通知は計数ルートより先に届くため、加算済みになる通信完了まで待つ。
     const recentPull = resumePage.waitForEvent("requestfinished", (request) => request.url().includes("taskchute/app-state.json"));
@@ -271,7 +274,7 @@ function healthDays({ today = TODAY, sleepMin = 442, yesterdaySteps = 7000, othe
       document.dispatchEvent(new Event("visibilitychange"));
     });
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
-    await resumePage.waitForFunction(() => document.querySelector(".tower-condition-text")?.textContent.includes("睡眠 4時間20分"));
+    await resumePage.waitForFunction(() => document.querySelector(".instr-condition-text")?.textContent.includes("睡眠 4時間20分"));
     check("pullスロットル中はapp-state fetchを増やさない", resumePullRequests === requestsBeforeResume.pull,
       JSON.stringify({ before: requestsBeforeResume, health: resumeHealthRequests, pull: resumePullRequests }));
     check("日跨ぎ復帰でhealth fetchを1回再発行して当日値へ更新", resumeHealthRequests === requestsBeforeResume.health + 1,

@@ -11,7 +11,8 @@ const invalidRow = { id: 'future-invalid', date: '2026-02-30', title: '元値保
       try {
         const page = await context.newPage(), errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.clock.install({ time: new Date(2026, 8, 11, 12) });
+        // Install before the pause target so elapsed setup time cannot move it into the past.
+        await page.clock.install({ time: new Date(2026, 8, 11, 11) });
         await page.clock.pauseAt(new Date(2026, 8, 11, 12));
         await page.route('https://**', route => route.abort());
         await page.route('**/app.js', async route => {

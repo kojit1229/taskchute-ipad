@@ -34,6 +34,8 @@ const {chromium,launchOptions,startServer,randomPort,passGithubGate,STATE_KEY,di
  await ctx.route('**/src/features/karada-import.js',route=>route.fulfill({status:200,contentType:'application/javascript',body:moduleText.replace(actionAnchor,
   '"karada-recheck": () => { const marker = window.__karadaObserved = {done:false,error:null}; const operation=controller.restore(); operation.then(()=>{marker.done=true;},error=>{marker.error=String(error);marker.done=true;}); return operation; }')}));
  await page.goto('http://localhost:'+port);await page.waitForSelector('[data-action="gate-continue"]');await passGithubGate(page);
+ await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+ await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
  await page.waitForSelector('[data-karada-import] button:not([disabled])');
  const state=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),STATE_KEY);
  const before=await state();

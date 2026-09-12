@@ -50,6 +50,9 @@ function check(name, cond, extra = "") {
     }, { KEY, blocks, bodyScans, view, TODAY });
     await page.reload();
     await page.waitForSelector(`#app[data-view="${view}"]`, { state: "attached" });
+    await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+    await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
+    await page.waitForSelector(".instr-view .sec-bodymind");
   }
 
   async function stateNow() {
@@ -179,36 +182,33 @@ function check(name, cond, extra = "") {
       ],
       bodyScans: [{ id: "s-r1", dateTime: at(TODAY, "07:15"), fatigue: 1, recovery: 4, part: "", pomodoroBlockId: "r1" }]
     });
+    const healthBeforeToday = await stateNow();
+    await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
+    await page.waitForSelector('[data-daily-view="today"]');
     check("NOW LANDING(滑走路)節が生存", await page.locator(".tower-runway").count() === 1);
-    check("旧ARRIVALSの役割を全件一覧へ移し実績Blockも保持", await page.locator('.tower-col-left > [data-work-list="today"]').count() === 1
+    check("旧ARRIVALSの役割を全件一覧へ移し実績Blockも保持", await page.locator('#dailyTodayPlans > [data-work-list="today"]').count() === 1
       && await page.locator('[data-work-list="today"] [data-work-key="block:r1"] [data-action="edit-block"][data-id="r1"]').count() === 1
       && (await page.locator('[data-work-list="today"]').textContent()).includes("実績1"));
     check("FLIGHT LOG節が生存し実績1件を含む", (await page.locator(".sec-log").textContent()).includes("実績1"));
     check("GATE ROUTINE節が生存", await page.locator(".tower-gates").count() === 1);
-    check("BODY/MINDはFLIGHT LOGの後・JOURNALより前の順で描画される(order:5)",
-      await page.evaluate(() => {
-        const log = document.querySelector(".sec-log");
-        const bm = document.querySelector(".sec-bodymind");
-        if (!log || !bm) return false;
-        return getComputedStyle(bm).order === "5" && Number(getComputedStyle(log).order) < 5;
-      }));
-
-    console.log("[7] 390px幅で横スクロールが発生しない(BODY/MINDウィジェット込み)");
+    check("今日の必須欄と健康画面を分離", await page.locator('.sec-journal').count() === 1 && await page.locator('.sec-bodymind').count() === 0);
+    await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
+    await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
+    await page.waitForSelector('.sec-bodymind');
+    check("健康画面へ戻ってもスキャン/Blockの内容を保持", await page.evaluate(({ key, before }) => {
+      const a = JSON.parse(localStorage.getItem(key)), b = JSON.parse(before);
+      return JSON.stringify(a.bodyScans) === JSON.stringify(b.bodyScans) && JSON.stringify(a.blocks) === JSON.stringify(b.blocks);
+    }, { key: KEY, before: healthBeforeToday }));
+    console.log("[7] 健康画面の390pxで横溢れ・重なりなし");
     await page.setViewportSize({ width: 390, height: 900 });
-    await page.waitForSelector(".sec-bodymind", { state: "attached" });
+    await page.waitForSelector('.sec-bodymind');
     const widths = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
-    check("390px幅で横スクロールが発生しない(scrollWidth<=clientWidth+1)",
-      widths.scrollWidth <= widths.clientWidth + 1, JSON.stringify(widths));
-    check("390pxは実績→身体→ジャーナルが重ならず、身体は中央列のGATE後に保持",
-      await page.evaluate(() => {
-        const log = document.querySelector(".sec-log"), body = document.querySelector(".sec-bodymind");
-        const gate = document.querySelector(".sec-gates"), journal = document.querySelector(".sec-journal");
-        if (!log || !body || !gate || !journal) return false;
-        const l = log.getBoundingClientRect(), b = body.getBoundingClientRect(), j = journal.getBoundingClientRect();
-        return body.parentElement.classList.contains("tower-col-center") && gate.parentElement === body.parentElement
-          && Boolean(gate.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING)
-          && b.width > 0 && b.height > 0 && l.bottom <= b.top && b.bottom <= j.top;
-      }));
+    check("390px幅で横スクロールが発生しない(scrollWidth<=clientWidth+1)", widths.scrollWidth <= widths.clientWidth + 1, JSON.stringify(widths));
+    check("健康画面にBODY/MINDを1つ表示し他の健康欄と重ならない", await page.locator('.instr-view .sec-bodymind').evaluate(body => {
+      const b = body.getBoundingClientRect(), health = document.querySelector('.instr-today').getBoundingClientRect();
+      return document.querySelectorAll('.sec-bodymind').length === 1 && b.width > 0 && b.height > 0
+        && (health.bottom <= b.top || b.bottom <= health.top || health.right <= b.left || b.right <= health.left);
+    }));
     await page.setViewportSize({ width: 1100, height: 1400 });
   } finally {
     await browser.close();
