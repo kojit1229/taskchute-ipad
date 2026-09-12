@@ -14094,8 +14094,10 @@ function buildProjectModal(project) {
   // 種別プルダウンをdisabledにして固定表示にし、削除ボタン自体を出さない(deleteProject側の
   // ガードと二重防御)。
   const isWishSingleton = kind === "wish";
-  return legacyDetailFrame("project", project, "Project を編集", "project-modal", !isWishSingleton, "保存", () => `
+  return legacyDetailFrame("project", project, "Project を編集", "project-modal detail-sheet task-detail-single", !isWishSingleton, "保存", () => `
       <div class="modal-body">
+        <div class="detail-columns"><section class="detail-column" aria-label="基本・期間">
+        <h4 class="tower-section-title">基本・期間</h4>
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(project.title || "")}">
@@ -14140,6 +14142,8 @@ function buildProjectModal(project) {
             <input class="input" type="date" data-modal-field="dueDate" value="${project.dueDate || ""}">
           </div>
         </div>
+        </section><section class="detail-column" aria-label="12週の計画・進捗">
+        <h4 class="tower-section-title">12週の計画・進捗</h4>
         <div class="field">
           <label class="checkbox-line">
             <input type="checkbox" data-modal-field="is12WY" ${is12WY ? "checked" : ""}>
@@ -14207,6 +14211,7 @@ function buildProjectModal(project) {
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(project.description || "")}</textarea>
         </div>
+        </section></div>
       </div>
   `);
 }
