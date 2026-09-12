@@ -13,7 +13,7 @@
 // (4) orange/green/tealの文字色AAトークン(--orange-text等)が定義され4.5:1以上を満たす。
 //     「充/放」「着手中/未着手」ラベルが10px→11.5pxになる
 // (5) Block編集モーダル: レバレッジ3問クイズが既定closedで、判定済み(leverageType設定済み)
-//     ならsummaryに判定結果が出る。フッタの削除ボタンがmargin-right:autoで左端に分離される
+//     なら見出しに判定結果が出る。フッタの削除ボタンがmargin-right:autoで左端に分離される
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -186,7 +186,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (5) Block編集モーダル: レバレッジ3問クイズ + フッタ削除ボタン分離
     // ============================================================
-    console.log("[5a] レバレッジ3問クイズは既定closed。未判定は招待文、判定済みなら結果をsummaryに表示");
+    console.log("[5a] レバレッジ3問クイズは常設。未判定は招待文、判定済みなら結果を見出しに表示");
     await seed({
       blocks: [planBlock({ id: "b-lev", title: "レバレッジ確認Block", startMin: 9 * 60 })],
       view: "tasks" // v230: Block編集は現行タスクシュート導線から開く
@@ -194,22 +194,19 @@ function check(name, cond, extra = "") {
     await page.click('[data-action="edit-block"][data-id="b-lev"]');
     await page.waitForTimeout(200);
     const levHelper = page.locator(".modal-card .lev-helper");
-    check(".lev-helperはdetails要素で既定closed", await levHelper.evaluate((el) => el.open) === false);
-    const levSummaryUnjudged = await levHelper.locator("summary").textContent();
-    check("未判定時のsummaryは招待文", levSummaryUnjudged.includes("10秒で判定する"), levSummaryUnjudged);
-    // v366追随: レバレッジ種別selectは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
-    await page.evaluate(() => {
-      const d = document.querySelector(".modal-card details.tower-fold");
-      if (d) d.open = true;
-    });
+    check(".lev-helperは常設sectionで表示済み", await levHelper.isVisible()
+      && await levHelper.evaluate(el => el.tagName === "SECTION" && !el.closest("details:not([open])")));
+    const levSummaryUnjudged = await levHelper.locator("h4").textContent();
+    check("未判定時の見出しは招待文", levSummaryUnjudged.includes("10秒で判定する"), levSummaryUnjudged);
+    check("レバレッジ種別は常設で表示済み", await page.locator('.modal-card [data-modal-field="leverageType"]').isVisible());
     await page.selectOption('.modal-card [data-modal-field="leverageType"]', "asset");
     await page.click('[data-action="modal-save"]');
     await page.waitForTimeout(200);
     await page.click('[data-action="edit-block"][data-id="b-lev"]');
     await page.waitForTimeout(200);
-    const levSummaryJudged = await page.locator(".modal-card .lev-helper summary").textContent();
-    check("判定済み(資産)ならsummaryに判定結果が出る", levSummaryJudged.includes("資産"), levSummaryJudged);
-    check("判定済みsummaryはもう「10秒で判定する(任意)」の招待文ではない",
+    const levSummaryJudged = await page.locator(".modal-card .lev-helper h4").textContent();
+    check("判定済み(資産)なら見出しに判定結果が出る", levSummaryJudged.includes("資産"), levSummaryJudged);
+    check("判定済み見出しはもう「10秒で判定する(任意)」の招待文ではない",
       !levSummaryJudged.includes("10秒で判定する(任意)"), levSummaryJudged);
 
     console.log("[5b] モーダルフッタの削除ボタンがmargin-right:autoで左端に分離される");

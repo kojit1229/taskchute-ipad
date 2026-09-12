@@ -165,8 +165,8 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     await page.locator('.modal-title:has-text("Block を編集")').waitFor();
     const fieldValues = await page.locator('[data-modal-field="plannedStartAt"], [data-modal-field="plannedEndAt"], [data-modal-field="actualStartAt"], [data-modal-field="actualEndAt"]').evaluateAll(
       (inputs) => inputs.map((input) => input.value));
-    check("Block編集の予定/実績4値が最近傍5分", JSON.stringify(fieldValues) === JSON.stringify([
-      `${TODAY}T09:55`, `${TODAY}T10:30`, `${TODAY}T10:00`, `${TODAY}T10:30`
+    check("Block editing: actual then planned, all four values rounded to five minutes", JSON.stringify(fieldValues) === JSON.stringify([
+      `${TODAY}T10:00`, `${TODAY}T10:30`, `${TODAY}T09:55`, `${TODAY}T10:30`
     ]), JSON.stringify(fieldValues));
     await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-card").waitFor({ state: "detached" });

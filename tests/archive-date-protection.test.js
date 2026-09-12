@@ -159,7 +159,7 @@ let clock = Date.now(); Date.now = () => clock;
     assert.equal(local.journals[d], remote.journals[d]);
     assert.equal(local.journals[d], 'synthetic remote only');
   });
-  await check('writers/actual-app-guards', () => {
+  await check('writers/actual-app-guards', async () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const local = clone(base()); local.archivedDates = [d]; local.selectedDate = d; Object.assign(local, clone(archive));
     let notices = 0;
@@ -174,8 +174,18 @@ let clock = Date.now(); Date.now = () => clock;
       target: { matches: () => true, dataset: { journalDate: d }, value: 'blocked input' } });
     start = app.indexOf('"save-tower-journal":'); end = app.indexOf('  "early-bird-check":', start);
     const handler = app.slice(start + '"save-tower-journal":'.length, end).trim().replace(/,$/, '');
-    vm.runInNewContext('(' + handler + ')', env)({ target: { dataset: { date: d } } });
-    assert.equal(notices, 3);
+    const { createTowerJournal } = await import(pathToFileURL(path.join(ROOT, 'src/features/tower-journal.js')));
+    const status = { textContent: '' };
+    const free = { dataset: { towerJournalDate: d }, value: 'blocked input', readOnly: false,
+      matches: selector => selector === '[data-tower-journal-date]', parentElement: { querySelector: () => status } };
+    const document = { getElementById: id => id === 'towerJournalFree' ? free : null, querySelector: () => free };
+    const towerJournal = createTowerJournal({ state: () => local, connection: () => 'test', document,
+      now: () => { throw Error('archived input must not acquire a timestamp'); },
+      run: () => { throw Error('archived input must not save'); },
+      drafts: { get: () => null, put: () => { throw Error('archived input must not create a draft'); } } });
+    vm.runInNewContext('(' + handler + ')', { ...env, document, towerJournal })({ target: { dataset: { date: d } } });
+    assert.equal(notices, 2);
+    assert.equal(status.textContent, mod.ARCHIVED_READONLY_MESSAGE, 'third writer reports readonly at the save control');
     for (const key of KEYS) assert.equal(local[key][d], archive[key][d]);
   });
   console.log(checks + ' checks passed');

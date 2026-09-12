@@ -27,10 +27,13 @@ export function buildBlockDetailDraft(state, before, edited, fields, deps) {
   }
   // Manual corrections retain the entered time; reopening never supplies the current clock.
   draft.blocks = draft.blocks.map(row => row.id === edited.id ? { ...row, actualStartAt: edited.actualStartAt } : row);
-  if (edited.actualEndAt && (edited.actualEndAt !== before?.actualEndAt || edited.actualStartAt !== before?.actualStartAt || fields.resultNote || fields.outcome)) {
+  const reports = (state.declarations || []).filter(row => !row.deleted && row.blockId === edited.id && before?.actualEndAt && row.reportedAt === before.actualEndAt);
+  const report = reports.length === 1 ? reports[0] : null;
+  const reportChanged = (fields.resultNote || "") !== (report?.resultNote || "") || (fields.outcome || "") !== (report?.outcome || "");
+  if (edited.actualEndAt && (edited.actualEndAt !== before?.actualEndAt || edited.actualStartAt !== before?.actualStartAt || reportChanged)) {
     apply("daily-block-end", { endDraft: { date: edited.date, actualStartAt: edited.actualStartAt,
-      actualEndAt: edited.actualEndAt, declarationId: "", fallbackId: `detail-end_${edited.id}_${edited.actualEndAt}` },
-      values: { actualEndAt: edited.actualEndAt, completed: edited.completed }, note: fields.resultNote, outcome: fields.outcome });
+      actualEndAt: edited.actualEndAt, declarationId: report?.id || "", fallbackId: `detail-end_${edited.id}_${edited.actualEndAt}` },
+      values: { actualEndAt: edited.actualEndAt, completed: edited.completed }, note: fields.resultNote, outcome: fields.outcome, updateReport: Boolean(report) });
   } else {
     if ((fields.resultNote || fields.outcome) && !edited.actualEndAt) throw new Error("結果の保存には実績終了を入力してください");
     draft.blocks = draft.blocks.map(row => row.id === edited.id ? { ...row, actualEndAt: edited.actualEndAt } : row);
@@ -40,6 +43,7 @@ export function buildBlockDetailDraft(state, before, edited, fields, deps) {
   if (fields.taskCompleted !== undefined && fields.taskCompleted !== (linkedTask?.status === "completed")) {
     if (fields.completionTaskId !== edited.taskId) throw new Error("紐づくTaskを変更した場合は保存後に完了状態を編集してください");
     const result = apply("daily-task-complete", { kind: "task", id: edited.taskId, desiredCompleted: fields.taskCompleted });
+    if (fields.taskCompleted) apply("daily-plan-complete", { desiredCompleted: true });
     if (result.records.length) effects.push(() => deps.taskCompletionEffect?.(result));
   }
   const block = draft.blocks.find(row => row.id === edited.id);

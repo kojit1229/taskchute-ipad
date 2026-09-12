@@ -14089,7 +14089,7 @@ function legacyDetailFrame(kind, record, title, className, canDelete, saveLabel,
     kind, id: record.id || `new-${kind}`, draftId: null, title, dateLabel: "",
     sections: [{ title: "", fields: [], slot: "legacyFields" }],
     dirty: false, busy: false, errors: [], saveLabel, canDelete, origin: state.currentView
-  }, { slots: { legacyFields: fields }, className }).replace('<div class="modal-card', `<div${["task", "project"].includes(kind) ? ' data-daily-view="detail"' : ""} class="modal-card`);
+  }, { slots: { legacyFields: fields }, className }).replace('<div class="modal-card', `<div${["task", "project", "block"].includes(kind) ? ' data-daily-view="detail"' : ""} class="modal-card`);
 }
 
 function buildProjectModal(project) {
@@ -14560,7 +14560,7 @@ function buildBlockModal(block) {
     ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
     : null;
   return legacyDetailFrame("block", block, block._isNew ? "Block を追加" : "Block を編集",
-    "tower-sheet detail-sheet", !block._isNew, block._isNew ? "追加" : "保存", () => `
+    "tower-sheet detail-sheet task-detail-single", !block._isNew, block._isNew ? "追加" : "保存", () => `
       <div class="modal-body">
     ${placementBackHTML(block)}
         <div class="detail-columns"><div class="detail-column">
@@ -14745,7 +14745,6 @@ function saveBlockFromModal(id, fields) {
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveBlockFromModal(id, fields)).ok;
   if (_blockSaveInFlight) return;
   _blockSaveInFlight = true;
-  let _bodyScanBlockId = "";  // v293: 分岐(6箇所)が合流するfinallyでまとめて1回だけ開く
   try {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
@@ -14813,8 +14812,11 @@ function saveBlockFromModal(id, fields) {
     if (!existing?.actualStartAt && savedBlock?.actualStartAt) trackOnBlockStarted(savedBlock);
     if (Boolean(existing?.completed) !== Boolean(savedBlock?.completed)) {
       trackOnBlockCompletionChanged(savedBlock, Boolean(savedBlock?.completed), { interactive: false });
-      // v293: 身体スキャン復活。完了取り消し方向(existing.completed=true→false)では立てない。
-      if (!existing?.completed && savedBlock?.completed) _bodyScanBlockId = savedBlock.id;
+      draftSaveTransaction.defer(() => {
+        const committedBlock = state.blocks.find(block => block.id === id);
+        // v293: Only a successfully saved completion opens the body scan.
+        if (!existing?.completed && committedBlock?.completed) openBodyScanModal(committedBlock.id);
+      }, { post: true });
     }
   };
   // Planned times were validated as a pair by the registered detail builder.
@@ -14979,8 +14981,6 @@ function saveBlockFromModal(id, fields) {
   }
   } finally {
     _blockSaveInFlight = false;
-    // v293: 身体スキャン復活。closeModal()/saveAndRender()より後(=編集モーダルは閉じ済み)に開く。
-    if (_bodyScanBlockId) openBodyScanModal(_bodyScanBlockId);
   }
 }
 

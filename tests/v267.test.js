@@ -213,10 +213,11 @@ function configureSync(syncMod) {
     await page.waitForTimeout(200);
     await page.click(`[data-action="edit-block"][data-id="${completionSeed.blockId}"]`);
     await page.waitForSelector('[data-modal-field="completed"]', { state: "attached" });
-    // v366追随: 完了済み(Block)チェックは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
-    // 開いた後にvisible待ちで実際に到達可能であることを確認する(attachedだけでは
-    // detailsが壊れて開かなくなっても検出できないため)。
-    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+    // fixSB2d: 予定枠の全項目は詳細枠に常設。完了操作への到達性と後続の免除断言を維持する。
+    const completedField = page.locator('.modal-card [data-modal-field="completed"]');
+    check("完了済み(Block)は詳細枠に常設され、閉じたdetailsを開かず操作できる",
+      await completedField.count() === 1 && await completedField.isVisible()
+      && await completedField.evaluate((el) => !el.closest("details:not([open])")));
     await page.waitForSelector('[data-modal-field="completed"]');
     await page.uncheck('[data-modal-field="completed"]');
     await page.click('[data-action="modal-save"]');

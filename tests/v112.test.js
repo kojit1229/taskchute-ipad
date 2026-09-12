@@ -145,8 +145,13 @@ function check(name, cond, extra = "") {
     console.log('[3] Task完了は保存され、未完了filterから消え、全件には残る');
     await page.locator(`[data-work-list="exec"] [data-action="block-row-toggle"][data-id="${first[0].id}"]`).click();
     await page.locator(`[data-work-list="exec"] [data-action="edit-block"][data-id="${first[0].id}"]`).click();
-    await page.locator('.modal-card details.tower-fold > summary').click();
+    const completion = page.locator('.modal-card [data-action="toggle-task-complete"]');
+    check('Task完了欄は1件・常設で表示済み', await completion.count() === 1 && await completion.isVisible()
+      && await completion.evaluate(el => !el.closest('details:not([open])')));
     await page.locator(`.modal-card [data-action="toggle-task-complete"][data-id="${first[0].id}"]`).click();
+    check('保存前はTask未完了', (await stateNow()).tasks.find(t=>t.id==='task-A')?.status !== 'completed');
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.locator('.modal-close[data-action="body-scan-discard"]').waitFor();
     await dismissBodyScanIfOpen(page);
     check('Taskがcompletedになる',(await stateNow()).tasks.find(t=>t.id==='task-A')?.status==='completed');
     await nav('wbs');

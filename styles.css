@@ -5863,6 +5863,8 @@ details.settings-row > .fold-summary.settings-row-summary {
   #app[data-view="today"] .today-tower[data-daily-view="today"] #towerFlightLog { max-height: 10rem; overflow-y: auto; }
   #app[data-view="today"] .today-tower[data-daily-view="today"] #towerGateStrip { max-height: 12rem; overflow-y: auto; }
   [data-daily-view="wbs"] .wbs-projects { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+}
+@media (min-width: 1024px) {
   [data-daily-view="detail"] .detail-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 1280px), (min-width: 1024px) and (orientation: landscape) {

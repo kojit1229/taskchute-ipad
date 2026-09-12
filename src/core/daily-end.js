@@ -41,7 +41,7 @@ export function buildBlockEnd(state, input, deps) {
   if (values.completed !== undefined && typeof values.completed !== "boolean") throw invalid("予定完了を確認してください");
   if (values.completed !== undefined) after.completed = values.completed;
   else if (outcome === "done" || input.timer === true) after.completed = true;
-  if (note && !String(block.comment || "").split(/\r?\n/).includes(note))
+  if (note && !`\n${String(block.comment || "").replace(/\r\n/g, "\n")}\n`.includes(`\n${note.replace(/\r\n/g, "\n")}\n`))
     after.comment = block.comment ? `${block.comment}${block.comment.endsWith("\n") ? "" : "\n"}${note}` : note;
   for (const key of ["charge", "discharge"]) if (values[key] !== undefined) {
     if (!Number.isFinite(values[key]) || values[key] < 0 || values[key] > 5) throw invalid("充放電を確認してください");
@@ -52,7 +52,8 @@ export function buildBlockEnd(state, input, deps) {
   };
   if (input.timer === true && !block.actualEndAt) after.pomodoroCount = Number(block.pomodoroCount || 0) + 1;
   add("blocks", block, after);
-  if (hasReport) {
+  const writeReport = hasReport || (input.updateReport === true && Boolean(entry?.reportedAt));
+  if (writeReport) {
     add("declarations", entry || null, reported);
     const merged = mergeRecords(list, [reported], { compareAt: row => row.updatedAt || row.reportedAt || row.declaredAt,
       tieBreak: (_, remote) => remote });
@@ -71,6 +72,6 @@ export function buildBlockEnd(state, input, deps) {
         && state.pomodoro.lastFocusBlockId === block.id))) valuesToSave.push({ kind: null,
     key: "pomodoro", before: state.pomodoro, after: { ...state.pomodoro, running: false, blockId: "",
       startedAt: "", endsAt: "", mode: "focus", paused: false, pausedRemainMs: 0 } });
-  return { records, values: valuesToSave, block: after, declaration: hasReport ? reported : null,
-    declarationId: hasReport ? reported.id : draft.declarationId, justCompleted: !block.completed && after.completed };
+  return { records, values: valuesToSave, block: after, declaration: writeReport ? reported : null,
+    declarationId: writeReport ? reported.id : draft.declarationId, justCompleted: !block.completed && after.completed };
 }

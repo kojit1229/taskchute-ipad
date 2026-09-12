@@ -76,12 +76,10 @@ function check(name, cond, extra = "") {
     { KEY, TODAY, ruleId });
   }
 
-  // v366追随: completed/toggle-task-completeは頻度の低い項目として「詳細 ›」
-  // (既定閉、<details class="tower-fold">)へ移設された。操作前に開く。
-  // (streakFixedは監督者裁定2026-09-05で🔁繰り返し節へ戻ったため開く必要はない)
+  // fixSB2: completion controls are permanently visible.
   async function openBlockDetails() {
-    await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
-    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+    await page.locator('.modal-card [data-modal-field="completed"]').waitFor();
+    check("Completion is not folded", await page.locator('.modal-card details:not([open])').count() === 0);
   }
 
   async function checkCompletionLog(label, ruleId = "habit") {
@@ -213,6 +211,8 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="edit-block"][data-id="task-block"]').evaluate((element) => element.click());
     await openBlockDetails();
     await page.locator('[data-action="toggle-task-complete"][data-id="task-block"]').click();
+    check("No streak log before save", await habitLog() === null);
+    await page.locator('.modal-card [data-action="modal-save"]').click();
     await checkCompletionLog("toggleTaskCompleteFromBlock");
 
     await seed(habitRule(), [block("bulk-block", "habit", "一括承認")]);

@@ -190,10 +190,12 @@ function check(name, cond, extra = "") {
       };
       await resetState({ tasks: [parent, kStep, aiStep], blocks: [block], view: "tasks" });
       await page.click(`[data-action="edit-block"][data-id="${block.id}"]`);
-      // v366追随: 🏁タスク完了トグルは頻度の低い項目として「詳細 ›」(既定閉)へ移設された。
-      await page.waitForSelector(".modal-card details.tower-fold", { state: "attached" });
-      await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+      const completion = page.locator('.modal-card [data-action="toggle-task-complete"]');
+      check("Task完了欄は1件・常設で表示済み", await completion.count() === 1 && await completion.isVisible()
+        && await completion.evaluate(el => !el.closest('details:not([open])')));
       await page.click(`.modal-card [data-action="toggle-task-complete"][data-id="${block.id}"]`);
+      check("保存前は身体スキャンなし", await page.locator('.modal-close[data-action="body-scan-discard"]').count() === 0);
+      await page.locator('.modal-card [data-action="modal-save"]').click();
       // v293追随: toggleTaskCompleteFromBlock内ではmaybeQueueNextAiStep()(引き継ぎシートを開く)
       // →openBodyScanModal()(身体スキャンを開く)の順に同期呼び出しされる。どちらもrenderModal()で
       // 同じ#modalRootへ描画するため、引き継ぎシートは1フレームも可視化されずopenBodyScanModal()の

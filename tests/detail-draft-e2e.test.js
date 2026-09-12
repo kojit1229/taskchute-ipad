@@ -68,19 +68,59 @@ const DAY = "2026-09-06";
     await action("edit-block", "b"); await field("comment").fill("身体スキャンへ渡すメモ");
     await action("toggle-task-complete", "b");
     assert.equal(await page.locator('[data-action="draft-leave-discard"]').count(), 0);
-    await choose("save");
+    assert.equal(await field("taskCompleted").isChecked(), true, "Task completion remains in draft");
+    assert.equal((await readState()).tasks.find(row => row.id === "t").status, "todo");
+    assert.equal((await readState()).blocks.find(row => row.id === "b").comment, "保存して戻る内容");
+    assert.equal(await page.locator('[data-action="body-scan-discard"]').count(), 0, "no scan before save");
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    assert.equal((await readState()).tasks.find(row => row.id === "t").status, "completed");
     await page.locator('[data-action="body-scan-discard"]').first().waitFor();
     assert.equal((await readState()).blocks.find(row => row.id === "b").comment, "身体スキャンへ渡すメモ");
     await page.locator('[data-action="body-scan-discard"]').first().click();
+    // Ended synthetic block: title-only edits preserve the full multiline report.
+    await page.evaluate(({ key, day }) => {
+      const s = JSON.parse(localStorage.getItem(key));
+      const block = s.blocks.find(row => row.id === "b");
+      Object.assign(block, { actualStartAt: day + "T11:40:00", actualEndAt: day + "T12:10:00", comment: "前のメモ\n一行目\n二行目" });
+      s.declarations = [{ id: "existing-report", blockId: "b", date: day, declaredAt: block.actualStartAt,
+        reportedAt: block.actualEndAt, outcome: "done", resultNote: "一行目\n二行目" }];
+      localStorage.setItem(key, JSON.stringify(s));
+    }, { key: STATE_KEY, day: DAY });
+    await page.reload(); await page.locator('#sidebar [data-action="nav"]').first().waitFor();
+    await action("edit-block", "b");
+    const originalReport = (await readState()).declarations;
+    await field("title").fill("架空Blockのタイトルだけ変更");
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    assert.equal((await readState()).blocks.find(row => row.id === "b").comment, "前のメモ\n一行目\n二行目");
+    assert.deepEqual((await readState()).declarations, originalReport, "title-only save does not rebuild end report");
+    // Changing the end time does rebuild; the multiline note must still occur only once.
+    await action("edit-block", "b"); await field("actualEndAt").fill(DAY + "T12:15");
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    assert.equal((await readState()).blocks.find(row => row.id === "b").comment, "前のメモ\n一行目\n二行目");
+    await action("edit-block", "b");
+    await field("outcome").selectOption(""); await field("resultNote").fill("");
+    const endBeforeClear = (await readState()).blocks.find(row => row.id === "b").actualEndAt;
+    await page.locator('#modalRoot [data-action="modal-save"]').click();
+    const cleared = await readState();
+    assert.equal(cleared.blocks.find(row => row.id === "b").actualEndAt, endBeforeClear);
+    assert.equal(cleared.declarations.length, 1);
+    assert.equal(cleared.declarations[0].id, "existing-report");
+    assert.equal(cleared.declarations[0].outcome, ""); assert.equal(cleared.declarations[0].resultNote, "");
+    await page.reload(); await page.locator('#sidebar [data-action="nav"]').first().waitFor();
+    await action("edit-block", "b");
+    assert.equal(await field("outcome").inputValue(), ""); assert.equal(await field("resultNote").inputValue(), "");
+    await page.locator('#modalRoot [data-action="modal-close"]').first().click();
+    console.log("PASS ended block: multiline report deduplication and clearing survive reopening");
     const output = process.env.DETAIL_EVIDENCE_DIR;
     if (output) fs.mkdirSync(output, { recursive: true });
-    for (const width of [390, 768, 1024, 1280]) {
+    for (const width of [390, 768, 1000, 1023, 1024, 1280]) {
       await page.setViewportSize({ width, height: width === 1024 ? 768 : 844 });
       for (const [kind, id] of [["task", "t"], ["block", "b"]]) {
         await action(`edit-${kind}`, id);
         assert(await page.locator(".detail-columns").evaluate(el => el.scrollWidth <= el.clientWidth + 1), `${kind} ${width}: no horizontal overflow`);
         assert(await field(kind === "task" ? "description" : "comment").evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 16), "readable input");
         if (width >= 1024) assert(await page.locator(".detail-columns").evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length === 2), "landscape uses two columns");
+        else assert(await page.locator(".detail-columns").evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length === 1), "below 1024 uses one column");
         await page.locator('#modalRoot [data-action="modal-save"]').scrollIntoViewIfNeeded();
         assert(await page.locator('#modalRoot [data-action="modal-save"]').isVisible(), "save reachable");
         if (output) await page.screenshot({ path: path.join(output, `${kind}-${width}.png`) });

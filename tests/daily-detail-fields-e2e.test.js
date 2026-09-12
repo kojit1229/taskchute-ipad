@@ -16,7 +16,7 @@ const TASK_FIELDS = ["title", "projectId", "status", "parentTaskId", "category",
 const PROJECT_FIELDS = ["title", "kind", "status", "priority", "category", "startDate", "dueDate", "is12WY",
   "showProgress", "description", "twyKind", "twyName", "twyStartDate", "twyBaseline", "twyGoal", "twyUnit", "twyDeadline", "twyStep"];
 const BLOCK_FIELDS = ["title", "category", "taskId", "isMIT", "date", "plannedStartAt", "plannedEndAt", "estimateMin",
-  "actualStartAt", "actualEndAt", "charge", "discharge", "recurrenceKind", "comment", "leverageType", "completed"];
+  "actualStartAt", "actualEndAt", "charge", "discharge", "recurrenceKind", "comment", "leverageType", "completed", "outcome", "resultNote"];
 
 (async () => {
   const server = startServer(randomPort());
@@ -162,7 +162,7 @@ const BLOCK_FIELDS = ["title", "category", "taskId", "isMIT", "date", "plannedSt
     await modalAction("modal-close");
     pass("Project milestones: add/delete, leave/stay, dedicated values and IDs survive save/reload");
 
-    await open("block", "b"); await fieldsExactly(BLOCK_FIELDS);
+    await open("block", "b"); await fieldsExactly([...BLOCK_FIELDS, "completionTaskId", "taskCompleted"]);
     assert.equal(await page.locator('[data-action="block-date-shift"][data-days="1"]').count(), 1);
     assert.equal(await page.locator('[data-action="block-date-shift"][data-days="7"]').count(), 1);
     await page.locator('[data-action="estimate-chip"][data-min="25"]').click();
@@ -177,7 +177,8 @@ const BLOCK_FIELDS = ["title", "category", "taskId", "isMIT", "date", "plannedSt
       plannedStartAt: dateAt(1) + "T13:00", plannedEndAt: dateAt(1) + "T14:00", estimateMin: 45,
       actualStartAt: dateAt(1) + "T13:05", actualEndAt: dateAt(1) + "T13:50", charge: 4, discharge: 3, comment: payload };
     await setFields(blockValues);
-    await page.locator("#modalRoot details.tower-fold > summary").click();
+    assert(await field("leverageType").isVisible());
+    assert.equal(await field("leverageType").evaluate(el => el.closest("details:not([open])")), null);
     await setFields({ leverageType: leverage, completed: false }); await save(); await reload();
     const block = (await read()).blocks.find(row => row.id === "b");
     subset(block, { ...blockValues, plannedStartAt: blockValues.plannedStartAt + ":00", plannedEndAt: blockValues.plannedEndAt + ":00",
