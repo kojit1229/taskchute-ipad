@@ -137,7 +137,7 @@ function check(name, cond, extra = "") {
     console.log("[4] Wishプロジェクト配下でタスクを新規作成し、期日入力欄に値を入れて保存しても dueDate が空になる");
     await seed({ tasks: [], projects: [wishProject()], view: "wbs" });
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="wish-proj-v133"] [data-action="wbs-row-menu-toggle"]');
+    await page.click('[data-action="wbs-select-project"][data-id="wish-proj-v133"]');
     await page.waitForTimeout(150);
     await page.click('[data-action="add-task-to-project"][data-id="wish-proj-v133"]');
     await page.waitForTimeout(200);
@@ -154,7 +154,7 @@ function check(name, cond, extra = "") {
     console.log("[5] 回帰: 通常Project配下のタスクは従来どおり明示的なdueDateがそのまま保存される");
     await seed({ tasks: [], projects: [normalProject()], view: "wbs" });
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="normal-proj-v133"] [data-action="wbs-row-menu-toggle"]');
+    await page.click('[data-action="wbs-select-project"][data-id="normal-proj-v133"]');
     await page.waitForTimeout(150);
     await page.click('[data-action="add-task-to-project"][data-id="normal-proj-v133"]');
     await page.waitForTimeout(200);

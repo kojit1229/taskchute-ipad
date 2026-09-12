@@ -180,7 +180,8 @@ const today = '2026-09-06', selected = '2026-09-07';
     assert.equal(await page.locator('.task-modal [role="tab"]').count(), 0);
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
-      assert(await page.locator('.task-modal .detail-columns').evaluate(el => { const sections = [...el.children].map(node => node.getBoundingClientRect()); return sections[1].top >= sections[0].bottom && el.scrollWidth <= el.clientWidth + 1; }), 'all sections stack vertically');
+      // 監督者の契約追随(2026-09-12 CHANGELOG 10:10): 設計06 §7「詳細: 390px は1列、1280px は関連項目2列で1つの編集枠」。切替タブなしは列数と別の契約。
+      assert(await page.locator('.task-modal .detail-columns').evaluate((el, w) => { const sections = [...el.children].map(node => node.getBoundingClientRect()); const cols = getComputedStyle(el).gridTemplateColumns.split(' ').length; return (w === 390 ? sections[1].top >= sections[0].bottom && cols === 1 : cols === 2) && el.scrollWidth <= el.clientWidth + 1; }, width), width === 390 ? 'narrow: all sections stack vertically in one column' : 'wide: two columns in one editing frame');
       await modalField('description').scrollIntoViewIfNeeded();
       assert(await modalField('description').isVisible());
       assert(await page.locator('.task-modal').evaluate(el => [...el.querySelectorAll('input:not([type="hidden"]),select,textarea')].every(input => parseFloat(getComputedStyle(input).fontSize) >= 16)));

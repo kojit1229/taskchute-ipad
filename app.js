@@ -6104,7 +6104,7 @@ function twyTrackIsDone(track) {
 }
 
 function wbsProjectTaskModel(project) {
-  const allTasksOfProject = state.tasks.filter((task) => !task.deleted && task.projectId === project.id);
+  const allTasksOfProject = state.tasks.filter((task) => !task.deleted && (task.projectId ?? "") === project.id);
   let visibleTasks = allTasksOfProject.filter((task) => state.settings.showSuspended || !isTaskSuspended(task));
   // v47: 完了を隠す(未完了の子孫を持つ完了タスクは、子を迷子にしないため残す)
   if (state.settings.wbsHideCompleted) {
@@ -6312,7 +6312,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="-1" aria-label="1つ上へ" ${planIndex <= 0 ? "disabled" : ""}>↑</button>
         <button class="btn ghost plan-move" data-action="move-plan-step" data-id="${task.id}" data-direction="1" aria-label="1つ下へ" ${planIndex < 0 || planIndex >= planSiblings.length - 1 ? "disabled" : ""}>↓</button>
         <button class="btn ghost" data-action="add-plan-step-below" data-id="${task.id}">＋ 下に追加</button>` : "";
-  const metaHTML = `<div class="wbs-task-meta">${projectTitle ? `<span>${escapeHTML(projectTitle)}</span>` : ""}<span>進捗 ${progressNum}/${progressDen}</span>${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}${leverageTypeMarkHTML(task.leverageType)}</div>`;
+  const metaHTML = `<div class="wbs-task-meta">${projectTitle ? `<span>${escapeHTML(projectTitle)}</span>` : ""}<span>進捗 ${progressNum}/${progressDen}</span>${task.estimateMin ? `<span>見積${escapeHTML(task.estimateMin)}分</span>` : ""}${dueHTML}${stats.count ? `<span>実績 ${stats.count}回 ${fmtMinShort(stats.minutes) || "0m"}</span>` : `<span>実績 0回 0m</span>`}${leverageTypeMarkHTML(task.leverageType)}</div>`;
   return `
     <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
       <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>

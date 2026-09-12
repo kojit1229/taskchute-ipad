@@ -68,18 +68,19 @@ function task(id, projectId, title, extra = {}) {
       && await activeRow.locator(":scope > .wbs-task-copy .wbs-task-title").isVisible()
       && (await activeRow.locator(".wbs-task-meta").textContent()).includes("進捗 4/10")
       && (await activeRow.locator(".wbs-task-meta").textContent()).includes("期限 9/1 超過")
-      && await activeRow.locator(":scope > .wbs-today-btn").textContent() === "今日へ"
+      && await activeRow.locator(":scope > div > .wbs-today-btn").textContent() === "今日へ"
       && await activeRow.locator(":scope > .wbs-row-menu-toggle").isVisible());
     check("閉時は＋サブ・中断・編集・AI・上下操作を表示しない",
       await activeRow.locator(":scope > .wbs-row-menu-panel").isHidden()
-      && await activeRow.locator('[data-action="add-subtask"], [data-action="suspend-task"], [data-action="edit-task"], [data-action="toggle-criteria-request"], [data-action="move-plan-step"]').evaluateAll((els) => els.every((el) => !el.getClientRects().length)));
+      && await activeRow.locator('.wbs-row-menu-panel').locator('[data-action="add-subtask"], [data-action="suspend-task"], [data-action="edit-task"], [data-action="toggle-criteria-request"], [data-action="move-plan-step"]').evaluateAll((els) => els.every((el) => !el.getClientRects().length)));
     const doneRow = row("t-done");
     check("完了行は取消線と完了表示で今日へ無し", await doneRow.locator(".wbs-task-title").evaluate((el) => getComputedStyle(el).textDecorationLine.includes("line-through"))
-      && await doneRow.locator(":scope > .wbs-task-done").textContent() === "完了"
+      && await doneRow.locator(":scope > div > .wbs-task-done").textContent() === "完了"
       && await doneRow.locator('[data-action="task-today"]').count() === 0);
     check("期限超過はアンバーで赤系class無し", await activeRow.locator(".wbs-overdue").evaluate((el) => getComputedStyle(el).color === "rgb(242, 184, 75)"
       && !/red|danger|error/i.test(el.className)));
     check("状態badge(active/done/未着手)を描画しない", await page.locator(".wbs-status-badge").count() === 0);
+    await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
     const lowOpacityText = await row("t-suspended").evaluate((root) => [...root.querySelectorAll("*")]
       .filter((el) => el.getClientRects().length && [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim()))
       .map((el) => {
@@ -91,6 +92,7 @@ function task(id, projectId, title, extra = {}) {
       }).filter((item) => item.opacity < .7 - Number.EPSILON));
     check("中断行の全テキストは実効opacity .7以上", lowOpacityText.length === 0, JSON.stringify(lowOpacityText));
 
+    await page.locator('[data-action="wbs-select-project"][data-id="p-cycle"]').click();
     console.log("[2] 排他的メニューと既存Task/12WY action");
     await page.evaluate((key) => {
       window.__v329StateWrites = 0;
@@ -144,6 +146,7 @@ function task(id, projectId, title, extra = {}) {
     check("編集OFF・12WY進行中サイクルのTaskは行内入力無し", await row("t-plan").locator(".wbs-inline-input").count() === 0);
     // v374 B-3(a): 編集OFFでは進捗入力以外の行内入力がページ全体で1つも出ない(旧「編集OFFでは行内入力無し」のページ全体保証を復元)。
     check("編集OFFでは進捗入力以外の行内入力がページ全体で無い", await page.locator(".wbs-inline-input:not(.wbs-progress-input)").count() === 0);
+    await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
     check("編集OFF・非12WYのTaskは進捗入力2個を常時表示", await row("t-suspended").locator(".wbs-inline-input").count() === 2
       && await row("t-suspended").locator(".wbs-progress-input").count() === 2);
     await page.locator(".wbs-view-menu > summary").click();
@@ -152,25 +155,26 @@ function task(id, projectId, title, extra = {}) {
       && await row("t-suspended").locator(".wbs-progress-input").count() === 2);
     // v374 B-3: 12WY進行中サイクルのTask(t-plan)は hideOldProgress で進捗入力2個が常時非表示のため、
     // 編集ONでも行内入力は状態/期限/カテゴリの3個のみ・進捗入力0個になる保証を復活させる。
+    await page.locator('[data-action="wbs-select-project"][data-id="p-cycle"]').click();
     check("編集ON・12WY進行中サイクルのTaskは進捗を除く行内入力(状態/期限/カテゴリ)のみ表示", await row("t-plan").locator(".wbs-inline-input").count() === 3
       && await row("t-plan").locator(".wbs-progress-input").count() === 0);
     const projectRow = page.locator('[data-wbs-row-id="p-cycle"]');
-    const otherProjectRow = page.locator('[data-wbs-row-id="p-other"]');
-    check("Project見出しはタグ・進捗・完了数と…を表示", (await projectRow.locator(".wbs-project-meta").textContent()).includes("[12WY]")
+    check("Project選択肢はタグ・進捗・完了数を表示し詳細操作へ到達", (await projectRow.locator(".wbs-project-meta").textContent()).includes("[12WY]")
       && (await projectRow.locator(".wbs-project-meta").textContent()).includes("進捗")
       && (await projectRow.locator(".wbs-project-meta").textContent()).includes("完了")
-      && await projectRow.locator(":scope > .wbs-project-head > .wbs-row-menu-toggle").isVisible());
-    const projectMenuRightGaps = await Promise.all([projectRow, otherProjectRow].map((projectLocator) => projectLocator.locator(":scope > .wbs-project-head").evaluate((head) => {
-      const headBox = head.getBoundingClientRect();
-      const menuBox = head.querySelector(":scope > .wbs-row-menu-toggle").getBoundingClientRect();
-      return headBox.right - menuBox.right;
-    })));
-    check("12WY/非12WY Projectの…右端位置が一致", projectMenuRightGaps.every((gap) => Math.abs(gap) < .5)
-      && Math.abs(projectMenuRightGaps[0] - projectMenuRightGaps[1]) < .5, JSON.stringify(projectMenuRightGaps));
-    await projectRow.locator(":scope > .wbs-project-head > .wbs-row-menu-toggle").click();
-    check("Projectメニューは＋タスク・編集・中断を表示", await projectRow.locator('[data-action="add-task-to-project"]').isVisible()
-      && await projectRow.locator('[data-action="edit-project"]').isVisible()
-      && await projectRow.locator('[data-action="suspend-project"]').isVisible());
+      && await page.locator('[data-wbs-detail-id="p-cycle"] .wbs-detail-actions').isVisible());
+    const actionShapes = [];
+    for(const id of ['p-cycle','p-other']) {
+      await page.locator(`[data-action="wbs-select-project"][data-id="${id}"]`).click();
+      actionShapes.push(await page.locator(`[data-wbs-detail-id="${id}"] [data-action="edit-project"]`).boundingBox());
+    }
+    check("12WY/非12WY Projectで同じ編集操作を44px以上で表示", actionShapes.every(box => box && box.width >= 44 && box.height >= 44)
+      && Math.abs(actionShapes[0].width-actionShapes[1].width) < .5, JSON.stringify(actionShapes));
+    await page.locator('[data-action="wbs-select-project"][data-id="p-cycle"]').click();
+    const projectActions = page.locator('[data-wbs-detail-id="p-cycle"] .wbs-detail-actions');
+    check("Project詳細は＋タスク・編集・中断を表示", await projectActions.locator('[data-action="add-task-to-project"]').isVisible()
+      && await projectActions.locator('[data-action="edit-project"]').isVisible()
+      && await projectActions.locator('[data-action="suspend-project"]').isVisible());
 
     async function quality(width) {
       await page.setViewportSize({ width, height: 900 });

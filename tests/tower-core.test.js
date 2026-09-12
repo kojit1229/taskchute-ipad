@@ -299,10 +299,16 @@ function check(name, cond, extra = "") {
       s.currentView = "wbs"; localStorage.setItem(KEY, JSON.stringify(s));
     }, KEY);
     await page.reload();
-    await page.waitForSelector('[data-work-list="wbs"]');
-    const wbsTask = id => page.locator(`[data-work-list="wbs"] [data-work-key="task:${id}"]`);
-    check("見積35分の未配置TaskはWBSで未完了として残る", (await wbsTask('task-plan').textContent()).includes('見積35分') && (await wbsTask('task-plan').textContent()).includes('未完了'));
-    check("配置済み・見積なし・未来期日・ProjectなしTaskもWBSで全件到達", (await Promise.all(tasks.map(task => wbsTask(task.id).count()))).every(count => count === 1));
+    await page.waitForSelector('[data-work-list="wbs-projects"]');
+    const normalizedTasks = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).tasks, KEY);
+    const projectOf = task => normalizedTasks.find(item => item.id === task.id)?.projectId || '';
+    const selectTaskProject = async task => page.locator(`[data-action="wbs-select-project"][data-id="${projectOf(task)}"]`).click();
+    await selectTaskProject(tasks.find(task => task.id === 'task-plan'));
+    const wbsTask = id => page.locator(`[data-work-list^="wbs-tasks-"] [data-work-key="task:${id}"]`);
+    check("見積35分の未配置Taskは選択Projectの一覧で未完了として残る", (await wbsTask('task-plan').textContent()).includes('見積35分')
+      && await wbsTask('task-plan').locator('[data-action="toggle-task"]:not(.done)').count() === 1);
+    check("配置済み・見積なし・未来期日・ProjectなしTaskもWBSで全件到達", await (async () => { for(const task of tasks) { await selectTaskProject(task); if(await wbsTask(task.id).count() !== 1) { console.log('missing selected Task', task.id, task.projectId); return false; } for(const other of tasks.filter(other => projectOf(other) !== projectOf(task))) if(await wbsTask(other.id).count() !== 0) { console.log('unexpected other Project Task', other.id, other.projectId); return false; } } return true; })());
+    await selectTaskProject(tasks.find(task => task.id === 'task-plan'));
     const placementBrowsingDate = await browseYesterdayForPlacement(page);
     await page.locator('[data-action="task-today"][data-id="task-plan"]').first().click();
     const placedBlock = await assertUntimedTodayPlacement(page, { key: KEY, taskId: 'task-plan', today, browsingDate: placementBrowsingDate });

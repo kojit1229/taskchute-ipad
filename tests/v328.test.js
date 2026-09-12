@@ -79,10 +79,10 @@ function task(id, projectId, title, extra = {}) {
       && (await page.locator(".wbs-heading").textContent()).includes("12WY 第3週 ・ 8/29 – 9/4"));
     check("検索は常設し、閉時のツールバー操作は表示と追加を保持", await page.locator(".wbs-view-menu > summary").isVisible()
       && await page.locator(".wbs-add-menu > summary").isVisible()
-      && await page.locator('[data-work-list="wbs"] #wbs-search-input').isVisible() && !await page.locator(".wbs-edit-toggle").isVisible());
+      && await page.locator('#wbs-projects-query').isVisible() && await page.locator('#wbs-tasks-p-cycle-query').isVisible() && !await page.locator(".wbs-edit-toggle").isVisible());
     const stateBeforeMenus = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     await page.locator(".wbs-view-menu > summary").click();
-    check("表示メニュー内に検索と編集を含む8操作、ON/OFFを表示", await page.locator("#wbs-search-input").isVisible()
+    check("表示メニュー内に検索と編集を含む8操作、ON/OFFを表示", await page.locator("#wbs-projects-query").isVisible()
       && await page.locator(".wbs-view-options [data-action]").count() === 8
       && (await page.locator(".wbs-view-options").textContent()).includes("カテゴリ絞り込み")
       && await page.locator(".wbs-view-option b").count() === 7);
@@ -122,8 +122,12 @@ function task(id, projectId, title, extra = {}) {
 
     console.log("[3] TOWER色・44px・390/1280pxレスポンシブ");
     await page.locator(".wbs-view-menu > summary").click();
-    await page.locator("#wbs-search-input").fill("Task");
-    await page.waitForSelector('[data-work-list="wbs"] .search-kind');
+    await page.locator('[data-action="wbs-select-project"][data-id="p-cycle"]').click();
+    await page.locator('#wbs-tasks-p-cycle-query').fill("未着手 Task");
+    await page.waitForSelector('[data-work-list="wbs-tasks-p-cycle"] [data-work-key="task:t-todo"]');
+    check("選択Project内検索は一致Taskだけを表示し別Projectを混ぜない", await page.locator('[data-work-list="wbs-tasks-p-cycle"] [data-work-key]').count() === 1
+      && await page.locator(`[data-work-key="task:${added.id}"]`).count() === 0);
+    await page.locator('#wbs-tasks-p-cycle-query').fill('');
     const mobile = await page.evaluate(() => {
       const root = document.querySelector(".wbs-tower");
       const doc = document.scrollingElement || document.documentElement;
@@ -158,25 +162,25 @@ function task(id, projectId, title, extra = {}) {
       JSON.stringify(accessibilityViolations.slice(0, 12)));
     const towerTokens = await page.evaluate(() => ({
       criteria: getComputedStyle(document.querySelector(".wbs-criteria-btn.on")).borderColor,
-      searchKind: getComputedStyle(document.querySelector('[data-work-list="wbs"] .search-kind')).color,
+      searchKind: getComputedStyle(document.querySelector('.wbs-project-choice.selected')).borderLeftColor,
       track: getComputedStyle(document.querySelector(".twy-row")).backgroundColor
     }));
-    check("検索種別・条件ボタン・12WYトラックはTOWERトークン配色",
-      towerTokens.criteria === "rgb(85, 217, 232)" && towerTokens.searchKind === "rgb(85, 217, 232)"
+    check("選択Project・条件ボタン・12WYトラックはTOWERトークン配色",
+      towerTokens.criteria === "rgb(85, 217, 232)" && towerTokens.searchKind === "rgb(242, 184, 75)"
         && towerTokens.track === "rgb(5, 10, 20)", JSON.stringify(towerTokens));
-    check("今週を確定は12WY Project行内", await page.locator('[data-wbs-row-id="p-cycle"] [data-action="twy-open-commit"]').count() === 1
+    check("週の確定操作は選択12WY Project詳細内", await page.locator('[data-wbs-detail-id="p-cycle"] [data-action="twy-open-commit"]').count() === 1
       && await page.locator(".wbs-toolbar [data-action='twy-open-commit']").count() === 0);
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.reload();
-    await page.waitForSelector("#wbs-search-input", { state: "attached" });
+    await page.waitForSelector("#wbs-projects-query", { state: "attached" });
     const desktop = await page.evaluate(() => ({
-      search: document.querySelector("#wbs-search-input").getClientRects().length > 0,
+      search: document.querySelector("#wbs-projects-query").getClientRects().length > 0,
       edit: document.querySelector(".wbs-edit-toggle").getClientRects().length > 0,
       summary: document.querySelector(".wbs-view-menu > summary").getClientRects().length > 0,
       options: document.querySelector(".wbs-view-options").getClientRects().length > 0,
       noOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
-      inputFont: parseFloat(getComputedStyle(document.querySelector("#wbs-search-input")).fontSize)
+      inputFont: parseFloat(getComputedStyle(document.querySelector("#wbs-projects-query")).fontSize)
     }));
     check("1280pxはsummaryを隠し検索・編集モード・表示設定を常時表示", desktop.search && desktop.edit
       && !desktop.summary && desktop.options
