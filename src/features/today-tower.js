@@ -1,5 +1,6 @@
 import { scheduleDisplay, scheduleWarning, renderSchedule } from "./single-schedule-view.js";
 import { state } from "../state/store.js";
+import { READING_LABELS } from "./daily-reading.js";
 import { dailyActuals, actualDurationMinutes } from "../core/daily-actuals.js";
 import { karadaImportHTML } from "./karada-import.js";
 import { ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
@@ -566,6 +567,7 @@ function renderTodayTower() {
       <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
       <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
+    <nav aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</nav>
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
     <div class="daily-today-main">

@@ -627,6 +627,7 @@ const CACHE_NAME = "taskchute-journal-pwa-v393";  // v393: プロジェクト詳
 // 「ビジョンボードが見れない」原因調査で見つかった同根の残骸なので合わせて削除する。
 
 const APP_SHELL = [
+  "./src/features/daily-reading.js",
   "./src/features/daily-operations.js",
   "./src/features/feedback/feedback-coordinator.js",
   "./src/features/feedback/feedback-entry.js",

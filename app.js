@@ -40,6 +40,7 @@ import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
+import { createDailyReading } from "./src/features/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -1332,6 +1333,7 @@ function visionConnectionKey() {
   return personalDataReady(state.settings.github) ? JSON.stringify(personalDataConn(state.settings.github)) : "";
 }
 function invalidateVisionConnection() {
+  dailyReading.close();
   visionLegacyKey = visionConnectionKey();
   visionLegacyGeneration++;
   visionConnectionGeneration++;
@@ -1551,7 +1553,15 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      ここで render() を呼ぶと、後方で宣言される const(JOURNAL_PROMPTS 等)が
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
+const dailyReading = createDailyReading({ document, today: todayISO, addDays, now: nowDateTime,
+  connection: () => `${visionConnectionKey()}${visionConnectionKey() ? `:${visionConnectionGeneration}` : ""}`,
+  board: () => ["now_vision.pdf", "45_vision.pdf", "80_vision.pdf"][clamp(state.settings.visionBoardIndex || 0, 0, 2)],
+  readVision: visionReader.read, readRaw: (name, kind) => fetchGitHubRawResult(name, kind, { cache: "no-store" }),
+  markdown: renderMarkdown, visible: request => state.modal?.type === "dailyReading" && state.modal.sequence === request.sequence,
+  show: (request, html) => { state.modal = { type: "dailyReading", sequence: request.sequence }; renderModal(html); }
+});
 const dailyOperationDeps = {
+  reading: dailyReading,
   journalConnection: zeroConnectionKey,
   journalSaved: date => { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); },
   makeBlock: input => makeBlock(input), projectName: id => projectName(id),
@@ -13846,6 +13856,7 @@ function renderModal(innerHTML) {
 
 function closeModal() {
   if (draftSaveTransaction?.defer(() => closeModal())) return;
+  dailyReading.close();
   modalDraftBaseline = null;
   state.modal = null;
   modalRoot.classList.remove("open");
