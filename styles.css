@@ -5908,6 +5908,18 @@ details.settings-row > .fold-summary.settings-row-summary {
 }
 #app[data-view="instruments"] .instr-panel-box h2 { font-size: 13px; }
 
+/* fixV392d: reserve desktop font headroom within the plans panel. */
+@media (min-width: 1280px) {
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .work-list > h2 { margin: 0; padding-block: 4px; line-height: 1.2; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .work-list-filters { gap: 4px; padding-block: 4px; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .work-list-filters label { flex-direction: row; align-items: center; gap: 4px; line-height: 1.2; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .work-list-count { margin-block: 2px; line-height: 1.2; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .work-list-row { row-gap: 0; line-height: 1.2; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans :is(.daily-plan-times, .daily-plan-status) { gap: 0 4px; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .daily-plan-actions { gap: 4px; padding-left: 0; }
+  #app[data-view="today"] [data-daily-view="today"] #dailyTodayPlans .daily-plan-actions button { padding: 0 6px; line-height: 1.2; }
+}
+
 /* fixV392b: keep MIT and the live timer inside the current-work region. */
 #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > :is(.tower-mit, .today-pomodoro) { margin: 0; min-width: 0; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro { padding: 6px; }
