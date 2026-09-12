@@ -112,11 +112,13 @@ async function healthJapanese(page) {
   await nav(page, "instruments");
   assert.equal(await page.locator(".instr-view h1").innerText(), "健康");
   await nav(page, "today");
-  // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
-  assert.equal(await page.locator(".tower-condition").count(), 1, "Today condition panel count matches the baseline");
-  assert.equal(await page.locator(".tower-condition > .tower-condition-label").count(), 1);
-  assert.equal(await page.locator(".tower-condition > .tower-condition-text").count(), 1);
-  assert.equal(await page.locator(".tower-condition > .tower-condition-meta").count(), 1);
+  // fixV392 / 設計06 §4: 健康画面でパネル・見出し・本文・取得元の各1件を維持。
+  assert.equal(await page.locator(".tower-condition").count(), 0, "Today keeps health in the health screen");
+  await nav(page, "instruments");
+  assert.equal(await page.locator(".instr-today").count(), 1, "health condition panel is unique");
+  assert.equal(await page.locator(".instr-today > h2").count(), 1);
+  assert.equal(await page.locator(".instr-today > .instr-condition-text").count(), 1);
+  assert.equal(await page.locator(".instr-today > .bm-health-src").count(), 1);
   console.log("PASS health: Japanese labels/units/reasons, raw HR/HRV reasons, missing/stale/failed values and controls");
 }
 

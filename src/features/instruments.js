@@ -33,7 +33,7 @@ import { karadaImportHTML } from "./karada-import.js";
 // characterization test: instruments-core.test.js(同ディレクトリ、ブラウザ不要)。
 
 import { habitStreakPeriodStats, habitStreakStats } from "../core/habit-streak.js";
-import { cachedHealthData, conditionCommentText, conditionFromHealth } from "./health.js";
+import { cachedHealthData, conditionCommentText, conditionFromHealth, latestHealthWithin } from "./health.js";
 import { bmSummary } from "./today-tower.js";
 
 // ---- 依存注入(configureInstruments) ----
@@ -174,7 +174,9 @@ function metricHTML(label, value, detail, wide = false) {
 function todayPanelHTML(state, todayIso, health) {
   const days = Array.isArray(health?.days) ? health.days : [];
   const row = days.find((day) => day?.date === todayIso);
-  const heading = `<h2>からだ ─ 今日 <span>Apple Health ${escapeHTML(generatedTime(health?.generated_at))}</span></h2>${karadaImportHTML()}`;
+  const sourceRow = latestHealthWithin(todayIso);
+  const source = sourceRow ? `Apple Health経由 · ${sourceRow.date.slice(5)}時点${sourceRow.date <= shiftIso(todayIso, -2) ? " (古い)" : ""}` : "健康データ 未取得";
+  const heading = `<h2>からだ ─ 今日 <span>Apple Health ${escapeHTML(generatedTime(health?.generated_at))}</span></h2>${karadaImportHTML()}<div class="bm-health-src">${escapeHTML(source)}</div>`;
   if (!row) return `<section class="instr-panel-box instr-today">${heading}<div class="instr-today-empty">今朝の睡眠データはまだありません</div></section>`;
   const cond = conditionFromHealth(days, todayIso);
   const detail = (value, text) => value === null ? "未記録" : text;

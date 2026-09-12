@@ -321,14 +321,12 @@ function check(name, cond, extra = "") {
     console.log("[9] DEPARTURESは明日便データがあっても描画せず周辺セクションを維持する");
     check("DEPARTURES要素・旧action・明日便タイトルを描画しない",
       await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], [data-work-list="today"] :text("明日8時半")').count() === 0);
-    const leftSectionOrder = await page.locator(".tower-col-left > section").evaluateAll((sections) =>
-      sections.map((section) => [...section.classList].find((name) => name.startsWith("sec-"))));
-    // v310: NOW LANDING(sec-rwy)は上帯2(tower-band2)へ移設されたため、左列はARRIVALS開始になる。
-    check("左列は全件一覧→FLIGHT LOG、BODY/MINDは中央GATE直後へ移行",
-      JSON.stringify(leftSectionOrder) === JSON.stringify(["sec-arrivals", "sec-log"])
-      && await page.locator('.tower-col-center > .sec-gates + .sec-bodymind').count() === 1
-      && await page.locator('.sec-bodymind').count() === 1,
-      JSON.stringify(leftSectionOrder));
+    const sectionOrder = await page.locator('[data-daily-view="today"] .life-band, [data-daily-view="today"] .so-row, [data-daily-view="today"] .sec-rwy, [data-daily-view="today"] .sec-arrivals, [data-daily-view="today"] .sec-log, [data-daily-view="today"] .sec-gates, [data-daily-view="today"] .sec-journal').evaluateAll(sections =>
+      sections.map(section => [...section.classList].find(name => name.startsWith('sec-')) || (section.classList.contains('life-band') ? 'life' : 'creeds')));
+    check("人生の時間→信条→いまの作業→予定→やったこと→ルーティン→ジャーナル、健康2欄は今日に無い",
+      JSON.stringify(sectionOrder) === JSON.stringify(['life', 'creeds', 'sec-rwy', 'sec-arrivals', 'sec-log', 'sec-gates', 'sec-journal'])
+      && await page.locator('[data-daily-view="today"] .sec-bodymind, [data-daily-view="today"] .sec-condition').count() === 0,
+      JSON.stringify(sectionOrder));
     check("今日の全件一覧とGATEは引き続き表示", await page.locator('[data-work-list="today"].sec-arrivals').count() === 1
       && await page.locator(".sec-gates").count() === 1);
 
@@ -895,89 +893,56 @@ function check(name, cond, extra = "") {
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector('.tower-gate[data-action="now-conveyor-complete"]');
 
-    console.log("[33] 1440pxでNOW/タイマー70:30、LIFE/SO横帯、下段38:29:33を維持");
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.waitForLoadState("networkidle");
-    const desktopLayout = await page.evaluate(() => {
-      const root = document.querySelector(".today-tower");
-      const rect = (selector) => {
-        const box = document.querySelector(selector).getBoundingClientRect();
-        return { x: box.x, top: box.top, bottom: box.bottom, width: box.width };
+    console.log("[33] 1440/1280pxで人生・信条の同高2枠と左予定・右記録を実測");
+    await page.evaluate(key => {
+      const fixture = JSON.parse(localStorage.getItem(key));
+      fixture.recurrences = [];
+      localStorage.setItem(key, JSON.stringify(fixture));
+    }, KEY);
+    await seedBoard(Array.from({ length: 4 }, (_, i) => block('layout-' + i, '配置検査予定' + i, today, 13 * 60 + i * 30)), []);
+    const measureLayout = () => page.evaluate(() => {
+      const root = document.querySelector('[data-daily-view="today"]');
+      const rect = selector => {
+        const box = root.querySelector(selector).getBoundingClientRect();
+        return { x: box.x, top: box.top, bottom: box.bottom, right: box.right, width: box.width, height: box.height };
       };
-      return {
-        columns: getComputedStyle(root).gridTemplateColumns,
-        board: rect('[data-work-list="today"]'), runway: rect(".tower-runway"), timer: rect(".today-pomodoro"), gates: rect(".tower-gates"),
-        log: rect(".sec-log"), journal: rect(".sec-journal"),
-        right: rect(".tower-col-right"), life: rect(".life-band"), clock: rect(".clock-box"), so: rect(".so-row"), root: rect(".today-tower")
-      };
+      return { columns: getComputedStyle(root.querySelector('.daily-today-main')).gridTemplateColumns,
+        life: rect('.life-band'), so: rect('.so-row'), runway: rect('.tower-runway'), board: rect('#dailyTodayPlans'),
+        log: rect('.sec-log'), gates: rect('.sec-gates'), journal: rect('.sec-journal'), input: rect('.sec-journal textarea'),
+        rows: [...root.querySelectorAll('[data-work-list="today"] [data-work-key]')].map(el => {
+          const r = el.getBoundingClientRect(); return { x: r.x, top: r.top, right: r.right, bottom: r.bottom, height: r.height };
+        }), scrollWidth: document.documentElement.scrollWidth, innerWidth, innerHeight };
     });
-    const columnParts = desktopLayout.columns.trim().split(/\s+/);
-    const columnWidths = columnParts.map(parseFloat);
-    check("grid列は正幅3列で38:29:33の順", columnWidths.length === 3 && columnWidths.every(value => value > 0)
-      && Math.abs(columnWidths[0] / columnWidths[1] - 38 / 29) < .08
-      && Math.abs(columnWidths[0] / columnWidths[2] - 38 / 33) < .08, desktopLayout.columns);
-    check("NOW/CABINは上帯2の70%/30%、ARRIVALS/LOGは左、GATEは中央、右列はその右",
-      desktopLayout.runway.x < desktopLayout.timer.x && desktopLayout.runway.width > desktopLayout.timer.width
-      && Math.abs(desktopLayout.runway.width / (desktopLayout.runway.width + desktopLayout.timer.width) - .7) < .01
-      && Math.abs(desktopLayout.board.x - desktopLayout.log.x) < 1
-      && desktopLayout.board.x < desktopLayout.gates.x && desktopLayout.gates.x < desktopLayout.right.x
-       && Math.abs(desktopLayout.journal.x - desktopLayout.right.x) < 1,
-      JSON.stringify(desktopLayout));
-    const fullSpan = desktopLayout.right.x + desktopLayout.right.width - desktopLayout.board.x;
-    check("PC上帯はLIFE横帯と上段右列の時計", Math.abs(desktopLayout.life.width - fullSpan) < 2
-      && Math.abs(desktopLayout.clock.x - desktopLayout.right.x) < 1
-      && Math.abs(desktopLayout.clock.width - desktopLayout.right.width) < 1
-      && desktopLayout.clock.top < desktopLayout.life.top, JSON.stringify(desktopLayout));
-    check("STANDING ORDERSはLIFE後の横帯で全幅と左端を共有", Math.abs(desktopLayout.so.width - desktopLayout.life.width) < 1
-      && Math.abs(desktopLayout.so.x - desktopLayout.life.x) < 1
-      && desktopLayout.so.top >= desktopLayout.life.bottom, JSON.stringify(desktopLayout));
-    check("PCでもLIFE BAND/SOは各1マークアップ", await page.locator(".life-band").count() === 1
-      && await page.locator(".so-row").count() === 1 && await page.locator(".so-item").count() === 3);
-    // 下限境界1280px(最も中央列が潰れやすい点)でも3面卓が成立し中央列が実用幅を持つこと(レビューm1)。
-    await page.setViewportSize({ width: 1280, height: 800 });
-    const boundaryColumns = await page.evaluate(() => getComputedStyle(document.querySelector(".today-tower")).gridTemplateColumns);
-    const boundaryParts = boundaryColumns.trim().split(/\s+/);
-    const boundaryWidths = boundaryParts.map(parseFloat);
-    check("境界1280pxでも38:29:33の正幅3カラム", boundaryWidths.length === 3 && boundaryWidths.every(value => value > 0)
-      && Math.abs(boundaryWidths[0] / boundaryWidths[1] - 38 / 29) < .08
-      && Math.abs(boundaryWidths[0] / boundaryWidths[2] - 38 / 33) < .08, boundaryColumns);
-
-    console.log("[34] 狭幅NOW先頭、390/768は1列・1024横は下段2列、横はみ出しなし");
+    for (const width of [1440, 1280]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const m = await measureLayout();
+      console.log('SL2A_MEASURE ' + JSON.stringify({ width, ...m }));
+      const columns = m.columns.split(/\s+/).map(Number.parseFloat);
+      check(width + 'pxは正幅2列', columns.length === 2 && columns.every(value => value > 0), m.columns);
+      check(width + 'pxは人生・信条が同じ段・同じ高さの2枠', m.life.width > 0 && m.life.height > 0
+        && m.so.x >= m.life.right && Math.abs(m.life.top - m.so.top) < 1 && Math.abs(m.life.height - m.so.height) < 1, JSON.stringify(m));
+      check(width + 'pxは現在作業の下に左予定・右実績/ルーティン/本文', m.runway.top >= Math.max(m.life.bottom, m.so.bottom)
+        && m.board.top >= m.runway.bottom && Math.abs(m.board.top - m.log.top) < 1 && m.log.x >= m.board.right
+        && Math.abs(m.log.x - m.gates.x) < 1 && Math.abs(m.gates.x - m.journal.x) < 1
+        && m.gates.top >= m.log.bottom && m.journal.top >= m.gates.bottom, JSON.stringify(m));
+      check(width + 'pxでも人生・信条は各1マークアップ、信条3件', await page.locator('.life-band').count() === 1
+        && await page.locator('.so-row').count() === 1 && await page.locator('.so-item').count() === 3);
+      if (width === 1440) {
+        const visible = r => r.height > 0 && r.top >= 0 && r.bottom <= m.innerHeight && r.x >= 0 && r.right <= m.innerWidth;
+        check('1440×1000で予定4件と本文入力欄が全て見える', m.rows.length === 4 && m.rows.every(visible) && visible(m.input), JSON.stringify(m));
+      }
+    }
+    console.log("[34] 390/768/1024pxは新契約順の1列、横はみ出しなし");
     for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
       await page.setViewportSize(viewport);
-      await page.waitForLoadState("networkidle");
-      const mobileLayout = await page.evaluate(() => {
-        const board = document.querySelector('[data-work-list="today"]').getBoundingClientRect();
-        const runway = document.querySelector(".tower-runway").getBoundingClientRect();
-        const gates = document.querySelector(".tower-gates").getBoundingClientRect();
-        const log = document.querySelector(".sec-log").getBoundingClientRect();
-        const journal = document.querySelector(".sec-journal").getBoundingClientRect();
-        const life = document.querySelector(".life-band").getBoundingClientRect();
-        const clock = document.querySelector(".clock-box").getBoundingClientRect();
-        const standing = document.querySelector(".so-row").getBoundingClientRect();
-        const focus = document.querySelector(".today-focus-bar").getBoundingClientRect();
-        const timer = document.querySelector(".today-pomodoro").getBoundingClientRect();
-        const bodyMind = document.querySelector(".sec-bodymind").getBoundingClientRect();
-        return {
-          boardX: board.x, runwayX: runway.x, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
-          panelX: [life.x, clock.x, standing.x],
-          twoColumn: { listX: board.x, gateX: gates.x, listTop: board.top, gateTop: gates.top, logTop: log.top, bodyTop: bodyMind.top, journalTop: journal.top, logBottom: log.bottom, bodyBottom: bodyMind.bottom },
-          order: [life.top, clock.top, standing.top, runway.top, timer.top, focus.top, board.top, gates.top, log.top, bodyMind.top, journal.top]
-        };
-      });
-      check(`${viewport.width}pxはboard/runwayが縦積み`, Math.abs(mobileLayout.boardX - mobileLayout.runwayX) < 1, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxは横はみ出しなし`, mobileLayout.scrollWidth <= mobileLayout.innerWidth, JSON.stringify(mobileLayout));
-      const [lifeTop, clockTop, standingTop, nowTop, timerTop, focusTop, listTop, gatesTop, logTop, bodyTop, journalTop] = mobileLayout.order;
-      const upperOrder = [nowTop, timerTop, lifeTop, clockTop, standingTop, focusTop];
-      const lower = mobileLayout.twoColumn;
-      const lowerOrder = viewport.width === 1024
-        ? lower.gateX > lower.listX && Math.abs(lower.listTop - lower.gateTop) < 2
-          && lower.logTop > lower.listTop && lower.bodyTop > lower.gateTop
-          && lower.journalTop >= Math.max(lower.logBottom, lower.bodyBottom)
-        : [focusTop, listTop, gatesTop, logTop, bodyTop, journalTop].every((top, index, list) => !index || list[index - 1] < top);
-      check(`${viewport.width}pxはNOW先頭の保持順と幅別下段配置`, upperOrder.every((top, index, list) => !index || list[index - 1] < top)
-        && focusTop < listTop && lowerOrder, JSON.stringify(mobileLayout));
-      check(`${viewport.width}pxは上帯3パネルも同じ左端`, mobileLayout.panelX.every((x) => Math.abs(x - mobileLayout.runwayX) < 1), JSON.stringify(mobileLayout));
+      const m = await measureLayout();
+      const panels = [m.life, m.so, m.runway, m.board, m.log, m.gates, m.journal];
+      check(viewport.width + 'pxはboard/runwayが縦積み', Math.abs(m.board.x - m.runway.x) < 1, JSON.stringify(m));
+      check(viewport.width + 'pxは横はみ出しなし', m.scrollWidth <= m.innerWidth, JSON.stringify(m));
+      check(viewport.width + 'pxは人生→信条→現在作業→予定→実績→ルーティン→本文',
+        m.columns.split(/\s+/).length === 1 && panels.every((r, i) => r.height > 0 && (!i || r.top >= panels[i - 1].bottom)), JSON.stringify(m));
+      check(viewport.width + 'pxは各パネルの左端が揃う', panels.every(r => Math.abs(r.x - m.runway.x) < 1), JSON.stringify(m));
     }
 
     console.log("[36] reduced-motionは演出を止めても数字を更新する");

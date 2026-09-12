@@ -1,4 +1,4 @@
-// v275: TOWER上帯1(LIFE BAND+時計)と全幅STANDING ORDERSの単一DOM契約を固定する。
+// v275 / fixV392: 設計06 §4/§7の時計・人生/信条と幅別配置の単一DOM契約を固定する。
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -31,12 +31,12 @@ function check(name, condition, extra = "") {
   check("旧二重DOMクラスは実行コード/CSSから消滅", !/sec-(?:life|creed)(?:-pc)?|tower-topband-pc/.test(`${topbandSource}\n${towerSource}\n${stylesSource}`));
   check("LIFE BANDはGLASS共通クラス・ビーコン・12WY内訳を含む", /tower-glass-panel life-band/.test(topbandSource)
     && /tower-beacon/.test(topbandSource) && /twyScoreHTML\(digest\).*twyCommitBannerHTML\(digest\)/s.test(topbandSource));
-  check("NOW/タイマー7:3、SO3列、外側gridはMIT/時計→条件→life→so→band2→focus", /grid-template-columns:\s*minmax\(0, 7fr\) minmax\(0, 3fr\)/.test(stylesSource)
-    && /\.so-grid\s*\{\s*grid-template-columns:\s*repeat\(3/.test(stylesSource)
-    && /"mit mit clock"\s*"cond cond cond"\s*"alert alert alert"\s*"life life life"\s*"so so so"\s*"band2 band2 band2"\s*"focus focus focus"\s*"left center right"/.test(stylesSource));
-  check("新3パネルは角丸内の罫線をoverflow hiddenでクリップ", /\.so-row\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
+  check("今日の親へ限定した人生/信条・予定/記録の2列と信条の縦3件", stylesSource.includes('.daily-today-main { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }')
+    && stylesSource.includes('[data-daily-view="today"] .so-grid { grid-template-columns: minmax(0, 1fr); }')
+    && towerSource.includes('<div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>'));
+  check("人生の角丸と信条の非切詰め・時計の共通GLASSを維持", stylesSource.includes('[data-daily-view="today"] .so-row { overflow: visible; }')
     && /\.life-band\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
-    && /\.clock-box\s*\{[^}]*overflow:\s*hidden/.test(stylesSource));
+    && towerSource.includes('class="daily-today-clock tower-glass-panel"'));
   const executableTopband = topbandSource.replace(/\/\/.*$/gm, "");
   check("iOS禁止の日付文字列パース・個別listenerを追加しない", !/new Date\s*\(\s*["'`]/.test(executableTopband)
     && !topbandSource.includes("addEventListener"));
@@ -106,13 +106,16 @@ function check(name, condition, extra = "") {
           return { x: box.x, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height }; };
         const root = document.querySelector(".today-tower");
         const sigRows = [...new Set([...document.querySelectorAll(".life-band .life-sig")].map((el) => Math.round(el.getBoundingClientRect().top)))];
-        return { root: rect(".today-tower"), band: rect(".tower-band1"), life: rect(".life-band"), clock: rect(".clock-box"), mit: rect(".tower-mit"), so: rect(".so-row"), focus: rect(".today-focus-bar"),
+        return { root: rect(".today-tower"), band: rect(".daily-today-values"), life: rect(".life-band"), clock: rect(".daily-today-clock"), mit: rect(".tower-runway"), so: rect(".so-row"), focus: rect(".daily-today-main"),
           sigs: document.querySelectorAll(".life-band .life-sig").length, soItems: document.querySelectorAll(".so-row .so-item").length,
           score: document.querySelectorAll(".life-band .twy-score").length,
-          duplicateCount: document.querySelectorAll(".life-band, .clock-box, .so-row").length,
+          duplicateCount: document.querySelectorAll(".life-band, .daily-today-clock, .so-row").length,
           headerCount: document.querySelectorAll(".tower-header, #towerEyebrow").length,
           soColumns: getComputedStyle(document.querySelector(".so-grid")).gridTemplateColumns, sigRows: sigRows.length,
-          clockAlign: getComputedStyle(document.querySelector(".clock-box")).textAlign,
+          clockFits: [...document.querySelectorAll('.daily-today-clock > *')].every(el => { const b=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect(); return b.left>=p.left&&b.right<=p.right; }),
+          rootDisplay: getComputedStyle(root).display, rootDirection: getComputedStyle(root).flexDirection,
+          valueColumns: getComputedStyle(document.querySelector('.daily-today-values')).gridTemplateColumns,
+          mainColumns: getComputedStyle(document.querySelector('.daily-today-main')).gridTemplateColumns,
           gridAreas: getComputedStyle(root).gridTemplateAreas, scrollWidth: document.scrollingElement.scrollWidth, innerWidth,
           blurOff: root.dataset.glassBlur === "off" };
       });
@@ -124,10 +127,11 @@ function check(name, condition, extra = "") {
     for (const width of [390, 768, 1024]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1024 });
       mobile = await layout();
-      check(`${width}pxはLIFE→時計→SO→FOCUSの縦順・全幅`, mobile.life.top < mobile.clock.top && mobile.clock.bottom < mobile.so.top
-        && mobile.so.bottom < mobile.focus.top && [mobile.life.width, mobile.clock.width, mobile.so.width].every((value) => Math.abs(value - mobile.band.width) < 1), JSON.stringify(mobile));
-      check(`${width}pxは横溢れなし・LIFE指標2x2・時計左寄せ`, mobile.scrollWidth <= mobile.innerWidth
-        && mobile.sigRows === 2 && mobile.clockAlign === "left", JSON.stringify(mobile));
+      check(`${width}pxは時計→LIFE→SO→現在作業→予定/記録の縦順・全幅`, mobile.clock.bottom < mobile.life.top && mobile.life.bottom <= mobile.so.top
+        && mobile.so.bottom < mobile.mit.top && mobile.mit.bottom < mobile.focus.top
+        && [mobile.life.width, mobile.clock.width, mobile.so.width].every((value) => Math.abs(value - mobile.band.width) < 1), JSON.stringify(mobile));
+      check(`${width}pxは横溢れなし・LIFE指標2x2・時計内の情報が枠内`, mobile.scrollWidth <= mobile.innerWidth
+        && mobile.sigRows === 2 && mobile.clockFits, JSON.stringify(mobile));
     }
     check("4指標+12WYスコア+信条3件を単一DOM表示", mobile.sigs === 4 && mobile.score === 1
       && mobile.soItems === 3 && mobile.duplicateCount === 3, JSON.stringify(mobile));
@@ -155,23 +159,25 @@ function check(name, condition, extra = "") {
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await page.screenshot({ path: path.join(ARTIFACTS, "tower-r2-mobile.png"), fullPage: true });
 
-    console.log("[3] 1280px境界/PC 70:30・全grid順・SO全幅");
+    console.log("[3] 1280px境界/PC 人生と信条の同高2列・予定と記録の2列");
     let pc, boundaryPc;
     for (const width of [1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       pc = await layout();
       if (width === 1280) boundaryPc = pc;
-      check(`${width}pxは上段MITと右時計、人生指標は次の全幅帯・横溢れなし`,
-        pc.mit.width > 0 && pc.clock.width > 0 && Math.abs(pc.mit.top - pc.clock.top) < 1
-        && pc.mit.right <= pc.clock.x && pc.clock.bottom <= pc.life.top
-        && Math.abs(pc.life.right - pc.clock.right) < 1 && Math.abs(pc.life.x - pc.mit.x) < 1
+      check(`${width}pxは時計→人生/信条→現在作業の全幅帯・横溢れなし`,
+        pc.mit.width > 0 && pc.clock.width > 0 && pc.clock.bottom <= pc.life.top
+        && pc.life.bottom <= pc.mit.top && pc.so.bottom <= pc.mit.top
+        && Math.abs(pc.so.right - pc.clock.right) < 1 && Math.abs(pc.life.x - pc.mit.x) < 1
         && pc.scrollWidth <= pc.innerWidth, JSON.stringify(pc));
-      check(`${width}pxはSOが人生指標の全幅で直下`, Math.abs(pc.so.x - pc.life.x) < 1
-        && Math.abs(pc.so.width - pc.life.width) < 1 && pc.so.top > pc.life.bottom, JSON.stringify(pc));
+      check(`${width}pxはSOが人生指標の右隣で同高・同幅`, pc.so.x >= pc.life.right
+        && Math.abs(pc.so.width - pc.life.width) < 1 && Math.abs(pc.so.top - pc.life.top) < 1
+        && Math.abs(pc.so.height - pc.life.height) < 1, JSON.stringify(pc));
     }
-    const expectedAreas = '"mit mit clock" "cond cond cond" "alert alert alert" "life life life" "so so so" "band2 band2 band2" "focus focus focus" "left center right"';
-    check("1280px境界の外側grid全順序を固定", boundaryPc.gridAreas.replace(/\s+/g, " ") === expectedAreas, boundaryPc.gridAreas);
-    check("PCは信条横3列・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 3
+    check("1280px境界の親は縦flex、人生/信条と予定/記録は各2列", boundaryPc.gridAreas === 'none'
+      && boundaryPc.rootDisplay === 'flex' && boundaryPc.rootDirection === 'column'
+      && boundaryPc.valueColumns.trim().split(/\s+/).length === 2 && boundaryPc.mainColumns.trim().split(/\s+/).length === 2, JSON.stringify(boundaryPc));
+    check("PCは信条縦3件・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 1
       && pc.sigs === 4 && pc.soItems === 3 && pc.duplicateCount === 3, JSON.stringify(pc));
     const soType = await page.locator(".so-item").first().evaluate((item) => {
       const num = item.querySelector(".so-num"), em = item.querySelector("em"), small = item.querySelector("small");
@@ -179,9 +185,9 @@ function check(name, condition, extra = "") {
         numFlex: getComputedStyle(num).flexShrink, numFont: getComputedStyle(num).fontSize,
         emFont: getComputedStyle(em).fontSize, smallFont: getComputedStyle(small).fontSize, smallFamily: getComputedStyle(small).fontFamily };
     });
-    check("SOは番号/本文寸法とv319英文11px・非monospace", soType.numWidth === 30 && soType.numHeight === 30
-      && soType.numFlex === "0" && soType.numFont === "13px" && soType.emFont === "12.5px"
-      && soType.smallFont === "11px" && !/mono|consolas/i.test(soType.smallFamily), JSON.stringify(soType));
+    check("SOは番号寸法と日本語本文14px・副題12px・非monospace", soType.numWidth === 30 && soType.numHeight === 30
+      && soType.numFlex === "0" && soType.numFont === "13px" && soType.emFont === "14px"
+      && soType.smallFont === "12px" && !/mono|consolas/i.test(soType.smallFamily), JSON.stringify(soType));
     await page.screenshot({ path: path.join(ARTIFACTS, "tower-r2-pc.png"), fullPage: true });
     const geometry = (selectors) => page.evaluate((items) => {
       const life = document.querySelector(".life-band").getBoundingClientRect(), so = document.querySelector(".so-row").getBoundingClientRect();
@@ -190,7 +196,8 @@ function check(name, condition, extra = "") {
           internalFit: Boolean(el) && el.scrollWidth <= el.clientWidth + 1,
           visualFit: Boolean(el) && [...el.children].every((child) => { const childBox = child.getBoundingClientRect();
             return childBox.left >= box.left - 1 && childBox.right <= box.right + 1 && childBox.bottom <= box.bottom + 1; }) }; });
-      return { life: { left: life.left, right: life.right, bottom: life.bottom }, soTop: so.top,
+      return { life: { left: life.left, right: life.right, bottom: life.bottom },
+        valuesFit: innerWidth < 1280 ? so.top >= life.bottom : so.left >= life.right && Math.abs(so.top-life.top)<1 && Math.abs(so.height-life.height)<1,
         pageFit: document.scrollingElement.scrollWidth <= innerWidth, boxes };
     }, selectors);
 
@@ -204,7 +211,7 @@ function check(name, condition, extra = "") {
       await page.setViewportSize({ width, height: 900 });
       const expanded = await geometry([".twy-score-detail", ".twy-tracks-foot", ".twy-track-line"]);
       if (width === 390) trackNameClippedAt390 = await page.locator(".twy-track-line .t-name").first().evaluate((el) => el.scrollWidth > el.clientWidth);
-      check(`${width}px TRACKS展開はLIFE内・SO押下げ・横溢れなし`, expanded.pageFit && expanded.soTop >= expanded.life.bottom
+      check(`${width}px TRACKS展開はLIFE内・幅別SO配置・横溢れなし`, expanded.pageFit && expanded.valuesFit
         && expanded.boxes.every((box) => box.present && box.left >= expanded.life.left - 1 && box.right <= expanded.life.right + 1
           && box.bottom <= expanded.life.bottom + 1 && box.visualFit), JSON.stringify(expanded));
     }
@@ -227,19 +234,20 @@ function check(name, condition, extra = "") {
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       const banner = await geometry([".life-sig.wy > .twy-commit-banner", '.twy-commit-banner [data-action="twy-open-commit"]']);
-      check(`${width}px未確定バナーはLIFE内・SO押下げ・横溢れなし`, banner.pageFit && banner.soTop >= banner.life.bottom
+      check(`${width}px未確定バナーはLIFE内・幅別SO配置・横溢れなし`, banner.pageFit && banner.valuesFit
         && banner.boxes.every((box) => box.present && box.left >= banner.life.left - 1 && box.right <= banner.life.right + 1
           && box.bottom <= banner.life.bottom + 1 && box.internalFit), JSON.stringify(banner));
     }
     await page.screenshot({ path: path.join(ARTIFACTS, "tower-r2-pc-banner.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await seed({ blurOff: true });
-    const off = await page.locator(".life-band, .clock-box, .so-row").evaluateAll((panels) => panels.map((panel) => ({
+    const off = await page.locator(".life-band, .daily-today-clock, .so-row").evaluateAll((panels) => panels.map((panel) => ({
       blur: getComputedStyle(panel).backdropFilter, overflow: getComputedStyle(panel).overflow,
-      radius: getComputedStyle(panel).borderRadius, width: panel.getBoundingClientRect().width
+      radius: getComputedStyle(panel).borderRadius, width: panel.getBoundingClientRect().width,
+      fits: panel.scrollWidth <= panel.clientWidth + 1
     })));
     check("blur-offでも新3パネルはぼかしだけ無効", off.length === 3 && off.every((panel) => panel.blur === "none"
-      && panel.overflow === "hidden" && panel.radius === "18px" && panel.width > 0), JSON.stringify(off));
+      && panel.fits && panel.radius === "18px" && panel.width > 0), JSON.stringify(off));
   } catch (error) {
     failures++; console.error(error.stack || error.message);
   } finally {

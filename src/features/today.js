@@ -128,10 +128,6 @@ function configureToday(deps) {
   registerActions({
     "today-plans-jump": () => focusTodaySection("#dailyTodayPlans"),
     "today-journal-jump": () => focusTodaySection(".tower-journal"),
-    "focus-toggle-side": () => toggleTodayFocusSection("side"),
-    "focus-toggle-journal": () => toggleTodayFocusSection("journal"),
-    "focus-toggle-life": () => toggleTodayFocusSection("life"),
-    "focus-mode": () => toggleTodayFocusMode()
   });
 }
 

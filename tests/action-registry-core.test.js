@@ -111,7 +111,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "daily-block-start", "daily-block-end",
   "modal-save",
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
-  "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
+  "today-plans-jump", "today-journal-jump",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
@@ -239,8 +239,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // v354: 同居していたtime-comb-fillはfill-gap-open(app.js側の直接registerActions)へ
   // 統合・置換したためここから削除した(下のAPP_JS_REGISTERED_ACTIONS側で検証する)。
   "drift-postpone",
-  // v241/v313: src/features/today.jsの端末ローカル表示切替
-  "focus-toggle-side", "focus-toggle-journal", "focus-toggle-life", "focus-mode",
+  // fixV392 / 設計06 §4: 常設化後の予定/記録への移動。集合の完全一致・重複なしは維持。
+  "today-plans-jump", "today-journal-jump",
   // v262: src/features/track-ui.jsの12WY進捗トースト
   "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
   // FUNDはconfigureFundで実bridgeを構築し、9操作を登録する。

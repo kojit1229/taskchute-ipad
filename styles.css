@@ -5800,7 +5800,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values > *,
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main > *,
-#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records > * { min-width: 0; margin: 0; grid-area: auto; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records > * { min-width: 0; margin: 0; grid-area: auto; order: 0; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .so-row { overflow: visible; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .so-grid { grid-template-columns: minmax(0, 1fr); }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .so-item { padding: 6px 10px; border-left: 0; }
@@ -5850,6 +5850,9 @@ details.settings-row > .fold-summary.settings-row-summary {
   #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-log-row { grid-template-columns: 90px minmax(0, 1fr) 44px; }
   #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-log-state { grid-column: 2 / -1; }
 }
+@media (min-width: 1024px) {
+  [data-daily-view="detail"] .detail-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (min-width: 1280px) {
   #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values,
   #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
@@ -5892,3 +5895,14 @@ details.settings-row > .fold-summary.settings-row-summary {
 @media (max-width: 767px) {
   #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock { position: sticky; top: 0; z-index: 5; }
 }
+
+/* fixSL2A2: keep four plans within the desktop viewport. */
+@media (min-width: 1280px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] { gap: 4px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .so-item { padding-block: 0; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .so-item small { margin-top: 0; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .life-band { gap: 6px; padding-block: 6px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .life-sigs { row-gap: 0; }
+  #app[data-view="today"] [data-daily-view="today"] .work-list-row { padding-block: 0; }
+}
+#app[data-view="instruments"] .instr-panel-box h2 { font-size: 13px; }

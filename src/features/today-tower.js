@@ -555,19 +555,19 @@ function renderTodayTower() {
   const blocks = blocksForDate(today);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
-  const weekday = ["?", "?", "?", "?", "?", "?", "?"][now.getDay()];
-  // ????????????????????????????????
+  const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+  // 今日の必須8項目は旧フォーカス設定にかかわらず常設する。
   return `<div class="today-tower" data-daily-view="today" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
-    <header class="daily-today-clock tower-glass-panel" aria-label="??????????">
+    <header class="daily-today-clock tower-glass-panel" aria-label="今日の時計">
       <span id="towerDate">${date} (${weekday})</span><time id="towerClock">${clockText(now)}</time>
-      <span>???? <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
-      <nav aria-label="?????"><button type="button" data-action="today-plans-jump">???</button><button type="button" data-action="today-journal-jump">???</button></nav>
+      <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
+      <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
     <div class="daily-today-main">
-      <section id="dailyTodayPlans" aria-label="?????">${renderWorkList("today")}</section>
+      <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
       <div class="daily-today-records">${renderFlightLog(today, blocks)}${renderTowerGates(blocks)}${renderTowerJournal(today)}</div>
     </div>
   </div>`;

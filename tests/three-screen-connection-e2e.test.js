@@ -274,20 +274,29 @@ process.once('beforeExit', async () => {
     for (const selector of ['#towerClock', '#towerDayLeft', '.life-band', '.so-row', '.tower-runway', '[data-work-list="today"]', '#towerFlightLog', '#towerGateStrip', '#towerJournalFree'])
       assert.equal(await root.locator(selector).count(), 1, 'permanent: ' + selector);
     assert.equal(await root.locator('.today-pomodoro,.sec-bm,.tower-condition').count(), 0);
-    assert.equal(await root.locator('.life-band').getByText('45???').count(), 0);
+    assert.equal(await root.locator('#towerDate').textContent(), today + ' (日)');
+    assert(await root.locator('header.daily-today-clock').isVisible());
+    assert.equal(await root.locator('header.daily-today-clock').getAttribute('aria-label'), '今日の時計');
+    assert.match(await root.locator('#towerDayLeft').locator('..').textContent(), /^本日残り /);
+    const jumps = root.getByRole('navigation', { name: '今日の移動' });
+    assert(await jumps.getByRole('button', { name: '予定へ', exact: true }).isVisible());
+    assert(await jumps.getByRole('button', { name: '記録へ', exact: true }).isVisible());
+    assert(await root.getByRole('region', { name: '今日の予定', exact: true }).isVisible());
+    console.log('PASS fixSL2A4: weekday, remaining label, navigation labels and section labels');
+    // 誕生日の補完は app.js の所有=レーン1の別発注 fixSB2x で扱う(CHANGELOG 17:20)。
     assert((await root.locator('#towerDate').textContent()).includes(today));
     const journal = root.locator('#towerJournalFree');
-    await journal.fill('????????????');
+    await journal.fill('今日の入力を時計更新後も保つ');
     await journal.evaluate(el => { window.dailyJournalNode = el; window.dailyOrder = [...el.closest('[data-daily-view]').children]; });
     await page.clock.runFor(2000);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.clock.runFor(1000);
-    assert(await journal.evaluate(el => el === window.dailyJournalNode && el.value === '????????????' && window.dailyOrder.every((node, i) => node === el.closest('[data-daily-view]').children[i])));
+    assert(await journal.evaluate(el => el === window.dailyJournalNode && el.value === '今日の入力を時計更新後も保つ' && window.dailyOrder.every((node, i) => node === el.closest('[data-daily-view]').children[i])));
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('taskchute-journal-today-focus-v1')).sections.life), false);
     await root.locator('[data-action="save-tower-journal"]').click();
-    assert.equal(await page.evaluate(async date => (await import('/src/state/store.js')).state.journals[date], today), '????????????');
+    assert.equal(await page.evaluate(async date => (await import('/src/state/store.js')).state.journals[date], today), '今日の入力を時計更新後も保つ');
     for (const check of dailyLayoutChecks) await check(page, root);
-    console.log('PASS S3-06: eight permanent sections, actual clock, missing birthday, retained settings/journal DOM, explicit save');
+    console.log('PASS S3-06: eight permanent sections, actual clock, retained settings/journal DOM, explicit save');
   } catch (error) { console.error(error); process.exitCode = 1; }
   finally { if (browser) await browser.close(); if (server) await new Promise(resolve => server.close(resolve)); }
 });
@@ -301,19 +310,20 @@ dailyLayoutChecks.push(async (page, root) => {
   console.log('PASS S3-08: Japanese subtitles without clipping');
 });
 
-// S3-09: live Today plus explicitly labelled pending app.js parent contracts.
+// S3-09: measure the unmodified production parents in all four views.
 dailyLayoutChecks.push(async page => {
   const measurements = [], measurementFailures = [];
   const action = (name, id = '') => page.evaluate(({ name, id }) => {
     const button = document.createElement('button'); button.dataset.action = name; button.dataset.id = id;
     document.body.append(button); button.click(); button.remove();
   }, { name, id });
-  const measure = async (view, width, count, zoom, contract = false) => {
-    const result = await page.evaluate(({ view, contract }) => {
+  const measure = async (view, width, count, zoom) => {
+    assert.equal(await page.locator('[data-daily-view="' + view + '"]').count(), 1, view + ' production parent');
+    const result = await page.evaluate(view => {
       const root = document.querySelector('[data-daily-view="' + view + '"]');
       const selectors = view === 'today' ? ['.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.daily-today-records', '.tower-journal']
         : view === 'wbs' ? ['.wbs-project-list', '.wbs-project-detail']
-        : view === 'exec' ? ['.exec-pane-left', '.exec-pane-right', ':scope > .timeline-tower', ':scope > .work-list'] : ['.detail-column'];
+        : view === 'exec' ? (root.querySelector('.exec-two-pane') ? ['.exec-pane-left', '.exec-pane-right'] : ['.timeline-tower', '[data-work-list="exec"]', '[data-work-list="exec-candidates"]']) : ['.detail-column'];
       const regions = [...new Set(selectors.flatMap(s => [...root.querySelectorAll(s)]))].map(el => {
         const r = el.getBoundingClientRect(); return { name: el.className || el.id, x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
       });
@@ -326,16 +336,39 @@ dailyLayoutChecks.push(async page => {
       const inputs = [...root.querySelectorAll('input:not([type="hidden"]),select,textarea')];
       const buttons = [...root.querySelectorAll('button')].filter(el => el.getBoundingClientRect().height > 0);
       const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
-      return { view, contract, regions, overlaps, rootWidth: root.getBoundingClientRect().width,
+      const layout = root.querySelector(({ today: '.daily-today-main', exec: '.exec-two-pane', wbs: '.wbs-projects', detail: '.detail-columns' })[view]) || root;
+      const style = getComputedStyle(layout);
+      return { view, regions, overlaps, rootWidth: root.getBoundingClientRect().width,
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         minInput: inputs.length ? Math.min(...inputs.map(el => parseFloat(getComputedStyle(el).fontSize))) : null,
         minButton: buttons.length ? Math.min(...buttons.map(el => el.getBoundingClientRect().height)) : null,
         duplicateIds: ids.filter((id, i) => ids.indexOf(id) !== i),
-        columns: view === 'today' ? getComputedStyle(root.querySelector('.daily-today-main')).gridTemplateColumns.split(' ').length : null };
-    }, { view, contract });
+        columns: style.display === 'grid' ? style.gridTemplateColumns.split(' ').length : 1 };
+    }, view);
     measurements.push({ width, count, zoom, ...result });
     console.log('SL2A_MEASURE ' + JSON.stringify(measurements.at(-1)));
     try {
+    assert(result.regions.length > 0, view + ' must have measured regions');
+    assert(result.regions.every(region => region.width > 0 && region.height > 0), view + ' visible measured regions');
+    // 監督者の契約追随(2026-09-12 CHANGELOG 19:05): 詳細の共通枠は 1024px 以上で2列(fixSB1b 09:20・fixSB2c 17:47 と同じ境界。設計06 §7 は 1280=2列・390=1列で 1024 は未規定→既存 .detail-columns の境界に揃える)。今日は 1280 以上で2列。
+    const twoColumns = view === 'exec' || view === 'detail' ? width >= 1024 : width >= 1280;
+    assert.equal(result.columns, twoColumns ? 2 : 1, view + ' column count');
+    const leftOf = (a, b) => assert(a.right <= b.x + 1 && Math.abs(a.y - b.y) <= 1, view + ' left/right placement');
+    const above = (a, b) => assert(a.bottom <= b.y + 1 && Math.abs(a.x - b.x) <= 1, view + ' vertical placement');
+    if (view === 'today') {
+      assert.equal(result.regions.length, 6, 'Today required regions');
+      const [life, creed, current, plans, records, journal] = result.regions;
+      if (twoColumns) { leftOf(life, creed); leftOf(plans, records); }
+      else { above(life, creed); above(creed, current); above(current, plans); above(plans, records); }
+      assert(journal.y >= records.y && journal.bottom <= records.bottom + 1, 'journal inside records');
+    } else if (view === 'exec') {
+      assert.equal(result.regions.length, twoColumns ? 2 : 3, 'execution required regions');
+      if (twoColumns) leftOf(result.regions[0], result.regions[1]);
+      else { above(result.regions[0], result.regions[1]); above(result.regions[1], result.regions[2]); }
+    } else {
+      assert.equal(result.regions.length, 2, view + ' required regions');
+      if (twoColumns) leftOf(...result.regions); else above(...result.regions);
+    }
     assert.equal(result.overflow, 0, view + ' page overflow at ' + width + '/' + count + '/' + zoom);
     assert.deepEqual(result.overlaps, [], view + ' region overlap');
     assert.deepEqual(result.duplicateIds, [], view + ' unique IDs');
@@ -366,34 +399,23 @@ dailyLayoutChecks.push(async page => {
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       await page.locator('[data-action="nav"][data-view="exec"]:visible').first().click();
       await page.locator('.timeline-tower').waitFor();
-      // Only the missing production wrapper is supplied in this fixture, never in product code.
-      await page.evaluate(() => {
-        const timeline = document.querySelector('.timeline-tower');
-        const pane = timeline.closest('.exec-two-pane');
-        const wrapper = document.createElement('div'); wrapper.dataset.dailyView = 'exec';
-        const first = pane || document.querySelector('[data-work-list="exec"]');
-        first.before(wrapper);
-        if (pane) wrapper.append(pane);
-        else for (const el of [first, document.querySelector('[data-work-list="exec-candidates"]'), timeline]) if (el) wrapper.append(el);
-      });
       for (const zoom of [100, 200]) {
         await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
-        await measure('exec', width, count, zoom, true);
+        await measure('exec', width, count, zoom);
       }
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       await page.locator('[data-action="nav"][data-view="wbs"]:visible').first().click();
       await page.locator('[data-action="wbs-select-project"][data-id="layout-project"]').click();
-      await page.locator('.wbs-tower').evaluate(el => { el.dataset.dailyView = 'wbs'; });
       for (const zoom of [100, 200]) {
         await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
-        await measure('wbs', width, count, zoom, true);
+        await measure('wbs', width, count, zoom);
       }
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       await action(count ? 'edit-task' : 'add-task-to-project', count ? 'layout-task-0' : 'layout-project');
-      await page.locator('.task-modal').evaluate(async el => { el.dataset.dailyView = 'detail'; await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished)); });
+      await page.locator('.task-modal').evaluate(async el => { await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished)); });
       for (const zoom of [100, 200]) {
         await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
-        await measure('detail', width, count, zoom, true);
+        await measure('detail', width, count, zoom);
       }
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       await page.locator('.task-modal [data-action="modal-close"]').last().click();
@@ -422,6 +444,7 @@ dailyLayoutChecks.push(async page => {
     console.log('SL2A_THEME ' + JSON.stringify({ theme, ...paint }));
     assert.notEqual(paint.background, 'rgb(255, 255, 255)', 'glass paint is inherited');
   }
+  assert.equal(measurements.length, 80, 'all configurations measured');
   assert.deepEqual(measurementFailures, [], 'all measured configurations satisfy the same assertions');
   console.log('PASS S3-09: 80 measured configurations, 200% root font simulation, long names, empty/300 items, fold and jump');
 });

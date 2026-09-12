@@ -443,9 +443,10 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: ["実候補"], aiRequest: ""
     } }, aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
     await page.locator('.nav-button[data-view="today"]').click();
-    await page.waitForSelector(".tower-col-right > .sec-journal");
-    check("右カラムはJOURNALだけを描画", await page.locator(".tower-col-right > .sec-journal").count() === 1);
-    check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".tower-col-right > *").count() === 1);
+    // fixV392 / 設計06 §4/§7: 記録列の常設ジャーナルと本文入力は各1個。
+    await page.waitForSelector(".daily-today-records > .sec-journal");
+    check("記録列のJOURNALは1個だけ", await page.locator(".daily-today-records > .sec-journal").count() === 1);
+    check("記録列の本文入力も1個だけ", await page.locator(".daily-today-records > .sec-journal #towerJournalFree").count() === 1);
     check("v299削除済み朝プラン・再プランactionがソースに存在しない",
       !appSource.includes('"ai-morning-plan"') && !appSource.includes('"today-replan"'));
     check("維持対象の下書き操作と廃止済み候補・鮮度UIをtodayへ重複描画しない",

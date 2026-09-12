@@ -1,4 +1,4 @@
-// v314: personal-data健康日次をBODY/MINDへ出所・鮮度付きで表示し、同期stateへ保存しない。
+// v314: personal-data健康日次を健康画面へ出所・鮮度付きで表示し、同期stateへ保存しない。
 const path = require("path");
 const { pathToFileURL } = require("url");
 const {
@@ -143,7 +143,7 @@ function fixtureDays(dates) {
     Date.now = realDateNow;
   }
 
-  console.log("[2] BODY/MIND実DOM・鮮度・未取得・state非書込");
+  console.log("[2] 健康画面実DOM・鮮度・未取得・state非書込");
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 1200 }, timezoneId: "Asia/Tokyo" });
@@ -176,7 +176,7 @@ function fixtureDays(dates) {
     check(`${label}のhealth応答完了を観測`, response.status() === status && responseError === null,
       JSON.stringify({ status: response.status(), error: responseError?.message }));
     await page.waitForFunction(({ expectedText: expected, exactMatch }) => {
-      const text = document.querySelector(".bm-health")?.textContent.trim();
+      const text = document.querySelector(".instr-today .bm-health-src")?.textContent.trim();
       return exactMatch ? text === expected : text?.includes(expected);
     }, { expectedText, exactMatch: exact });
   }
@@ -186,6 +186,11 @@ function fixtureDays(dates) {
     await page.goto(`http://localhost:${PORT}/`);
     const healthResponse = page.waitForResponse((response) => response.url().includes(HEALTH_URL_FRAGMENT));
     await passGithubGate(page);
+    await page.setViewportSize({ width: 390, height: 1200 });
+    await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
+    await page.locator('.more-tower-grid [data-action="nav"][data-view="instruments"]').click();
+    await page.waitForSelector('#app[data-view="instruments"] .instr-today');
+    await page.setViewportSize({ width: 1100, height: 1200 });
     const stateBefore = await page.evaluate((key) => {
       window.__healthOriginalSetItem = Storage.prototype.setItem;
       window.__healthStateWrites = 0;
@@ -198,13 +203,23 @@ function fixtureDays(dates) {
     holdHealth = false;
     releaseHealth();
     await healthResponse;
-    await page.waitForFunction(() => document.querySelector(".bm-health-src")?.textContent.includes("09-02時点"));
+    await page.waitForFunction(() => document.querySelector(".instr-today .bm-health-src")?.textContent.includes("09-02時点"));
 
-    const healthText = await page.locator(".bm-health").textContent();
+    const healthText = await page.locator(".instr-today").textContent();
     // 4回-08 日本語化の契約追随(監督者決定 2026-09-10)
-    check("BODY/MINDに睡眠・HR・歩数を表示", ["睡眠 7時間05分(23:46→06:51)", "安静時心拍数 58拍/分", "歩数 8,120"].every((text) => healthText.includes(text)), healthText);
+    const healthMeta = await page.locator('.instr-kpi').evaluateAll(els => els.map(el => ({
+      label: el.querySelector('span').textContent, value: el.querySelector('strong').textContent,
+      unit: el.querySelector('small').textContent
+    })));
+    check("健康画面に睡眠・HRを表示", JSON.stringify(healthMeta.slice(0, 2)) === JSON.stringify([
+      { label: '睡眠', value: '7時間05分', unit: '23:46→06:51' },
+      { label: '安静時心拍数', value: '58', unit: '拍/分' }
+    ]), JSON.stringify(healthMeta));
+    check("健康画面に当日の歩数8,120を表示", (await page.locator('.instr-week [data-series="steps"] strong').textContent()).includes('平均 8,120'));
     check("出所と表示行の日付を表示", healthText.includes("Apple Health経由 · 09-02時点"), healthText);
-    check("bodyScansが0件でも健康行とbm-emptyが共存", await page.locator(".sec-bodymind .bm-health").count() === 1 && await page.locator(".sec-bodymind .bm-empty").count() === 1);
+    check("bodyScansが0件でも健康値と身体スキャン未記録が共存", await page.locator('.instr-today .instr-kpis').count() === 1
+      && (await page.locator('.instr-week-body strong').textContent()).trim() === '未記録'
+      && await page.evaluate(key => JSON.parse(localStorage.getItem(key)).bodyScans.length === 0, STATE_KEY));
     const stateAfter = await page.evaluate((key) => ({
       raw: localStorage.getItem(key), writes: window.__healthStateWrites,
       healthKeys: Object.keys(JSON.parse(localStorage.getItem(key))).filter((keyName) => /health/i.test(keyName))
@@ -214,16 +229,16 @@ function fixtureDays(dates) {
     await page.evaluate(() => { Storage.prototype.setItem = window.__healthOriginalSetItem; });
 
     await reloadHealth(JSON.stringify(fixture("2026-08-31")), 200, "08-31時点 (古い)", "2日前ケース");
-    check("2日前の最新行には古い表示を付ける", (await page.locator(".bm-health-src").textContent()).includes("08-31時点 (古い)"));
+    check("2日前の最新行には古い表示を付ける", (await page.locator(".instr-today .bm-health-src").textContent()).includes("08-31時点 (古い)"));
 
     await reloadHealth(JSON.stringify(fixture("2026-08-25")), 200, "健康データ 未取得", "8日前ケース", true);
-    check("8日前しか無ければ未取得表示", (await page.locator(".bm-health").textContent()).trim() === "健康データ 未取得");
+    check("8日前しか無ければ未取得表示", (await page.locator(".instr-today .bm-health-src").textContent()).trim() === "健康データ 未取得");
 
     await reloadHealth("{broken", 200, "健康データ 未取得", "壊れたJSONケース", true);
-    check("壊れたJSONでも未取得表示", (await page.locator(".bm-health").textContent()).trim() === "健康データ 未取得");
+    check("壊れたJSONでも未取得表示", (await page.locator(".instr-today .bm-health-src").textContent()).trim() === "健康データ 未取得");
 
     await reloadHealth("{}", 404, "健康データ 未取得", "404ケース", true);
-    check("404でも未取得表示", (await page.locator(".bm-health").textContent()).trim() === "健康データ 未取得");
+    check("404でも未取得表示", (await page.locator(".instr-today .bm-health-src").textContent()).trim() === "健康データ 未取得");
     check("全失敗ケースを含めpageerrorが0件", pageErrors.length === 0, JSON.stringify(pageErrors));
   } finally {
     releaseHealth?.();
