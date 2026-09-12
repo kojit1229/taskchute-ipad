@@ -1,3 +1,4 @@
+// 0秒思考: 下書き保存・問い更新・完了・画面離脱の候補保存境界 (order 124).
 const assert = require('node:assert/strict');
 const { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } = require('../src/features/zero-entry.js');
 const { createDailyDraftStore } = require('../src/features/daily-draft.js');
@@ -92,3 +93,79 @@ try {
   }
   console.log('PASS deleted/changed question, other connection, blank completion preserve state');
 } finally { setCommitGuard(null); }
+
+// R3-03b: exercise the actual app adapter and shared leave guard with isolated storage.
+(async () => {
+  const fs = require('node:fs'), path = require('node:path'), { once } = require('node:events');
+  const { chromium, launchOptions, startServer, randomPort, STATE_KEY } = require('./helpers');
+  const server = startServer(randomPort()); let browser;
+  try {
+    if (!server.listening) await once(server, 'listening');
+    browser = await chromium.launch(launchOptions());
+    const page = await browser.newPage({ serviceWorkers: 'block', locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    page.setDefaultTimeout(5000);
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/*', route => new URL(route.request().url()).hostname === 'localhost' ? route.continue() : route.abort());
+    await page.route('**/app.js', route => route.fulfill({ status: 200, contentType: 'text/javascript',
+      body: fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8') + '\nwindow.zeroBoundaryProbe = { save: () => runZeroEntry("zero-draft-save", "#zt-write-input"), read: () => ztCurrent?.zeroDraft };' }));
+    await page.clock.install({ time: new Date(2026, 8, 11, 10) });
+    await page.goto(`http://localhost:${server.address().port}/`);
+    await page.waitForFunction(key => !!localStorage.getItem(key), STATE_KEY);
+    await page.evaluate(key => {
+      const state = JSON.parse(localStorage.getItem(key));
+      state.currentView = 'zero'; state.settings.autoSync = false;
+      Object.assign(state.settings.github, { token: 'synthetic', dataOwner: 'synthetic', dataRepo: 'fixture', autoSave: false });
+      state.zeroThinking = { themes: [{ id: 'a', text: 'Synthetic A', fav: true }, { id: 'b', text: 'Synthetic B', fav: false }], entries: [] };
+      localStorage.setItem(key, JSON.stringify(state));
+    }, STATE_KEY);
+    await page.reload();
+    await page.waitForFunction(() => !!window.zeroBoundaryProbe);
+    const action = (name, values = {}) => page.evaluate(({ name, values }) => {
+      const button = document.createElement('button'); Object.assign(button.dataset, { action: name, ...values });
+      document.body.append(button); button.click(); button.remove();
+    }, { name, values });
+    const input = page.locator('#zt-write-input');
+    const read = () => page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return state; });
+    await action('zt-write', { id: 'a' }); await input.fill('保存済み本文');
+    assert.equal((await page.evaluate(() => window.zeroBoundaryProbe.save())).ok, true);
+    await page.clock.runFor(20000);
+    const first = await page.evaluate(() => window.zeroBoundaryProbe.read());
+    await action('nav', { view: 'wbs' });
+    assert.equal((await read()).currentView, 'wbs'); assert.equal((await read()).zeroThinking.entries.length, 0);
+    assert.equal(await page.locator('.draft-leave-dialog').count(), 0, 'saved body/time leave has no confirmation');
+    const saved = await page.evaluate(id => Object.keys(sessionStorage).map(key => JSON.parse(sessionStorage.getItem(key)))
+      .find(value => value.id === id), first.id);
+    assert.equal(saved.body, '保存済み本文'); assert.equal(saved.durationSec, 20);
+    console.log('PASS live saved body/time: confirmation 0, history insertion 0, preserved draft id and 20 seconds');
+    await action('nav', { view: 'zero' }); await action('zt-write', { id: 'a' }); await input.fill('失敗しても保持');
+    await page.clock.runFor(20000);
+    await page.evaluate(() => {
+      window.originalZeroStorage = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (this === sessionStorage) throw Error('synthetic session quota');
+        return window.originalZeroStorage.call(this, key, value);
+      };
+    });
+    await action('nav', { view: 'wbs' });
+    assert.equal((await read()).currentView, 'zero'); assert.equal(await input.inputValue(), '失敗しても保持');
+    assert.equal((await page.evaluate(() => window.zeroBoundaryProbe.read())).durationSec, 20);
+    await page.locator('[data-action="draft-leave-stay"]').click();
+    await page.clock.runFor(30000);
+    await page.evaluate(() => { Storage.prototype.setItem = window.originalZeroStorage; });
+    await action('nav', { view: 'wbs' });
+    assert.equal((await read()).currentView, 'wbs'); assert.equal((await read()).zeroThinking.entries.length, 0);
+    console.log('PASS live session failure blocks navigation; retry after 50 seconds keeps stopped draft');
+    await action('nav', { view: 'zero' }); await action('zt-write', { id: 'b' }); await input.fill('完成回答');
+    await page.evaluate(() => {
+      Storage.prototype.setItem = function(key, value) {
+        if (this === sessionStorage) throw Error('synthetic session unavailable');
+        return window.originalZeroStorage.call(this, key, value);
+      };
+    });
+    await action('zt-save');
+    assert.equal((await read()).zeroThinking.entries.filter(entry => entry.body === '完成回答').length, 1);
+    assert.equal((await read()).zeroThinking.themes.some(theme => theme.id === 'b'), false);
+    assert.deepEqual(errors, []);
+    console.log('PASS live explicit completion with session unavailable; normal local persistence succeeds');
+  } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

@@ -7,7 +7,7 @@ const DAY = "2026-09-06";
   const server = startServer(randomPort());
   const browser = await chromium.launch(launchOptions());
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 844 }, serviceWorkers: "block" });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 844 }, serviceWorkers: "block", locale: "ja-JP", timezoneId: "Asia/Tokyo" });
     const errors = [];
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
     await page.route("**/*", route => new URL(route.request().url()).hostname === "localhost" ? route.continue() : route.abort());
@@ -42,15 +42,24 @@ const DAY = "2026-09-06";
     await nav('zero'); await action('zt-write', 'theme');
     const input = page.locator('#zt-write-input');
     await input.fill('新しい回答を保持');
-    await action('zt-discard'); await choose('stay');
-    assert.equal(await input.inputValue(), '新しい回答を保持');
-    await nav('wbs'); await choose('save');
+    await nav('wbs');
+    await page.waitForFunction(() => Object.keys(sessionStorage).some(k => {
+      const d = JSON.parse(sessionStorage.getItem(k)); return d?.kind === 'zero' && d.body === '新しい回答を保持';
+    }));
+    assert.equal(await page.locator('[data-action="draft-leave-stay"]').count(), 0);
     let entries = (await readState()).zeroThinking.entries;
-    assert.equal(entries.filter(e => e.body === '新しい回答を保持').length, 1);
+    assert.equal(entries.length, 1);
     assert.equal((await readState()).currentView, 'wbs');
-    await nav('zero'); await action('zt-write', 'theme'); await input.fill('破棄する新規回答');
-    await action('zt-discard'); await choose('discard');
+    const drafts = () => page.evaluate(() => Object.keys(sessionStorage).filter(k => k.startsWith('taskchute-journal-daily-draft-v1:')).map(k => JSON.parse(sessionStorage.getItem(k))));
+    assert.equal((await drafts()).filter(d => d.kind === 'zero' && d.body === '新しい回答を保持').length, 1, JSON.stringify(await drafts()));
+    await nav('zero'); await action('zt-write', 'theme'); await input.fill('中止でも保持する回答');
+    await action('zt-discard');
+    await page.waitForFunction(() => Object.keys(sessionStorage).some(k => {
+      const d = JSON.parse(sessionStorage.getItem(k)); return d?.kind === 'zero' && d.body === '中止でも保持する回答';
+    }));
+    assert.equal(await page.locator('[data-action="draft-leave-stay"]').count(), 0);
     assert.equal((await readState()).zeroThinking.entries.length, entries.length);
+    assert.equal((await drafts()).filter(d => d.body === '中止でも保持する回答').length, 1);
     await action('zt-entry-open', 'past');
     await page.clock.runFor(70); // Finish the existing 60ms editor focus/caret callback before typing.
     const edit = page.locator('#zt-edit-input');
