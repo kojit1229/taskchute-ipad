@@ -74,10 +74,12 @@ export function captureReportInput(source, date, derive) {
   const singleSchedules = captureScheduleReport(source.singleSchedules, date);
   const state = {};
   for (const key of ['blocks', 'tasks', 'projects', 'recurrences', 'questions', 'bodyScans']) state[key] = rows(source[key] || [], fields[key]);
-  state.blocks.forEach((block, i) => {
+  state.blocks = state.blocks.filter((block, i) => {
+    try { if (!block.deleted && block.date === date) readingReportMinutes(block); }
+    catch (error) { console.warn("report_reading_block_excluded", block.id, error.message); return false; }
     if (block.externalRef != null && typeof block.externalRef !== 'string') fail('invalid_report_field');
-    if (!block.deleted && block.date === date) readingReportMinutes(block);
     if (source.blocks[i].incompleteReason) block.incompleteReason = pick(source.blocks[i].incompleteReason, 'chip note at');
+    return true;
   });
   state.zeroThinking = { entries: rows(source.zeroThinking?.entries || [], fields.zero) };
   state.writeMeditations = rows(source.writeMeditations || [], fields.meditation);

@@ -1,4 +1,4 @@
-// Independent synchronous Markdown builder. Input comes from captureReportInput. No persistence or application imports.
+// Independent synchronous Markdown builder. Input comes from captureReportInput. Uses pure report/core helpers; no persistence or application globals.
 import { readingReportMinutes } from "./report-input.js";
 function minutesOf(dateTime) {
   if (!dateTime) return 0;

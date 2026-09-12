@@ -261,6 +261,16 @@ additionalChecks.push(async (page, { instant, date, nav }) => {
     await page.setViewportSize({ width, height: 1000 });
     for (const zoom of [1, 2, 4]) {
       await page.locator('[data-action="tl-zoom"][data-zoom="' + zoom + '"]').click();
+      await page.waitForFunction(({ date, zoom }) => {
+        const axis = document.querySelector('.timeline[data-date="' + date + '"]');
+        const start = axis?.querySelector('.time-row[data-minute="240"]');
+        const end = axis?.querySelector('.time-row[data-minute="1440"]');
+        return start && end && Math.abs(end.getBoundingClientRect().top - start.getBoundingClientRect().top - 1200 * zoom) <= 1
+          && ['measure-hour', 'measure-short', 'measure-end'].every(id => {
+            const card = axis.querySelector('.timeline-card[data-id="' + id + '"]');
+            return card && card.getBoundingClientRect().height > 0;
+          });
+      }, { date, zoom });
       const measured = await page.evaluate(() => {
         const axis = document.querySelector('.timeline[data-date]'), origin = axis.querySelector('.time-row[data-minute="240"]').getBoundingClientRect().top;
         const rows = ['measure-hour', 'measure-short', 'measure-end'].map(id => {
