@@ -12,6 +12,7 @@ import { buildActualEdit } from "../core/daily-actuals.js";
 import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 import { gapPlacementOperation } from "./daily-gap-placement.js";
 import { zeroEntryOperation } from "./zero-entry.js";
+import { towerJournalOperation } from "./tower-journal.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -24,6 +25,7 @@ const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); }
 const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](input) });
 
 export const DAILY_OPERATIONS = {
+  "save-tower-journal": towerJournalOperation,
   "zero-draft-save": zeroEntryOperation("draft"),
   "zero-complete": zeroEntryOperation("complete"),
   "zero-leave": zeroEntryOperation("leave"),

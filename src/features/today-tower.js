@@ -346,7 +346,8 @@ function renderTowerJournal(date) {
     <div class="tower-journal-body">
       <label class="tower-journal-label" for="towerJournalFree">自由記述</label>
       ${journal.archived ? `<p role="status">${ARCHIVED_READONLY_MESSAGE}</p>` : ""}
-      <textarea ${journal.archived ? "readonly" : ""} id="towerJournalFree" class="tower-journal-free" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(journal.free)}</textarea>
+      <textarea ${journal.archived ? "readonly" : ""} data-tower-journal-date="${escapeHTML(date)}" id="towerJournalFree" class="tower-journal-free" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(journal.free)}</textarea>
+      <p role="status" data-journal-save-status></p>
       <button type="button" class="tower-journal-save" ${journal.archived ? "disabled" : ""} data-action="save-tower-journal" data-date="${escapeHTML(date)}">SAVE 記録</button>
     </div>
   </section>`;

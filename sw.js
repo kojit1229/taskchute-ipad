@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v392";  // v392: 今日画面の8項目とルーティン編集の配置、信条の日本語副題、3画面と詳細の幅別配置(390/768/1024/1280/1440px)
+const CACHE_NAME = "taskchute-journal-pwa-v393";  // v393: プロジェクト詳細と予定枠詳細を Task 詳細と同じ一つの編集枠へ(全項目常設・完了操作を冒頭に)、ジャーナルの下書き保護と自動保存
+// v392: 今日画面の8項目とルーティン編集の配置、信条の日本語副題、3画面と詳細の幅別配置(390/768/1024/1280/1440px)
 // v391: 今日・実行・作業一覧が同じ対象・日付の分類から共通行を受け取る、作業一覧は左Project・右Taskの独立検索と選択保持、タスク詳細は切替タブなしの一つの編集枠
 
 // v353: 12WY R0 task.twyPlan のデータ契約+plan.js 純関数+Task編集モーダル3項目
@@ -706,6 +707,8 @@ const APP_SHELL = [
 
   "./src/features/draft-leave.js",
   "./src/features/daily-draft.js",
+  "./src/features/block-detail.js",
+  "./src/features/tower-journal.js",
   "./src/features/three-screen-rows.js",
   "./src/features/zero-entry.js",
   "./src/features/zero-session.js",

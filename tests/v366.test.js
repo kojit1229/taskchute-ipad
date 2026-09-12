@@ -356,40 +356,35 @@ function staticChecks() {
       blocks: [makeBlock("b3", { taskId: "t3" })]
     });
     await openEditor("b3");
-    const details = page.locator(".modal-card details.tower-fold");
-    check("「詳細 ›」要素が1つある", await details.count() === 1);
-    check("「詳細 ›」は既定閉(open属性なし)", await details.evaluate((el) => el.open) === false);
-    check("閉状態ではレバレッジ種別selectは非可視", await page.locator('.modal-card [data-modal-field="leverageType"]').isVisible() === false);
     const stateBeforeOpen = await snapshot();
-    // 「詳細 ›」を開く操作(summaryクリック)自体はstate/localStorageを書き換えない(非永続)。
-    await page.click(".modal-card details.tower-fold summary");
-    await unchanged("詳細を開く", stateBeforeOpen);
-    check("開くとレバレッジ種別selectが可視になる", await page.locator('.modal-card [data-modal-field="leverageType"]').isVisible() === true);
-    check("開くと完了済み(Block)チェックが可視になる", await page.locator('.modal-card [data-modal-field="completed"]').isVisible() === true);
+    check("No closed detail fold", await page.locator('.modal-card details:not([open])').count() === 0);
+    const leverage = page.locator('.modal-card [data-modal-field="leverageType"]');
+    check("Effect classification is permanent", await leverage.count() === 1 && await leverage.isVisible());
+    check("Block completion is permanent", await page.locator('.modal-card [data-modal-field="completed"]').isVisible());
     const taskCompleteBtn = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="b3"]');
-    check("開くと🏁タスク完了トグルが可視になる(v107契約)", await taskCompleteBtn.isVisible() === true);
-    await page.click(".modal-card details.tower-fold summary");
-    check("再クリックで閉じる(非永続なので閉じたら再度非可視)",
-      await page.locator('.modal-card [data-modal-field="leverageType"]').isVisible() === false);
-
-    await unchanged("詳細を閉じる", stateBeforeOpen);
-    await page.click(".modal-card details.tower-fold summary");
-    await unchanged("詳細を再度開く", stateBeforeOpen);
+    check("Task completion is permanent", await taskCompleteBtn.isVisible());
+    await leverage.focus();
+    await unchanged("Focus permanent control", stateBeforeOpen);
     await cancelAndReopen("b3");
-    check("開いたままキャンセルして再表示すると詳細は閉じる", await details.evaluate((el) => el.open) === false);
-    await unchanged("詳細キャンセル再表示", stateBeforeOpen);
-
-    console.log("[3b] 開いた状態で🏁タスク完了トグルを押すと従来どおりタスクが完了する(v107契約の維持)");
-    await page.click(".modal-card details.tower-fold summary");
+    check("Reopening keeps effect and completion visible", await leverage.isVisible() && await taskCompleteBtn.isVisible());
+    await unchanged("Cancel and reopen detail", stateBeforeOpen);
+    console.log("[3b] Task completion stays in draft until saved; cancel discards it");
     await taskCompleteBtn.click();
-    // review-v363-claude-a L-1対応: 常にtrueを返すno-op待機ではなく、実際にtoggleTaskComplete
-    // FromBlockのstate反映(Task.status===completed)が成立するまで待つ。
+    check("Draft completion is checked", await page.locator('[data-modal-field="taskCompleted"]').isChecked());
+    await unchanged("Before saving Task completion", stateBeforeOpen);
+    await page.locator('.modal-card [data-action="modal-close"]').first().click();
+    await page.locator('[data-action="draft-leave-discard"]').click();
+    await openEditor("b3");
+    check("Cancel discards Task completion draft", !(await page.locator('[data-modal-field="taskCompleted"]').isChecked()));
+    await unchanged("Cancel Task completion", stateBeforeOpen);
+    await taskCompleteBtn.click();
+    await page.locator('.modal-card [data-action="modal-save"]').click();
     await page.waitForFunction((KEY) => {
       const s = JSON.parse(localStorage.getItem(KEY) || "null");
       return s?.tasks?.find((t) => t.id === "t3")?.status === "completed";
     }, KEY);
     const s3 = await stateNow();
-    check("🏁押下でTaskがcompletedになる(v107契約)", s3.tasks.find((t) => t.id === "t3")?.status === "completed",
+    check("Saving Task completion marks Task completed", s3.tasks.find((t) => t.id === "t3")?.status === "completed",
       JSON.stringify(s3.tasks.find((t) => t.id === "t3")));
 
     // ============================================================
@@ -415,11 +410,9 @@ function staticChecks() {
     await waitForNavReady(pageMobile);
     await pageMobile.click('[data-action="edit-block"][data-id="mb1"]');
     await waitForModalField(pageMobile, "title");
-    // 「詳細 ›」も開いた状態で計測する(閉状態の非表示要素はfont-size計測対象から自然に外れるため、
-    // 折りたたみ内のleverageType/completedも計測対象に含めるにはここで開く必要がある)。
-    await checkHorizontal(pageMobile, 390, "詳細閉");
-    await pageMobile.click(".modal-card details.tower-fold summary");
-    await checkHorizontal(pageMobile, 390, "詳細開");
+    await checkHorizontal(pageMobile, 390, "permanent controls");
+    check("390px effect and completion are permanent", await pageMobile.locator('[data-modal-field="leverageType"]').isVisible()
+      && await pageMobile.locator('[data-modal-field="completed"]').isVisible());
     const fontSizeReport = await pageMobile.evaluate(() => {
       const els = Array.from(document.querySelectorAll('.modal-card input, .modal-card select, .modal-card textarea'))
         .filter((el) => el.type !== "checkbox");
@@ -438,11 +431,9 @@ function staticChecks() {
     });
     check("見積チップ・明日へ/来週へボタンが44px以上ある", chipAndShiftHeights.length === 6 && chipAndShiftHeights.every((h) => h >= 44),
       JSON.stringify(chipAndShiftHeights));
-    // review-v363-claude-a M-4対応: 「詳細 ›」のsummary自体が390pxでタップ可能(44px以上)か
-    // を計測する(モーダル内に到達可能でも、summaryが見切れていては開けない)。
-    const detailsSummaryHeight = await pageMobile.evaluate(() =>
-      document.querySelector(".modal-card details.tower-fold summary")?.offsetHeight ?? 0);
-    check("「詳細 ›」のsummaryが44px以上ある", detailsSummaryHeight >= 44, detailsSummaryHeight);
+    const saveButton = pageMobile.locator('.modal-card [data-action="modal-save"]');
+    await saveButton.scrollIntoViewIfNeeded();
+    check("Save is reachable from permanent controls and at least 44px", await saveButton.isVisible() && await saveButton.evaluate(el => el.offsetHeight) >= 44);
     check("390px幅でpageerrorが0件", mobileErrors === 0, mobileErrors);
     await ctxMobile.close();
 
@@ -465,9 +456,9 @@ function staticChecks() {
     await waitForNavReady(pageWide);
     await pageWide.click('[data-action="edit-block"][data-id="wb1"]');
     await waitForModalField(pageWide, "title");
-    await checkHorizontal(pageWide, 1280, "詳細閉");
-    await pageWide.click(".modal-card details.tower-fold summary");
-    await checkHorizontal(pageWide, 1280, "詳細開");
+    await checkHorizontal(pageWide, 1280, "permanent controls");
+    check("1280px effect and completion are permanent", await pageWide.locator('[data-modal-field="leverageType"]').isVisible()
+      && await pageWide.locator('[data-modal-field="completed"]').isVisible());
     check("1280px幅でpageerrorが0件", wideErrors === 0, wideErrors);
     await ctxWide.close();
   } finally {

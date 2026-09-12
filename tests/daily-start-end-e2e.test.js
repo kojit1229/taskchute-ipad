@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { runDailyOperation: run, getDailyStartDraft, prepareDailyEnd } = require('../src/features/daily-operations.js');
+const { buildBlockDetailDraft } = require('../src/features/block-detail.js');
 const { commitCandidate, setCommitGuard } = require('../src/core/commit.js');
 const { mergeWeeklyCommitments } = require('../src/core/merge.js');
 const { deepCommitGuard, expectRestored } = require('./helpers');
@@ -159,6 +160,31 @@ try {
     assert(run('daily-block-end', { ...input, outcome: '', completeTask: false,
       values: { actualEndAt: '2026-09-11T00:25:00' } }, reloadedDeps).ok);
     assert.equal(state.declarations.length, 1); assert.equal(state.declarations[0].id, request.endDraft.fallbackId);
+  }
+  {
+    const { state, deps, input } = endFixture();
+    assert(run('daily-block-end', input, deps).ok);
+    const beforeSkip = structuredClone(state.declarations);
+    assert(run('daily-block-end', { kind: 'block', id: 'b', outcome: '', note: '', completeTask: false }, deps).ok);
+    assert.deepEqual(state.declarations, beforeSkip, 'blank skip preserves an already saved report');
+    const before = structuredClone(state.blocks[0]);
+    const edited = { ...before, plannedStartAt: '', plannedEndAt: '' };
+    const detail = buildBlockDetailDraft(state, before, edited, { outcome: '', resultNote: '' }, deps);
+    detail.apply(state);
+    assert.equal(state.declarations.length, 1);
+    assert.equal(state.declarations[0].id, beforeSkip[0].id);
+    assert.equal(state.declarations[0].outcome, '');
+    assert.equal(state.declarations[0].resultNote, '');
+    assert.equal(state.declarations[0].reportedAt, before.actualEndAt);
+    const cleared = structuredClone(state.declarations);
+    buildBlockDetailDraft(state, before, edited, { outcome: '', resultNote: '' }, deps).apply(state);
+    assert.deepEqual(state.declarations, cleared, 'unchanged empty detail does not recreate a report');
+    const corrected = { ...edited, actualEndAt: '2026-09-11T00:20:00' };
+    buildBlockDetailDraft(state, before, corrected, { outcome: '', resultNote: '' }, deps).apply(state);
+    assert.equal(state.declarations.length, 1);
+    assert.equal(state.declarations[0].id, cleared[0].id);
+    assert.equal(state.declarations[0].reportedAt, corrected.actualEndAt, 'empty report time correction retains its identity');
+    console.log('PASS fixV393: blank skip preserves report; detail clear, unchanged save and time correction');
   }
   for (const existing of [false, true]) {
     const { state, deps } = endFixture();

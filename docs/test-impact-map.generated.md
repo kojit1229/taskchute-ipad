@@ -5,7 +5,7 @@
 |---|---|---|---|---:|---:|---:|
 | action-registry-core.test.js | node | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 41 | 0 | 0 |
 | archive-date-protection-e2e.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 16 | 0 | 0 |
-| archive-date-protection.test.js | node | full | sync-storage | 49 | 0 | 0 |
+| archive-date-protection.test.js | node | full | sync-storage | 50 | 0 | 0 |
 | archive-snapshot-safety.test.js | node | full | sync-storage | 49 | 0 | 0 |
 | archive-tombstone-sync.test.js | node | full | sync-storage | 10 | 0 | 0 |
 | bridge-epoch-independent.test.js | node | full | content-ai | 4 | 0 | 0 |
@@ -19,7 +19,7 @@
 | daily-block-merge.test.js | node | full | sync-storage, planning-execution, content-ai | 25 | 0 | 0 |
 | daily-completion-e2e.test.js | e2e | full | content-ai | 74 | 0 | 0 |
 | daily-copy-e2e.test.js | e2e | full | content-ai | 65 | 0 | 0 |
-| daily-detail-fields-e2e.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 55 | 0 | 0 |
+| daily-detail-fields-e2e.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 57 | 0 | 0 |
 | daily-detail-frame.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
 | daily-draft-e2e.test.js | e2e | full | content-ai | 40 | 0 | 0 |
 | daily-mock-adapter.test.js | node | full | content-ai | 78 | 0 | 0 |
@@ -34,13 +34,13 @@
 | daily-report-e2e.test.js | e2e | full | journal-health, content-ai | 30 | 0 | 0 |
 | daily-search-e2e.test.js | e2e | full | content-ai | 35 | 0 | 0 |
 | daily-stamp-e2e.test.js | node | full | content-ai | 14 | 0 | 0 |
-| daily-start-end-e2e.test.js | e2e | full | content-ai | 142 | 0 | 0 |
+| daily-start-end-e2e.test.js | e2e | full | content-ai | 154 | 0 | 0 |
 | daily-time-e2e.test.js | e2e | full | content-ai | 28 | 0 | 0 |
 | daily-view-model.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 82 | 0 | 0 |
 | data-contract-gate.test.js | node | full | content-ai | 20 | 0 | 0 |
 | data-stamp-normalize.test.js | node | full | legacy-crosscutting | 13 | 0 | 0 |
 | day-cross-ticker.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 8 | 7600 |
-| detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 11 | 0 | 0 |
+| detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 25 | 0 | 0 |
 | directory-fallback.test.js | node | full | content-ai | 14 | 0 | 0 |
 | draft-leave.test.js | node | full | legacy-crosscutting | 24 | 0 | 0 |
 | draft-save-transaction.test.js | node | full | legacy-crosscutting | 58 | 0 | 0 |
@@ -131,14 +131,14 @@
 | sw-self-heal.test.js | e2e | full | content-ai | 53 | 0 | 0 |
 | sync-load-confirm-snapshot.test.js | e2e | full | sync-storage | 32 | 10 | 4550 |
 | test-manifest-generator.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
-| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 104 | 0 | 0 |
+| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 130 | 0 | 0 |
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
 | today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 150 | 4 | 4250 |
-| today-detail-integration-e2e.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 39 | 0 | 0 |
+| today-detail-integration-e2e.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 44 | 0 | 0 |
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 49 | 0 | 0 |
-| tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 166 | 0 | 0 |
+| tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 167 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 7 | 0 | 0 |
 | track-commit-core.test.js | node | full | planning-execution, journal-health | 51 | 0 | 0 |
 | track-core.test.js | node | full | planning-execution, journal-health | 51 | 0 | 0 |
@@ -155,12 +155,12 @@
 | v104.test.js | e2e | full | sync-storage, ui-responsive | 19 | 14 | 5550 |
 | v105.test.js | e2e | smoke | sync-storage, journal-health, ui-responsive | 20 | 5 | 2900 |
 | v106.test.js | e2e | full | sync-storage, planning-execution, journal-health | 18 | 5 | 5600 |
-| v107.test.js | e2e | full | planning-execution | 58 | 23 | 6050 |
+| v107.test.js | e2e | full | planning-execution | 61 | 20 | 5300 |
 | v108.test.js | e2e | full | sync-storage, planning-execution | 21 | 6 | 1800 |
 | v109.test.js | e2e | full | planning-execution, ui-responsive | 24 | 12 | 3900 |
 | v110.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 2 | 1000 |
 | v111.test.js | e2e | full | ui-responsive | 24 | 18 | 6550 |
-| v112.test.js | e2e | full | planning-execution, ui-responsive | 28 | 1 | 400 |
+| v112.test.js | e2e | full | planning-execution, ui-responsive | 30 | 1 | 400 |
 | v113.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 15 | 8 | 3200 |
 | v116.test.js | e2e | full | planning-execution | 7 | 4 | 1300 |
 | v117.test.js | e2e | full | planning-execution | 17 | 6 | 2200 |
@@ -190,7 +190,7 @@
 | v143.test.js | e2e | full | sync-storage, content-ai | 8 | 3 | 1500 |
 | v144.test.js | e2e | full | planning-execution, journal-health | 48 | 34 | 10050 |
 | v146.test.js | e2e | full | planning-execution | 12 | 2 | 900 |
-| v147.test.js | e2e | full | planning-execution | 15 | 6 | 1650 |
+| v147.test.js | e2e | full | planning-execution | 16 | 6 | 1650 |
 | v148.test.js | e2e | full | planning-execution | 56 | 21 | 6350 |
 | v150.test.js | e2e | full | planning-execution | 56 | 19 | 9150 |
 | v151.test.js | e2e | full | ui-responsive | 35 | 13 | 5100 |
@@ -203,7 +203,7 @@
 | v195.test.js | e2e | full | sync-storage, planning-execution, content-ai | 30 | 0 | 0 |
 | v196.test.js | e2e | full | planning-execution, content-ai | 29 | 0 | 0 |
 | v197.test.js | e2e | full | sync-storage, planning-execution, content-ai | 30 | 12 | 5000 |
-| v198.test.js | e2e | full | content-ai | 47 | 13 | 4300 |
+| v198.test.js | e2e | full | content-ai | 49 | 13 | 4300 |
 | v199.test.js | e2e | full | planning-execution, content-ai | 48 | 8 | 3150 |
 | v231.test.js | e2e | full | journal-health | 9 | 0 | 0 |
 | v235.test.js | node | full | journal-health | 8 | 0 | 0 |
@@ -211,9 +211,9 @@
 | v241.test.js | e2e | full | ui-responsive | 27 | 0 | 0 |
 | v247.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | v251.test.js | e2e | full | content-ai | 21 | 0 | 0 |
-| v252.test.js | e2e | full | sync-storage | 26 | 0 | 0 |
+| v252.test.js | e2e | full | sync-storage | 28 | 0 | 0 |
 | v253.test.js | e2e | full | planning-execution, ui-responsive | 17 | 0 | 0 |
-| v254.test.js | e2e | full | planning-execution, sync-storage | 50 | 0 | 0 |
+| v254.test.js | e2e | full | planning-execution, sync-storage | 53 | 0 | 0 |
 | v255.test.js | e2e | full | ui-responsive, security-offline | 11 | 0 | 0 |
 | v256.test.js | e2e | full | journal-health, ui-responsive | 17 | 0 | 0 |
 | v258.test.js | e2e | full | sync-storage | 41 | 1 | 150 |
@@ -224,7 +224,7 @@
 | v263.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 42 | 2 | 300 |
 | v264.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 50 | 0 | 0 |
 | v266.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 61 | 0 | 0 |
-| v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 22 | 2 | 400 |
+| v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 23 | 2 | 400 |
 | v268.test.js | e2e | full | planning-execution | 11 | 0 | 0 |
 | v271.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
 | v274.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
@@ -241,7 +241,7 @@
 | v286.test.js | e2e | full | content-ai, ui-responsive | 27 | 0 | 0 |
 | v287.test.js | e2e | full | content-ai, planning-execution, ui-responsive | 43 | 0 | 0 |
 | v288.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 32 | 0 | 0 |
-| v293.test.js | e2e | full | planning-execution, ui-responsive | 34 | 0 | 0 |
+| v293.test.js | e2e | full | planning-execution, ui-responsive | 38 | 0 | 0 |
 | v294.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 42 | 0 | 0 |
 | v295.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 43 | 0 | 0 |
 | v296.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 51 | 0 | 0 |
@@ -292,7 +292,7 @@
 | v362.test.js | e2e | full | sync-storage, journal-health, content-ai, ui-responsive | 36 | 0 | 0 |
 | v363.test.js | e2e | full | ui-responsive | 31 | 0 | 0 |
 | v364.test.js | node | full | sync-storage | 88 | 0 | 0 |
-| v366.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 58 | 0 | 0 |
+| v366.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 59 | 0 | 0 |
 | v367.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 63 | 0 | 0 |
 | v49.test.js | e2e | full | sync-storage, content-ai | 19 | 16 | 7900 |
 | v50.test.js | e2e | smoke | planning-execution, ui-responsive | 17 | 12 | 4200 |
@@ -306,7 +306,7 @@
 | v61.test.js | e2e | full | planning-execution | 40 | 19 | 5600 |
 | v62.test.js | e2e | full | journal-health, content-ai | 38 | 19 | 7650 |
 | v63.test.js | e2e | full | ui-responsive | 15 | 8 | 2450 |
-| v65.test.js | e2e | full | planning-execution | 33 | 16 | 4150 |
+| v65.test.js | e2e | full | planning-execution | 34 | 16 | 4150 |
 | v67.test.js | e2e | smoke | planning-execution, content-ai | 17 | 1 | 150 |
 | v68.test.js | e2e | full | sync-storage, journal-health, content-ai | 44 | 18 | 5500 |
 | v70.test.js | e2e | smoke | planning-execution | 42 | 16 | 4850 |
@@ -410,7 +410,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 4 | tests/v104.test.js | 47, 73, 102, 129 |
 | missing-timezone | 1 | tests/v105.test.js | 36 |
 | missing-timezone | 1 | tests/v106.test.js | 25 |
-| missing-timezone | 2 | tests/v107.test.js | 45, 338 |
+| missing-timezone | 2 | tests/v107.test.js | 45, 336 |
 | missing-timezone | 1 | tests/v108.test.js | 44 |
 | missing-timezone | 2 | tests/v109.test.js | 31, 192 |
 | fixed-date | 1 | tests/v110.test.js | 43 |
@@ -458,7 +458,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | fixed-date | 1 | tests/v196.test.js | 84 |
 | missing-timezone | 1 | tests/v196.test.js | 17 |
 | missing-timezone | 4 | tests/v197.test.js | 128, 173, 252, 349 |
-| missing-timezone | 3 | tests/v198.test.js | 94, 343, 485 |
+| missing-timezone | 3 | tests/v198.test.js | 94, 345, 487 |
 | missing-timezone | 1 | tests/v199.test.js | 41 |
 | missing-timezone | 1 | tests/v231.test.js | 35 |
 | missing-timezone | 1 | tests/v241.test.js | 19 |
@@ -477,7 +477,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v263.test.js | 135 |
 | missing-timezone | 1 | tests/v264.test.js | 150 |
 | missing-timezone | 1 | tests/v266.test.js | 90 |
-| fixed-date | 5 | tests/v267.test.js | 97, 100, 104, 261, 265 |
+| fixed-date | 5 | tests/v267.test.js | 97, 100, 104, 262, 266 |
 | missing-timezone | 1 | tests/v274.test.js | 66 |
 | missing-timezone | 1 | tests/v275.test.js | 57 |
 | fixed-date | 3 | tests/v276.test.js | 77, 198, 261 |
@@ -494,7 +494,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | fixed-date | 9 | tests/v287.test.js | 59, 124, 214, 242, 249, 273, 287, 309, 351 |
 | missing-timezone | 1 | tests/v287.test.js | 79 |
 | missing-timezone | 1 | tests/v288.test.js | 334 |
-| missing-timezone | 2 | tests/v293.test.js | 70, 378 |
+| missing-timezone | 2 | tests/v293.test.js | 70, 377 |
 | missing-timezone | 1 | tests/v294.test.js | 150 |
 | missing-timezone | 2 | tests/v295.test.js | 59, 306 |
 | missing-timezone | 1 | tests/v296.test.js | 51 |
@@ -517,11 +517,11 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v323.test.js | 45 |
 | fixed-date | 1 | tests/v355.test.js | 19 |
 | missing-timezone | 1 | tests/v358.test.js | 41 |
-| missing-timezone | 3 | tests/v359.test.js | 134, 370, 422 |
+| missing-timezone | 3 | tests/v359.test.js | 114, 350, 402 |
 | missing-timezone | 1 | tests/v361.test.js | 27 |
 | missing-timezone | 1 | tests/v362.test.js | 51 |
 | missing-timezone | 1 | tests/v363.test.js | 26 |
-| missing-timezone | 5 | tests/v366.test.js | 64, 262, 306, 399, 449 |
+| missing-timezone | 5 | tests/v366.test.js | 64, 262, 306, 394, 440 |
 | missing-timezone | 1 | tests/v367.test.js | 26 |
 | missing-timezone | 1 | tests/v49.test.js | 21 |
 | missing-timezone | 1 | tests/v53.test.js | 23 |

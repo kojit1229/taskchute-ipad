@@ -1,0 +1,98 @@
+{
+  "version": 393,
+  "date": "2026-09-12",
+  "title": "プロジェクト詳細・予定枠詳細の一枚化と常設、ジャーナルの下書き保護と自動保存",
+  "summary": "プロジェクトの詳細がタスク詳細と同じ一つの編集枠になり、全項目(基本5項目・開始日と期限・12週登録・進み方・進捗・数値・節目・前サイクル移行)を落とさず保存・取消できる。予定枠の詳細は冒頭に実績の開始と終了・予定完了・紐づくタスク完了が常設され(閉じた折りたたみなし)、1回の保存で成立し失敗すると元へ戻る。ジャーナルの本文は日付ごとに下書きが守られ、入力が止まると自動で端末に保存され(成功・失敗を表示)、明示保存も残る。広い画面(1024px以上)は2列",
+  "changedFiles": [
+    "CHANGES_v393.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v393.json",
+    "src/core/daily-end.js",
+    "src/features/block-detail.js",
+    "src/features/daily-operations.js",
+    "src/features/today-tower.js",
+    "src/features/tower-journal.js",
+    "styles.css",
+    "sw.js",
+    "tests/daily-operations-registry.test.js",
+    "tests/detail-draft-e2e.test.js",
+    "tests/draft-save-transaction.test.js",
+    "tests/impact-regression-map.json",
+    "tests/recurrence-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/three-screen-connection-e2e.test.js",
+    "tests/today-core.test.js",
+    "tests/today-detail-integration-e2e.test.js",
+    "tests/tower-core.test.js",
+    "tests/v252.test.js",
+    "tests/v267.test.js",
+    "tests/v276.test.js",
+    "tests/v293.test.js",
+    "tests/v359.test.js",
+    "tests/v366.test.js"
+  ],
+  "intent": [
+    "束 S-B2=3段-04(プロジェクト詳細を一つの編集枠へ)→3段-05(予定枠詳細の全項目と完了操作を常設)→3段-07(ジャーナルの下書き保護と自動保存)+fixSB2〜fixSB2e。設計06 §6.2・§6.3・§3.2/§4 のジャーナル"
+  ],
+  "changes": [
+    "src/features/block-detail.js(新設): 予定枠詳細の候補(buildBlockDetailDraft)、完了時の効果(身体スキャン・ストリーク・週登録・刻印)を1回の候補保存の中で扱う",
+    "src/features/tower-journal.js(新設): 日付を所有者にした本文の下書き保護と自動保存(save-tower-journal の登録行→候補保存)",
+    "app.js / src/features/daily-operations.js / today-tower.js: 依存注入と最小接続、登録行 save-tower-journal",
+    "styles.css: 予定枠詳細の 1024px 以上2列と data-daily-view",
+    "tests: 旧期待13か所+v267 の契約追随(design/CHANGELOG.md 09-12 17:00(機械時刻)・17:47・19:05・19:35)、detail-draft-e2e に終了結果の消去と複数行の一言の再保存の断言",
+    "sw.js: CACHE_NAME v393、APP_SHELL に block-detail.js / tower-journal.js"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad)の表示は未確認(K の実機確認へ)"
+  ],
+  "reviewFocus": [
+    "予定枠の完了時の効果(身体スキャン・ストリーク・週登録・刻印)が候補保存1回に載り失敗時に両不変か",
+    "ジャーナルの日跨ぎ・同期・画面移動中に本文を置き換えないか、退避日は読み取り専用か",
+    "12週の保存と移行の分離、やりたいこと専用 Project の種別固定・削除不可"
+  ],
+  "verification": [
+    "受領実走(v392 main f4c6093 起点、reports/supervision/recv-S3B2v2): (a)(b)(c) = 0(v317 の衝突は v392 側の導線を採用)",
+    "独立検証: Codex 174a FAIL 中2 / Claude 174b 条件付き PASS 中3 → fixSB2e → Codex recheck177 PASS",
+    "release-gate --final は監督者が実走(reports/impl-r1/v393/release-gate-final*.log)"
+  ],
+  "knownLimitations": [
+    "106b 軽微(旧詳細モーダルの日報再生成条件、実績モーダルの文言)は次周送り",
+    "3段-10(上部3ボタン)は別束 S-B2b(v394 候補、記録は既定オフ)"
+  ],
+  "relatedSuites": [
+    "detail-draft-e2e",
+    "draft-leave",
+    "draft-save-transaction",
+    "modal-delete-impact",
+    "v359",
+    "v366",
+    "three-screen-connection-e2e",
+    "today-detail-integration-e2e",
+    "v317",
+    "v293",
+    "today-core",
+    "tower-core",
+    "tower-model-core",
+    "day-cross-ticker",
+    "recurrence-core",
+    "v108",
+    "v252",
+    "v276",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "v76",
+    "v85",
+    "v125",
+    "v361",
+    "v367",
+    "journal-core",
+    "v261",
+    "v267",
+    "v311",
+    "daily-actuals-e2e",
+    "sw-integration"
+  ]
+}

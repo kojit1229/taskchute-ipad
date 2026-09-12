@@ -50,29 +50,18 @@ function staticChecks() {
   const body = src.slice(startIdx, endIdx === -1 ? undefined : endIdx);
 
   const headings = Array.from(body.matchAll(/<h4 class="tower-section-title"[^>]*>([^<]*)<\/h4>/g)).map((m) => m[1].trim());
-  const expectedHeadings = ["基本", "時間", "エネルギー", "🔁 繰り返し", "メモ"];
-  check("節見出しが 基本→時間→エネルギー→繰り返し→メモ の順で5つ出現する",
+  const expectedHeadings = ["実績・完了", "基本", "時間", "エネルギー", "🔁 繰り返し", "メモ", "効果の分類"];
+  check("Seven permanent sections: actual/completion first, effect classification last",
     JSON.stringify(headings) === JSON.stringify(expectedHeadings), JSON.stringify(headings));
 
   // A-M3/B-M1/B-M2レビュー反映: 節見出しの並びだけでなく、各<section class="tower-section">
   // の内部に出現するdata-modal-field(categoryはrenderCategorySelect()呼び出しとして検出)を
   // 節ごとに個別pinする。これにより「フィールドを別節へ移してもテストが緑のまま通る」穴を塞ぐ。
-  // v366: レバレッジ種別・完了済み(Block)+🏁タスク完了を
-  // 末尾の<details class="tower-fold">(既定閉・data-fold-idなし=非永続)へ移設したため、
-  // 5節の各スライスは<details>開始位置で打ち切り、移設先の内容は別途detailsSliceとして
-  // 検証する。シリーズ設定はliveRuleの有無によらず繰り返し節に残す(総出現数もpinする)。
+  // fixSB2: retain exact section membership, without a closed detail fold.
   const sectionStarts = Array.from(body.matchAll(/<section class="tower-section"[^>]*>/g));
-  check("<section class=\"tower-section\">の開始タグが5つ出現する", sectionStarts.length === 5, sectionStarts.length);
-  const detailsIdx = body.indexOf("<details class=\"tower-fold\">");
-  check("<details class=\"tower-fold\">が見つかる", detailsIdx !== -1);
-  const detailsEndIdx = detailsIdx !== -1 ? body.indexOf("</details>", detailsIdx) + "</details>".length : -1;
-  const detailsSlice = detailsIdx !== -1 ? body.slice(detailsIdx, detailsEndIdx) : "";
-  const sectionSlices = sectionStarts.map((m, i) => {
-    const start = m.index;
-    let end = i + 1 < sectionStarts.length ? sectionStarts[i + 1].index : body.length;
-    if (detailsIdx !== -1 && detailsIdx > start && detailsIdx < end) end = detailsIdx;
-    return body.slice(start, end);
-  });
+  check("Seven permanent sections", sectionStarts.length === 7, sectionStarts.length);
+  check("Block detail has no fold", !/<details\b/.test(body));
+  const sectionSlices = sectionStarts.map((m, i) => body.slice(m.index, i + 1 < sectionStarts.length ? sectionStarts[i + 1].index : body.length));
   // 節内のフィールド出現順を、data-modal-field属性とrenderCategorySelect()呼び出し
   // (categoryはこの関数呼び出しでしかHTMLへ出ないため、静的な属性走査だけでは検出できない)の
   // 両方を1つの正規表現で拾い、出現順どおりの配列にする。
@@ -81,11 +70,13 @@ function staticChecks() {
     Array.from(slice.matchAll(fieldOrCategoryRe)).map((m) => m[1] || "category");
 
   const expectedSections = [
+    { heading: "実績・完了", fields: ["actualStartAt", "actualEndAt", "completed", "outcome", "resultNote"] },
     { heading: "基本", fields: ["title", "category", "taskId", "isMIT"] },
-    { heading: "時間", fields: ["date", "plannedStartAt", "plannedEndAt", "estimateMin", "actualStartAt", "actualEndAt"] },
+    { heading: "時間", fields: ["date", "plannedStartAt", "plannedEndAt", "estimateMin"] },
     { heading: "エネルギー", fields: ["charge", "discharge"] },
     { heading: "🔁 繰り返し", fields: ["recurrenceKind", "streakFixed", "expectedCharge", "expectedDischarge", "anchor", "recurrenceKind"] },
-    { heading: "メモ", fields: ["comment"] }
+    { heading: "メモ", fields: ["comment"] },
+    { heading: "効果の分類", fields: ["leverageType"] }
   ];
   expectedSections.forEach((expected, i) => {
     const slice = sectionSlices[i];
@@ -94,32 +85,21 @@ function staticChecks() {
       JSON.stringify(actualFields) === JSON.stringify(expected.fields),
       `actual=${JSON.stringify(actualFields)}`);
   });
-  // 監督者裁定(2026-09-05、review-v363-claude-a H-1/review-v363-claude-b M-4): 固定化・
-  // 既定充放電・アンカーの3行はモック注記どおり繰り返し節へ戻した。「詳細 ›」は
-  // レバレッジ種別・完了済み(Block)・🏁タスク完了の3項目のみ(taskCompleteHTMLは
-  // data-modal-fieldを持たないため下のcheckで別途確認する)。
-  const detailsFields = extractFields(detailsSlice);
-  check("「詳細 ›」のdata-modal-field所属が固定どおり(レバレッジ種別・完了済みの2種のみ)",
-    JSON.stringify(detailsFields) === JSON.stringify(["leverageType", "completed"]),
-    `actual=${JSON.stringify(detailsFields)}`);
-  check("🏁タスク完了トグル(taskCompleteHTML)は「詳細 ›」に挿入される(時間節/エネルギー節から除去済み)",
-    detailsSlice.includes("${taskCompleteHTML}")
-    && !!sectionSlices[1] && !sectionSlices[1].includes("${taskCompleteHTML}")
-    && !!sectionSlices[2] && !sectionSlices[2].includes("${taskCompleteHTML}"));
-
-  const allFields = [...sectionSlices.flatMap(extractFields), ...detailsFields];
+  const taskTemplate = body.slice(body.indexOf('const taskCompleteHTML'), body.indexOf('const liveRule'));
+  const taskFields = extractFields(taskTemplate);
+  check("Task draft retains target ID and completion value", JSON.stringify(taskFields) === JSON.stringify(["completionTaskId", "taskCompleted"]), JSON.stringify(taskFields));
+  check("Task completion is inserted only in the first section", sectionSlices[0].includes("${taskCompleteHTML}")
+    && sectionSlices.slice(1).every(slice => !slice.includes("${taskCompleteHTML}")));
+  const allFields = [...sectionSlices.flatMap(extractFields), ...taskFields];
   const uniqueNames = Array.from(new Set(allFields)).sort();
-  // v359時点でpinする静的フィールド名一覧(旧18種+新設isMIT+category=20種)。v366は
-  // レバレッジ種別・完了済みの置き場所を変えただけで種類・総数は不変。
   const expectedUnique = [
-    "actualEndAt", "actualStartAt", "anchor", "category", "charge", "comment", "completed", "date",
-    "discharge", "estimateMin", "expectedCharge", "expectedDischarge", "isMIT", "leverageType",
-    "plannedEndAt", "plannedStartAt", "recurrenceKind", "streakFixed", "taskId", "title"
+    "actualEndAt", "actualStartAt", "anchor", "category", "charge", "comment", "completed", "completionTaskId", "date",
+    "discharge", "estimateMin", "expectedCharge", "expectedDischarge", "isMIT", "leverageType", "outcome",
+    "plannedEndAt", "plannedStartAt", "recurrenceKind", "resultNote", "streakFixed", "taskCompleted", "taskId", "title"
   ];
-  check("data-modal-fieldのユニーク名一覧が変わっていない(category込み20種、isMIT追加のみ)",
+  check("Retain all 20 existing fields plus 4 completion/result fields",
     JSON.stringify(uniqueNames) === JSON.stringify(expectedUnique), JSON.stringify(uniqueNames));
-  check("data-modal-field(category込み)の総出現数が21件で変わっていない(重複デグレのpin)",
-    allFields.length === 21, allFields.length);
+  check("Exactly 25 field occurrences including category", allFields.length === 25, allFields.length);
   check("recurrenceKindは繰り返し節内の2分岐分(liveRuleなし/あり)で2回出現する",
     allFields.filter((n) => n === "recurrenceKind").length === 2, allFields.filter((n) => n === "recurrenceKind").length);
   check("buildBlockModal内に new Date(\" を含まない(iOS Safari日時パース禁則)",

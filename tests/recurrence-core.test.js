@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "acorn";
 import vm from "node:vm";
 import { mergeRecords, mergeByIdPreferNewer } from "../src/core/merge.js";
+import { buildBlockDetailDraft } from "../src/features/block-detail.js";
 import {
   configureRecurrence,
   routineRate,
@@ -386,8 +387,9 @@ const legacyCode = declarations(legacyApp, ["RECURRENCE_KEEP_PAST_DAYS", "RECURR
 function legacyFixture() {
   const rule = { id: "baseline", title: "朝の読書", kind: "daily", category: "仕事",
     anchorDate: "2026-08-06", startTime: "09:00", endTime: "09:30", streakSince: null, deleted: false };
-  const state = { ...freshState(), recurrences: [rule], dataModifiedAt: "2026-08-20T10:00:00" };
+  const state = { ...freshState(), tasks: [], recurrences: [rule], dataModifiedAt: "2026-08-20T10:00:00" };
   const context = vm.createContext({ state, _blockSaveInFlight: false, draftSaveTransaction: { active: true },
+    buildBlockDetailDraft, dailyOperationDeps: { now: () => "2026-08-20T10:00:00" },
     todayISO: () => "2026-08-20", nowDateTime: () => "2026-08-20T10:00:00", addDays: addDaysISO,
     fromLocalInput: value => value || "", habitStreakEdit: () => ({ ok: true, value: null }),
     saveState() {}, saveAndRender() {}, closeModal() {}, showToast() {}, render() {},

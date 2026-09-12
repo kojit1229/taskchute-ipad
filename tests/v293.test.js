@@ -184,13 +184,13 @@ function check(name, cond, extra = "") {
       tasks: [makeTask("t2")]
     });
     await clickAction("edit-block", { id: "r2" });  // モーダルを開く導線自体はこの接続点の対象外
-    // v366追随: 🏁は「詳細 ›」(既定閉)へ移設された。他の実操作系テストと同じく、
-    // 実際に開いてから可視性を確認してクリックする(非表示要素への直接クリックは
-    // ユーザーが辿れない経路になるため避ける)。
-    await page.locator('[data-action="toggle-task-complete"][data-id="r2"]').waitFor({ state: "attached" });
-    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+    // fixSB2: completion controls are always available in the detail form.
+    check("Task completion is not folded", await page.locator('.modal-card details:not([open])').count() === 0);
     await page.locator('[data-action="toggle-task-complete"][data-id="r2"]').waitFor();
     await clickReal('[data-action="toggle-task-complete"][data-id="r2"]');
+    check("Before save: task incomplete and no scan", (await stateNow()).tasks.find(t => t.id === "t2").status !== "completed" && await bodyScanOpen() === 0);
+    await clickReal('[data-action="modal-save"]');
+    check("After save: task completed", (await stateNow()).tasks.find(t => t.id === "t2").status === "completed");
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await recordBodyScan(1, "");
@@ -202,9 +202,8 @@ function check(name, cond, extra = "") {
     console.log("[3] Block編集モーダルの「完了」チェック保存で開く(モーダルの掛け替えが正しい順序で起きる)");
     await seed({ blocks: [makeBlock({ id: "r3", title: "対象3", startMin: 11 * 60 })] });
     await clickAction("edit-block", { id: "r3" });
-    // v366追随: 完了済み(Block)は「詳細 ›」(既定閉)へ移設された。開いてから可視性を確認する。
-    await page.locator('[data-modal-field="completed"]').waitFor({ state: "attached" });
-    await page.locator(".modal-card details.tower-fold").evaluate((el) => { el.open = true; });
+    // fixSB2: Block completion is permanently visible.
+    check("Block completion is not folded", await page.locator('.modal-card details:not([open])').count() === 0);
     await page.locator('[data-modal-field="completed"]').waitFor();
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('[data-action="modal-save"]').click();

@@ -54,7 +54,7 @@ function harness(legacy, preserve = false) {
   document: { body: {}, activeElement: { matches: () => false, value: "typed gap title" },
     querySelectorAll: () => Object.values(sheets).filter(Boolean),
     querySelector: selector => selector.includes("exec-pane-left") ? sheets.left : sheets.overlay },
-  draftSaveTransaction: null, personalDataReady: () => true, app: { dataset: {} }, visionEditDraft: null,
+  towerJournal: { restore() {} }, draftSaveTransaction: null, personalDataReady: () => true, app: { dataset: {} }, visionEditDraft: null,
   renderSidebar() {}, renderBottomNav() {}, rememberWorkListScroll() {}, restoreWorkListScroll() {}, restoreGlobalInputs() {},
   renderTimelineRail() {}, renderSyncBanner() {}, renderPersonalDataAuthBanner() {}, maybeMarkAiReportRead() {},
   renderMain() { renders++; html = vm.runInContext("renderExecView()", ctx); replaceSheet("left", html.includes("fill-gap-sheet")); } };

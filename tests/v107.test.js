@@ -103,15 +103,13 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
-  // v366追随: 🏁タスク完了トグル・完了済み(Block)チェックは頻度の低い項目として
-  // 「詳細 ›」(既定閉、<details class="tower-fold">)へ移設された。既存の操作は
-  // ロジック不変のまま維持されているため、開いてから触るだけで従来どおり検証できる
-  // (state/localStorageへは書き込まれない開閉操作なので他assertionへの影響はない)。
-  // el.open=trueの直接代入ではなくsummaryを実クリックする(390pxでのタップ可能性・
-  // summary自体の到達可能性を経路として検証するため、review-v363-claude-a M-4対応)。
+  // fixV393: 完了欄は常設。同じ実DOMの一意性・表示・タップ到達性を検査する。
   async function openBlockDetails(pg = page) {
-    await pg.waitForSelector(".modal-card details.tower-fold > summary", { state: "visible" });
-    await pg.click(".modal-card details.tower-fold > summary");
+    const completion = pg.locator('.modal-card [data-action="toggle-task-complete"]');
+    await completion.waitFor({ state: 'visible' });
+    check("Task完了欄は1件・常設", await completion.count() === 1
+      && await completion.evaluate(el => !el.closest('details:not([open])')));
+    await completion.click({ trial: true });
   }
 
   // The accepted exec view lists Blocks; Task membership belongs to WBS filters.
@@ -198,8 +196,12 @@ function check(name, cond, extra = "") {
     const modalTaskCheck1 = page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
     check("Block編集モーダル内にタスク完了トグルが表示される(Task紐づきBlockのみ)", await modalTaskCheck1.count() === 1);
     await openBlockDetails();
+    const beforeComplete = await stateNow();
     await modalTaskCheck1.click();
-    await page.waitForTimeout(300);
+    check("保存前はTaskが完全一致", JSON.stringify((await stateNow()).tasks) === JSON.stringify(beforeComplete.tasks));
+    check("保存前は身体スキャンなし", await page.locator('.modal-close[data-action="body-scan-discard"]').count() === 0);
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.locator('.modal-close[data-action="body-scan-discard"]').waitFor();
     const s2 = await stateNow();
     const t2 = s2.tasks.find((t) => t.id === "task-B");
     const bB1 = s2.blocks.find((b) => b.id === "block-B1");
@@ -240,18 +242,17 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     await openBlockDetails();
     await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
-    await page.waitForTimeout(300);
+    check("解除は下書きに反映・保存前のTaskは完了のまま",
+      !(await page.locator('.modal-card [data-modal-field="taskCompleted"]').isChecked())
+      && (await stateNow()).tasks.find(t => t.id === "task-B")?.status === "completed");
+    await page.locator('.modal-card [data-action="modal-save"]').click();
+    await page.waitForFunction(() => !document.querySelector("#modalRoot").classList.contains("open"));
     const s3 = await stateNow();
     const t3 = s3.tasks.find((t) => t.id === "task-B");
     const b3 = s3.blocks.find((b) => b.id === "block-B1");
     check("Taskはdoingに戻る(Blockに実績があるためtodoではない)", t3?.status === "doing", JSON.stringify(t3));
     check("Block(B1)は完了のまま(解除しない)", b3?.completed === true, JSON.stringify(b3));
-    // v146: toggleTaskCompleteFromBlockは対象のBlock編集モーダルが開いたままなら再描画する
-    // (renderModal(buildBlockModal(...))で更新するため、closeModalを呼ばずとも状態を反映できる)。
-    check("モーダルは閉じずに再描画され、ボタンが「紐づくTaskも完了にする」表示に戻る",
-      (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("紐づくTaskも完了にする"));
-    await page.click('[data-action="modal-close"]');
-    await page.waitForTimeout(150);
+    // fixV393: 解除の表示は下書き、保存後は上のstate断言で確認。
     // v335(§C追随): 既にexec(実績モード)にいるため、nav[data-view="exec"]の再クリックはno-op
     // (setViewは同一ビューへの遷移では_execModeをリセットしない)。未完了タスク一覧(計画モード)
     // へ戻るにはヘッダのセグメントで明示的に計画へ切り替える。
@@ -291,44 +292,41 @@ function check(name, cond, extra = "") {
     // (d2) v146レビュー対応: 🏁押下時の再描画は編集中の他フィールドを破棄しない
     //      (renderModal(buildBlockModal(...))直呼びからrerenderActiveModal(["completed"])へ変更)
     // ============================================================
-    console.log("[4b] 未保存操作は保留し、継続で入力を保持、保存後に完了操作する");
+    console.log("[4b] タイトルとTask完了は同じ下書きで保持し、離脱確認で継続、保存で一括確定する");
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     const titleField = page.locator('.modal-card [data-modal-field="title"]');
     await titleField.fill("書きかけタイトルXYZ");
     await openBlockDetails();
     const beforeBlocked = await stateNow();
     await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
-    await page.locator('.draft-leave-dialog').waitFor({ state: 'visible' });
-    check("未保存タイトルがあると完了操作の確認を表示する", await page.locator('.draft-leave-dialog').isVisible());
-    check("完了操作の確認には破棄して実行する選択肢が無い", await page.locator('.draft-leave-dialog [data-action="draft-leave-discard"]').count() === 0);
+    check("完了は同じ下書きに入り、即時操作の確認は出ない", await page.locator('.draft-leave-dialog').count() === 0);
+    check("完了操作後も詳細は開いたまま", await page.locator("#modalRoot").evaluate(root => root.classList.contains("open")));
     const blocked = await stateNow();
-    check("確認中はTaskとBlockを変更しない", JSON.stringify(blocked.tasks) === JSON.stringify(beforeBlocked.tasks)
+    check("保存前はTaskとBlockを変更しない", JSON.stringify(blocked.tasks) === JSON.stringify(beforeBlocked.tasks)
       && JSON.stringify(blocked.blocks) === JSON.stringify(beforeBlocked.blocks));
+    check("下書きではTask完了を保持", await page.locator('[data-modal-field="taskCompleted"]').isChecked());
+    await page.locator('.modal-card .modal-close[data-action="modal-close"]').click();
+    await page.locator('.draft-leave-dialog').waitFor({ state: 'visible' });
+    check("未保存の下書きから離脱すると確認を表示する", await page.locator('.draft-leave-dialog').isVisible());
     await page.locator('[data-action="draft-leave-stay"]').click();
     await page.locator('.draft-leave-dialog').waitFor({ state: 'detached' });
     check("編集を続けるとモーダルは開いたまま", await page.locator("#modalRoot").evaluate(root => root.classList.contains("open")));
-    check("書きかけのタイトルが保持されている(古い保存値へ巻き戻らない)",
-      await titleField.inputValue() === "書きかけタイトルXYZ", await titleField.inputValue());
-    check("継続を選ぶとTaskの完了操作を行わない", (await stateNow()).tasks.find(t => t.id === "task-B")?.status === beforeBlocked.tasks.find(t => t.id === "task-B")?.status);
+    check("書きかけのタイトルとTask完了の下書きを両方保持", await titleField.inputValue() === "書きかけタイトルXYZ"
+      && await page.locator('[data-modal-field="taskCompleted"]').isChecked());
+    check("継続だけではTaskの完了を保存しない", (await stateNow()).tasks.find(t => t.id === "task-B")?.status === beforeBlocked.tasks.find(t => t.id === "task-B")?.status);
     await page.locator('.modal-card [data-action="modal-save"]').click();
     await page.waitForFunction(() => !document.querySelector("#modalRoot").classList.contains("open"));
-    const saved = await stateNow();
-    check("完了操作前にタイトルだけを明示保存する", saved.blocks.find(b => b.id === "block-B1")?.title === "書きかけタイトルXYZ"
-      && saved.tasks.find(t => t.id === "task-B")?.status === beforeBlocked.tasks.find(t => t.id === "task-B")?.status);
+    const s4b = await stateNow();
+    check("保存でタイトルとTask完了を両方確定する", s4b.blocks.find(b => b.id === "block-B1")?.title === "書きかけタイトルXYZ"
+      && s4b.tasks.find(t => t.id === "task-B")?.status === "completed");
     await page.click('[data-action="edit-block"][data-id="block-B1"]');
     await openBlockDetails();
-    await page.click('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]');
-    check("保存後の完了操作では未保存確認を出さない", await page.locator('.draft-leave-dialog').count() === 0);
-    check("保存後の🏁押下でもモーダルは開いたまま", await page.locator("#modalRoot").evaluate(root => root.classList.contains("open")));
-    const s4b = await stateNow();
-    check("🏁の効果自体は反映される(taskBが再度completedになる)",
-      s4b.tasks.find((t) => t.id === "task-B")?.status === "completed", JSON.stringify(s4b.tasks.find((t) => t.id === "task-B")));
+    check("再表示では未保存確認を出さない", await page.locator('.draft-leave-dialog').count() === 0);
     check("保存したタイトルは完了後のstateと編集欄で一致する", s4b.blocks.find(b => b.id === "block-B1")?.title === "書きかけタイトルXYZ"
       && await page.locator('.modal-card [data-modal-field="title"]').inputValue() === "書きかけタイトルXYZ");
-    check("🏁ボタンのラベルも最新状態(完了済み)を反映する(古いキャッシュ値へ巻き戻らない)",
+    check("🏁ボタンのラベルも保存後の完了済みを反映する",
       (await page.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-B1"]').textContent())?.includes("完了済み"));
-    check("完了済み(Block)チェックボックスも最新値を反映する(completedを復元対象から除外済み)",
-      await page.locator('.modal-card [data-modal-field="completed"]').isChecked());
+    check("完了済み(Block)も保存後の値を反映する", await page.locator('.modal-card [data-modal-field="completed"]').isChecked());
     await page.click('[data-action="modal-close"]');
 
     // ============================================================
@@ -391,7 +389,7 @@ function check(name, cond, extra = "") {
     await pageMobile.click('.exec-row-upcoming [data-action="edit-block"][data-id="block-M"]');
     await pageMobile.waitForTimeout(200);
     const modalTaskCheckMobile = pageMobile.locator('.modal-card [data-action="toggle-task-complete"][data-id="block-M"]');
-    // v366追随: 🏁は「詳細 ›」(既定閉)に移設されたため、開いた状態での可視性を確認する
+    // fixV393: 390pxでも常設の完了欄へのタップ到達性を確認する
     // (「モーダルを開けば到達可能」の検証意図はv107時点から変わっていない)。
     await openBlockDetails(pageMobile);
     check("390px幅でBlock編集モーダルを開くと🏁ボタンが可視状態である", await modalTaskCheckMobile.isVisible());

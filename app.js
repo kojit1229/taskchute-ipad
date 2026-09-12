@@ -38,6 +38,8 @@ import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js
 import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
+import { buildBlockDetailDraft } from "./src/features/block-detail.js";
+import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
@@ -466,14 +468,8 @@ registerActions({
   "sync-banner-dismiss": () => dismissSyncBanner(),
   "open-iron-log": () => setView("iron-log"),
   "save-tower-journal": ({ target }) => {
-    const date = target.dataset.date || todayISO();
-    if (isArchivedDate(state, date)) return showToast(ARCHIVED_READONLY_MESSAGE);
     const free = document.getElementById("towerJournalFree");
-    if (!free) return;
-    state.journals[date] = free.value;
-    const meta = (state.journalMeta[date] ||= { aiImported: false, ideal: "", aiTaskCandidates: [], aiRequest: "" });
-    meta.textUpdatedAt = nowDateTime();
-    saveAndRender("ジャーナルを保存しました");
+    if (free?.dataset.towerJournalDate === target.dataset.date) towerJournal.saveElement(free);
   },
   "early-bird-check": () => toggleEarlyBird(),
   "tower-gate-edit-toggle": () => {
@@ -993,10 +989,11 @@ registerActions({
     const card = target.closest(".modal-card");
     const toDate = addDays(todayISO(), Number(target.dataset.days) || 0);
     const dateInput = card?.querySelector('[data-modal-field="date"]');
+    const fromDate = dateInput?.value || toDate;
     if (dateInput) dateInput.value = toDate;
     ["plannedStartAt", "plannedEndAt"].forEach((field) => {
       const input = card?.querySelector(`[data-modal-field="${field}"]`);
-      if (input && input.value) input.value = `${toDate}${input.value.slice(10)}`;
+      if (input && input.value) input.value = `${addDays(toDate, daysBetween(fromDate, input.value.slice(0, 10)))}${input.value.slice(10)}`;
     });
   }
 });
@@ -1555,6 +1552,8 @@ function foldSection(id, defaultOpen, wrapperClass, summaryClass, summaryText, b
 //      未初期化のまま参照され、最後に開いていた画面によっては起動時に例外で全停止していた。
 
 const dailyOperationDeps = {
+  journalConnection: zeroConnectionKey,
+  journalSaved: date => { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); },
   makeBlock: input => makeBlock(input), projectName: id => projectName(id),
   draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   isReadingBlock: function isReadingBlock(block) {
@@ -1766,10 +1765,11 @@ document.addEventListener("toggle", (event) => {
 // 変換確定/フォーカス離脱のタイミングでの保留render実行。
 // v140(Med-2): compositionendはフォーカスがまだ入力欄に残っていれば延期を継続する
 // (attemptFlushDeferredRenderが両条件を見て判定する)。
-document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); });
+document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); towerJournal.composition(event.target, true); });
 document.addEventListener("compositionend", (event) => {
   _imeComposing = false;
   handleWorkListComposition(event.target, false);
+  towerJournal.composition(event.target, false);
   attemptFlushDeferredRender();
 });
 document.addEventListener("focusout", () => {
@@ -1785,6 +1785,7 @@ document.addEventListener("focusout", () => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  if (towerJournal.input(target, event.isComposing || _imeComposing)) return;
   if (handleWorkListInput(target)) return;
   // v315: ユーザーが編集したIRON LOG入力はプリフィル所有権を外す。
   placementInput(target);
@@ -3346,6 +3347,8 @@ function makeBlock(input) {
 
 function render() {
   if (draftSaveTransaction?.defer(() => render())) return;
+  const journalFocus = document.activeElement?.matches?.('[data-tower-journal-date]');
+  if (journalFocus && _imeComposing) { renderDeferringForFocus(); return; }
   // v271: iOSのネイティブpickerを開いている間はselectを含む全体DOMを差し替えず、focusout後に1回反映する。
   if (document.activeElement?.matches?.("[data-tower-arrival-select], [data-fund-report-date]")) {
     if (!_deferredRenderPending) _deferredRenderPendingSince = Date.now();
@@ -3369,6 +3372,7 @@ function render() {
   rememberWorkListScroll();
   renderMain();
   restoreGlobalInputs();
+  towerJournal.restore(journalFocus);
   restoreWorkListScroll();
   renderTimelineRail();
   renderSyncBanner();  // v43: 全再描画で消えるバナーを再注入
@@ -4873,12 +4877,12 @@ function leverageTypeOptionsHTML(current) {
 // v147(UI改善計画Phase2 2-4a): 既定closedの<details>自体は既存どおり(v65から変更なし)。
 // 判定済み(leverageType設定済み)なら、summary行に「未判定への招待文」ではなく判定結果を出す
 // (currentType引数、任意。呼び出し元がTask/BlockそれぞれのleverageTypeを渡す)。
-function leverageJudgeHelperHTML(currentType) {
+function leverageJudgeHelperHTML(currentType, permanent = false) {
   const judgedLabel = leverageTypeLabel(currentType || "");
   const summaryText = judgedLabel ? `10秒判定: 「${judgedLabel}」と判定済み(変更する)` : "10秒で判定する(任意)";
   return `
-    <details class="lev-helper">
-      <summary>${escapeHTML(summaryText)}</summary>
+    <${permanent ? "section" : "details"} class="lev-helper">
+      <${permanent ? "h4" : "summary"}>${escapeHTML(summaryText)}</${permanent ? "h4" : "summary"}>
       <div class="lev-helper-body">
         <label class="checkbox-line"><input type="checkbox" data-lev-q="1"> 今日で終わらず、明日以降も自分の代わりに働き続けるか</label>
         <label class="checkbox-line"><input type="checkbox" data-lev-q="2"> やった後、同じ問題が来たとき自分の時間はもう要らなくなっているか</label>
@@ -4888,7 +4892,7 @@ function leverageJudgeHelperHTML(currentType) {
           <span class="muted" style="font-size:11px">2問以上Yesなら「資産」。迷うなら未設定のままでOK。</span>
         </div>
       </div>
-    </details>
+    </${permanent ? "section" : "details"}>
   `;
 }
 // v61: マイグレーション儀式(提案1)==============================
@@ -10368,6 +10372,13 @@ function completedTaskRecord(task) {
 }
 
 function toggleTaskCompleteFromBlock(blockId) {
+  const draftTask = modalRoot.querySelector('[data-modal-field="taskCompleted"]');
+  if (state.modal?.type === "block" && state.modal.id === blockId && draftTask) {
+    draftTask.checked = !draftTask.checked;
+    const button = modalRoot.querySelector('[data-action="toggle-task-complete"]');
+    if (button) button.textContent = draftTask.checked ? "🏁 Task完了（保存で反映）" : "🏁 Task未完了（保存で反映）";
+    return;
+  }
   if (state.modal?.type === "block" && state.modal.id === blockId
       && requestDraftLeave(() => toggleTaskCompleteFromBlock(blockId), { allowDiscard: false })) return;
   const block = state.blocks.find((b) => b.id === blockId);
@@ -13699,6 +13710,8 @@ function openBlockEditor(id) {
 }
 
 const dailyDrafts = createDailyDraftStore();
+const towerJournal = createTowerJournal({ state: () => state, connection: zeroConnectionKey, now: nowDateTime, document,
+  run: input => runDailyOperation("save-tower-journal", input, dailyOperationDeps) });
 const dailyDraftSessions = new WeakMap();
 const draftLeaveGuard = createDraftLeaveGuard(document, {
   drafts: dailyDrafts, readDraft: readDailyDraft, isComposing: () => _imeComposing, notify: showToast
@@ -14076,7 +14089,7 @@ function legacyDetailFrame(kind, record, title, className, canDelete, saveLabel,
     kind, id: record.id || `new-${kind}`, draftId: null, title, dateLabel: "",
     sections: [{ title: "", fields: [], slot: "legacyFields" }],
     dirty: false, busy: false, errors: [], saveLabel, canDelete, origin: state.currentView
-  }, { slots: { legacyFields: fields }, className }).replace('<div class="modal-card', `<div${["task", "project"].includes(kind) ? ' data-daily-view="detail"' : ""} class="modal-card`);
+  }, { slots: { legacyFields: fields }, className }).replace('<div class="modal-card', `<div${["task", "project", "block"].includes(kind) ? ' data-daily-view="detail"' : ""} class="modal-card`);
 }
 
 function buildProjectModal(project) {
@@ -14094,8 +14107,10 @@ function buildProjectModal(project) {
   // 種別プルダウンをdisabledにして固定表示にし、削除ボタン自体を出さない(deleteProject側の
   // ガードと二重防御)。
   const isWishSingleton = kind === "wish";
-  return legacyDetailFrame("project", project, "Project を編集", "project-modal", !isWishSingleton, "保存", () => `
+  return legacyDetailFrame("project", project, "Project を編集", "project-modal detail-sheet task-detail-single", !isWishSingleton, "保存", () => `
       <div class="modal-body">
+        <div class="detail-columns"><section class="detail-column" aria-label="基本・期間">
+        <h4 class="tower-section-title">基本・期間</h4>
         <div class="field">
           <label class="field-label">タイトル</label>
           <input class="input" data-modal-field="title" value="${escapeHTML(project.title || "")}">
@@ -14140,6 +14155,8 @@ function buildProjectModal(project) {
             <input class="input" type="date" data-modal-field="dueDate" value="${project.dueDate || ""}">
           </div>
         </div>
+        </section><section class="detail-column" aria-label="12週の計画・進捗">
+        <h4 class="tower-section-title">12週の計画・進捗</h4>
         <div class="field">
           <label class="checkbox-line">
             <input type="checkbox" data-modal-field="is12WY" ${is12WY ? "checked" : ""}>
@@ -14207,6 +14224,7 @@ function buildProjectModal(project) {
           <label class="field-label">説明 / メモ</label>
           <textarea class="textarea" data-modal-field="description" style="min-height:120px">${escapeHTML(project.description || "")}</textarea>
         </div>
+        </section></div>
       </div>
   `);
 }
@@ -14515,6 +14533,8 @@ function saveTaskFromModal(id, fields) {
 // Block編集シートを基本→時間→エネルギー→繰り返し→メモの5節へ再編。
 // data-modal-field の名前・意味・保存ロジックは不変(節分けとDOM順序のみ変更)。
 function buildBlockModal(block) {
+  const endReports = (state.declarations || []).filter(row => !row.deleted && row.blockId === block.id && block.actualEndAt && row.reportedAt === block.actualEndAt);
+  const endReport = endReports.length === 1 ? endReports[0] : null;
   const taskOptions = [
     `<option value="" ${!block.taskId ? "selected" : ""}>単発(Task紐づけなし)</option>`,
     ...state.tasks
@@ -14523,9 +14543,11 @@ function buildBlockModal(block) {
   ].join("");
   // v146(UI改善計画Phase1-3): 🏁(タスク完了)はタスクシュート行から誤タップ対策で撤去し、
   // ここ(Block編集モーダル)へ移設した。挙動(toggleTaskCompleteFromBlock)自体は無変更。
-  const linkedTask = block.taskId ? state.tasks.find((t) => t.id === block.taskId) : null;
+  const linkedTask = block.taskId ? state.tasks.find((t) => t.id === block.taskId && !t.deleted) : null;
   const taskCompleteHTML = linkedTask ? `
         <div class="field">
+          <input type="hidden" data-modal-field="completionTaskId" value="${escapeHTML(linkedTask.id)}">
+          <input type="checkbox" hidden data-modal-field="taskCompleted" ${linkedTask.status === "completed" ? "checked" : ""}>
           <button class="btn task-complete-toggle-btn ${linkedTask.status === "completed" ? "green" : "orange"}"
             data-action="toggle-task-complete" data-id="${block.id}" style="min-height:44px; width:100%">
             🏁 ${linkedTask.status === "completed" ? "タスク完了済み(タップで戻す)" : "紐づくTaskも完了にする"}
@@ -14538,10 +14560,33 @@ function buildBlockModal(block) {
     ? (state.recurrences || []).find((r) => r.id === block.recurrenceGroupId && !r.deleted)
     : null;
   return legacyDetailFrame("block", block, block._isNew ? "Block を追加" : "Block を編集",
-    "tower-sheet detail-sheet", !block._isNew, block._isNew ? "追加" : "保存", () => `
+    "tower-sheet detail-sheet task-detail-single", !block._isNew, block._isNew ? "追加" : "保存", () => `
       <div class="modal-body">
     ${placementBackHTML(block)}
         <div class="detail-columns"><div class="detail-column">
+        <section class="tower-section">
+          <h4 class="tower-section-title">実績・完了</h4>
+          <div class="field-row block-time-row">
+            <div class="field">
+              <label class="field-label">実績開始</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
+            </div>
+            <div class="field">
+              <label class="field-label">実績終了</label>
+              <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
+            </div>
+          </div>
+          <div class="field">
+            <label class="checkbox-line">
+              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
+              完了済み(Block)
+            </label>
+          </div>
+          ${taskCompleteHTML}
+
+          <div class="field"><label class="field-label">終了時の結果</label><select class="select" data-modal-field="outcome"><option value="">未設定</option>${[["done", "できた"], ["partial", "一部できた"], ["derailed", "予定外"]].map(([value, label]) => `<option value="${value}" ${endReport?.outcome === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
+          <div class="field"><label class="field-label">終了時の一言</label><textarea class="textarea" data-modal-field="resultNote">${escapeHTML(endReport?.resultNote || "")}</textarea></div>
+        </section>
         <section class="tower-section">
           <h4 class="tower-section-title">基本</h4>
           <div class="field">
@@ -14590,16 +14635,6 @@ function buildBlockModal(block) {
               ${[15, 25, 40, 60].map((min) => `
               <button type="button" class="btn ghost estimate-chip${Number(block.estimateMin) === min ? " active" : ""}" data-action="estimate-chip" data-min="${min}" style="min-height:44px">${min}分</button>
               `).join("")}
-            </div>
-          </div>
-          <div class="field-row block-time-row">
-            <div class="field">
-              <label class="field-label">実績開始</label>
-              <input class="input" type="datetime-local" step="300" data-modal-field="actualStartAt" value="${toLocalInput(block.actualStartAt)}">
-            </div>
-            <div class="field">
-              <label class="field-label">実績終了</label>
-              <input class="input" type="datetime-local" step="300" data-modal-field="actualEndAt" value="${toLocalInput(block.actualEndAt)}">
             </div>
           </div>
         </section>
@@ -14686,25 +14721,18 @@ function buildBlockModal(block) {
             <textarea class="textarea" data-modal-field="comment" style="min-height:100px">${escapeHTML(block.comment || "")}</textarea>
           </div>
         </section>
-        <details class="tower-fold">
-          <summary class="tower-section-title">詳細 ›</summary>
+        <section class="tower-section">
+          <h4 class="tower-section-title">効果の分類</h4>
           <div class="tower-fold-body">
           <div class="field">
             <label class="field-label">レバレッジ(10x機構・任意)</label>
             <select class="select" data-modal-field="leverageType">
               ${leverageTypeOptionsHTML(block.leverageType || "")}
             </select>
-            ${leverageJudgeHelperHTML(block.leverageType)}
+            ${leverageJudgeHelperHTML(block.leverageType, true)}
           </div>
-          <div class="field">
-            <label class="checkbox-line">
-              <input type="checkbox" data-modal-field="completed" ${block.completed ? "checked" : ""}>
-              完了済み(Block)
-            </label>
           </div>
-          ${taskCompleteHTML}
-          </div>
-        </details>
+        </section>
         </div></div>
       </div>
   `);
@@ -14717,11 +14745,11 @@ function saveBlockFromModal(id, fields) {
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveBlockFromModal(id, fields)).ok;
   if (_blockSaveInFlight) return;
   _blockSaveInFlight = true;
-  let _bodyScanBlockId = "";  // v293: 分岐(6箇所)が合流するfinallyでまとめて1回だけ開く
   try {
   const existing = state.blocks.find((b) => b.id === id);
   const isNew = !existing;
   const updated = {
+    ...existing,
     id: isNew ? id : existing.id,
     title: (fields.title || "").trim() || (existing?.title || "新規Block"),
     date: fields.date || existing?.date || todayISO(),
@@ -14772,21 +14800,26 @@ function saveBlockFromModal(id, fields) {
     }
     updated.isMIT = true;
   }
+  let lifecycle;
+  try { lifecycle = buildBlockDetailDraft(state, existing, updated, fields, dailyOperationDeps); }
+  catch (error) { showToast(error.message); return; }
+  Object.assign(updated, lifecycle.block);
   const trackSavedBlockTransitions = () => {
+    lifecycle.apply(state);
+    lifecycle.effects.forEach(effect => draftSaveTransaction.defer(effect, { post: true }));
     const savedBlock = state.blocks.find((block) => block.id === id);
     saveState();
     if (!existing?.actualStartAt && savedBlock?.actualStartAt) trackOnBlockStarted(savedBlock);
     if (Boolean(existing?.completed) !== Boolean(savedBlock?.completed)) {
       trackOnBlockCompletionChanged(savedBlock, Boolean(savedBlock?.completed), { interactive: false });
-      // v293: 身体スキャン復活。完了取り消し方向(existing.completed=true→false)では立てない。
-      if (!existing?.completed && savedBlock?.completed) _bodyScanBlockId = savedBlock.id;
+      draftSaveTransaction.defer(() => {
+        const committedBlock = state.blocks.find(block => block.id === id);
+        // v293: Only a successfully saved completion opens the body scan.
+        if (!existing?.completed && committedBlock?.completed) openBodyScanModal(committedBlock.id);
+      }, { post: true });
     }
   };
-  // v29: 予定の開始・終了日時は必須。空のままでは登録/保存させない。
-  if (!updated.plannedStartAt || !updated.plannedEndAt) {
-    showToast("予定の開始・終了日時を入力してください");
-    return;
-  }
+  // Planned times were validated as a pair by the registered detail builder.
   const currentRule = existing?.recurrenceGroupId
     ? (state.recurrences || []).find((r) => r.id === existing.recurrenceGroupId && !r.deleted)
     : null;
@@ -14948,8 +14981,6 @@ function saveBlockFromModal(id, fields) {
   }
   } finally {
     _blockSaveInFlight = false;
-    // v293: 身体スキャン復活。closeModal()/saveAndRender()より後(=編集モーダルは閉じ済み)に開く。
-    if (_bodyScanBlockId) openBodyScanModal(_bodyScanBlockId);
   }
 }
 

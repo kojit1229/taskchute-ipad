@@ -30,6 +30,14 @@
     "fund-data-contract"
   ],
   "areas": {
+    "tower-journal": {
+      "paths": ["^src/features/tower-journal\\.js$"],
+      "suites": ["three-screen-connection-e2e", "today-core", "tower-core", "day-cross-ticker"]
+    },
+    "block-detail": {
+      "paths": ["^src/features/block-detail\\.js$"],
+      "suites": ["three-screen-connection-e2e", "draft-save-transaction", "v359", "v366"]
+    },
     "mutation-stamp": {
       "paths": [
         "^src/core/mutation-stamp\\.js$",
@@ -137,6 +145,14 @@
         "today-detail-integration-e2e",
         "v293"
       ]
+    },
+    "block-detail-save-boundary": {
+      "paths": [
+        "^src/features/block-detail\\.js$",
+        "^src/core/daily-end\\.js$",
+        "^src/features/tower-journal\\.js$"
+      ],
+      "suites": ["mutation-block-e2e", "draft-save-transaction"]
     },
     "archive-safety": {
       "paths": [

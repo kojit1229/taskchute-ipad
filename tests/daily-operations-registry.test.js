@@ -11,8 +11,9 @@ let commits = 0, saves = 0, schedules = 0;
 const deps = { state, now: () => '2026-09-10T12:00:00',
   commitCandidate: options => { commits++; return commitCandidate(options); },
   persist: () => { saves++; return true; }, scheduleSync: () => schedules++, legacy: {} };
-assert.deepEqual(Object.keys(rows).sort(), [...DAILY_ACTIONS].sort());
-for (const name of DAILY_ACTIONS) {
+const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal'];
+assert.deepEqual(Object.keys(rows).sort(), [...expectedActions].sort());
+for (const name of expectedActions) {
   const before = JSON.parse(JSON.stringify(state));
   if (rows[name].legacy) {
     const token = {}, start = commits;
@@ -28,7 +29,7 @@ for (const name of DAILY_ACTIONS) {
 for (const name of ['missing', 'toString', '__proto__']) assert.throws(() => run(name, {}, deps), /unknown operation/);
 assert.equal(saves, 0); assert.equal(schedules, 0);
 // 124/R3-03 adds three candidate rows; derive counts from the actual registry.
-console.log(`PASS all ${DAILY_ACTIONS.length} rows, ${Object.values(rows).filter(row => !row.legacy).length} invalid-input rejections, 6 legacy delegates and unknown names`);
+console.log(`PASS all ${expectedActions.length} rows, ${Object.values(rows).filter(row => !row.legacy).length} invalid-input rejections, 6 legacy delegates and unknown names`);
 const fixture = '__fixture';
 try {
   rows[fixture] = { build: () => ({ records: [] }) };
@@ -109,7 +110,7 @@ const ctx = { DAILY_ACTIONS, state: { modal: null },
 const weeklyNames = ['weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock',
   'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs',
   // v385(fixV385b、監督者): deps.completedTask が名前付き関数 completedTaskRecord(v198 の追随)を参照するので、その依存ごと取り込む
-  'completedTaskRecord', 'fillProgressOnComplete'];
+  'completedTaskRecord', 'fillProgressOnComplete', 'zeroConnectionKey'];
 const weeklyNodes = ast.body.filter(n => (n.type === 'FunctionDeclaration' && weeklyNames.includes(n.id.name))
   || (n.type === 'VariableDeclaration' && n.declarations.some(d => d.id.name === 'COMMITMENT_SOURCE_PRIORITY')));
 vm.runInNewContext(weeklyNodes.map(n => source.slice(n.start, n.end)).join('\n') + '\n'

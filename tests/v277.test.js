@@ -44,7 +44,8 @@ function check(name, cond, extra = "") {
         width: box.width,
         maxWidth: getComputedStyle(element).maxWidth,
         pageClient: document.documentElement.clientWidth,
-        pageScroll: document.documentElement.scrollWidth
+        pageScroll: document.documentElement.scrollWidth,
+        detailColumns: element.querySelector(".detail-columns") ? getComputedStyle(element.querySelector(".detail-columns")).gridTemplateColumns.trim().split(/\s+/).length : 0
       };
     });
   };
@@ -231,15 +232,15 @@ function check(name, cond, extra = "") {
       track2Columns: getComputedStyle(element.querySelector(".twy-grid2")).gridTemplateColumns.trim().split(/\s+/).length,
       track3Columns: getComputedStyle(element.querySelector(".twy-grid3")).gridTemplateColumns.trim().split(/\s+/).length
     }));
-    check("Project詳細は560pxを超え最大960px", projectModal.width > 560 && projectModal.maxWidth === "960px", JSON.stringify(projectModal));
+    check("Project詳細は共通枠で最大1120px", projectModal.width > 560 && projectModal.width <= 1120 && projectModal.maxWidth === "1120px", JSON.stringify(projectModal));
     check("Project詳細の既存2・3列比率を維持", projectModal.fieldColumns === 2
       && projectModal.track2Columns === 2 && projectModal.track3Columns === 3, JSON.stringify(projectModal));
     await page.setViewportSize({ width: 1024, height: 900 });
     const projectBoundary = await layoutOf(".project-modal");
-    check("1024pxのProject詳細は従来560px", projectBoundary.maxWidth === "560px"
-      && projectBoundary.width <= 560 && projectBoundary.pageScroll <= projectBoundary.pageClient, JSON.stringify(projectBoundary));
+    check("1024pxのProject詳細も共通枠1120px・2列", projectBoundary.maxWidth === "1120px" && projectBoundary.detailColumns === 2
+      && projectBoundary.width > 560 && projectBoundary.width <= 1024 && projectBoundary.pageScroll <= projectBoundary.pageClient, JSON.stringify(projectBoundary));
 
-    console.log("[10] 非12WYの通常Projectも1440pxで960px、1024pxで560pxに統一する");
+    console.log("[10] 非12WYの通常Projectも共通枠1120px、1024px以上で2列");
     await page.locator(".modal-close").click();
     await page.waitForSelector(".project-modal", { state: "detached" });
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -261,12 +262,12 @@ function check(name, cond, extra = "") {
     }));
     check("通常Projectは非12WY", !normalProjectModal.is12WY && normalProjectModal.trackHidden,
       JSON.stringify(normalProjectModal));
-    check("通常Projectは1440pxで最大960px", normalProjectModal.width > 560
-      && normalProjectModal.maxWidth === "960px", JSON.stringify(normalProjectModal));
+    check("通常Projectは1440pxで最大1120px", normalProjectModal.width > 560
+      && normalProjectModal.width <= 1120 && normalProjectModal.maxWidth === "1120px", JSON.stringify(normalProjectModal));
     await page.setViewportSize({ width: 1024, height: 900 });
     const normalProjectBoundary = await layoutOf(".project-modal");
-    check("通常Projectは1024pxで従来560px", normalProjectBoundary.maxWidth === "560px"
-      && normalProjectBoundary.width <= 560 && normalProjectBoundary.pageScroll <= normalProjectBoundary.pageClient,
+    check("通常Projectは1024pxでも共通枠1120px・2列", normalProjectBoundary.maxWidth === "1120px" && normalProjectBoundary.detailColumns === 2
+      && normalProjectBoundary.width > 560 && normalProjectBoundary.width <= 1024 && normalProjectBoundary.pageScroll <= normalProjectBoundary.pageClient,
     JSON.stringify(normalProjectBoundary));
   } catch (error) {
     failures++; console.error(error.stack || error.message);
