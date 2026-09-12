@@ -193,6 +193,7 @@ async function fixture(extraNames = []) {
   core.setCommitGuard(deepCommitGuard);
   const { stamped } = await import('../src/core/mutation-stamp.js');
   const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
+  const { buildBlockDetailDraft } = await import('../src/features/block-detail.js');
   // v388 契約追随(監督者決定 2026-09-11、束B8 41c+fixB8): confirmScheduleDraft が daily-gap-placement.js の validatePlannedDraft / gapWarning を呼ぶため実物を砂場へ渡す(製品変更なし、design/CHANGELOG.md)。
   const { validatePlannedDraft, gapWarning } = await import('../src/features/daily-gap-placement.js');
   const clock = fixedClock(Date.UTC(2026, 8, 10, 10));
@@ -200,6 +201,9 @@ async function fixture(extraNames = []) {
   let failure, raw, id = 0;
   const persisted = [];
   const ctx = vm.createContext({ ...core, stamped, createDraftSaveTransaction, validatePlannedDraft, gapWarning, console: { error() {} },
+    // v393: run the real detail builder; lifecycleFixture supplies the full app wiring.
+    buildBlockDetailDraft, dailyOperationDeps: {},
+    zeroConnectionKey: () => 'fixture-connection', feedbackUiController: null, feedbackReportController: null,
     nowDateTime: () => new Date(clock()).toISOString().slice(0, 19), todayISO: () => DATE,
     draftSaveTransaction: null, _lastSaveError: null, _quotaToastShown: false, _blockSaveInFlight: false,
     _scheduleDraft: null, _draftUndo: { retained: true }, MIGRATION_RITUAL_THRESHOLD: 3,
@@ -224,7 +228,8 @@ async function fixture(extraNames = []) {
     minToHHMM: min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`,
     pad2: n => String(n).padStart(2, '0'), migrationNextCount: () => 1,
     renderModal: block => { ctx.displayedBlock = block; }, buildBlockModal: b => b,
-    setTimeout: callback => { callback(); }, modalRoot: { querySelector: () => ({ focus() {} }) }
+    setTimeout: callback => { callback(); }, modalRoot: { querySelector: selector =>
+      selector === '[data-modal-field="taskCompleted"]' ? null : ({ focus() {} }) }
   });
   vm.runInContext(functions(['makeBlock', 'openTimelineNewBlock', 'commitBlockChanges', 'updateBlockField',
     'updateCategoryField', 'confirmScheduleDraft', 'saveBlockFromModal', 'saveState', 'saveAndRender', ...extraNames]), ctx);
