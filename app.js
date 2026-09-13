@@ -9143,8 +9143,8 @@ function renderExperimentSection() {
           <label class="field-label">結論(1行)</label>
           <input class="input" id="exp-conclusion-input" style="font-size:16px" placeholder="続ける/手放す理由を1行で">
           <div class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap">
-            <button class="btn primary" data-action="experiment-keep" data-id="${exp.id}">続ける(kept)</button>
-            <button class="btn" data-action="experiment-drop" data-id="${exp.id}">手放す(dropped)</button>
+            <button class="btn primary" data-action="experiment-keep" data-id="${exp.id}">続ける</button>
+            <button class="btn" data-action="experiment-drop" data-id="${exp.id}">手放す</button>
           </div>
         </div>` : `
         <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">

@@ -352,6 +352,7 @@ async function ironJapanese(page) {
 }
 
 async function run() {
+  await require('./remaining-journal-labels.cjs')();
   const { page, browser, server } = await setup();
   try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); await settingsJapanese(page); await ironJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

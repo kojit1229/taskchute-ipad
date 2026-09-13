@@ -4598,6 +4598,43 @@ details.settings-row > .fold-summary.settings-row-summary {
 .journal-tower .muted { color: var(--tower-text); opacity: .7; }
 .journal-tower textarea.journal-free { min-height: 320px; }
 
+/* 日報の入力と生成済み本文を分け、保存済みの対象日を明示する。 */
+.journal-tower .journal-report { min-width: 0; }
+.journal-tower .journal-report > .fold-summary {
+  margin: 0;
+  cursor: default;
+  font-size: 14px;
+  letter-spacing: .02em;
+}
+.journal-tower .journal-report-help {
+  margin: 0 0 12px;
+  color: var(--tower-text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.journal-tower .journal-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.journal-tower .journal-report-actions .btn { min-height: 44px; }
+.journal-tower .journal-report-preview {
+  max-height: 65vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--tower-line);
+  background: var(--tower-bg);
+}
+.journal-tower .journal-report-empty {
+  margin: 0;
+  padding: 16px 12px;
+  border: 1px dashed var(--tower-line);
+  color: var(--tower-text);
+  font-size: 14px;
+}
+
 @media (max-width: 720px) {
   .journal-tower textarea.journal-free { min-height: 40vh; }
 }
