@@ -9205,9 +9205,12 @@ function ztRenderThemeItem(t, groupsSorted) {
   const important = t.importance === "高";
   return `
         <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
+          <div class="zt-theme-main">
           <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
-          <button class="zt-important-toggle ${important ? "on" : ""}" data-action="zt-importance-toggle" data-id="${t.id}" title="重要度: 高⇔なし" aria-label="重要度を切り替え">${important ? "❗" : "❕"}</button>
           <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${important ? `<span class="zt-theme-important">高</span>` : ""}${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag">🤖 AI提案</span>` : ""}</div>
+          </div>
+          <div class="zt-theme-actions">
+          <button class="zt-important-toggle ${important ? "on" : ""}" data-action="zt-importance-toggle" data-id="${t.id}" title="重要度: 高⇔なし" aria-label="重要度を切り替え">${important ? "❗" : "❕"}</button>
           ${groupsSorted.length ? `
           <select class="select zt-theme-group-select" data-action="zt-theme-set-group" data-id="${t.id}" aria-label="大テーマを選ぶ" title="大テーマへ割り当て">
             <option value="">未分類</option>
@@ -9215,6 +9218,7 @@ function ztRenderThemeItem(t, groupsSorted) {
           </select>` : ""}
           <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
           <button class="zt-theme-del" data-action="zt-theme-delete" data-id="${t.id}" title="削除" aria-label="このテーマを削除">×</button>
+          </div>
         </div>`;
 }
 

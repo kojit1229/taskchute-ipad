@@ -2629,8 +2629,11 @@ details.settings-row > .fold-summary.settings-row-summary {
 .zt-workspace :is(button, select) { min-height: 44px; min-width: 44px; }
 .zt-workspace .zt-write-actions { flex-wrap: wrap; }
 .zt-workspace .zt-write-head { flex-wrap: wrap; gap: 8px; }
-.zt-workspace .zt-theme-item { flex-wrap: wrap; }
-.zt-workspace .zt-theme-text { order: -1; flex-basis: 100%; overflow-wrap: anywhere; }
+.zt-workspace .zt-theme-item { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+.zt-theme-main { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 11px; min-width: 0; }
+.zt-theme-main .zt-star { flex-shrink: 0; }
+.zt-workspace .zt-theme-text { order: 0; flex: 1; min-height: 44px; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.zt-theme-actions { display: flex; align-items: center; gap: 6px; }
 .zt-workspace .zt-plabel { flex-wrap: wrap; }
 .zt-workspace .zt-plabel-spacer { min-width: 0; }
 .zt-workspace .zt-day-count { text-align: left; }
