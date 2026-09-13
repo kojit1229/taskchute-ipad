@@ -40,7 +40,7 @@ test('212 nested track edit: milestone and parent advance together above future 
 test('212 twelve week: actual old entry restores weekly records and suppresses toast; retry persists once', async () => {
   const { createDraftSaveTransaction } = await moduleAt('src/features/draft-save.js');
   const { runDailyOperation } = await moduleAt('src/features/daily-operations.js');
-  const { buildTwelveWeekDraft } = await moduleAt('src/features/twelve-week-save.js');
+  const { buildTwelveWeekDraft, twelveWeekSaveOperation } = await moduleAt('src/features/twelve-week-save.js');
   const clock = fixedClock(Date.UTC(2026, 8, 13, 1));
   const now = () => new Date(clock()).toISOString().slice(0, 19);
   const block = { id: 'b', date: '2026-09-13', actualEndAt: '2026-09-13T00:59:00' };
@@ -49,7 +49,7 @@ test('212 twelve week: actual old entry restores weekly records and suppresses t
     todayISO: () => '2026-09-13', nowDateTime: now, weekRange: () => ({ weekStart: '2026-09-12' }),
     candidateBlocksForWeek: s => s.blocks,
     commitmentItemForBlock: (s, b, weekStart) => ({ id: `wci_${weekStart}_${b.id}`, recordType: 'item', weekStart }),
-    buildTwelveWeekDraft, runDailyOperation, saveState() { assert.equal(ctx.draftSaveTransaction.active, true); } });
+    buildTwelveWeekDraft, twelveWeekSaveOperation, runDailyOperation, saveState() { assert.equal(ctx.draftSaveTransaction.active, true); } });
   let fail = true, writes = 0, sync = 0, toast = 0;
   ctx.maybeShowTrackProgressToast = () => toast++;
   ctx.draftSaveTransaction = createDraftSaveTransaction({ getState: () => ctx.state, setState: s => { ctx.state = s; },

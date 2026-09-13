@@ -18,7 +18,7 @@ const code = names.map(name => { const n = ast.body.find(n => n.type === 'Functi
 
 async function fixture() {
   const { createDraftSaveTransaction } = await moduleAt('src/features/draft-save.js');
-  const { runDailyOperation } = await moduleAt('src/features/daily-operations.js');
+  const { runDailyOperation, DAILY_OPERATIONS } = await moduleAt('src/features/daily-operations.js');
   const { commitLifecycleDraft } = await moduleAt('src/features/lifecycle-save.js');
   const { buildTwelveWeekDraft } = await moduleAt('src/features/twelve-week-save.js');
   const { buildDailyReport } = await moduleAt('src/core/daily-report.js');
@@ -32,7 +32,7 @@ async function fixture() {
     recurrences: [{ id: 'r', kind: 'daily', streakSince: block.date }, { id: 'follow', anchor: 'r', title: 'follow' }],
     habitStreaks: {}, pomodoro: { running: false }, dataModifiedAt: '2026-09-13T10:05:00' },
     _quickCompleteSnapshots: {}, _pendingInterruptBlockId: 'typed-interrupt',
-    runDailyOperation, buildTwelveWeekDraft, buildDailyReport, REPORT_PENDING: 'pending',
+    runDailyOperation, DAILY_OPERATIONS, commitLifecycleDraft, buildTwelveWeekDraft, buildDailyReport, REPORT_PENDING: 'pending',
     todayISO: () => block.date, nowDateTime: now, fromLocalInput: v => v || '',
     weekRange: () => ({ weekStart: '2026-09-12' }), candidateBlocksForWeek: s => s.blocks.filter(b => b.taskId),
     commitmentItemForBlock: (s, b, weekStart) => ({ id: `wci_${weekStart}_${b.id}`, recordType: 'item', weekStart, blockId: b.id }),

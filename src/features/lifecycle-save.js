@@ -36,7 +36,7 @@ export function buildLifecycleDraft(input, deps) {
     return JSON.stringify(prior) === JSON.stringify(after) ? [] : [{ kind, before: prior, after }];
   }));
   for (const date of affectedReportDates(state, { records: changes })) {
-    if (!state.archivedDates?.includes(date)) applyCandidate(state, buildDailyReport(state, { reportDate: date }, deps.reportDeps));
+    if (!state.archivedDates?.includes(date)) applyCandidate(state, (deps.reportBuild || buildDailyReport)(state, { reportDate: date }, deps.reportDeps));
   }
   const stamp = prepareRelatedStamps(before, state, kinds, deps.now());
   for (const [id, habit] of Object.entries(state.habitStreaks || {})) {

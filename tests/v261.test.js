@@ -120,20 +120,20 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     && updatedMs.plannedDate === "2026-01-01");
   check("plannedDate変更でoriginalPlannedDate・doneChangedAtは不変", updatedMs.originalPlannedDate === "2026-09-01"
     && updatedMs.doneChangedAt === "old-done-change");
-  check("節目と親trackのupdatedAtを同じnowへ伝播", updatedMs.updatedAt === dataSandbox.now
-    && updatedTrack.updatedAt === dataSandbox.now);
+  check("節目と親trackのupdatedAtを実時計+1秒へ伝播", updatedMs.updatedAt === "2026-08-24T11:00:01"
+    && updatedTrack.updatedAt === updatedMs.updatedAt);
   check("節目更新成功時saveStateは1回", dataSandbox.saveCalls === 1);
 
   dataSandbox.now = "2026-08-24T11:01:00";
   dataSandbox.updateTrackMilestone("ms-track", "ms-1", { doneAt: "2026-08-24" });
   updatedMs = dataSandbox.state.tracks[0].milestones[0];
   check("done ONでdoneAt/doneChangedAtを更新しoriginalは不変", updatedMs.doneAt === "2026-08-24"
-    && updatedMs.doneChangedAt === dataSandbox.now && updatedMs.originalPlannedDate === "2026-09-01");
+    && updatedMs.doneChangedAt === "2026-08-24T11:01:01" && updatedMs.originalPlannedDate === "2026-09-01");
   dataSandbox.now = "2026-08-24T11:02:00";
   dataSandbox.updateTrackMilestone("ms-track", "ms-1", { doneAt: "" });
   updatedMs = dataSandbox.state.tracks[0].milestones[0];
   check("done OFF往復でdoneAtを空へ戻しdoneChangedAtだけ進める", updatedMs.doneAt === ""
-    && updatedMs.doneChangedAt === dataSandbox.now && updatedMs.originalPlannedDate === "2026-09-01");
+    && updatedMs.doneChangedAt === "2026-08-24T11:02:01" && updatedMs.originalPlannedDate === "2026-09-01");
 
   dataSandbox.state = { tracks: [milestoneTrack("ms-original", [milestone("ms-empty", {
     plannedDate: "2026-09-10", originalPlannedDate: "" })])], trackMeasurements: [] };
@@ -431,7 +431,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     let msTrackState = stateAfter.tracks.find((track) => track.id === "m-track");
     let msState = msTrackState.milestones.find((entry) => entry.id === "ms-a");
     check("B-5 #7 節目ONはdoneAt=today・親updatedAt伝播・開いたまま", msState.doneAt === TODAY
-      && msState.doneChangedAt === NOW && msTrackState.updatedAt === NOW
+      && msState.doneChangedAt === `${TODAY}T10:00:01` && msTrackState.updatedAt === msState.doneChangedAt
       && await msRow.locator(".twy-editor").count() === 1);
     check("節目ONはquiet日報・保存全体2回(日報は候補保存)", !!stateAfter.reports[TODAY]
       && await page.evaluate(() => window.__v261SaveCalls) === MILESTONE_SAVE_CALLS);

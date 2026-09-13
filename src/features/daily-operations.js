@@ -15,9 +15,6 @@ import { gapPlacementOperation } from "./daily-gap-placement.js";
 import { zeroEntryOperation } from "./zero-entry.js";
 import { towerJournalOperation } from "./tower-journal.js";
 import { dailyReadingOpenOperation, dailyReadingRecordOperation } from "./daily-reading.js";
-import { recurrenceSaveOperation } from "./recurrence-save.js";
-import { twelveWeekSaveOperation } from "./twelve-week-save.js";
-import { lifecycleSaveOperation } from "./lifecycle-save.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -30,9 +27,9 @@ const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); }
 const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](input) });
 
 export const DAILY_OPERATIONS = {
-  "recurrence-related-save": recurrenceSaveOperation,
-  "twelve-week-related-save": twelveWeekSaveOperation,
-  "lifecycle-related-save": lifecycleSaveOperation,
+  "recurrence-related-save": legacy("recurrence-related-save"),
+  "twelve-week-related-save": legacy("twelve-week-related-save"),
+  "lifecycle-related-save": legacy("lifecycle-related-save"),
   "daily-reading-open": dailyReadingOpenOperation,
   "daily-reading-record": dailyReadingRecordOperation,
   "save-tower-journal": towerJournalOperation,

@@ -51,7 +51,8 @@ export function createDraftSaveTransaction({ getState, setState, persist, now, f
               if (!transaction.ready) throw Object.assign(new Error("Invalid editor save"), { invalid: true });
               draft = getState();
             } finally { current = null; setState(before); }
-            const records = [], values = [], orders = [], candidates = [];
+            // Imported state can carry a newer global clock than the pre-save state.
+            const records = [], values = [], orders = [], candidates = [draft.dataModifiedAt];
             for (const kind of kinds || new Set([...Object.keys(before), ...Object.keys(draft)])) {
               if (kind === "dataModifiedAt" || content(before[kind]) === content(draft[kind])) continue;
               const old = snapshot[kind], next = draft[kind];

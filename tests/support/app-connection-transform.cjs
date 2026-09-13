@@ -78,3 +78,19 @@ function transformApp(source){
  return source;
 }
 module.exports={transformApp,transformStorage,wiring};
+
+// Legacy unit sandboxes test the work itself; transaction persistence is covered separately.
+function installTwelveWeekVm(sandbox) {
+ const transaction = sandbox.draftSaveTransaction ||= {
+  active: false, run(work) { work(); return { ok: true }; }
+ };
+ transaction.complete ||= effect => { effect?.(); return true; };
+ transaction.defer ||= effect => { effect(); return true; };
+ sandbox.runTwelveWeekChange = work => {
+  const active = transaction.active;
+  transaction.active = true;
+  try { return work(); } finally { transaction.active = active; }
+ };
+ return sandbox;
+}
+module.exports.installTwelveWeekVm = installTwelveWeekVm;

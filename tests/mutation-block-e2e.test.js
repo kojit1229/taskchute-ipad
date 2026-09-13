@@ -195,7 +195,8 @@ async function fixture(extraNames = []) {
   const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
   const { buildBlockDetailDraft } = await import('../src/features/block-detail.js');
   const { commitLifecycleDraft } = await import('../src/features/lifecycle-save.js');
-  const { runDailyOperation } = await import('../src/features/daily-operations.js');
+  // fixV398(監督者追随 2026-09-13): lifecycleSaveDeps が日報再生成を登録表の行 daily-report-refresh 経由にしたため実物の登録表を砂場へ渡す(製品変更なし)。
+  const { runDailyOperation, DAILY_OPERATIONS } = await import('../src/features/daily-operations.js');
   // v388 契約追随(監督者決定 2026-09-11、束B8 41c+fixB8): confirmScheduleDraft が daily-gap-placement.js の validatePlannedDraft / gapWarning を呼ぶため実物を砂場へ渡す(製品変更なし、design/CHANGELOG.md)。
   const { validatePlannedDraft, gapWarning } = await import('../src/features/daily-gap-placement.js');
   const clock = fixedClock(Date.UTC(2026, 8, 10, 10));
@@ -204,7 +205,7 @@ async function fixture(extraNames = []) {
   const persisted = [];
   const ctx = vm.createContext({ ...core, stamped, createDraftSaveTransaction, validatePlannedDraft, gapWarning, console: { error() {} },
     // v393: run the real detail builder; lifecycleFixture supplies the full app wiring.
-    buildBlockDetailDraft, commitLifecycleDraft, runDailyOperation, dailyOperationDeps: {},
+    buildBlockDetailDraft, commitLifecycleDraft, runDailyOperation, DAILY_OPERATIONS, dailyOperationDeps: {},
     _quickCompleteSnapshots: {}, _pendingInterruptBlockId: null,
     dailyReading: { open() {}, close() {}, current: () => null },
     recurrenceMatchesDate: () => false, makeRecurrenceInstance: () => null,
@@ -428,10 +429,9 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
     expectRestored(snapshots, clone(f.ctx._quickCompleteSnapshots));
     assert.equal(f.counts.timer + f.counts.tracking + f.counts.close + f.counts.render + f.counts.autoSync + f.counts.autoSave, 0);
     if (name === 'task completion') {
-      // Task precedes the Block boundary and intentionally is not rolled back in 15b.
-      assert.equal(f.ctx.state.tasks[0].status, 'completed');
-      // Recreate the same completion intent for the isolated Block retry check.
-      f.ctx.state.tasks = clone(before.tasks);
+      // fixR2C: Task and Block roll back together; retry the unchanged intent.
+      assert.equal(f.ctx.state.tasks[0].status, 'todo');
+      expectRestored(before.tasks, clone(f.ctx.state.tasks));
     }
     f.fail(null);
     execute();

@@ -35,7 +35,7 @@ import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
 import { REPORT_PENDING, buildDailyReport } from "./src/core/daily-report.js";
 import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
-import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
+import { DAILY_OPERATIONS, runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
@@ -48,7 +48,8 @@ import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/featur
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
-import { buildTwelveWeekDraft, prepareRelatedStamps } from "./src/features/twelve-week-save.js";
+import { twelveWeekSaveOperation, buildTwelveWeekDraft, prepareRelatedStamps } from "./src/features/twelve-week-save.js";
+import { recurrenceSaveOperation } from "./src/features/recurrence-save.js";
 import { commitLifecycleDraft } from "./src/features/lifecycle-save.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
@@ -3975,11 +3976,17 @@ function runTwelveWeekChange(work) {
   if (draftSaveTransaction.lifecycleBuilding) return work();
   const deps = { transaction: draftSaveTransaction, state: () => state, now: nowDateTime };
   return draftSaveTransaction.active ? buildTwelveWeekDraft({ work }, deps)
-    : runDailyOperation("twelve-week-related-save", { work }, deps);
+    : runDailyOperation("twelve-week-related-save", { work }, { legacy: {
+      "twelve-week-related-save": input => twelveWeekSaveOperation.run(input, deps) } });
 }
 
 function lifecycleSaveDeps() {
-  return { transaction: draftSaveTransaction, state: () => state, now: nowDateTime, reportDeps: dailyOperationDeps,
+  return { transaction: draftSaveTransaction, state: () => state, now: nowDateTime,
+    reportBuild: (...args) => DAILY_OPERATIONS["daily-report-refresh"].build(...args),
+    reportDeps: { ...dailyOperationDeps, captureReport: (source, date) => {
+      ensureJournal(date);
+      return dailyOperationDeps.captureReport(source, date);
+    } },
     related: result => {
       for (const { kind, before, after } of result.records || []) {
         if (kind !== "blocks" || !after) continue;
@@ -3997,7 +4004,8 @@ function lifecycleSaveDeps() {
 
 function runLifecycleChange(work) {
   const quick = JSON.parse(JSON.stringify(_quickCompleteSnapshots)), pending = _pendingInterruptBlockId;
-  const result = runDailyOperation("lifecycle-related-save", { work }, lifecycleSaveDeps());
+  const result = runDailyOperation("lifecycle-related-save", { work }, { legacy: {
+    "lifecycle-related-save": input => commitLifecycleDraft(input, lifecycleSaveDeps()) } });
   if (!result.ok) { _quickCompleteSnapshots = quick; _pendingInterruptBlockId = pending; }
   return result.ok;
 }
@@ -10702,6 +10710,8 @@ function generateReport(dateArg, { quiet = false } = {}) {
     return state.reports[date] === REPORT_PENDING ? "" : state.reports[date] || "";
   }
   if (draftSaveTransaction?.active) {
+    state.journals = { ...state.journals };
+    ensureJournal(date);
     const result = buildDailyReport(state, { reportDate: date }, dailyOperationDeps);
     state.reports[date] = result.report;
     return result.pending ? "" : result.report;
@@ -10759,13 +10769,15 @@ function importData(file) {
       const next = normalizeState(loaded);
       // バックアップはトークンを含まないので、この端末のトークンを引き継ぐ
       if (!next.settings.github.token) next.settings.github.token = token;
+      draftSaveTransaction.run(() => {
       setState(next);
       invalidateFeedbackConnection();
       invalidateKaradaConnection();
       invalidateFundConnection();
     invalidateVisionConnection();
-      maintainRecurrences({ purge: true });
-      saveAndRender("データをインポートしました");
+        maintainRecurrences({ purge: true });
+        saveAndRender("データをインポートしました");
+      });
     } catch {
       showToast("JSONを読み込めませんでした");
     }
@@ -11467,12 +11479,14 @@ async function restoreBackup(name) {
     loaded.singleSchedules = mergeStoredSingleSchedules(state.singleSchedules, loaded.singleSchedules).stored;
     const next = normalizeState(loaded);
     next.settings.github = { ...next.settings.github, ...currentGithubSettings };
+    draftSaveTransaction.run(() => {
     setState(next);
     maintainRecurrences({ purge: true });
     closeModal();
     // saveState = dataModifiedAt を今に更新。「復元」をこの端末発の最新変更として扱うことで、
     // 直後の自動 pull がリモート(誤同期後の状態)で復元を黙って上書きするのを防ぐ。
     saveAndRender(`📦 ${dateLabel} 時点に復元しました。内容を確認してください`);
+    });
   } catch (error) {
     showToast(`復元失敗: ${error.message}`);
   }
@@ -13109,7 +13123,8 @@ function removeUntouchedInstances(ruleId, { fromDate = "", excludeId = "" } = {}
 }
 
 function runRecurrenceChange(work) {
-  return runDailyOperation("recurrence-related-save", { work }, { transaction: draftSaveTransaction });
+  return runDailyOperation("recurrence-related-save", { work }, { legacy: {
+    "recurrence-related-save": input => recurrenceSaveOperation.run(input, { transaction: draftSaveTransaction }) } });
 }
 
 function archiveHabitPinPeriod(rule) {
@@ -15422,6 +15437,8 @@ function runDailyOpen({ force = false } = {}) {
   const today = todayISO();
   const isNewDay = state.settings.lastOpenedDate !== today;
   if (!force && !isNewDay) return false;
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => runDailyOpen({ force })).ok && isNewDay;
+  draftSaveTransaction.complete();
   maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
   if (isNewDay) {
     state.settings.lastOpenedDate = today;

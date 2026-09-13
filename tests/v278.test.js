@@ -93,9 +93,10 @@ const block = (id, ruleId, title = "朝の読書") => ({
     await page.waitForFunction(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).recurrences.find((item) => item.id === "daily")?.streakSince === TODAY, { KEY, TODAY });
     const fixed = await storedRule("daily");
     const fixedModifiedAt = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).dataModifiedAt, KEY);
-    check("ONでstreakSinceへ当日を付与しupdatedAt更新", fixed.streakSince === TODAY && fixed.updatedAt === `${TODAY}T10:00:00`, JSON.stringify(fixed));
-    // 設計03「新旧の保存が交差しても更新時刻を戻さない」: 全体時刻は比較対象と実時計の最大値+1秒(ON/OFF共通)。
-    check("ONはsaveState経由でdataModifiedAt更新", fixedModifiedAt === `${TODAY}T10:00:01`, fixedModifiedAt);
+    check("ONでstreakSinceへ当日を付与しupdatedAt更新", fixed.streakSince === TODAY && fixed.updatedAt === `${TODAY}T10:00:01`, JSON.stringify(fixed));
+    // 関連保存でruleは実時計+1秒。ON直前の全体時刻10:00:02を下限に全体は10:00:03。
+    // OFFは実時計10:05:00→rule 10:05:01→全体10:05:02(max(比較対象, 実時計)+1秒)。
+    check("ONはsaveState経由でdataModifiedAt更新", fixedModifiedAt === `${TODAY}T10:00:03`, fixedModifiedAt);
     await page.locator('.nav-button[data-view="instruments"]').click();
     await page.waitForSelector('.instr-habit-panel');
     check("固定化したルーティンがINSTRUMENTSのHABITパネルへ出現", (await page.locator('.instr-habit-panel').first().textContent()).includes("朝の読書"));
@@ -114,8 +115,8 @@ const block = (id, ruleId, title = "朝の読書") => ({
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).recurrences.find((item) => item.id === "daily")?.streakSince === null, KEY);
     const unfixed = await storedRule("daily");
     const unfixedModifiedAt = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).dataModifiedAt, KEY);
-    check("OFFでstreakSinceを解除しupdatedAt更新", unfixed.streakSince === null && unfixed.updatedAt === `${TODAY}T10:05:00`, JSON.stringify(unfixed));
-    check("OFFもsaveState経由でdataModifiedAt更新", unfixedModifiedAt === `${TODAY}T10:05:01`, unfixedModifiedAt);
+    check("OFFでstreakSinceを解除しupdatedAt更新", unfixed.streakSince === null && unfixed.updatedAt === `${TODAY}T10:05:01`, JSON.stringify(unfixed));
+    check("OFFもsaveState経由でdataModifiedAt更新", unfixedModifiedAt === `${TODAY}T10:05:02`, unfixedModifiedAt);
     await page.reload();
     await page.waitForSelector('.today-tower');
     check("OFFはreload後も維持", (await storedRule("daily")).streakSince === null);

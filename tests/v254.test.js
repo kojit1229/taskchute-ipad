@@ -57,7 +57,7 @@ const instrumentedTrackUiSource = trackUiSource.replace(
 console.log("[0] 共通フック契約と全経路の機械検査");
 async function checkHooks() {
   const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
-  const { buildTwelveWeekDraft } = await import('../src/features/twelve-week-save.js');
+  const { twelveWeekSaveOperation, buildTwelveWeekDraft } = await import('../src/features/twelve-week-save.js');
   const { runDailyOperation } = await import('../src/features/daily-operations.js');
   const hookStart = appSource.indexOf("function trackOnBlockStarted(");
   const hookEnd = appSource.indexOf("function excuseCommitmentItem(", hookStart);
@@ -65,7 +65,7 @@ async function checkHooks() {
   const hookSource = `function maybeShowTrackProgressToast(block) { calls.push(\`toast:\${block.id}\`); }\n`
     + appSource.slice(hookStart, hookEnd);
   const sandbox = {
-    calls, buildTwelveWeekDraft, runDailyOperation,
+    calls, twelveWeekSaveOperation, buildTwelveWeekDraft, runDailyOperation,
     state: { weeklyCommitments: [], tracks: [], trackMeasurements: [], projects: [] },
     nowDateTime: () => "2026-09-13T10:00:00",
     autoCommitWeekIfNeeded: (block) => calls.push(`auto:${block.id}`),
@@ -293,17 +293,12 @@ async function checkHooks() {
     const spies = await hookSpies();
     const routeCalls = spies.completions.filter((call) => call.blockId === blockId);
     check(`${label}: 完了フックを1回呼ぶ`, routeCalls.length === 1, JSON.stringify(spies));
-    check(`${label}: interactive=${interactive}`,
-      routeCalls[0]?.interactive === interactive && routeCalls[0]?.isNowCompleted === true,
+    check(`${label}: 日次終了の候補フックはfalse・旧入口はinteractive指定を保持`,
+      routeCalls[0]?.interactive === (expectedSaveCalls === "daily-end" ? false : interactive) && routeCalls[0]?.isNowCompleted === true,
       JSON.stringify(routeCalls));
     check(`${label}: interactive経路だけ進捗トースト判定を1回呼ぶ`,
       spies.toasts.filter((id) => id === blockId).length === (interactive ? 1 : 0), JSON.stringify(spies));
-    // v386 契約追随(監督者決定 2026-09-11、束B6 単位33/34、design/CHANGELOG.md): 完了で日報の内容が変わるため、
-    // 完了の保存が成立した後に登録行 daily-report-refresh が日報を候補保存で書く(旧 generateReport(quiet) の
-    // saveState() ではなく commitCandidate の persist)。よって完了経路は saveState が1回減り、
-    // 最後の localStorage 書き込みに対象日の日報が入る。日報が書かれたことを断言して検査を減らさない。
-    // 例外: "atomic-new"(新規繰り返し保存出口)は実績(actualEndAt)のない新規 Block なので日報の対象外
-    // (src/core/daily-report.js affectedReportDates は actualEndAt のある Block だけ)=B6 前と同じ書き込み1回。
+    // fixR2C: 日報を含めた候補をpersist1回で保存する。実績なし新規Blockは日報対象外。
     const expectsReport = expectedSaveCalls !== "atomic-new";
     const lastWrite = spies.writes[spies.writes.length - 1];
     const lastDate = lastWrite?.blocks.find((entry) => entry.id === blockId)?.date;
@@ -315,9 +310,9 @@ async function checkHooks() {
       const saved = spies.writes[0];
       const savedBlock = saved?.blocks.find((entry) => entry.id === blockId);
       const savedItem = saved?.weeklyCommitments.find((entry) => entry.id === `wci_${WEEK_START}_${blockId}`);
-      // v386 契約追随: 2回目の書き込みは日報の候補保存(上で断言)。Block と刻印は1回目の snapshot で一緒に永続化。
-      check(`${label}: 完了Blockと刻印を同じsnapshotで1回だけ永続化${expectsReport ? "(2回目は日報)" : ""}`,
-        spies.writes.length === (expectsReport ? 2 : 1)
+      // fixR2C: Block・刻印・対象日の日報を唯一のsnapshotで検査する。
+      check(`${label}: 完了Blockと刻印を同じsnapshotで1回だけ永続化${expectsReport ? "(日報込み)" : ""}`,
+        spies.writes.length === 1
         && savedBlock?.completed === true && Boolean(savedItem?.completedAt)
         // v379: 観測時刻(completedChangedAt)は実時計のまま、updatedAt は変更順の時刻(候補の最大値+1秒)なので同値にならない(設計03)。
         && savedItem.updatedAt >= savedItem.completedChangedAt
@@ -326,28 +321,26 @@ async function checkHooks() {
         && saved.dataModifiedAt >= savedItem.updatedAt && savedItem.updatedAt > OLD,
         JSON.stringify({ writes: spies.writes.length, savedBlock, savedItem }));
     } else if (expectedSaveCalls === "daily-end") {
-      // v385 契約追随(監督者決定 2026-09-11): commitCandidate→hook→stamp save→final save。
-      // v386 契約追随(監督者決定 2026-09-11、束B6): 旧 final save(generateReport quiet の saveState)は
-      // 登録行 daily-report-refresh の候補保存に置き換わった=saveState 2→1、書き込みは3回のまま(3回目が日報)。
-      check(`${label}: 候補保存1回がフックに先行し刻印後に日報を候補保存`,
-        spies.writes.length === 3 && spies.saves.length === 1
+      check(`${label}: フックと刻印を候補に含めpersist1回・成功後toast1回`,
+        spies.writes.length === 1 && spies.saves.length === 1
         && JSON.stringify(spies.order) === JSON.stringify(["completion", "save", "toast"])
-        && JSON.stringify(spies.writeOrders) === JSON.stringify([[], ["completion", "save"], ["completion", "save", "toast"]])
-        && spies.writes.every(s => s.blocks.find(b => b.id === blockId)?.completed === true)
-        && spies.writes[0].weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`)?.completedAt === ""
-        && spies.writes.slice(1).every(s => {
-          const item = s.weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`);
-          return Boolean(item?.completedAt) && item.completedAt === record.completedAt
-            && item.completedChangedAt === record.completedChangedAt;
-        }), JSON.stringify(spies));
+        && JSON.stringify(spies.writeOrders) === JSON.stringify([["completion", "save"]])
+        && spies.writes[0].blocks.find(b => b.id === blockId)?.completed === true
+        && spies.writes[0].weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`)?.completedAt === record.completedAt
+        && spies.writes[0].weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`)?.completedChangedAt === record.completedChangedAt,
+        JSON.stringify(spies));
     } else {
-      check(`${label}: saveState呼び出し回数`, spies.saves.length === expectedSaveCalls,
-        JSON.stringify(spies.order));
+      check(`${label}: 内部saveState2回・persist1回に完了と刻印を包含`,
+        spies.saves.length === 2 && spies.writes.length === 1
+        && spies.writes[0].blocks.find(b => b.id === blockId)?.completed === true
+        && spies.writes[0].weeklyCommitments.find(e => e.id === `wci_${WEEK_START}_${blockId}`)?.completedChangedAt === record.completedChangedAt,
+        JSON.stringify(spies));
     }
     const completionIndex = spies.order.indexOf("completion");
-    if (expectedSaveCalls !== "daily-end") check(`${label}: 保存確定後にフック、刻印後にも保存`,
-      spies.order.slice(0, completionIndex).includes("save")
-        && spies.order.slice(completionIndex + 1).includes("save"), JSON.stringify(spies.order));
+    if (expectedSaveCalls !== "daily-end") check(`${label}: フックと刻印がpersist前・toastは成功後`,
+      completionIndex >= 0 && spies.writeOrders.length === 1
+        && spies.writeOrders[0].includes("completion") && !spies.writeOrders[0].includes("toast")
+        && spies.order.slice(completionIndex + 1).includes("save"), JSON.stringify(spies));
     check(`${label}: completedChangedAt/item.updatedAt/dataModifiedAtを同時刻で永続化`,
       Boolean(record?.completedChangedAt) && record.updatedAt >= record.completedChangedAt // v379: 観測時刻≦変更順時刻(設計03)
         && state.dataModifiedAt >= record.updatedAt && record.updatedAt > OLD, // v379: 全体時刻は記録の時刻+1秒以上(設計03、K決定C)
@@ -423,8 +416,8 @@ async function checkHooks() {
     console.log("[2] 開始3経路を個別に自動確定");
     function checkCandidateStart(label, blockId, spies, meta) {
       const saved = spies.writes[0];
-      check(`${label}: 開始スパイ0回、開始とauto週メタを同じ保存1回で永続化`,
-        spies.starts.length === 0 && spies.writes.length === 1
+      check(`${label}: 開始スパイ1回、開始とauto週メタを同じ保存1回で永続化`,
+        spies.starts.length === 1 && spies.starts[0] === blockId && spies.writes.length === 1
         && Boolean(saved?.blocks.find(b => b.id === blockId)?.actualStartAt)
         && meta?.committedVia === "auto"
         && JSON.stringify(saved?.weeklyCommitments.find(e => e.id === `wcw_${WEEK_START}`)) === JSON.stringify(meta),

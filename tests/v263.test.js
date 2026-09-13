@@ -84,6 +84,7 @@ sandbox.maybeShowTrackProgressToast = () => {};
 sandbox.saveState = () => { sandbox.saveCount += 1; };
 vm.createContext(sandbox);
 vm.runInContext(appSource.slice(coreStart, coreEnd), sandbox);
+require('./support/app-connection-transform.cjs').installTwelveWeekVm(sandbox);
 function coreState(blockDate) {
   return { settings: { twelveWeekStartDate: CYCLE }, projects: [{ id: "p", kind: "normal", status: "active", deleted: false }],
     tasks: [{ id: "t", projectId: "p", status: "todo", deleted: false }],

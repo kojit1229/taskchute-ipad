@@ -26,11 +26,12 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 
 (async () => {
   const trackCore = await import(pathToFileURL(path.join(ROOT, "src", "core", "track.js")).href);
+  const { prepareRelatedStamps } = await import("../src/features/twelve-week-save.js");
   let currentNow = "2026-08-24T12:34:56";
   let uuidCount = 0;
   let confirmResult = true;
   const sandbox = {
-    String, Number, Boolean, Map, Set,
+    String, Number, Boolean, Map, Set, prepareRelatedStamps,
     activeTrackForProject: trackCore.activeTrackForProject,
     dateParts: trackCore.dateParts,
     latestMeasurement: trackCore.latestMeasurement,
@@ -59,6 +60,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
   };
   vm.createContext(sandbox);
   vm.runInContext(trackSource + deleteSource + projectTrackSaveSource + projectSaveSource, sandbox);
+  require('./support/app-connection-transform.cjs').installTwelveWeekVm(sandbox);
 
   function project(id = "p1", extra = {}) {
     return {
