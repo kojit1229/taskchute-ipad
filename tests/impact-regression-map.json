@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "recurrence-save": {
+      "paths": ["^src/features/recurrence-save\\.js$"],
+      "suites": ["recurrence-core", "v59", "mutation-recurrence-e2e"]
+    },
     "daily-reading-report": {
       "paths": ["^src/features/feedback/report-(input|builder|derived)\\.js$", "^src/core/recurrence\\.js$"],
       "suites": ["daily-reading-core", "daily-reading-e2e", "recurrence-core", "v276"]

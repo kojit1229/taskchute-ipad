@@ -34,11 +34,12 @@ import { readingMark } from "./daily-reading.js";
 let todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock;
 let RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS;
 let getState;
+let mutate, mutationActive;
 
 function configureRecurrence(deps) {
   ({
     todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock,
-    RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, getState
+    RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS, getState, mutate, mutationActive
   } = deps);
 }
 
@@ -127,6 +128,7 @@ function findActiveDuplicateRecurrenceRule(title, startTime) {
 // 戻り値: 作成したルール。重複検知時は作成せず null(呼び出し側はトースト表示済みとして扱う)。
 // (元routine.js:720-751、逐語コピー。stateアクセスをgetState()経由に変更)
 function createRecurrenceRule(block, kind) {
+  if (mutate && !mutationActive()) return mutate(() => createRecurrenceRule(block, kind));
   const state = getState();
   const title = block.title || "繰り返しBlock";
   const startTime = block.plannedStartAt ? (block.plannedStartAt.split("T")[1] || "") : "";
@@ -204,6 +206,7 @@ function ensureChainRun(chainId) {
 // (v219で表示UIは削除。既存データへの記録挙動は温存する。詳細はdecisions.md参照)。
 // (元routine.js:759-782、逐語コピー。stateアクセスをgetState()経由に変更)
 function triggerAnchorPlacements(anchorId, completedAtDateTime) {
+  if (mutate && !mutationActive()) return mutate(() => triggerAnchorPlacements(anchorId, completedAtDateTime));
   const state = getState();
   if (!anchorId || !completedAtDateTime) return;
   const today = todayISO();
@@ -233,6 +236,7 @@ function triggerAnchorPlacements(anchorId, completedAtDateTime) {
 // purge=true で「期間外 かつ 未編集」の繰り返し実体を破棄しファイルを小さく保つ。
 // (元routine.js:786-826、逐語コピー。stateアクセスをgetState()経由に変更)
 function maintainRecurrences({ purge = false } = {}) {
+  if (mutate && !mutationActive()) return mutate(() => maintainRecurrences({ purge }));
   const state = getState();
   state.recurrences ||= [];
   state.blocks ||= [];

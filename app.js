@@ -438,7 +438,9 @@ configureJournal({
 configureRecurrence({
   todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock,
   RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS,
-  getState: () => state
+  getState: () => state,
+  mutate: work => runRecurrenceChange(work),
+  mutationActive: () => !draftSaveTransaction || draftSaveTransaction.active
 });
 // v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
 configureTimelineLayout({ minutesOf, nowDateTime });
@@ -492,7 +494,7 @@ registerActions({
   "tower-gate-add": () => addTowerGate(),
   "tower-gate-delete": ({ target }) => endGateRecurrence(target.dataset.ruleId),
   "tower-gate-move": ({ target }) => moveTowerGate(target.dataset.ruleId, Number(target.dataset.direction)),
-  "tower-gate-streak-toggle": ({ target }) => {
+  "tower-gate-streak-toggle": ({ target }) => runRecurrenceChange(() => {
     const rule = (state.recurrences || []).find((item) => item.id === target.dataset.ruleId && !item.deleted);
     const streakEdit = habitStreakEdit(rule, rule?.kind, target.checked);
     if (!streakEdit.ok) {
@@ -505,7 +507,7 @@ registerActions({
       ? { ...item, streakSince: streakEdit.value, updatedAt: nowDateTime() }
       : item);
     saveAndRender(streakEdit.value ? "ルーティンを固定化しました" : "ルーティンの固定化を解除しました");
-  },
+  }),
   // --- settings(11): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理 ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;
@@ -13052,6 +13054,10 @@ function removeUntouchedInstances(ruleId, { fromDate = "", excludeId = "" } = {}
   });
 }
 
+function runRecurrenceChange(work) {
+  return runDailyOperation("recurrence-related-save", { work }, { transaction: draftSaveTransaction });
+}
+
 function archiveHabitPinPeriod(rule) {
   if (!rule?.streakSince) return false;
   state.habitPinHistory ||= {};
@@ -13075,11 +13081,13 @@ function endRecurrenceSeries(ruleId, { excludeId = "" } = {}) {
 }
 
 function endGateRecurrence(ruleId) {
+  if (!draftSaveTransaction.active) return runRecurrenceChange(() => endGateRecurrence(ruleId));
   if (!endRecurrenceSeries(ruleId)) return;
   saveAndRender("ゲートの繰り返しシリーズを終了しました");
 }
 
 function addTowerGate() {
+  if (!draftSaveTransaction.active) return runRecurrenceChange(() => addTowerGate());
   const title = (document.getElementById("towerGateTitle")?.value || "").trim();
   const time = document.getElementById("towerGateTime")?.value || "";
   if (!title || !/^\d{2}:\d{2}$/.test(time)) {
@@ -13100,6 +13108,7 @@ function addTowerGate() {
 }
 
 function moveTowerGate(ruleId, direction) {
+  if (!draftSaveTransaction.active) return runRecurrenceChange(() => moveTowerGate(ruleId, direction));
   if (direction !== -1 && direction !== 1) return;
   const rules = (state.recurrences || []).map((rule, index) => ({ rule, index }))
     .filter(({ rule }) => !rule.deleted && rule.category === "ルーティン")

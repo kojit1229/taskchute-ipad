@@ -693,6 +693,7 @@ const APP_SHELL = [
   "./src/core/habit-streak.js",
 
   "./src/core/recurrence.js",
+  "./src/features/recurrence-save.js",
 
   "./src/core/track.js",
 
