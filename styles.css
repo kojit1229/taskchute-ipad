@@ -4603,7 +4603,6 @@ details.settings-row > .fold-summary.settings-row-summary {
 .journal-tower .journal-report > .fold-summary {
   margin: 0;
   cursor: default;
-  font-size: 14px;
   letter-spacing: .02em;
 }
 .journal-tower .journal-report-help {
