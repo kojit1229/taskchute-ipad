@@ -1,4 +1,5 @@
-const CACHE_NAME = "taskchute-journal-pwa-v397";  // v397: 設定画面と筋トレ画面の表示・確認・通知の文言を日本語に(第4回公開の先行分)
+const CACHE_NAME = "taskchute-journal-pwa-v398";  // v398: 繰り返しと12週連携の関連更新に変更順時刻(候補保存1回)、開始・終了・完了の関連記録の一括保存(失敗で全部元へ戻る)
+// v397: 設定画面と筋トレ画面の表示・確認・通知の文言を日本語に(第4回公開の先行分)
 // v396: 閲覧由来の記録を日報へ渡す経路(保存は無効のまま)と、3画面の通し・失敗/日跨ぎ・スマホ/PWA の検査群
 // v395: 閲覧記録・対応設定・習慣の合流(保存は無効のまま)、実行の4〜24時と空き時間の配置枠、単発予定の新しい配置枠への接続
 // v394: 上部3ボタン(アファメーション・ビジョンボード・昨日のAIフィードバック)の表示成功と当日記録の接続(記録の保存は設定で無効のまま)
@@ -693,6 +694,9 @@ const APP_SHELL = [
   "./src/core/habit-streak.js",
 
   "./src/core/recurrence.js",
+  "./src/features/recurrence-save.js",
+  "./src/features/twelve-week-save.js",
+  "./src/features/lifecycle-save.js",
 
   "./src/core/track.js",
 

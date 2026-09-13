@@ -12,7 +12,8 @@ const deps = { state, now: () => '2026-09-10T12:00:00',
   commitCandidate: options => { commits++; return commitCandidate(options); },
   persist: () => { saves++; return true; }, scheduleSync: () => schedules++, legacy: {} };
 // S-B2b/3段-10(監督者の契約追随 2026-09-12 20:35): 内部登録行 daily-reading-record(記録は旗で無効)を save-tower-journal と同じ扱いで追加。design/CHANGELOG.md
-const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record'];
+const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record',
+  'recurrence-related-save', 'twelve-week-related-save', 'lifecycle-related-save'];
 assert.deepEqual(Object.keys(rows).sort(), [...expectedActions].sort());
 for (const name of expectedActions) {
   const before = JSON.parse(JSON.stringify(state));
@@ -96,6 +97,7 @@ assert(wiring && click, 'one shared dependency object and actual delegated click
 let listener, calls = [], routes = [], blockSaveCount = 0;
 const ctx = { DAILY_ACTIONS, state: { modal: null },
   mergeWeeklyCommitments, activeTrackForProject, isProjectInCurrentCycle,
+  commitLifecycleDraft: require("../src/features/lifecycle-save.js").commitLifecycleDraft,
   openDeclareModal: (...args) => calls.push(['open-declare', ...args]),
   openReportModal: (...args) => calls.push(['open-report', ...args]),
   runDailyOperation: (name, input, injected) => { routes.push(name); return run(name, input, injected); },
@@ -112,6 +114,11 @@ const ctx = { DAILY_ACTIONS, state: { modal: null },
   todayISO: () => '2026-09-12', recurrenceMatchesDate: () => false, makeRecurrenceInstance: () => null,
   isDailyReadingBlock: () => false, markDailyReadingEdit: value => value
 };
+ctx.lifecycleSaveDeps = () => ({ state: () => ctx.state, now: () => '2026-09-12T12:00:00',
+  transaction: require('../src/features/draft-save.js').createDraftSaveTransaction({
+    getState: () => ctx.state, setState: value => { ctx.state = value; },
+    now: () => '2026-09-12T12:00:00', persist: () => { throw Error('invalid route persisted'); },
+    schedule() {}, onFailure() {} }) });
 const weeklyNames = ['weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock',
   'parseDate', 'addDays', 'dateToISO', 'pad2', 'dateToLocalDateTime', 'localDateTimeToMs',
   // v385(fixV385b、監督者): deps.completedTask が名前付き関数 completedTaskRecord(v198 の追随)を参照するので、その依存ごと取り込む

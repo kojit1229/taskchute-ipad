@@ -53,6 +53,8 @@ sandbox.saveState = () => {
 };
 vm.createContext(sandbox);
 vm.runInContext(cycleSource + commitSource, sandbox);
+// fixV398b(監督者追随 2026-09-13): 2回-13 で週の確定が runTwelveWeekChange / draftSaveTransaction を経由するため砂場へ代役を注入(断言不変、製品変更なし)。
+require('./support/app-connection-transform.cjs').installTwelveWeekVm(sandbox);
 
 function project(id = "p1", twelveWeekStartDate = "2026-06-01", extra = {}) {
   return { id, kind: "normal", status: "active", twelveWeekStartDate, deleted: false, ...extra };

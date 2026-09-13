@@ -291,6 +291,7 @@ class FakeToast {
     };
     vm.createContext(hookSandbox);
     vm.runInContext(hookSource, hookSandbox);
+    require('./support/app-connection-transform.cjs').installTwelveWeekVm(hookSandbox);
     hookSandbox.trackOnBlockCompletionChanged({}, false, { interactive: true });
     hookSandbox.trackOnBlockCompletionChanged({}, true, { interactive: false });
     check("完了取消・非interactiveはトースト判定を呼ばない", !hookCalls.includes("toast"));
@@ -337,7 +338,8 @@ class FakeToast {
       'import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";')
       && appSource.includes("configureTrackUi({ escapeHTML, todayISO, saveAndRender, generateReport, recordTrackMeasurement });")
       && !appSource.includes("showTrackProgressToastStub")
-      && hookSource.includes("if (interactive && isNowCompleted) maybeShowTrackProgressToast(block);"));
+      // 2回-11(v398)の契約追随: 通知は保存成功後に出す(draftSaveTransaction.defer)。条件 interactive && isNowCompleted は不変(design/CHANGELOG.md 2026-09-13 fixV398)
+      && hookSource.includes("if (interactive && isNowCompleted) draftSaveTransaction.defer(() => maybeShowTrackProgressToast(block));"));
     check("#5フックのauto→stamp→toast順とシグネチャは不変", /function trackOnBlockCompletionChanged\(block, isNowCompleted, \{ interactive = false \} = \{\}\)/.test(hookSource)
       && hookSource.indexOf("autoCommitWeekIfNeeded") < hookSource.indexOf("stampCommitmentCompletion")
       && hookSource.indexOf("stampCommitmentCompletion") < hookSource.indexOf("maybeShowTrackProgressToast"));

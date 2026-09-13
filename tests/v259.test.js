@@ -49,6 +49,7 @@ function sourceBetween(source, startMarker, endMarker) {
   };
   vm.createContext(sandbox);
   vm.runInContext(carryUiSource, sandbox);
+  require('./support/app-connection-transform.cjs').installTwelveWeekVm(sandbox);
 
   const numeric = { id: "trk-num", ownerId: "p259", kind: "numeric", status: "active" };
   sandbox.state.tracks = [numeric];
@@ -284,7 +285,8 @@ function sourceBetween(source, startMarker, endMarker) {
       && active?.baselineValue === 12 && active?.goalValue === 30 && active?.deadline === "2026-11-07"
       && active?.carriedFromTrackId === "trk-v259" && active?.cycleStartDate === NEW_CYCLE,
     JSON.stringify(active));
-    check("numeric通常carryはProject時刻を進め旧trackをcarriedで閉じる", state.projects[0].updatedAt === `${TODAY}T10:00:00`
+    // 関連保存の変更順時刻はmax(既存時刻, 実時計)+1秒。closedAtは観測時刻のまま。
+    check("numeric通常carryはProject時刻を進め旧trackをcarriedで閉じる", state.projects[0].updatedAt === `${TODAY}T10:00:01`
       && old?.closedReason === "carried" && old?.closedAt === `${TODAY}T10:00:00`
       && await page.locator(".modal-root.open").count() === 0, JSON.stringify(old));
     check("numeric通常成功も保存は実質2回", await page.evaluate(() => window.__v259SaveCount) === 2);

@@ -113,6 +113,7 @@ function syncState(extra = {}) {
   };
   vm.createContext(dataSandbox);
   vm.runInContext(updateSource, dataSandbox);
+  require('./support/app-connection-transform.cjs').installTwelveWeekVm(dataSandbox);
   const baseMs = { id: "m1", label: "本文", plannedDate: "2026-09-01", originalPlannedDate: "2026-09-01",
     doneAt: "", doneChangedAt: "", updatedAt: "2026-08-01T00:00:00", deleted: false };
   dataSandbox.state = { tracks: [{ id: "t1", kind: "milestone", status: "active", deleted: false,

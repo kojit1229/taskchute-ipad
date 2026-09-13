@@ -24,12 +24,14 @@ async function fixture() {
   const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
   const { commitCandidate, setCommitGuard } = await import('../src/core/commit.js');
   const { stamped } = await import('../src/core/mutation-stamp.js');
+  // fixV398b(監督者追随 2026-09-13): 2回-13 で saveProjectFromModal が関連記録の変更順時刻 prepareRelatedStamps を呼ぶため実物を砂場へ渡す(断言不変、製品変更なし)。
+  const { prepareRelatedStamps } = await import('../src/features/twelve-week-save.js');
   setCommitGuard(deepCommitGuard);
   let failure, raw, seq = 0;
   const counts = { writes: 0, sync: 0, render: 0, close: 0, queue: 0 };
   const inputs = { '#taskTitle': { value: 'typed task' }, '#taskProject': { value: 'p' },
     '#projectTitle': { value: 'typed project' }, '#projectKind': { value: 'normal' } };
-  const ctx = vm.createContext({ stamped, commitCandidate, Date, JSON, Map, Set,
+  const ctx = vm.createContext({ stamped, commitCandidate, prepareRelatedStamps, Date, JSON, Map, Set,
     crypto: { randomUUID: () => `new-${++seq}` }, nowDateTime: () => NOW, todayISO: () => '2026-09-10',
     document: { querySelector: selector => inputs[selector] }, window: { confirm: () => true },
     twyPlanFromFields: (_fields, previous) => previous || {}, planParentFor: () => null,

@@ -27,6 +27,9 @@ const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); }
 const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](input) });
 
 export const DAILY_OPERATIONS = {
+  "recurrence-related-save": legacy("recurrence-related-save"),
+  "twelve-week-related-save": legacy("twelve-week-related-save"),
+  "lifecycle-related-save": legacy("lifecycle-related-save"),
   "daily-reading-open": dailyReadingOpenOperation,
   "daily-reading-record": dailyReadingRecordOperation,
   "save-tower-journal": towerJournalOperation,
@@ -269,7 +272,9 @@ export function runDailyOperation(name, input, deps) {
     if (name === "daily-block-start") input = startInput(input, deps);
     if (name === "daily-block-end") input = prepareDailyEnd(input, deps);
     if (name === "daily-block-duplicate" && !input[copyReady]) return duplicateDailyBlock(input, deps);
-    return deps.commitCandidate({
+    const commit = ["daily-block-start", "daily-block-end", "daily-plan-complete", "daily-actual-edit"].includes(name)
+      && deps.commitLifecycle ? deps.commitLifecycle : deps.commitCandidate;
+    return commit({
       state: deps.state, input, persist: deps.persist, now: deps.now, floors: deps.floors,
       build: (state, values) => {
         // Schedule owners validate candidate id/fingerprint, independent of the viewed date.
@@ -284,7 +289,7 @@ export function runDailyOperation(name, input, deps) {
         // effects の例外は commitCandidate の契約どおり呼び出し元へ伝える(飲み込まない)。
         try { op.effects?.(result, input, deps); }
         finally {
-          if (!result.unchanged) {
+          if (!result.unchanged && !result.bundled) {
             try {
               if (name !== "daily-reading-record" && deps.refreshActualReports && (name !== "daily-plan-times-save"
                   || result.records.some(row => row.before?.date !== row.after?.date))) {

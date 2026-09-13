@@ -8,7 +8,7 @@ const names = ['saveState', 'saveAndRender', 'closeModal', 'submitModal', 'readM
   'runZeroEntry', 'saveZtEntry', 'applyZtEntry', 'saveZtEdit', 'applyZtEdit', 'saveTrackFromForm', 'saveProjectTrackFromModal',
   'readTrackDraft', 'autoCloseStaleRoutineRuns', 'resetPomodoroForBlock', 'transferIronLogToCompletedBlock',
   'trackOnBlockStarted', 'trackOnBlockCompletionChanged', 'autoCommitWeekIfNeeded', 'stampCommitmentCompletion',
-  'toggleTaskCompleteFromBlock', 'commitBlockChanges'];
+  'toggleTaskCompleteFromBlock', 'commitBlockChanges', 'runTwelveWeekChange', 'runLifecycleChange', 'lifecycleSaveDeps'];
 const extracted = names.map(name => {
   const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
   assert(node, name); assert.equal(node.async, false, `${name} must remain synchronous`);
@@ -23,8 +23,10 @@ const init = ast.body.find(n => n.type === 'ExpressionStatement' && n.expression
 assert(init, 'actual app transaction dependency wiring exists');
 const { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } = require('../src/features/zero-entry.js');
 const { createDailyDraftStore } = require('../src/features/daily-draft.js');
-const { runDailyOperation } = require('../src/features/daily-operations.js');
+const { commitLifecycleDraft } = require('../src/features/lifecycle-save.js');
+const { DAILY_OPERATIONS, runDailyOperation } = require('../src/features/daily-operations.js');
 const { buildBlockDetailDraft } = require('../src/features/block-detail.js');
+const { twelveWeekSaveOperation, buildTwelveWeekDraft, prepareRelatedStamps } = require('../src/features/twelve-week-save.js');
 const copy = value => JSON.parse(JSON.stringify(value));
 function setup(mode, { storageFail = true, completed = false, track = false } = {}) {
   const effects = { persisted: [], schedules: 0, renders: 0, stops: 0, post: [], toasts: [], sequence: [], dialogs: [] };
@@ -59,6 +61,7 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
     createElement: () => ({ close() {}, remove() {}, showModal() {}, setAttribute() {} }), body: { append: dialog => effects.dialogs.push(dialog) } };
   const ctx = vm.createContext({ commitCandidate, assertNotInsideBuild, state: data, document, modalRoot, modalDraftBaseline: null,
     draftSaveTransaction: null, _lastSaveError: null, _quotaToastShown: false, _blockSaveInFlight: false,
+    _quickCompleteSnapshots: {}, _pendingInterruptBlockId: null,
     _migrationRitualCtx: null, _pendingLifecycleCtx: null, _pendingBodyScanCtx: null, _aiStepConfirmCtx: null, _aiStepPending: null,
     ztCurrent: mode === 'zero-new' ? { id: 'theme', text: 'theme', fav: false, questionId: 'q' } : null,
     ztEditId: mode === 'zero-edit' ? 'past' : null, ztWriteStartedAt: 12,
@@ -86,9 +89,11 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
       ctx.state.modal = { type: 'bodyScan', id }; effects.post.push(id); effects.sequence.push('post');
     }
   });
-  Object.assign(ctx, { runDailyOperation, buildBlockDetailDraft, stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
+  Object.assign(ctx, { commitLifecycleDraft, DAILY_OPERATIONS, runDailyOperation, buildBlockDetailDraft, twelveWeekSaveOperation, buildTwelveWeekDraft, prepareRelatedStamps,
+    stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
     dailyDrafts: createDailyDraftStore({ storage: () => ({ setItem() {} }) }),
     dailyOperationDeps: { state: data, commitCandidate, now: ctx.nowDateTime,
+      captureReport: () => ({}), buildReport: () => 'fixture report',
       persist: () => { ctx.persistLocalNoSchedule(); return !ctx._lastSaveError; },
       scheduleSync: () => { ctx.scheduleAutoSave(); ctx.scheduleAutoSync(); } } });
   if (ctx.ztCurrent) {
@@ -241,4 +246,98 @@ for (const [mode, kind] of [['task', 'tasks'], ['project', 'projects'], ['block'
     }
   });
 }
-console.log(`PASS draft save transaction: ${count} cases`);
+
+
+// 222-fixR2Cc: legacy modal boundary initializes missing journals inside the candidate.
+test('legacy block date change saves initialized reports once and rolls back on failure', () => {
+  const x = setup('block');
+  const { buildDailyReport, REPORT_PENDING } = require('../src/core/daily-report.js');
+  const { captureReportInput } = require('../src/features/feedback/report-input.js');
+  const journalSource = fs.readFileSync(path.join(root, 'src/features/journal.js'), 'utf8');
+  const journalAst = acorn.parse(journalSource, { ecmaVersion: 'latest', sourceType: 'module' });
+  const journalNode = journalAst.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'ensureJournal');
+  const reportNode = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'generateReport');
+  Object.assign(x.ctx, { buildDailyReport, REPORT_PENDING, isArchivedDate: () => false,
+    defaultJournal: date => '# ' + date + ' journal' });
+  x.ctx.dailyOperationDeps.captureReport = (s, date) => captureReportInput(s, date, () => ({
+    rateTaskchute: { done: 0, total: 0, pct: 0 }, rateRoutine: { done: 0, total: 0, pct: 0 },
+    rateCycleWeek: { done: 0, total: 0, pct: 0 }, rateDeferral: { pending: 0, started: 0, total: 0 },
+    cycleWeek: 1, conditionBudget: { level: 'none', reason: '' }, conditionLabel: '' }));
+  x.ctx.dailyOperationDeps.buildReport = input => JSON.stringify(input.actuals);
+  vm.runInContext(journalSource.slice(journalNode.start, journalNode.end) + '\n' + source.slice(reportNode.start, reportNode.end), x.ctx);
+  Object.assign(x.state().blocks[0], { actualStartAt: '2026-09-07T11:00:00', actualEndAt: '2026-09-07T12:00:00' });
+  x.putField('date', '2026-09-07');
+  x.putField('actualStartAt', '2026-09-07T11:00:00');
+  x.putField('actualEndAt', '2026-09-07T12:00:00');
+  const before = copy(x.state());
+  assert.equal(x.run().ok, false);
+  assert.deepEqual(x.state(), before, 'failed candidate must not leak journals or reports');
+  assert.equal(x.effects.persisted.length, 1);
+  x.fail(false);
+  assert.equal(x.run().ok, true);
+  assert.equal(x.effects.persisted.length, 2, 'retry adds exactly one write');
+  const saved = x.effects.persisted[1];
+  assert.ok(saved.journals['2026-09-06']);
+  assert.ok(saved.journals['2026-09-07']);
+  assert.notEqual(saved.reports['2026-09-07'], REPORT_PENDING);
+  assert.equal(JSON.parse(saved.reports['2026-09-07'])[0].blockId, 'b');
+});
+
+test('import and daily open persist the whole change once, including forced recurrence maintenance', () => {
+  const x = setup('project', { storageFail: false });
+  const functions = ['importData', 'runDailyOpen'].map(name => {
+    const n = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
+    return source.slice(n.start, n.end);
+  }).join('\n');
+  x.state().settings.github = { token: '' };
+  let maintenance = 0;
+  Object.assign(x.ctx, { normalizeState: copy, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
+    invalidateFeedbackConnection() {}, invalidateKaradaConnection() {}, invalidateFundConnection() {}, invalidateVisionConnection() {},
+    invalidateHealthCache() {}, ensureJournal: date => { x.ctx.state.journals[date] ||= 'journal'; },
+    // fixV398b(監督者決定 2026-09-13、v326 の旧契約を優先): 取り込みと日跨ぎの実体化は外側の保存に同乗し、
+    // 同じ日の強制再オープンは候補保存を開かずメモリ上だけ(次の利用者操作の保存に同乗)。
+    maintainRecurrences: ({ persist = true } = {}) => {
+      maintenance++;
+      assert.equal(x.ctx.draftSaveTransaction.active, maintenance <= 2, maintenance <= 2 ? 'maintenance belongs to the outer save' : 'same-day forced open must not open a save');
+      if (maintenance > 2) { assert.equal(persist, false); x.ctx.state.recurrences.push({ id: 'forced', title: 'generated' }); }
+    },
+    FileReader: class { readAsText(file) { this.result = file; this.onload(); } } });
+  vm.runInContext(functions, x.ctx);
+  const imported = copy(x.state()); imported.projects[0].title = 'imported';
+  x.ctx.importData(JSON.stringify(imported));
+  assert.equal(x.effects.persisted.length, 1, 'import without recurrence changes still persists');
+  assert.equal(x.effects.persisted[0].projects[0].title, 'imported');
+  assert.equal(x.ctx.runDailyOpen(), true);
+  assert.equal(x.effects.persisted.length, 2);
+  assert.equal(x.effects.persisted[1].settings.lastOpenedDate, x.ctx.todayISO());
+  assert.equal(x.ctx.runDailyOpen({ force: true }), false);
+  assert.equal(x.effects.persisted.length, 2, 'same-day forced open persists nothing (v326)');
+  assert.equal(x.ctx.state.recurrences.at(-1).id, 'forced', 'materialization stays in memory until the next user save');
+});
+
+(async () => {
+  const x = setup('project');
+  x.state().settings.github = { token: '', branch: 'fixture' };
+  const before = copy(x.state()), loaded = copy(before);
+  loaded.projects[0].title = 'restored';
+  Object.assign(x.ctx, { normalizeState: copy, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
+    clearTimeout() {}, autoSaveTimer: null, requireGitHubConfig: () => x.state().settings.github,
+    gitHubBackupURL: () => 'fixture', githubHeaders: () => ({}), fromBase64: value => value,
+    fetch: async () => ({ ok: true, json: async () => ({ content: JSON.stringify(loaded) }) }),
+    maintainRecurrences: () => {
+      assert.equal(x.ctx.draftSaveTransaction.active, true);
+      x.ctx.state.recurrences.push({ id: 'restored-rule', title: 'maintained' });
+    } });
+  const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === 'restoreBackup');
+  vm.runInContext(source.slice(node.start, node.end), x.ctx);
+  await x.ctx.restoreBackup('fixture');
+  assert.deepEqual(x.state(), before, 'restore failure must retain the original state');
+  assert.equal(x.effects.persisted.length, 1);
+  x.fail(false);
+  await x.ctx.restoreBackup('fixture');
+  assert.equal(x.effects.persisted.length, 2, 'restore retry adds one write including maintenance');
+  assert.equal(x.effects.persisted[1].projects[0].title, 'restored');
+  assert.equal(x.effects.persisted[1].recurrences[0].id, 'restored-rule');
+  console.log('PASS restore persists replacement and recurrence maintenance once, with rollback');
+  console.log('PASS draft save transaction: ' + (count + 1) + ' cases');
+})().catch(error => { console.error(error); process.exitCode = 1; });

@@ -33,9 +33,9 @@ import { normalizeTwyPlan } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
-import { REPORT_PENDING } from "./src/core/daily-report.js";
+import { REPORT_PENDING, buildDailyReport } from "./src/core/daily-report.js";
 import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js";
-import { runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
+import { DAILY_OPERATIONS, runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
@@ -48,6 +48,9 @@ import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/featur
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
+import { twelveWeekSaveOperation, buildTwelveWeekDraft, prepareRelatedStamps } from "./src/features/twelve-week-save.js";
+import { recurrenceSaveOperation } from "./src/features/recurrence-save.js";
+import { commitLifecycleDraft } from "./src/features/lifecycle-save.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { candidateTasks } from "./src/features/three-screen-rows.js";
@@ -438,7 +441,9 @@ configureJournal({
 configureRecurrence({
   todayISO, addDays, parseDate, minutesOf, pad2, nowDateTime, showToast, isTouchedBlock,
   RECURRENCE_KEEP_PAST_DAYS, RECURRENCE_FUTURE_DAYS,
-  getState: () => state
+  getState: () => state,
+  mutate: work => runRecurrenceChange(work),
+  mutationActive: () => !draftSaveTransaction || draftSaveTransaction.active
 });
 // v171: src/features/timeline-layout.jsも同じ理由(循環import回避)で依存注入する。
 configureTimelineLayout({ minutesOf, nowDateTime });
@@ -492,7 +497,7 @@ registerActions({
   "tower-gate-add": () => addTowerGate(),
   "tower-gate-delete": ({ target }) => endGateRecurrence(target.dataset.ruleId),
   "tower-gate-move": ({ target }) => moveTowerGate(target.dataset.ruleId, Number(target.dataset.direction)),
-  "tower-gate-streak-toggle": ({ target }) => {
+  "tower-gate-streak-toggle": ({ target }) => runRecurrenceChange(() => {
     const rule = (state.recurrences || []).find((item) => item.id === target.dataset.ruleId && !item.deleted);
     const streakEdit = habitStreakEdit(rule, rule?.kind, target.checked);
     if (!streakEdit.ok) {
@@ -505,7 +510,7 @@ registerActions({
       ? { ...item, streakSince: streakEdit.value, updatedAt: nowDateTime() }
       : item);
     saveAndRender(streakEdit.value ? "ルーティンを固定化しました" : "ルーティンの固定化を解除しました");
-  },
+  }),
   // --- settings(11): サイドバー/WBS表示設定/カテゴリ・休憩メッセージ管理 ---
   "toggle-show-suspended": () => {
     state.settings.showSuspended = !state.settings.showSuspended;
@@ -831,7 +836,7 @@ registerActions({
       showToast("他端末で確定済みのため読み取り表示へ切り替えました");
       return;
     }
-    commitWeek(weekStart, [..._twyCommitSelectedBlockIds]);
+    if (commitWeek(weekStart, [..._twyCommitSelectedBlockIds])?.ok === false) return;
     saveAndRender("今週を確定しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
   },
@@ -849,7 +854,7 @@ registerActions({
     if (!item || item.completedAt || item.excused) return;
     const reason = target.closest(".twy-excuse-form")?.querySelector("[data-twy-excuse-reason]")?.value || "";
     if (!reason.trim()) { showToast("免除理由を入力してください"); return; }
-    excuseCommitmentItem(id, reason);
+    if (excuseCommitmentItem(id, reason)?.ok === false) return;
     _twyExcuseOpenItemId = null;
     saveAndRender("免除しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
@@ -865,7 +870,7 @@ registerActions({
     if (!weekStart) { openTwyCommitSheet(); showToast("週が変わったため当週のシートを開き直しました"); return; }
     const item = twyCommitItemForWeek(id, weekStart);
     if (!item?.excused) return;
-    unexcuseCommitmentItem(id);
+    if (unexcuseCommitmentItem(id)?.ok === false) return;
     saveAndRender("免除を解除しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
   },
@@ -882,7 +887,7 @@ registerActions({
     if (!_twyAddCandidateSelectedIds.size || !twyCommittedWeekMeta(weekStart)) return;
     const selected = twyAddCandidates(weekStart).filter((block) => _twyAddCandidateSelectedIds.has(block.id)).map((block) => block.id);
     if (!selected.length) { showToast("追加できる候補がありませんでした"); return; }
-    addCommitmentItems(weekStart, selected);
+    if (addCommitmentItems(weekStart, selected)?.ok === false) return;
     _twyAddPanelOpen = false;
     saveAndRender("計画に追加しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
@@ -1575,6 +1580,7 @@ const dailyOperationDeps = {
   draftIntervals: () => draftPlannedIntervals(_scheduleDraft),
   isReadingBlock: block => isDailyReadingBlock(block, state),
   get state() { return state; }, commitCandidate, now: nowDateTime, notify: showToast,
+  commitLifecycle: input => commitLifecycleDraft(input, lifecycleSaveDeps()),
   floors: () => [state.settings?.lastPushedAt, saveState.pendingStamp],
   persist: () => { persistLocalNoSchedule(); return !_lastSaveError; },
   scheduleSync: () => { saveState.pendingStamp = state.dataModifiedAt; scheduleAutoSave(); scheduleAutoSync(); },
@@ -1594,7 +1600,7 @@ const dailyOperationDeps = {
     _pendingLifecycleCtx.endInput.values = { completed: true };
   },
   planCompletionEffect: block => {
-    trackOnBlockCompletionChanged(block, block.completed, { interactive: true });
+    if (block.completed) maybeShowTrackProgressToast(block);
     render();
     showToast(block.completed ? "予定を完了しました" : "予定を未完了に戻しました");
   },
@@ -1609,10 +1615,7 @@ const dailyOperationDeps = {
     closeModal();
     const block = blockById(input.id);
     if (result.justCompleted) {
-      syncHabitStreakForBlock(block);
-      if (block.recurrenceGroupId) triggerAnchorPlacements(block.recurrenceGroupId, block.actualEndAt);
-      transferIronLogToCompletedBlock(block.id);
-      trackOnBlockCompletionChanged(block, true, { interactive: true });
+      maybeShowTrackProgressToast(block);
       triggerCompletionEffect(getRandomCelebrate(), block.isMIT);
     }
     render();
@@ -3897,6 +3900,7 @@ function upsertWeeklyCommitment(record) {
 }
 
 function commitWeek(weekStart, selectedBlockIds) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => commitWeek(weekStart, selectedBlockIds));
   weekStart = weekRange(weekStart).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
   const candidates = candidateBlocksForWeek(state, weekStart);
@@ -3919,6 +3923,7 @@ function commitWeek(weekStart, selectedBlockIds) {
 }
 
 function autoCommitWeekIfNeeded(block) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => autoCommitWeekIfNeeded(block));
   if (!block?.date) return;
   const weekStart = weekRange(block.date).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
@@ -3940,6 +3945,7 @@ function autoCommitWeekIfNeeded(block) {
 }
 
 function stampCommitmentCompletion(block, isNowCompleted) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => stampCommitmentCompletion(block, isNowCompleted));
   if (!block?.date) return;
   const weekStart = weekRange(block.date).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
@@ -3955,16 +3961,57 @@ function stampCommitmentCompletion(block, isNowCompleted) {
 }
 
 function trackOnBlockStarted(block) {
-  autoCommitWeekIfNeeded(block);
+  return runTwelveWeekChange(() => autoCommitWeekIfNeeded(block));
 }
 
 function trackOnBlockCompletionChanged(block, isNowCompleted, { interactive = false } = {}) {
-  autoCommitWeekIfNeeded(block);
-  stampCommitmentCompletion(block, isNowCompleted);
-  if (interactive && isNowCompleted) maybeShowTrackProgressToast(block);
+  return runTwelveWeekChange(() => {
+    autoCommitWeekIfNeeded(block);
+    stampCommitmentCompletion(block, isNowCompleted);
+    if (interactive && isNowCompleted) draftSaveTransaction.defer(() => maybeShowTrackProgressToast(block));
+  });
+}
+
+function runTwelveWeekChange(work) {
+  if (draftSaveTransaction.lifecycleBuilding) return work();
+  const deps = { transaction: draftSaveTransaction, state: () => state, now: nowDateTime };
+  return draftSaveTransaction.active ? buildTwelveWeekDraft({ work }, deps)
+    : runDailyOperation("twelve-week-related-save", { work }, { legacy: {
+      "twelve-week-related-save": input => twelveWeekSaveOperation.run(input, deps) } });
+}
+
+function lifecycleSaveDeps() {
+  return { transaction: draftSaveTransaction, state: () => state, now: nowDateTime,
+    reportBuild: (...args) => DAILY_OPERATIONS["daily-report-refresh"].build(...args),
+    reportDeps: { ...dailyOperationDeps, captureReport: (source, date) => {
+      ensureJournal(date);
+      return dailyOperationDeps.captureReport(source, date);
+    } },
+    related: result => {
+      for (const { kind, before, after } of result.records || []) {
+        if (kind !== "blocks" || !after) continue;
+        if (!before?.actualStartAt && after.actualStartAt) trackOnBlockStarted(after);
+        if (Boolean(before?.completed) === Boolean(after.completed)) continue;
+        syncHabitStreakForBlock(after);
+        if (after.completed) {
+          if (after.recurrenceGroupId) triggerAnchorPlacements(after.recurrenceGroupId, after.actualEndAt || nowDateTime());
+          transferIronLogToCompletedBlock(after.id);
+        }
+        trackOnBlockCompletionChanged(after, after.completed);
+      }
+    } };
+}
+
+function runLifecycleChange(work) {
+  const quick = JSON.parse(JSON.stringify(_quickCompleteSnapshots)), pending = _pendingInterruptBlockId;
+  const result = runDailyOperation("lifecycle-related-save", { work }, { legacy: {
+    "lifecycle-related-save": input => commitLifecycleDraft(input, lifecycleSaveDeps()) } });
+  if (!result.ok) { _quickCompleteSnapshots = quick; _pendingInterruptBlockId = pending; }
+  return result.ok;
 }
 
 function excuseCommitmentItem(itemId, reason) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => excuseCommitmentItem(itemId, reason));
   const text = (reason || "").trim();
   if (!text) return;
   const item = (state.weeklyCommitments || []).find((record) =>
@@ -3979,6 +4026,7 @@ function excuseCommitmentItem(itemId, reason) {
 }
 
 function unexcuseCommitmentItem(itemId) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => unexcuseCommitmentItem(itemId));
   const item = (state.weeklyCommitments || []).find((record) =>
     record.id === itemId && record.recordType === "item" && !record.deleted);
   if (!item || item.weekStart !== weekRange(todayISO()).weekStart) return;
@@ -3991,6 +4039,7 @@ function unexcuseCommitmentItem(itemId) {
 }
 
 function addCommitmentItems(weekStart, blockIds) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => addCommitmentItems(weekStart, blockIds));
   if (weekStart !== weekRange(todayISO()).weekStart) return;
   if (!(state.weeklyCommitments || []).some((record) =>
     record.id === "wcw_" + weekStart && record.recordType === "week" && !record.deleted)) return;
@@ -4058,6 +4107,7 @@ function mergeEditedMilestones(existing, fields, incoming, now) {
 }
 
 function saveTrackFromForm(projectId, kind, fields) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => saveTrackFromForm(projectId, kind, fields));
   const validation = validateTrackDraft(kind, fields);
   if (!validation.ok) return validation;
   const existing = activeTrackForProject(state.tracks || [], projectId);
@@ -4083,12 +4133,14 @@ function saveTrackFromForm(projectId, kind, fields) {
 }
 
 function closeActiveTrackManual(projectId) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => closeActiveTrackManual(projectId));
   if (!closeTracksForOwner("project", projectId, "manual")) return { ok: true };
   saveState();
   return { ok: true };
 }
 
 function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => carryProjectToNewCycle(projectId, newCycleStartDate, fields));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(newCycleStartDate || "") || !dateParts(newCycleStartDate)) {
     return { ok: false, errors: ["newCycleStartDateは有効な日付が必須"] };
   }
@@ -4141,6 +4193,7 @@ function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
 
 // v261: WBS/後続トーストから共有する測定追記。UI副作用は呼び出し元へ任せる。
 function recordTrackMeasurement(trackId, value, { sourceKind = "wbs", blockId = "", note = "" } = {}) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => recordTrackMeasurement(trackId, value, { sourceKind, blockId, note }));
   const track = (state.tracks || []).find((entry) => entry.id === trackId
     && entry.status === "active" && !entry.deleted && entry.kind === "numeric");
   if (!track) return { ok: false, errors: ["対象のトラックが見つかりません"] };
@@ -4160,6 +4213,7 @@ function recordTrackMeasurement(trackId, value, { sourceKind = "wbs", blockId = 
 
 // v261: 既存節目1件だけをid指定で更新し、同期勝敗に使う親track.updatedAtも進める。
 function updateTrackMilestone(trackId, milestoneId, patch) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => updateTrackMilestone(trackId, milestoneId, patch));
   const track = (state.tracks || []).find((entry) => entry.id === trackId
     && entry.status === "active" && !entry.deleted && entry.kind === "milestone");
   if (!track) return { ok: false, errors: ["対象のトラックが見つかりません"] };
@@ -10287,6 +10341,7 @@ let _quickCompleteSnapshots = {};
 // 開けるようにした(saveAndRenderのtoastOpts、下記参照)。ポモドーロ完了経路(completePomodoro)
 // は対象外(現行維持、K指示)。
 function toggleBlock(id) {
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => toggleBlock(id));
   let justCompleted = false;
   let completedBlock = null;
   let changedBlock = null;
@@ -10396,6 +10451,7 @@ function toggleTaskCompleteFromBlock(blockId) {
   }
   if (state.modal?.type === "block" && state.modal.id === blockId
       && requestDraftLeave(() => toggleTaskCompleteFromBlock(blockId), { allowDiscard: false })) return;
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => toggleTaskCompleteFromBlock(blockId));
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block || !block.taskId) return;
   const task = state.tasks.find((t) => t.id === block.taskId);
@@ -10427,7 +10483,7 @@ function toggleTaskCompleteFromBlock(blockId) {
   // v198(第3弾3e): 完了6経路#2(タイムラインBlock行の「タスク完了」)。task.statusは
   // 上のstate.tasks.map前のprevStatus(taskの参照自体は再代入していないため保持される)。
   if (completing) maybeQueueNextAiStep(task.id, task.status);
-  else closeAiStepConfirmIfUndone(task.id);
+  else draftSaveTransaction.defer(() => closeAiStepConfirmIfUndone(task.id));
   // v146: 🏁はBlock編集モーダルへ移設した。render()はmodalRootを触らないため、モーダルを
   // 開いたままこのボタンを押した場合はここで明示的に再描画して状態(ラベル/色)を反映する。
   // v146レビュー対応: renderModal(buildBlockModal(...))の直呼びは編集中の他フィールド
@@ -10436,7 +10492,7 @@ function toggleTaskCompleteFromBlock(blockId) {
   // 古いキャッシュ値へ巻き戻さないよう復元対象から除外する(rerenderActiveModal側で
   // 再オープンされた時点の最新値=このトグル後の値がそのまま残る)。
   if (state.modal && state.modal.type === "block" && state.modal.id === blockId) {
-    rerenderActiveModal(["completed"]);
+    draftSaveTransaction.defer(() => rerenderActiveModal(["completed"]));
   }
   // v293: 身体スキャン復活。Block編集モーダルが再描画されていてもここで上書きして表示する
   // (モーダルは1枚だけ=直前のrerenderActiveModalより後に呼ぶ)。
@@ -10463,6 +10519,7 @@ function toggleMIT(blockId) {
 
 // v17: 完了時の演出(花火 + ランダム祝福メッセージ)
 function triggerCompletionEffect(message, isMIT) {
+  if (draftSaveTransaction?.defer(() => triggerCompletionEffect(message, isMIT))) return;
   const container = document.createElement("div");
   container.className = "completion-effect";
   // 粒子(8〜14個、ランダムな角度)
@@ -10509,6 +10566,7 @@ function resetPomodoroForBlock(blockId) {
 }
 
 function autoCloseStaleRoutineRuns(blockId) {
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => autoCloseStaleRoutineRuns(blockId));
   const at = nowDateTime();
   const closed = [];
   const blocks = state.blocks.map((block) => {
@@ -10521,19 +10579,16 @@ function autoCloseStaleRoutineRuns(blockId) {
     }
     return block;
   });
-  return commitBlockChanges(blocks, () => {
-    const previousTimer = state.pomodoro;
-    closed.forEach(id => resetPomodoroForBlock(id));
-    if (state.pomodoro !== previousTimer) saveState();
-  });
+  closed.forEach(id => resetPomodoroForBlock(id));
+  return commitBlockChanges(blocks);
 }
 
 function setBlockTime(id, field) {
   if (field === "actualStartAt") return resumeLifecycleStart({ blockId: id, kind: "block" })?.ok;
-  const result = draftSaveTransaction.run(() => {
+  const saved = runLifecycleChange(() => {
     updateBlockField(id, field, nowDateTime());
-  }, { kinds: ["blocks"] });
-  if (!result.ok) return false;
+  });
+  if (!saved) return false;
   render();
   showToast(field === "actualStartAt" ? "開始時刻を入れました" : "終了時刻を入れました");
 }
@@ -10543,6 +10598,7 @@ function setBlockTime(id, field) {
 // (既存の deleteProject 等と同じ流儀)。Taskの状態は toggleBlock と同じ思想で "todo"→"doing" のみ
 // (自動で "completed" までは進めない — Task完了は既存フロー同様、人の判断に委ねる)。
 function bulkApproveAsPlanned() {
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => bulkApproveAsPlanned());
   const today = todayISO();
   const targets = state.blocks.filter((b) =>
     !b.deleted && b.date === today && b.category !== "ルーティン" &&
@@ -10653,7 +10709,13 @@ function generateReport(dateArg, { quiet = false } = {}) {
     if (!quiet) showToast(ARCHIVED_READONLY_MESSAGE);
     return state.reports[date] === REPORT_PENDING ? "" : state.reports[date] || "";
   }
-  if (draftSaveTransaction?.defer(() => generateReport(date, { quiet }), { post: true })) return "";
+  if (draftSaveTransaction?.active) {
+    state.journals = { ...state.journals };
+    ensureJournal(date);
+    const result = buildDailyReport(state, { reportDate: date }, dailyOperationDeps);
+    state.reports[date] = result.report;
+    return result.pending ? "" : result.report;
+  }
   ensureJournal(date);
   const result = runDailyOperation("daily-report-refresh", { reportDate: date, quiet }, dailyOperationDeps);
   if (!result.ok) showToast(REPORT_PENDING);
@@ -10707,13 +10769,15 @@ function importData(file) {
       const next = normalizeState(loaded);
       // バックアップはトークンを含まないので、この端末のトークンを引き継ぐ
       if (!next.settings.github.token) next.settings.github.token = token;
+      draftSaveTransaction.run(() => {
       setState(next);
       invalidateFeedbackConnection();
       invalidateKaradaConnection();
       invalidateFundConnection();
     invalidateVisionConnection();
-      maintainRecurrences({ purge: true });
-      saveAndRender("データをインポートしました");
+        maintainRecurrences({ purge: true });
+        saveAndRender("データをインポートしました");
+      });
     } catch {
       showToast("JSONを読み込めませんでした");
     }
@@ -11415,12 +11479,14 @@ async function restoreBackup(name) {
     loaded.singleSchedules = mergeStoredSingleSchedules(state.singleSchedules, loaded.singleSchedules).stored;
     const next = normalizeState(loaded);
     next.settings.github = { ...next.settings.github, ...currentGithubSettings };
+    draftSaveTransaction.run(() => {
     setState(next);
     maintainRecurrences({ purge: true });
     closeModal();
     // saveState = dataModifiedAt を今に更新。「復元」をこの端末発の最新変更として扱うことで、
     // 直後の自動 pull がリモート(誤同期後の状態)で復元を黙って上書きするのを防ぐ。
     saveAndRender(`📦 ${dateLabel} 時点に復元しました。内容を確認してください`);
+    });
   } catch (error) {
     showToast(`復元失敗: ${error.message}`);
   }
@@ -11707,6 +11773,7 @@ function startPomodoro(blockId) {
   if (blockId && !blockById(blockId)) return showToast("Blockが見つかりません");
   if (blockId && !blockById(blockId).actualStartAt)
     return resumeLifecycleStart({ blockId, kind: "pomodoro" });
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => startPomodoro(blockId));
   const wasStarted = Boolean(blockById(blockId)?.actualStartAt);
   if (blockId) autoCloseStaleRoutineRuns(blockId);  // v215: 旧prepareTimeswitchForTaskStartのタブ非依存部
   // v14: state.pomodoro を完全再構築(spread を使わず、必要なフィールドだけ明示的に作成)
@@ -11729,7 +11796,7 @@ function startPomodoro(blockId) {
   // v111: タイマー開始後(非ブロッキング)にiOSガイド付きアクセスのリマインドを出す。
   //       modalRootはrender()と独立したDOMルートのため、直前のsaveAndRenderの再描画で
   //       消えることはない。
-  maybeShowGuidedAccessHint();
+  draftSaveTransaction.defer(() => maybeShowGuidedAccessHint());
 }
 
 // v14: ポモドーロセッションを強制完全リセット(他フィールド保持)
@@ -11846,19 +11913,22 @@ function stopPomodoro() {
 // v311レビュー(Codex)で発見: 旧actualEndAt残置Blockの再ポモ連動で古い時刻を誤再利用する実害
 // があったため、saveActualEntryFromModal(入力済み終了時刻を尊重)だけがtrueを渡す。
 function completePomodoro(preserveActualEndAt = false) {
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => completePomodoro(preserveActualEndAt));
   const blockId = state.pomodoro.blockId;
   const wasCompleted = Boolean(blockId && blockById(blockId)?.completed);
     // v19: 完了時、Block の完了フラグも立てる + 実績終了時刻記録
-  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
+  if (!commitBlockChanges(state.blocks.map((block) => block.id === blockId
       ? {
           ...block,
           pomodoroCount: Number(block.pomodoroCount || 0) + 1,
           actualEndAt: preserveActualEndAt ? (block.actualEndAt || nowDateTime()) : nowDateTime(),
           completed: true
         }
-      : block), () => {
+      : block))) return false;
   if (blockId) {
     syncHabitStreakForBlock(state.blocks.find((block) => block.id === blockId));
+    const completed = blockById(blockId);
+    if (!wasCompleted && completed?.recurrenceGroupId) triggerAnchorPlacements(completed.recurrenceGroupId, completed.actualEndAt);
     transferIronLogToCompletedBlock(blockId);
   }
   const completedBlock = blockId ? state.blocks.find((block) => block.id === blockId) : null;
@@ -11882,7 +11952,7 @@ function completePomodoro(preserveActualEndAt = false) {
   // (v117(C)過集中ゲートはv219のroutine.js削除で撤去済み。当時の「閉じた後にゲート判定」
   // という順序前提は現在は対応する呼び出し先が無く、身体スキャン単体の表示のみが残る)。
   openBodyScanModal(blockId);
-  });
+  return true;
 }
 
 // v129/v295: 身体スキャン ====================================================
@@ -13052,6 +13122,11 @@ function removeUntouchedInstances(ruleId, { fromDate = "", excludeId = "" } = {}
   });
 }
 
+function runRecurrenceChange(work) {
+  return runDailyOperation("recurrence-related-save", { work }, { legacy: {
+    "recurrence-related-save": input => recurrenceSaveOperation.run(input, { transaction: draftSaveTransaction }) } });
+}
+
 function archiveHabitPinPeriod(rule) {
   if (!rule?.streakSince) return false;
   state.habitPinHistory ||= {};
@@ -13075,11 +13150,13 @@ function endRecurrenceSeries(ruleId, { excludeId = "" } = {}) {
 }
 
 function endGateRecurrence(ruleId) {
+  if (!draftSaveTransaction.active) return runRecurrenceChange(() => endGateRecurrence(ruleId));
   if (!endRecurrenceSeries(ruleId)) return;
   saveAndRender("ゲートの繰り返しシリーズを終了しました");
 }
 
 function addTowerGate() {
+  if (!draftSaveTransaction.active) return runRecurrenceChange(() => addTowerGate());
   const title = (document.getElementById("towerGateTitle")?.value || "").trim();
   const time = document.getElementById("towerGateTime")?.value || "";
   if (!title || !/^\d{2}:\d{2}$/.test(time)) {
@@ -13100,6 +13177,7 @@ function addTowerGate() {
 }
 
 function moveTowerGate(ruleId, direction) {
+  if (!draftSaveTransaction.active) return runRecurrenceChange(() => moveTowerGate(ruleId, direction));
   if (direction !== -1 && direction !== 1) return;
   const rules = (state.recurrences || []).map((rule, index) => ({ rule, index }))
     .filter(({ rule }) => !rule.deleted && rule.category === "ルーティン")
@@ -14250,7 +14328,11 @@ function buildProjectModal(project) {
 }
 
 function saveProjectFromModal(id, fields) {
-  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => saveProjectFromModal(id, fields), { kinds: ["projects", "tracks", "settings"] }).ok;
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => {
+    const before = JSON.parse(JSON.stringify({ projects: state.projects, tracks: state.tracks }));
+    saveProjectFromModal(id, fields);
+    prepareRelatedStamps(before, state, ["projects", "tracks"], nowDateTime());
+  }, { kinds: ["projects", "tracks", "settings"] }).ok;
   const existing = state.projects.find((project) => project.id === id);
   const previousCycleStartDate = state.settings.twelveWeekStartDate || "";
   // K裁定2026-09-05: 新規サイクル開始(previousCycleStartDate/既存Projectの値がどちらも
@@ -15301,6 +15383,7 @@ function saveActualEntryFromModal(blockId, fields) {
   if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
   return result.ok === true;
   }
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => saveActualEntryFromModal(blockId, fields));
   const previousBlock = state.blocks.find((b) => b.id === blockId);
   const wasCompleted = Boolean(previousBlock?.completed);
   if (!commitBlockChanges(state.blocks.map((b) => {
@@ -15354,6 +15437,12 @@ function runDailyOpen({ force = false } = {}) {
   const today = todayISO();
   const isNewDay = state.settings.lastOpenedDate !== today;
   if (!force && !isNewDay) return false;
+  if (!isNewDay) {
+    maintainRecurrences({ purge: true, persist: false }); // Persist same-day materialization with the next user action.
+    return false;
+  }
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => runDailyOpen({ force })).ok && isNewDay;
+  draftSaveTransaction.complete();
   maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
   if (isNewDay) {
     state.settings.lastOpenedDate = today;
