@@ -29,6 +29,7 @@ function draftOwner(action, input, deps) {
     draftId: `occurrence-${action}:${input.requestId}`, connection: deps.connection || "local" } };
 }
 function changedFields(action, input, row) {
+  if (action === "restore-time") return { time: input.restoreTime };
   if (action === "delete") { if (input.confirmed !== true) throw seriesInvalid("この回の削除を確認してください"); return { lifecycle: { deleted: true } }; }
   if (action === "complete") {
     if (typeof input.desiredCompleted !== "boolean") throw seriesInvalid("完了の希望値を確認してください");
@@ -47,7 +48,7 @@ function changedFields(action, input, row) {
 }
 export function prepareOccurrence(action, input, deps) {
   const { store, key } = draftOwner(action, input, deps);
-  const signature = contentKey({ values: input.values ?? null, completed: input.desiredCompleted ?? null, confirmed: input.confirmed ?? null, base: input.baseFingerprint });
+  const signature = contentKey({ values: input.values ?? null, restoreTime: input.restoreTime ?? null, completed: input.desiredCompleted ?? null, confirmed: input.confirmed ?? null, base: input.baseFingerprint });
   const previous = store.get(key);
   if (previous) {
     if (previous.signature !== signature) throw seriesInvalid("入力を変えたら新しい要求として保存してください");
@@ -60,7 +61,7 @@ export function prepareOccurrence(action, input, deps) {
   const updatedAt = nextMutationStamp({ now, candidates: stamps(related(deps.state, row)) });
   const candidate = Object.keys(fields).length ? stamped({ ...(saved || { id: row.id, seriesId: row.seriesId,
     occurrenceKey: row.occurrenceKey, formatVersion: 1, createdAt: now }), overrides: { ...saved?.overrides,
-    ...Object.fromEntries(Object.entries(fields).map(([field, value]) => [field, { value, updatedAt, changeId: input.requestId }])) } }, updatedAt) : null;
+    ...Object.fromEntries(Object.entries(fields).map(([field, value]) => [field, { ...(action === "restore-time" && value === null ? { cleared: true } : { value }), updatedAt, changeId: input.requestId }])) } }, updatedAt) : null;
   const draft = { ...key, signature, candidate, baseFingerprint: input.baseFingerprint };
   if (!store.put(draft).ok) throw seriesInvalid("下書きの控えを保存できません。入力を残しています");
   return { ...input, occurrenceDraft: draft };

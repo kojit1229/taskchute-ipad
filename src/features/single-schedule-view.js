@@ -8,12 +8,15 @@ import { runDailyOperation } from "./daily-operations.js";
 import { schedulesWithSeriesForDate } from "../core/schedule-series-derive.js";
 import { occurrenceFingerprint, occurrenceForm, submitOccurrence } from "./schedule-occurrence.js";
 import { seriesBulkControls, submitSeriesBulk } from "./schedule-series-bulk.js";
+import { occurrenceTimeControls, submitOccurrenceTime } from "./schedule-occurrence-time.js";
+import { configureSeriesAvailability } from "./daily-gap-placement.js";
 let scheduleViewDeps;
 // Display-only projection; the derived row/identity remains the operation source.
 const scheduleModel = (record, date) => buildDailyViewModel(record.seriesId ? { ...record, seriesId: "", occurrenceKey: "" } : record, { kind: "schedule", date });
 
 export function configureScheduleView(deps) {
   scheduleViewDeps = deps;
+  configureSeriesAvailability(() => seriesEnabled(deps.operationDeps));
   const open = (id, date) => {
     const record = scheduleDisplay(deps.state(), date).records.find(row => row.id === id);
     if (!record) { deps.notify("予定を表示できません。最新の保存値を確認してください"); return; }
@@ -25,6 +28,7 @@ export function configureScheduleView(deps) {
         + '<button type="button" data-action="series-register-new">新しい繰り返し予定</button>' : "") + "</div></div>");
   };
   registerActions({
+    "series-time-change": ({ target }) => submitOccurrenceTime(target, deps, runDailyOperation),
     "series-bulk-preview": ({ target }) => submitSeriesBulk(false, target, deps, runDailyOperation),
     "series-bulk-save": ({ target }) => submitSeriesBulk(true, target, deps, runDailyOperation),
     "series-occurrence-save": ({ target }) => submitOccurrence("edit", target, deps, runDailyOperation),
@@ -99,7 +103,7 @@ export function renderSchedule(record, date, escapeHTML, { detail = false, style
     <button type="button" data-action="schedule-view-complete" data-id="${id}" data-date="${escapeHTML(date)}"
       data-series-id="${escapeHTML(record.seriesId || "")}" data-occurrence-key="${escapeHTML(record.occurrenceKey || "")}"
       data-fingerprint="${key}" data-completed="${!plan.planCompleted}" aria-label="${plan.planCompleted ? "予定完了を解除" : "予定を完了"}">${style ? (plan.planCompleted ? "↺" : "○") : plan.planCompleted ? "予定完了を解除" : "予定を完了"}</button>
-    ${detail ? `<p>${escapeHTML(note)}</p>` : ""}</article>`;
+    ${style ? occurrenceTimeControls(record, date, scheduleViewDeps?.operationDeps, escapeHTML) : ""}${detail ? `<p>${escapeHTML(note)}</p>` : ""}</article>`;
 }
 
 export function scheduleTimelineRows(state, date) {

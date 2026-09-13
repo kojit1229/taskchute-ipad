@@ -1,5 +1,8 @@
 import { plannedOccupancy, plannedMinute } from "../core/planned-occupancy.js";
 import { normalizeSingleSchedules } from "../core/single-schedule.js";
+import { schedulesWithSeriesForDate } from "../core/schedule-series-derive.js";
+let seriesAvailabilityEnabled = () => false;
+export function configureSeriesAvailability(enabled) { seriesAvailabilityEnabled = enabled; }
 import { contentKey } from "../core/single-schedule-merge.js";
 import { placementTimes } from "../core/placement.js";
 
@@ -61,7 +64,8 @@ export function plannedAvailability(state, date, options = {}) {
     ? "単発予定の取得に失敗しました。配置を停止しています" : "単発予定を未取得です。配置を停止しています");
   if (!Array.isArray(source.value)) return stopped("単発予定の容器が不正です。配置を停止しています");
   if (!Array.isArray(state.blocks)) return stopped("Blockの容器が不正です。配置を停止しています");
-  const schedules = normalizeSingleSchedules(source.value);
+  const schedules = (options.scheduleSeriesEnabled ?? seriesAvailabilityEnabled())
+    ? schedulesWithSeriesForDate({ ...state, singleSchedules: source.value }, date) : normalizeSingleSchedules(source.value);
   const result = plannedOccupancy({ blocks: state.blocks.filter(row =>
     (!row || typeof row !== "object" || !row.id || row?.date === date || (typeof row?.plannedStartAt === "string" && row.plannedStartAt.slice(0, 10) === date)
       || row?.plannedStartAt && (!Number.isFinite(plannedMinute(row.plannedStartAt, date))

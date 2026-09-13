@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "schedule-occurrence-time": {
+      "paths": ["^src/features/schedule-occurrence-time\\.js$"],
+      "suites": ["schedule-series-sync-e2e", "placement-e2e"]
+    },
     "lifecycle-save": {
       "paths": ["^src/features/lifecycle-save\\.js$"],
       "suites": ["mutation-block-e2e", "v70", "v87", "v107", "today-core", "mutation-bundle-e2e"]

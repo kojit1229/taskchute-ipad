@@ -1,5 +1,7 @@
 import { reportActuals } from "../../core/daily-report.js";
 import { normalizeSingleSchedules } from "../../core/single-schedule.js";
+import { schedulesWithSeriesForDate } from "../../core/schedule-series-derive.js";
+import { SCHEDULE_SERIES_ENABLED, mergeStoredScheduleState } from "../../core/schedule-series-storage.js";
 import { plannedMinute } from "../../core/planned-occupancy.js";
 import { readingMark } from "../../core/daily-reading.js";
 import { actualDurationMinutes } from "../../core/daily-actuals.js";
@@ -67,11 +69,26 @@ function captureScheduleReport(source, date) {
   records.sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt) || a.id.localeCompare(b.id));
   return { records, count: records.length, completed: records.filter(row => row.completed).length, excluded };
 }
-export function captureReportInput(source, date, derive) {
+function captureSeriesReport(source, date) {
+  const display = schedulesWithSeriesForDate(source, date);
+  const occurrences = display.records.filter(row => row.seriesId);
+  const records = [...new Map(occurrences.filter(row => row.date === date && !row.deleted)
+    .map(row => [row.id, pick(row, 'id date title plannedStartAt plannedEndAt completed')])).values()];
+  // Keep the derivation owner's identity/order; a previous-day continuation has no report row here.
+  return { records, count: records.length, completed: records.filter(row => row.completed).length,
+    excluded: { deleted: 0, invalid: display.warnings.filter(w => w.code.includes('series')).reduce((n, w) => n + w.count, 0),
+      otherDate: occurrences.filter(row => row.date !== date).length, continuation: occurrences.filter(row => row.date < date).length } };
+}
+export function captureReportInput(source, date, derive, options = {}) {
   if (!source || typeof date !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date) || typeof derive !== 'function') fail('report_input_required');
   if ((source.archivedDates || []).includes(date)) fail('archived_readonly');
   if (typeof source.journals?.[date] !== 'string' || !source.journals[date]) fail('journal_initialization_required');
-  const singleSchedules = captureScheduleReport(source.singleSchedules, date);
+  const seriesSchedules = (options.scheduleSeriesEnabled ?? SCHEDULE_SERIES_ENABLED) ? captureSeriesReport(source, date) : null;
+  const seriesIds = new Set(seriesSchedules ? [...seriesSchedules.records.map(row => row.id),
+    ...mergeStoredScheduleState(source).readable.scheduleSeries.map(parent => parent.originScheduleId).filter(Boolean)] : []);
+  const ordinary = seriesSchedules && Array.isArray(source.singleSchedules)
+    ? source.singleSchedules.filter(row => !row?.seriesId && !seriesIds.has(row?.id)) : source.singleSchedules;
+  const singleSchedules = captureScheduleReport(ordinary, date);
   const state = {};
   for (const key of ['blocks', 'tasks', 'projects', 'recurrences', 'questions', 'bodyScans']) state[key] = rows(source[key] || [], fields[key]);
   state.blocks = state.blocks.filter((block, i) => {
@@ -108,5 +125,5 @@ export function captureReportInput(source, date, derive) {
   const blocks = fixed.blocks.filter(block => !block.deleted && block.date === date)
     .sort((a, b) => (a.plannedStartAt || '99').localeCompare(b.plannedStartAt || '99'));
   const actuals = reportActuals(fixed, date);
-  return { date, state: fixed, blocks, derived, actuals, singleSchedules };
+  return { date, state: fixed, blocks, derived, actuals, singleSchedules, ...(seriesSchedules ? { seriesSchedules } : {}) };
 }

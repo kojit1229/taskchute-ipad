@@ -3,6 +3,7 @@ import { validateDailyTimes } from "../core/daily-time.js";
 import { isValidSingleSchedule, normalizeSingleSchedules } from "../core/single-schedule.js";
 import { contentKey } from "../core/single-schedule-merge.js";
 import { prepareOccurrence, buildOccurrence } from "./schedule-occurrence.js";
+import { prepareOccurrenceTime, occurrenceTimeEffects } from "./schedule-occurrence-time.js";
 
 const stores = new WeakMap();
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
@@ -92,7 +93,7 @@ function singleScheduleEffects(result, input, deps) {
 
 // Registry-only until D01; no modal handler or visible save action is installed.
 export function singleScheduleOperation(action) {
-  return { prepare: (input, deps) => input.seriesId ? prepareOccurrence(action, input, deps) : prepareSingleSchedule(action, input, deps),
+  return { prepare: (input, deps) => input.seriesId ? (input.timeline ? prepareOccurrenceTime(input, deps) : prepareOccurrence(action, input, deps)) : prepareSingleSchedule(action, input, deps),
     build: (state, input, deps) => input.occurrenceDraft ? buildOccurrence(state, input, deps) : buildSingleSchedule(state, input),
-    effects: (result, input, deps) => { if (!input.occurrenceDraft) singleScheduleEffects(result, input, deps); } };
+    effects: (result, input, deps) => { if (input.occurrenceDraft) occurrenceTimeEffects(result, input, deps); else singleScheduleEffects(result, input, deps); } };
 }

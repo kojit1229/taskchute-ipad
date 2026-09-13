@@ -49,18 +49,23 @@ export function prepareSeriesBulk(input, deps) {
   const signature = contentKey({ values: input.values, confirmation: input.confirmation });
   const old = store.get(key);
   if (old) { if (old.signature !== signature) throw seriesInvalid("新しい要求で再確認してください"); return { ...input, bulkDraft: old }; }
-  const preview = seriesBulkPreview(deps.state, input, deps);
-  const draft = { ...key, signature, candidate: preview.candidate, values: input.values, fingerprint: input.confirmation };
+  let preview;
+  try { preview = seriesBulkPreview(deps.state, input, deps); }
+  catch (error) { if (!input.confirmation || !seriesEnabled(deps)) throw error; }
+  const draft = { ...key, signature, candidate: preview?.candidate || null, values: input.values, fingerprint: input.confirmation };
   if (!store.put(draft).ok) throw seriesInvalid("下書きを保存できません。入力を残しています");
   return { ...input, bulkDraft: draft };
 }
 export function buildSeriesBulk(state, input, deps) {
   const draft = input.bulkDraft;
   if (!draft || !seriesEnabled(deps)) throw seriesInvalid("全件の下書きを確認してください");
+  if (!draft.candidate) throw conflict();
   const current = (state.scheduleSeries || []).find(p => p?.id === input.seriesId);
   const saved = current?.revisions.find(r => r.id === input.requestId);
   if (saved && contentKey(saved) === contentKey(draft.candidate.revisions.at(-1))) return { records: [] };
-  if (seriesBulkPreview(state, input, deps).fingerprint !== draft.fingerprint) throw conflict();
+  let latest;
+  try { latest = seriesBulkPreview(state, input, deps).fingerprint; } catch { throw conflict(); }
+  if (latest !== draft.fingerprint) throw conflict();
   const result = mergeStoredScheduleState(state, { scheduleSeries: [draft.candidate] });
   return { records: [], candidates: [draft.candidate.updatedAt], values: [
     { kind: null, key: "scheduleSeries", before: state.scheduleSeries, after: result.scheduleSeries }] };
