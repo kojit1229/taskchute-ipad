@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v401";  // v401: AIレポートの外側9タブと作成元表示、本文の失敗表示、週次登録の成功表示を保存後へ、第3回の引渡し検査(束 R3-C+3回-11)
+const CACHE_NAME = "taskchute-journal-pwa-v402";  // v402: 系列の全件操作・時間軸の15分移動・日報の別表、再読込後の下書き復元、失敗注入の試験、第2回の引渡し(束 R2-E+R2-F。系列は旗で既定オフ)
 // v397: 設定画面と筋トレ画面の表示・確認・通知の文言を日本語に(第4回公開の先行分)
 // v396: 閲覧由来の記録を日報へ渡す経路(保存は無効のまま)と、3画面の通し・失敗/日跨ぎ・スマホ/PWA の検査群
 // v395: 閲覧記録・対応設定・習慣の合流(保存は無効のまま)、実行の4〜24時と空き時間の配置枠、単発予定の新しい配置枠への接続
@@ -727,6 +727,8 @@ const APP_SHELL = [
   "./src/features/single-schedule.js",
   "./src/features/schedule-series.js",
   "./src/features/schedule-occurrence.js",
+  "./src/features/schedule-series-bulk.js",
+  "./src/features/schedule-occurrence-time.js",
   "./src/features/single-schedule-view.js",
   "./src/features/daily-gap-placement.js",
   "./src/features/daily-gap-sheet.js",

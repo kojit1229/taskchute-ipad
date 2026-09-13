@@ -22,7 +22,7 @@
 | daily-copy-e2e.test.js | e2e | full | content-ai | 65 | 0 | 0 |
 | daily-detail-fields-e2e.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 57 | 0 | 0 |
 | daily-detail-frame.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
-| daily-draft-e2e.test.js | e2e | full | content-ai | 40 | 0 | 0 |
+| daily-draft-e2e.test.js | e2e | full | content-ai | 50 | 0 | 0 |
 | daily-mock-adapter.test.js | node | full | content-ai | 78 | 0 | 0 |
 | daily-operations-registry.test.js | node | full | content-ai | 45 | 0 | 0 |
 | daily-order-core.test.js | node | full | content-ai | 20 | 0 | 0 |
@@ -44,9 +44,9 @@
 | data-contract-gate.test.js | node | full | content-ai | 20 | 0 | 0 |
 | data-stamp-normalize.test.js | node | full | legacy-crosscutting | 13 | 0 | 0 |
 | day-cross-ticker.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 8 | 7600 |
-| detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 25 | 0 | 0 |
+| detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 31 | 0 | 0 |
 | directory-fallback.test.js | node | full | content-ai | 14 | 0 | 0 |
-| draft-leave.test.js | node | full | legacy-crosscutting | 24 | 0 | 0 |
+| draft-leave.test.js | node | full | legacy-crosscutting | 34 | 0 | 0 |
 | draft-save-transaction.test.js | node | full | legacy-crosscutting | 83 | 0 | 0 |
 | exec-layout-media.test.js | node | full | planning-execution, ui-responsive | 34 | 0 | 0 |
 | exec-timeline-e2e.test.js | e2e | full | planning-execution | 21 | 0 | 0 |
@@ -94,7 +94,7 @@
 | life-export-core.test.js | node | full | sync-storage, journal-health | 21 | 0 | 0 |
 | merge-core.test.js | node | full | sync-storage | 23 | 0 | 0 |
 | modal-delete-impact.test.js | node | full | ui-responsive | 15 | 0 | 0 |
-| mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 164 | 0 | 0 |
+| mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 181 | 0 | 0 |
 | mutation-bundle-e2e.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
 | mutation-global-e2e.test.js | e2e | full | sync-storage | 178 | 0 | 0 |
 | mutation-recurrence-e2e.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
