@@ -10,6 +10,7 @@ import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completi
 import { createDailyDraftStore } from "./daily-draft.js";
 import { singleScheduleOperation } from "./single-schedule.js";
 import { seriesRegistrationOperation } from "./schedule-series.js";
+import { prepareSeriesBulk, buildSeriesBulk } from "./schedule-series-bulk.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
 import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 import { gapPlacementOperation } from "./daily-gap-placement.js";
@@ -48,6 +49,7 @@ export const DAILY_OPERATIONS = {
   "daily-schedule-add": singleScheduleOperation("add"),
   "daily-series-add": seriesRegistrationOperation("add"),
   "daily-series-convert": seriesRegistrationOperation("convert"),
+  "daily-series-bulk": { prepare: prepareSeriesBulk, build: buildSeriesBulk },
   "daily-schedule-edit": singleScheduleOperation("edit"),
   "daily-schedule-complete": singleScheduleOperation("complete"),
   "daily-schedule-delete": singleScheduleOperation("delete"),
@@ -308,6 +310,6 @@ export function runDailyOperation(name, input, deps) {
     });
   } catch (error) {
     if (error.code !== "DAILY_OPERATION_INVALID") throw error;
-    return { ok: false, status: "invalid", error };
+    return { ok: false, status: error.status || "invalid", error };
   }
 }

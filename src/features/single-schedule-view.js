@@ -7,6 +7,7 @@ import { seriesEnabled, seriesRegistrationForm, submitSeriesRegistration } from 
 import { runDailyOperation } from "./daily-operations.js";
 import { schedulesWithSeriesForDate } from "../core/schedule-series-derive.js";
 import { occurrenceFingerprint, occurrenceForm, submitOccurrence } from "./schedule-occurrence.js";
+import { seriesBulkControls, submitSeriesBulk } from "./schedule-series-bulk.js";
 let scheduleViewDeps;
 // Display-only projection; the derived row/identity remains the operation source.
 const scheduleModel = (record, date) => buildDailyViewModel(record.seriesId ? { ...record, seriesId: "", occurrenceKey: "" } : record, { kind: "schedule", date });
@@ -19,11 +20,13 @@ export function configureScheduleView(deps) {
     deps.state().modal = { type: "singleScheduleView", id, date };
     deps.renderModal(deps.modalHeaderHTML("単発予定", "single-schedule-detail")
       + renderSchedule(record, date, deps.escapeHTML, { detail: true })
-      + (record.seriesId && seriesEnabled(deps.operationDeps) ? occurrenceForm(record, deps.escapeHTML) : "")
+      + (record.seriesId && seriesEnabled(deps.operationDeps) ? occurrenceForm(record, deps.escapeHTML, seriesBulkControls(record, deps.state().scheduleSeries.find(p => p.id === record.seriesId), deps.escapeHTML)) : "")
       + (seriesEnabled(deps.operationDeps) && !record.seriesId ? seriesRegistrationForm(record, deps.escapeHTML)
         + '<button type="button" data-action="series-register-new">新しい繰り返し予定</button>' : "") + "</div></div>");
   };
   registerActions({
+    "series-bulk-preview": ({ target }) => submitSeriesBulk(false, target, deps, runDailyOperation),
+    "series-bulk-save": ({ target }) => submitSeriesBulk(true, target, deps, runDailyOperation),
     "series-occurrence-save": ({ target }) => submitOccurrence("edit", target, deps, runDailyOperation),
     "series-occurrence-delete": ({ target }) => submitOccurrence("delete", target, deps, runDailyOperation),
     "series-register-save": ({ target }) => submitSeriesRegistration(target, deps, runDailyOperation),

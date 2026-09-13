@@ -77,13 +77,13 @@ export function buildOccurrence(state, input, deps) {
   return { records: [], candidates: [draft.candidate?.updatedAt], values: unchanged ? [] : [
     { kind: null, key: "singleSchedules", before: state.singleSchedules, after: result.singleSchedules }] };
 }
-export function occurrenceForm(row, escapeHTML) {
+export function occurrenceForm(row, escapeHTML, bulkControls = "") {
   const field = (name, type, value) => `<label>${({ title: "予定名", date: "日付", startTime: "開始", endTime: "終了" })[name]}<input style="font-size:16px" data-modal-field="${name}" data-occurrence-field="${name}" type="${type}" ${type === "time" ? 'step="300"' : ""} value="${escapeHTML(value)}"></label>`;
   return `<section data-occurrence-form data-id="${escapeHTML(row.id)}" data-series-id="${escapeHTML(row.seriesId)}" data-key="${row.occurrenceKey}" data-date="${row.date}" data-fingerprint="${escapeHTML(row.seriesFingerprint)}">
     ${field("title", "text", row.title)}${field("date", "date", row.date)}${field("startTime", "time", row.plannedStartAt.slice(11))}${field("endTime", "time", row.plannedEndAt.slice(11))}
     <label>翌日終了<input data-modal-field="endNextDay" data-occurrence-field="endNextDay" type="checkbox" ${row.plannedEndAt.slice(0, 10) !== row.date ? "checked" : ""}></label>
     <label>メモ<textarea style="font-size:16px" data-modal-field="note" data-occurrence-field="note">${escapeHTML(row.note)}</textarea></label>
-    <button type="button" data-action="series-occurrence-save">この回だけ保存</button><button type="button" data-action="series-occurrence-delete">この回だけ削除</button></section>`;
+    <button type="button" data-action="series-occurrence-save">この回だけ保存</button><button type="button" data-action="series-occurrence-delete">この回だけ削除</button>${bulkControls}</section>`;
 }
 export function submitOccurrence(action, target, deps, run) {
   if (!seriesEnabled(deps.operationDeps)) return;
