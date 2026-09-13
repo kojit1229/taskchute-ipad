@@ -438,10 +438,10 @@ function exerciseMenuHTML(exercises) {
 
   return `
     <section class="iron-box">
-      <h2>MENU <span>種目メニュー</span></h2>
+      <h2>種目メニュー</h2>
       <div class="iron-menu-list">${rows}</div>
       <div class="iron-menu-form">
-        <input id="ironMenuName" type="text" placeholder="種目名を追加" maxlength="24">
+        <input id="ironMenuName" type="text" placeholder="種目名を追加" maxlength="24" aria-label="追加する種目名">
         <button type="button" data-action="iron-menu-add">+ 追加</button>
       </div>
     </section>`;
@@ -497,7 +497,7 @@ function renderIronLog() {
     ? `<div class="iron-linked">
          <span class="iron-linked-status">● 実行中</span>
          <span class="iron-linked-name">${escapeHTML(linked.block.title || "")}</span>
-         ${linked.block.id ? `<button type="button" class="btn" style="min-height:44px" data-action="edit-block" data-id="${escapeHTML(linked.block.id)}">連動中のBlockを開く</button>` : ""}
+         ${linked.block.id ? `<button type="button" class="btn" style="min-height:44px" data-action="edit-block" data-id="${escapeHTML(linked.block.id)}">連動中の予定・実行記録を開く</button>` : ""}
          <span class="iron-linked-time">${hhmmFromDateTimeString(linked.block.actualStartAt)?.h != null
             ? `${String(hhmmFromDateTimeString(linked.block.actualStartAt).h).padStart(2, "0")}:${String(hhmmFromDateTimeString(linked.block.actualStartAt).min).padStart(2, "0")} 開始`
             : ""} — 実行中 ${linked.elapsedMinutes != null
@@ -509,14 +509,14 @@ function renderIronLog() {
          <span class="iron-linked-status is-idle">○ 未連動</span>
          <span class="iron-linked-name">実行中のジムタスクはありません</span>
        </div>
-       <div class="iron-linked-foot">タスク未連動(セットは当日記録のみ)。ジム系Blockを開始すると自動で連動します。</div>`;
+       <div class="iron-linked-foot">タスク未連動(セットは当日記録のみ)。筋トレの予定・実行記録を開始すると自動で連動します。</div>`;
 
   const setRows = rows.length === 0
     ? `<div class="iron-empty">まだ記録がありません</div>`
     : rows.map((s) => `
         <div class="iron-set-row">
           <time>${escapeHTML((s.at || "").slice(11, 16))}</time>
-          <span class="iron-set-name">${escapeHTML(s.exercise || "")}${s.isPersonalBest ? '<span class="iron-pr">PR</span>' : ""}</span>
+          <span class="iron-set-name">${escapeHTML(s.exercise || "")}${s.isPersonalBest ? '<span class="iron-pr">自己ベスト</span>' : ""}</span>
           <span class="iron-set-detail">${fmtNum(s.weight)}kg × ${fmtNum(s.reps)}</span>
           <span class="iron-set-kg">+${fmtNum(s.kg)}</span>
           <button type="button" class="iron-set-del" data-action="iron-delete-set" data-id="${s.idx}" aria-label="削除">✕</button>
@@ -524,16 +524,16 @@ function renderIronLog() {
       `).join("");
 
   return `
-    ${renderHeader("IRON LOG", "筋トレ")}
+    ${renderHeader("筋トレの記録", "筋トレ記録")}
     <div class="iron" id="ironRoot">
 
       <section class="iron-box">
-        <h2>LINKED FLIGHT <span>連動中のタスク</span></h2>
+        <h2>連動中のタスク</h2>
         ${linkedHTML}
       </section>
 
       <section class="iron-box">
-        <h2>PAYLOAD <span>今日の総重量</span></h2>
+        <h2>今日の総重量</h2>
         <div class="iron-payload">
           <div class="iron-total"><span>${fmtNum(total)}</span><small> kg</small></div>
           <div class="iron-fact">${factHTML}</div>
@@ -542,17 +542,17 @@ function renderIronLog() {
       </section>
 
       <section class="iron-box">
-        <h2>LOAD SET <span>セットを追加</span></h2>
+        <h2>セットを追加</h2>
         ${form.date && form.date !== iso ? `<p class="iron-draft-date" role="status">${escapeHTML(form.date)}からの入力です。追加すると今日（${escapeHTML(iso)}）に記録します。</p>` : ""}
         <div class="iron-form-labels">
           <span>種目</span><span>重量 kg</span><span>回数</span><span></span>
         </div>
         <div class="iron-form">
-          <select id="ironFormExercise" aria-describedby="ironErrorExercise" aria-invalid="${Boolean(form.errors.exercise)}" data-action="iron-exercise-select">
+          <select id="ironFormExercise" aria-label="種目" aria-describedby="ironErrorExercise" aria-invalid="${Boolean(form.errors.exercise)}" data-action="iron-exercise-select">
             ${optionList.map((ex) => `<option value="${escapeHTML(ex)}"${ex === selectedExercise ? " selected" : ""}>${escapeHTML(ex)}</option>`).join("")}
           </select>
-          <input id="ironFormWeight" aria-describedby="ironErrorWeight" aria-invalid="${Boolean(form.errors.weight)}" type="number" value="${escapeHTML(form.weight)}"${form.weightPrefilled ? ' data-prefilled="1"' : ""} min="0" step="2.5">
-          <input id="ironFormReps" aria-describedby="ironErrorReps" aria-invalid="${Boolean(form.errors.reps)}" type="number" value="${escapeHTML(form.reps)}"${form.repsPrefilled ? ' data-prefilled="1"' : ""} min="1" step="1">
+          <input id="ironFormWeight" aria-label="重量（kg）" aria-describedby="ironErrorWeight" aria-invalid="${Boolean(form.errors.weight)}" type="number" value="${escapeHTML(form.weight)}"${form.weightPrefilled ? ' data-prefilled="1"' : ""} min="0" step="2.5">
+          <input id="ironFormReps" aria-label="回数" aria-describedby="ironErrorReps" aria-invalid="${Boolean(form.errors.reps)}" type="number" value="${escapeHTML(form.reps)}"${form.repsPrefilled ? ' data-prefilled="1"' : ""} min="1" step="1">
           <button type="button" data-action="iron-add-set">+ 追加</button>
         </div>
         <div class="iron-form-errors" aria-live="polite">
@@ -563,12 +563,12 @@ function renderIronLog() {
       ${exerciseMenuHTML(exercises)}
 
       <section class="iron-box">
-        <h2>TODAY'S SETS <span>${rows.length} セット</span></h2>
+        <h2>今日のセット <span>${rows.length} セット</span></h2>
         <div class="iron-set-list">${setRows}</div>
       </section>
 
       <section class="iron-box">
-        <h2>TOTALS <span>積み上げ</span></h2>
+        <h2>積み上げ</h2>
         <div class="iron-totals">
           <div class="iron-totals-cell"><span>累計</span><strong>${(totals.lifetimeKg / 1000).toFixed(1)} t</strong></div>
           <div class="iron-totals-cell"><span>今月</span><strong>${fmtNum(totals.monthKg)} kg</strong></div>

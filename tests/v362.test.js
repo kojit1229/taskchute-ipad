@@ -74,8 +74,8 @@ async function seed(page, values) {
       await page.locator(".settings-columns").count() === 0);
     check("1100pxでは5群すべての.settings-group-flatが並ぶ",
       await page.locator(".settings-grid > .settings-group-flat").count() === 5);
-    check("1100pxでもバッファ・電池・テーマ・プロフィール・カテゴリ・データ・その他の行ラベルが全部見える",
-      (await page.locator(".settings-rows").allInnerTexts()).join("\n").match(/バッファ/) &&
+    check("1100pxでも余白時間・電池・テーマ・プロフィール・カテゴリ・データ・その他の行ラベルが全部見える",
+      (await page.locator(".settings-rows").allInnerTexts()).join("\n").match(/余白時間/) &&
       (await page.locator(".settings-group-flat-label").allInnerTexts()).join(",").includes("データ"));
 
     // ============================================================
@@ -101,11 +101,11 @@ async function seed(page, values) {
       await page.locator(".settings-grid > .settings-group-flat").count() === 0
       && await page.locator(".settings-group-detail > .settings-group-flat").count() === 5);
     const navItems = page.locator(".settings-group-nav-item");
-    check("左ナビは5群ぶん(日々の使い方/表示/プロフィールとマスタ/データ/その他)",
+    check("左ナビは5群ぶん(日々の使い方/表示/基本情報/データ/その他)",
       await navItems.count() === 5);
     const navLabels = await navItems.locator(".settings-group-nav-label").allInnerTexts();
     check("左ナビの並びはv358と同じ順",
-      JSON.stringify(navLabels) === JSON.stringify(["日々の使い方", "表示", "プロフィールとマスタ", "データ", "その他"]),
+      JSON.stringify(navLabels) === JSON.stringify(["日々の使い方", "表示", "基本情報", "データ", "その他"]),
       JSON.stringify(navLabels));
     check("既定ハイライトは先頭群「日々の使い方」(左ナビ)",
       await navItems.nth(0).evaluate((el) => el.classList.contains("active")) === true
@@ -114,12 +114,12 @@ async function seed(page, values) {
       await page.locator('.settings-group-detail [data-settings-group="daily"]').evaluate((el) => el.classList.contains("settings-group-flat-active")) === true
       && await page.locator('.settings-group-detail [data-settings-group="display"]').evaluate((el) => el.classList.contains("settings-group-flat-active")) === false);
     // H1/H2差し戻し対応の核心: 選択中でない群の行も常にDOMに存在すること(v266等が前提にする契約)。
-    check("右詳細に「日々の使い方」群の行(バッファ・電池)が見える",
+    check("右詳細に「日々の使い方」群の行(余白時間・電池)が見える",
       (await page.locator('.settings-group-detail [data-settings-group="daily"]').innerText()).includes("60分")
       && (await page.locator('.settings-group-detail [data-settings-group="daily"]').innerText()).includes("60/80/100"));
     check("右詳細には非選択の「データ」群の行(書き出し)も常時DOMに存在する(絞り込まない)",
       (await page.locator('.settings-group-detail [data-settings-group="data"]').innerText()).includes("書き出し"));
-    check("右詳細には非選択の「プロフィールとマスタ」群のスコア目標inputも常時DOMに存在する(v266が前提にする契約)",
+    check("右詳細には非選択の「基本情報」群のスコア目標inputも常時DOMに存在する(v266が前提にする契約)",
       await page.locator("[data-setting-scoretarget]").count() === 1);
 
     // ============================================================
@@ -135,7 +135,7 @@ async function seed(page, values) {
     check("「データ」タップで右詳細側のハイライトも「データ」へ移動する",
       await page.locator('.settings-group-detail [data-settings-group="data"]').evaluate((el) => el.classList.contains("settings-group-flat-active")) === true
       && await page.locator('.settings-group-detail [data-settings-group="daily"]').evaluate((el) => el.classList.contains("settings-group-flat-active")) === false);
-    check("「データ」タップ後も「日々の使い方」群の行(バッファ)はDOMから消えない(絞り込みではなくハイライト+スクロールのみ)",
+    check("「データ」タップ後も「日々の使い方」群の行(余白時間)はDOMから消えない(絞り込みではなくハイライト+スクロールのみ)",
       (await page.locator('.settings-group-detail [data-settings-group="daily"]').innerText()).includes("60分"));
     const rawAfterSwitch = await page.evaluate((k) => localStorage.getItem(k), STATE_KEY);
     check("群選択はlocalStorageの内容を一切変えない(state非書込・非永続の実証)",
@@ -202,7 +202,7 @@ async function seed(page, values) {
     // ============================================================
     console.log("[7] vision-open-direct-settings誘導がPC幅でも空振りしない(H2差し戻し対応)");
     // ============================================================
-    // v189導線: ALIGNMENT誘導→設定「プロフィールとマスタ」群へ着地。旧実装は死にキー
+    // v189導線: ALIGNMENT誘導→設定「基本情報」群へ着地。旧実装は死にキー
     // (setFoldOpen("settings-master"))で誘導が無言で空振りしていた(review-v362-claude.md H2)。
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForFunction((w) => document.documentElement.clientWidth === w, 1280);
@@ -217,9 +217,9 @@ async function seed(page, values) {
         document.querySelector('.settings-group-detail [data-settings-group="profile"]')?.classList.contains("settings-group-flat-active"));
       check("vision-open-direct-settingsで設定タブへ遷移する",
         await page.locator(".settings-connect").count() === 1);
-      check("vision-open-direct-settingsで「プロフィールとマスタ」群がハイライトされる(誘導が空振りしない)",
+      check("vision-open-direct-settingsで「基本情報」群がハイライトされる(誘導が空振りしない)",
         await page.locator('.settings-group-detail [data-settings-group="profile"]').evaluate((el) => el.classList.contains("settings-group-flat-active")) === true
-        && await page.locator(".settings-group-nav-item").filter({ hasText: "プロフィールとマスタ" }).evaluate((el) => el.classList.contains("active")) === true);
+        && await page.locator(".settings-group-nav-item").filter({ hasText: "基本情報" }).evaluate((el) => el.classList.contains("active")) === true);
       check("誘導後もカテゴリ管理の行(カテゴリ)がDOMに存在し操作できる",
         (await page.locator('.settings-group-detail [data-settings-group="profile"]').innerText()).includes("カテゴリ管理"));
     } else {

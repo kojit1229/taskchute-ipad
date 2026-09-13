@@ -127,11 +127,12 @@ function gymSet(exercise, weight, reps, hhmm) {
       ["LOAD SET", "セットを追加"],
       ["TOTALS", "積み上げ"]
     ];
+    // R4-B/4回-09(監督者の契約追随 2026-09-13 09:35): 見出しは英語ラベル+日本語副題から日本語の見出しだけになった(設計10 §3、R4-09 成果記録の対応表)。
+    // 同じ性質=各枠の見出しが日本語で表示され 11px 以上、を見出し本体で検査する(副題 span は無い)。design/CHANGELOG.md
     for (const [label, subtitle] of subtitleChecks) {
-      const h2 = page.locator(".iron-box h2", { hasText: label });
-      const span = h2.locator("span").first();
-      check(`${label}の副題「${subtitle}」を表示`, ((await span.textContent()) || "").includes(subtitle));
-      const fontSize = await span.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      const h2 = page.locator(".iron-box h2", { hasText: subtitle }).first();
+      check(`${label}の見出し「${subtitle}」を表示`, ((await h2.textContent()) || "").includes(subtitle));
+      const fontSize = await h2.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       check(`${label}副題のfont-sizeは11px以上`, fontSize >= 11, String(fontSize));
     }
     // 差し戻し対応M3: 個別ラベルだけでなく、#ironRoot配下で実際に文字を持つ全要素をDOM走査し、

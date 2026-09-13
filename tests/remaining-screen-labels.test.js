@@ -255,9 +255,105 @@ async function wishJapanese(page) {
   console.log("PASS wish: Japanese headings/empty states, all controls, realization and existing IDs");
 }
 
+async function settingsJapanese(page) {
+  const { STATE_KEY } = require("./helpers");
+  await nav(page, "settings");
+  const root = page.locator(".settings-grid");
+  const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, STATE_KEY);
+  assert.deepEqual(await root.locator(".settings-group-flat-label").allTextContents(),
+    ["日々の使い方", "表示", "基本情報", "データ", "その他"]);
+  for (const [id, label] of [["buffer", "余白時間"], ["battery", "電池"], ["draft", "下書きスケジュール"],
+    ["theme", "テーマ"], ["profile", "基本情報(生年月日・12週計画)"], ["category", "カテゴリ管理"],
+    ["data-export", "書き出し"], ["data-import", "ファイルから復元（JSON）"], ["data-reset", "デモデータに戻す"]]) {
+    const row = root.locator('[data-settings-row="' + id + '"]');
+    assert.equal(await row.locator(".settings-row-label").innerText(), label);
+    await row.locator("summary").click();
+    assert.equal(await row.evaluate(el => el.open), true);
+  }
+  const text = await root.textContent();
+  for (const label of ["予定の開始で自動起動", "実行画面の開始", "端末の設定に合わせる", "ホーム画面に追加したアプリ",
+    "ファイルに書き出す（JSON）", "保存形式（JSON）", "公開先（GitHub Pages）", "有効", "無効"]) assert.ok(text.includes(label), label);
+  const actions = await root.locator("[data-action]").evaluateAll(nodes => [...new Set(nodes.map(n => n.dataset.action))].sort());
+  const expected = ["save-github", "load-github", "toggle-settings-sync", "open-backup-list", "settings-row-toggle",
+    "add-category", "download-data", "life-export", "run-archive", "reset-demo", "delete-category", "toggle-vision-direct-category"];
+  if (await root.locator(".settings-group-nav").count()) expected.push("settings-group-select");
+  assert.deepEqual(actions, expected.sort(), "all settings actions remain available");
+  for (const field of ["birthDate", "twelveWeekStartDate"]) assert.equal(await root.locator('[data-setting-field="' + field + '"]').getAttribute("type"), "date");
+  const time = root.locator('[data-setting-battery-field="decayStartMinutes"]');
+  assert.equal(await time.getAttribute("type"), "time");
+  assert.equal(await time.getAttribute("step"), "300");
+  assert.equal(await root.locator('[data-setting-field="theme"] option[value="auto"]').textContent(), "端末の設定に合わせる");
+  assert.equal(await root.locator("#importData").getAttribute("accept"), "application/json");
+  assert.equal(await root.locator('[data-github-field="token"]').getAttribute("type"), "password");
+  assert.deepEqual(await root.locator('[data-action="life-export"]').evaluateAll(nodes => nodes.map(n => n.dataset.kind)),
+    ["gym", "sleep", "condition", "store", "bodyScan", "writeMeditation"]);
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, STATE_KEY), before, "opening settings preserves every value");
+  const dialogPromise = page.waitForEvent("dialog");
+  const clicked = root.locator('[data-action="reset-demo"]').click();
+  const dialog = await dialogPromise;
+  assert.equal(dialog.message(), "この端末の全データ(予定・実行記録・ジャーナル・0秒思考・筋トレ記録等)をデモデータへ置き換えます。\nGitHub同期設定(トークン)も初期化され、取り消せません。よろしいですか?");
+  await dialog.dismiss(); await clicked;
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, STATE_KEY), before, "cancelled restoration preserves settings");
+  console.log("PASS settings: Japanese groups, explanations, native inputs, every action, unchanged values and reset confirmation");
+}
+
+async function ironJapanese(page) {
+  const { STATE_KEY } = require("./helpers");
+  await page.evaluate(key => {
+    const s = JSON.parse(localStorage.getItem(key));
+    const date = "2026-07-25";
+    s.settings.gymExerciseList = ["ベンチプレス", "スクワット"];
+    s.settings.ironManualBaseKg = 0;
+    s.ironImport = { done: true, importedTotalKg: 0, importedDays: 0 };
+    for (const [day, weight] of [["2026-07-24", 50], [date, 60]]) {
+      s.condition.logs[day] = { ...s.condition.logs[day], gym: [{ id: "label-set-" + day,
+        exercise: "ベンチプレス", weight, reps: 10, at: day + "T09:15:00", deleted: false }] };
+    }
+    s.blocks = [{ id: "label-running", title: "架空の筋トレ", category: "ジム", date,
+      start: "09:00", end: "10:00", actualStartAt: date + "T09:00:00", actualEndAt: null, deleted: false }];
+    localStorage.setItem(key, JSON.stringify(s));
+  }, STATE_KEY);
+  await page.reload(); await nav(page, "iron-log");
+  const root = page.locator("#ironRoot");
+  assert.equal(await page.locator(".view-header h1").innerText(), "筋トレ記録");
+  assert.equal(await page.locator(".eyebrow").innerText(), "筋トレの記録");
+  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.trim())),
+    ["連動中のタスク", "今日の総重量", "セットを追加", "種目メニュー", "今日のセット", "積み上げ"]);
+  assert.equal(await root.locator(".iron-pr").innerText(), "自己ベスト");
+  assert.equal(await root.locator(".iron-total span").innerText(), "600");
+  assert.equal(await root.locator(".iron-set-detail").innerText(), "60kg × 10");
+  assert.equal(await root.locator(".iron-set-kg").innerText(), "+600");
+  assert.equal(await root.locator('[data-action="edit-block"]').innerText(), "連動中の予定・実行記録を開く");
+  const actions = await root.locator("[data-action]").evaluateAll(nodes => [...new Set(nodes.map(n => n.dataset.action))].sort());
+  assert.deepEqual(actions, ["edit-block", "iron-add-set", "iron-delete-set", "iron-exercise-select",
+    "iron-menu-add", "iron-menu-delete", "iron-menu-down", "iron-menu-up"].sort());
+  for (const [id, label] of [["ironFormExercise", "種目"], ["ironFormWeight", "重量（kg）"],
+    ["ironFormReps", "回数"], ["ironMenuName", "追加する種目名"]]) assert.equal(await root.locator("#" + id).getAttribute("aria-label"), label);
+  assert.equal(await root.locator('[data-action="iron-menu-up"]').first().getAttribute("aria-label"), "上へ");
+  assert.equal(await root.locator('[data-action="iron-menu-down"]').first().getAttribute("aria-label"), "下へ");
+  assert.equal(await root.locator('[data-action="iron-delete-set"]').getAttribute("aria-label"), "削除");
+  assert.equal(await root.locator("#ironFormWeight").getAttribute("type"), "number");
+  assert.equal(await root.locator("#ironFormReps").getAttribute("step"), "1");
+  const { setViewportAndWaitForStableLayout } = require("./helpers");
+  const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
+  const output = process.env.ARTIFACT_DIR || fs.mkdtempSync(path.join(os.tmpdir(), "r4b-labels-"));
+  fs.mkdirSync(output, { recursive: true });
+  const measurements = [];
+  for (const view of ["iron-log", "settings"]) {
+    await nav(page, view);
+    for (const width of [390, 1280]) {
+      await setViewportAndWaitForStableLayout(page, { width, height: 900 }, view === "iron-log" ? "#ironRoot input, #ironRoot select" : ".settings-grid input, .settings-grid select");
+      measurements.push({ view, width, ...(await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }))) });
+      await page.screenshot({ path: path.join(output, view + "-" + width + ".png"), fullPage: true });
+    }
+  }
+  fs.writeFileSync(path.join(output, "label-dimensions.json"), JSON.stringify(measurements, null, 2), "utf8");
+  console.log("PASS iron: Japanese headings/PR/linked action, all controls, accessible names and weight × reps; screenshots saved");
+}
+
 async function run() {
   const { page, browser, server } = await setup();
-  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); }
+  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); await settingsJapanese(page); await ironJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

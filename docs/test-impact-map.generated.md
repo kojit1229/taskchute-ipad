@@ -109,7 +109,7 @@
 | recurrence-core.test.js | node | full | sync-storage, planning-execution | 87 | 0 | 0 |
 | release-gate.test.js | node | full | legacy-crosscutting | 31 | 0 | 0 |
 | release-record.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
-| remaining-screen-labels.test.js | e2e | full | content-ai, ui-responsive | 88 | 0 | 0 |
+| remaining-screen-labels.test.js | e2e | full | content-ai, ui-responsive | 118 | 0 | 0 |
 | remaining-twelveweek-layout.test.js | e2e | full | content-ai, ui-responsive | 11 | 0 | 0 |
 | remote-invalid-fail-close.test.js | node | full | content-ai | 18 | 0 | 0 |
 | report-view.test.js | node | full | journal-health, content-ai | 30 | 0 | 0 |

@@ -76,8 +76,8 @@ function check(name, cond, extra = "") {
     await seed({
       gym: [set("ベンチプレス", 60, 10, 9 * 60), set("スクワット", 80, 5, 9 * 60 + 10)]
     });
-    check("ヘッダはIRON LOG/筋トレ", (await page.locator(".eyebrow").textContent()) === "IRON LOG"
-      && (await page.locator(".view-header h1").textContent()) === "筋トレ");
+    check("ヘッダは筋トレの記録/筋トレ記録", (await page.locator(".eyebrow").textContent()) === "筋トレの記録"
+      && (await page.locator(".view-header h1").textContent()) === "筋トレ記録");
     check("PAYLOADは合計1,000kgを表示", (await page.locator(".iron-total span").textContent()) === "1,000");
     check("v363: 目標線(DAILY TARGET)・達成バッジ・goal-hitクラスは撤去済み", await page.locator(".iron-goal-line").count() === 0
       && await page.locator(".iron-achieved").count() === 0 && await page.locator(".iron.goal-hit").count() === 0);
@@ -190,10 +190,10 @@ function check(name, cond, extra = "") {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.blocks.find((b) => b.id === id)?.completed === true;
     }, { KEY, id: "gym-empty" });
-    await page.waitForFunction(() => document.querySelector("#toast")?.textContent === "IRON LOGのセットが未記録です", null, { timeout: 1000 }).catch(() => {});
+    await page.waitForFunction(() => document.querySelector("#toast")?.textContent === "筋トレ記録のセットが未記録です", null, { timeout: 1000 }).catch(() => {});
     check("未記録通知でconfirmを呼ばない", (await page.evaluate(() => window.__emptyConfirmCalls)) === 0);
     check("紐づくセット0件の完了で未記録トーストが出る",
-      (await page.locator("#toast").textContent()) === "IRON LOGのセットが未記録です");
+      (await page.locator("#toast").textContent()) === "筋トレ記録のセットが未記録です");
     const afterEmptyComplete = await readState();
     check("通知後も完了自体は成立する", afterEmptyComplete.blocks.find((b) => b.id === "gym-empty")?.completed === true);
 
@@ -255,8 +255,8 @@ function check(name, cond, extra = "") {
     }));
     check("一括承認のconfirmは全体確認1回だけ", bulkSignals.confirmCalls === 1, JSON.stringify(bulkSignals));
     check("一括承認では未記録トーストを出さない",
-      !bulkSignals.toastMessages.includes("IRON LOGのセットが未記録です")
-        && !bulkSignals.currentToast.includes("IRON LOGのセットが未記録です"),
+      !bulkSignals.toastMessages.includes("筋トレ記録のセットが未記録です")
+        && !bulkSignals.currentToast.includes("筋トレ記録のセットが未記録です"),
       JSON.stringify(bulkSignals));
 
     console.log("[9] NOW LANDINGのIRON LOG導線は実行中ジムBlockだけに表示され遷移できる");
