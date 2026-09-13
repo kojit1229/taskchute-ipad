@@ -235,8 +235,8 @@ function triggerAnchorPlacements(anchorId, completedAtDateTime) {
 // 指定期間に繰り返し Block を実体化(既存があれば温存)。
 // purge=true で「期間外 かつ 未編集」の繰り返し実体を破棄しファイルを小さく保つ。
 // (元routine.js:786-826、逐語コピー。stateアクセスをgetState()経由に変更)
-function maintainRecurrences({ purge = false } = {}) {
-  if (mutate && !mutationActive()) return mutate(() => maintainRecurrences({ purge }));
+function maintainRecurrences({ purge = false, persist = true } = {}) {
+  if (persist && mutate && !mutationActive()) return mutate(() => maintainRecurrences({ purge }));
   const state = getState();
   state.recurrences ||= [];
   state.blocks ||= [];

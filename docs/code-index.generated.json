@@ -3,7 +3,7 @@
   "generatedBy": "scripts/code-index.js",
   "parser": "acorn@8.18.0",
   "source": "app.js",
-  "sourceLines": 15731,
+  "sourceLines": 15735,
   "functions": [
     {
       "name": "pruneExpiredSuggestedThemes",
@@ -10122,8 +10122,8 @@
       "name": "runDailyOpen",
       "kind": "function",
       "startLine": 15436,
-      "endLine": 15456,
-      "lines": 21,
+      "endLine": 15460,
+      "lines": 25,
       "area": [
         "state",
         "journal-health"
@@ -10139,8 +10139,8 @@
     {
       "name": "_energyMedian",
       "kind": "function",
-      "startLine": 15459,
-      "endLine": 15464,
+      "startLine": 15463,
+      "endLine": 15468,
       "lines": 6,
       "area": [
         "journal-health"
@@ -10151,8 +10151,8 @@
     {
       "name": "_actualDurationMin",
       "kind": "function",
-      "startLine": 15465,
-      "endLine": 15469,
+      "startLine": 15469,
+      "endLine": 15473,
       "lines": 5,
       "area": [
         "core"
@@ -10163,8 +10163,8 @@
     {
       "name": "resolveEstimateMin",
       "kind": "function",
-      "startLine": 15471,
-      "endLine": 15481,
+      "startLine": 15475,
+      "endLine": 15485,
       "lines": 11,
       "area": [
         "journal-health"
@@ -10177,8 +10177,8 @@
     {
       "name": "computeProjectedEnd",
       "kind": "function",
-      "startLine": 15483,
-      "endLine": 15498,
+      "startLine": 15487,
+      "endLine": 15502,
       "lines": 16,
       "area": [
         "execution"
@@ -10189,8 +10189,8 @@
     {
       "name": "projectedEndText",
       "kind": "function",
-      "startLine": 15500,
-      "endLine": 15511,
+      "startLine": 15504,
+      "endLine": 15515,
       "lines": 12,
       "area": [
         "execution"
@@ -10205,8 +10205,8 @@
     {
       "name": "updateProjectedEndTick",
       "kind": "function",
-      "startLine": 15514,
-      "endLine": 15517,
+      "startLine": 15518,
+      "endLine": 15521,
       "lines": 4,
       "area": [
         "core"
@@ -10219,8 +10219,8 @@
     {
       "name": "updateBatteryTick",
       "kind": "function",
-      "startLine": 15525,
-      "endLine": 15543,
+      "startLine": 15529,
+      "endLine": 15547,
       "lines": 19,
       "area": [
         "execution",
@@ -10240,8 +10240,8 @@
     {
       "name": "computeBufferRemaining",
       "kind": "function",
-      "startLine": 15554,
-      "endLine": 15572,
+      "startLine": 15558,
+      "endLine": 15576,
       "lines": 19,
       "area": [
         "execution"
@@ -10254,8 +10254,8 @@
     {
       "name": "bufferMeterLevel",
       "kind": "function",
-      "startLine": 15574,
-      "endLine": 15579,
+      "startLine": 15578,
+      "endLine": 15583,
       "lines": 6,
       "area": [
         "core"
@@ -10266,8 +10266,8 @@
     {
       "name": "computeDailyOverload",
       "kind": "function",
-      "startLine": 15593,
-      "endLine": 15608,
+      "startLine": 15597,
+      "endLine": 15612,
       "lines": 16,
       "area": [
         "state",
@@ -10281,8 +10281,8 @@
     {
       "name": "bufferMeterHTML",
       "kind": "function",
-      "startLine": 15614,
-      "endLine": 15633,
+      "startLine": 15618,
+      "endLine": 15637,
       "lines": 20,
       "area": [
         "state"
@@ -10296,8 +10296,8 @@
     {
       "name": "prefillEnergy",
       "kind": "function",
-      "startLine": 15637,
-      "endLine": 15649,
+      "startLine": 15641,
+      "endLine": 15653,
       "lines": 13,
       "area": [
         "journal-health"
@@ -10308,10 +10308,10 @@
       "effects": []
     },
     {
-      "name": "event:visibilitychange@15716",
+      "name": "event:visibilitychange@15720",
       "kind": "event-listener",
-      "startLine": 15716,
-      "endLine": 15730,
+      "startLine": 15720,
+      "endLine": 15734,
       "lines": 15,
       "area": [
         "sync",

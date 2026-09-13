@@ -15437,6 +15437,10 @@ function runDailyOpen({ force = false } = {}) {
   const today = todayISO();
   const isNewDay = state.settings.lastOpenedDate !== today;
   if (!force && !isNewDay) return false;
+  if (!isNewDay) {
+    maintainRecurrences({ purge: true, persist: false }); // Persist same-day materialization with the next user action.
+    return false;
+  }
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => runDailyOpen({ force })).ok && isNewDay;
   draftSaveTransaction.complete();
   maintainRecurrences({ purge: true });  // 既存の展開ロジックを流用
