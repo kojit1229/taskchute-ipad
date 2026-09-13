@@ -1501,7 +1501,6 @@ let ztAddOpen = false;         // テーマ追加パネルの開閉
 let ztCurrent = null;          // 書く画面の対象 { id, text, fav } / null=一覧
 let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
-let ztTimerLeft = 60;
 let ztAutosaveTimer = null;
 const zeroSessions = new Map();
 let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
@@ -9321,18 +9320,19 @@ function renderZtThemeTab() {
 
 function renderZtWrite() {
   const cur = ztCurrent;
+  const clock = ztClockDisplay();
   return `
     <div class="zt-write-head">
       <button class="zt-back-btn" data-action="zt-discard">← テーマへ戻る</button>
       <div class="zt-write-date">${escapeHTML(ztFormatDate(cur.zeroDraft.date || todayISO()))}</div>
     </div>
 
-    <div class="zt-write-card run">
+    <div class="zt-write-card">
       <div class="zt-write-eyebrow"><span class="zt-write-sq"></span>WRITING — 1 MINUTE</div>
       <div class="zt-write-theme">${escapeHTML(cur.text)}</div>
       <div class="zt-timer-bar">
-        <div class="zt-timer-time running" id="zt-timer-time">1:00</div>
-        <div class="zt-timer-state running" id="zt-timer-state">進行中</div>
+        <div class="zt-timer-time ${clock.kind}" id="zt-timer-time">${clock.text}</div>
+        <div class="zt-timer-state ${clock.kind}" id="zt-timer-state">${clock.label}</div>
       </div>
       <textarea class="zt-write-input" id="zt-write-input" placeholder="・&#10;・&#10;・&#10;・">${escapeHTML(cur.zeroDraft.body)}</textarea>
       <div id="zt-draft-status" role="status">下書きをこのタブに保存・完了すると日報に載ります</div>
@@ -9702,27 +9702,26 @@ function applyZtEdit(id) {
 }
 
 // ---- タイマー(1分カウントダウン。0で停止のみ、入力は継続可) ----
+function ztClockDisplay() {
+  const deadline = ztCurrent?.zeroDraft?.deadline;
+  const left = Number.isFinite(deadline) ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0;
+  return { left, text: `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`,
+    kind: left ? "running" : "done", label: left ? "進行中" : "終了 — 書き終えたら完了" };
+}
+
 function startZtTimer() {
-  clearInterval(ztTimerInterval);
-  ztTimerLeft = 60;
+  stopZtTimer();
+  if (!ztCurrent) return;
+  ztTimerInterval = setInterval(updateZtTimerDisplay, 1000);
   updateZtTimerDisplay();
-  ztTimerInterval = setInterval(() => {
-    ztTimerLeft--;
-    updateZtTimerDisplay();
-    if (ztTimerLeft <= 0) {
-      clearInterval(ztTimerInterval);
-      ztTimerInterval = null;
-      const s = document.querySelector("#zt-timer-state");
-      const t = document.querySelector("#zt-timer-time");
-      if (s) { s.textContent = "終了 — 書き終えたら保存"; s.className = "zt-timer-state done"; }
-      if (t) t.className = "zt-timer-time done";
-    }
-  }, 1000);
 }
 function updateZtTimerDisplay() {
-  const left = Math.max(0, ztTimerLeft);
+  const clock = ztClockDisplay();
   const el = document.querySelector("#zt-timer-time");
-  if (el) el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  const status = document.querySelector("#zt-timer-state");
+  if (el) { el.textContent = clock.text; el.className = `zt-timer-time ${clock.kind}`; }
+  if (status) { status.textContent = clock.label; status.className = `zt-timer-state ${clock.kind}`; }
+  if (!clock.left) stopZtTimer();
 }
 function stopZtTimer() {
   clearInterval(ztTimerInterval);
@@ -15765,6 +15764,7 @@ setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  if (ztCurrent) startZtTimer();
   // v196: 実行計画(plan-step)は復帰時即照合を行う。
   if (_planStepPending && !_planStepPollBusy
     && Date.now() - _planStepPending.startedAtMs >= PLAN_STEP_POLL_MS) {
