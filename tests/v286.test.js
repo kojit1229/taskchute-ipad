@@ -138,8 +138,11 @@ async function verifyMixedWhitelist(browser) {
     await openAiType(page, "english");
     await page.waitForFunction(() => document.querySelector(".md-render")?.textContent.includes("通知外でも閲覧可能_v286"));
     const tabs = await page.$$eval('[data-action="ai-report-type"]', (elements) => elements.map((element) => [element.dataset.type, element.textContent.trim()]));
-    check("既存7セグメント不変・FABLE/CODEXの4セグメントを表示",
-      JSON.stringify(tabs) === JSON.stringify(EXPECTED_TYPES.map(([id, label]) => [id, label])), JSON.stringify(tabs));
+    // v401 契約追随(監督者 2026-09-13、束R3-C 3回-08=K確定 D04): 外側は9タブに固定し、投資の CODEX 2種類は
+    // 「FABLE FUND日誌」「朝の投資ブリーフ」の内側切替(作成元表示)。内部11種類(L45)は不変。
+    const EXPECTED_OUTER_TABS = [...EXPECTED_TYPES.slice(0, 7).map(([id, label]) => [id, label]), ["fundJournal", "FABLE FUND日誌"], ["market", "朝の投資ブリーフ"]];
+    check("既存7セグメント不変・投資2タブ(内側で FABLE/CODEX 切替)を表示",
+      JSON.stringify(tabs) === JSON.stringify(EXPECTED_OUTER_TABS), JSON.stringify(tabs));
     check("englishは通知外のままタブでは読める", (await page.locator(".md-render").textContent()).includes("通知外でも閲覧可能_v286"));
     check("englishを開いても通知10件は不変", await badgeText(page) === "10", String(await badgeText(page)));
   } finally { await context.close(); }

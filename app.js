@@ -7174,6 +7174,19 @@ const AI_REPORT_TYPES = [
     guide: "前夜の米国市場と当日の注目材料を寄り付き前にまとめます" }
 ];
 
+// 外側は9項目。投資の作成元は専用画面の内側切替で選ぶ。
+const AI_REPORT_TABS = [
+  { id: "feedback", label: "AIフィードバック", types: ["feedback"] },
+  { id: "content", label: "コンテンツ総括", types: ["content"] },
+  { id: "self", label: "自己分析", types: ["self"] },
+  { id: "weekly", label: "週次レビュー", types: ["weekly"] },
+  { id: "english", label: "英語表現集", types: ["english"] },
+  { id: "letter", label: "未来からの手紙", types: ["letter"] },
+  { id: "excuse", label: "言い訳レポート", types: ["excuse"] },
+  { id: "fundJournal", label: "FABLE FUND日誌", types: ["fundJournal", "fundJournalCodex"] },
+  { id: "market", label: "朝の投資ブリーフ", types: ["market", "marketCodex"] }
+];
+
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
 // 日付降順(新しい順)で返す。一覧未取得ならnullを返し、呼び出し側で読み込みをトリガーさせる。
 function aiReportFilesForType(prefix) {
@@ -7383,7 +7396,12 @@ async function triggerAiReportBodyLoad(fileName) {
     _aiReportBodyFailedAt[fileName] = Date.now();
   }
   delete _aiReportBodyLoadInFlight[fileName];
-  if (state.currentView === "ai-reports") render();
+  // 遅れて届いた別日の本文はキャッシュだけに置く。表示中の本文だけを更新する。
+  if (state.currentView !== "ai-reports" || fundReportsUI.type()) return;
+  const type = AI_REPORT_TYPES.find(item => item.id === state.settings.aiReportType);
+  const files = type && aiReportFilesForType(type.prefix);
+  const selected = files?.find(file => file.date === _aiReportSelectedDate[type.id]) || files?.[0];
+  if (selected?.name === fileName) render();
 }
 
 // 手動更新ボタン: 一覧キャッシュを破棄し、現在表示中ファイルの本文キャッシュも破棄して
@@ -7431,13 +7449,13 @@ function renderAiReports() {
   if (fundReportsUI.isType(requestedId) && !fundReportsUI.type()) fundReportsUI.select(requestedId);
   const activeType = AI_REPORT_TYPES.find((t) => t.id === requestedId) || AI_REPORT_TYPES[0];
   const activeId = activeType.id;
-  const refreshBtn = `<button class="btn ghost" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
+  const refreshBtn = `<button class="btn ghost" style="min-height:44px" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
   return `
     ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート", refreshBtn)}
     ${renderAiReportUnreadList()}
     <div class="segmented ai-report-types">
-      ${AI_REPORT_TYPES.map((t) => `
-        <button class="${t.id === activeId ? "active" : ""}" data-action="ai-report-type" data-type="${t.id}">${escapeHTML(t.label)}</button>
+      ${AI_REPORT_TABS.map((t) => `
+        <button class="${t.types.includes(activeId) ? "active" : ""}" aria-pressed="${t.types.includes(activeId)}" data-action="ai-report-type" data-type="${t.types.includes(activeId) ? activeId : t.id}">${escapeHTML(t.label)}</button>
       `).join("")}
     </div>
     ${renderAiReportBody(activeType)}
@@ -7462,7 +7480,7 @@ function renderAiReportBody(type) {
   }
   if (files.length === 0) {
     return `
-      <div class="panel">
+      <div class="panel" data-ai-report-state="empty-list">
         <p>まだ生成されていません。</p>
         <p class="muted" style="font-size:12px">${escapeHTML(type.guide)}</p>
       </div>
@@ -7473,19 +7491,24 @@ function renderAiReportBody(type) {
   const file = files.find((f) => f.date === selectedDate) || files[0];
   const body = _aiReportBodyCache[file.name];
   if (body === undefined) triggerAiReportBodyLoad(file.name);
+  const hasBody = typeof body === "string" && body.trim().length > 0;
+  const bodyState = body !== undefined ? (hasBody ? "loaded" : "empty")
+    : (_aiReportBodyLoadInFlight[file.name] ? "loading" : _aiReportBodyFailedAt[file.name] ? "failed" : "loading");
   const renderedBody = body === undefined
-    ? "読み込み中..."
-    : (type.id === "weekly"
+    ? (bodyState === "failed"
+      ? '<p role="status">本文の取得に失敗しました。通信状況を確認して再試行してください。</p><button class="btn" style="min-height:44px" data-action="ai-report-refresh">再試行</button>'
+      : '<p role="status">読み込み中...</p>')
+    : !hasBody ? '<p role="status">本文がありません。</p>' : (type.id === "weekly"
       ? renderAiWeeklyReportBody(selectedDate, body)
-      : renderMarkdown(body || "（本文を取得できませんでした）"));
+      : renderMarkdown(body));
   return `
     <div class="row" style="margin:10px 0">
-      <select data-ai-report-date data-type-id="${type.id}" style="font-size:16px">
+      <select data-ai-report-date data-type-id="${type.id}" style="font-size:16px;min-height:44px">
         ${files.map((f) => `<option value="${escapeHTML(f.date)}" ${f.date === selectedDate ? "selected" : ""}>${escapeHTML(f.date)}</option>`).join("")}
       </select>
     </div>
     <div class="panel">
-      <div class="md-render readonly-md" data-report-file="${escapeHTML(file.name)}" data-report-loaded="${typeof body === "string" && body.length > 0 ? "1" : "0"}">${renderedBody}</div>
+      <div class="md-render readonly-md" data-report-state="${bodyState}" data-report-file="${escapeHTML(file.name)}" data-report-loaded="${hasBody ? "1" : "0"}">${renderedBody}</div>
     </div>
   `;
 }
@@ -7543,7 +7566,10 @@ function parseSuggestedTaskTitle(raw) {
 }
 
 function addWeeklySuggestedTask(week, idx) {
-  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addWeeklySuggestedTask(week, idx), { kinds: ["tasks"] }).ok;
+  if (!draftSaveTransaction.active) return runDailyOperation("weekly-suggest-add", { week, idx }, {
+    legacy: { "weekly-suggest-add": input => draftSaveTransaction.run(
+      () => addWeeklySuggestedTask(input.week, input.idx), { kinds: ["tasks"] }).ok }
+  });
   if (!week || !Number.isInteger(idx)) return;
   const key = `${week}:${idx}`;
   if (_weeklySuggestRegistered.has(key)) return;
@@ -7558,8 +7584,11 @@ function addWeeklySuggestedTask(week, idx) {
   const task = makeTask({ projectId: otherProject.id, title });
   if (estimateMin) task.estimateMin = estimateMin;
   state.tasks.push(task);
-  draftSaveTransaction.defer(() => _weeklySuggestRegistered.add(key));
-  saveAndRender(`「${title}」をWBSに登録しました`);
+  draftSaveTransaction.complete(() => {
+    _weeklySuggestRegistered.add(key);
+    render();
+    showToast(`「${title}」をWBSに登録しました`);
+  });
 }
 
 // v361-fix(H-1): 過去日の集計に「止め忘れ」Block(actualStartAtはあるがactualEndAtが無い)を

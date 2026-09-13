@@ -212,6 +212,7 @@ const wishWriters = ['addWish', 'addWishSubtask', 'toggleWishSubtask', 'realizeW
 const wishExtract = name => { const node = wishAst.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name); return wishSource.slice(node.start, node.end); };
 async function planFixture() {
   const f = await fixture(), c = f.ctx;
+  const { runDailyOperation } = await import('../src/features/daily-operations.js');
   Object.assign(c.state.tasks[0], { planTarget: true, parentTaskId: '' });
   c.state.tasks.push(...['step', 'next'].map((id, i) => ({ id, title: id, parentTaskId: 't', projectId: 'p',
     status: i ? 'todo' : 'completed', owner: i ? 'ai' : 'k', aiStatus: 'none', order: null,
@@ -238,7 +239,9 @@ async function planFixture() {
     openTaskCreator: () => { f.counts.open++; }, personalDataReady: () => true,
     putAiStepRequest: () => { f.counts.send++; }, setView: () => { f.counts.view++; },
     modalRoot: { querySelector: selector => f.inputs[selector] },
-    taskTransaction: () => c.draftSaveTransaction, wishSubtaskDraft: null, getWishProject: () => c.state.projects.find(p => p.kind === 'wish')
+    taskTransaction: () => c.draftSaveTransaction, wishSubtaskDraft: null, getWishProject: () => c.state.projects.find(p => p.kind === 'wish'),
+    // v401 ハーネス追随(監督者 2026-09-13、束R3-C 3回-10): addWeeklySuggestedTask が登録表 weekly-suggest-add(runDailyOperation の legacy 委譲)経由になったので実物を砂場へ渡す(製品変更なし)。
+    runDailyOperation, dailyOperationDeps: { get state() { return c.state; }, legacy: {} }
   });
   c.window.prompt = () => 'typed subtask';
   vm.runInContext(planWriters.map(extract).concat(wishWriters.map(wishExtract)).join('\n'), c);

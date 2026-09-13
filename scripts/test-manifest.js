@@ -90,6 +90,8 @@ function generateAreaSuiteMap(suites) {
 }
 
 const explicitDomains = {
+  "weekly-save-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive"],
+  "ai-tabs-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive"],
   "exec-layout-media.test.js": ["planning-execution", "ui-responsive"],
   "fill-gap-layout-inputs-e2e.test.js": ["planning-execution", "ui-responsive", "sync-storage"],
   "feedback-readonly-scroll.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],

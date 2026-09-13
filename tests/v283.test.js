@@ -199,11 +199,36 @@ async function verifyMainFlow(browser) {
     check("health/batchセグメントは非表示", !tabs.some((tab) => tab.id === "health" || tab.id === "batch"), JSON.stringify(tabs));
     check("既存kindはすべて維持", ["content", "self", "weekly", "english", "letter", "excuse"].every((id) => tabs.some((tab) => tab.id === id)), JSON.stringify(tabs));
     const fundKinds = ["fundJournal", "fundJournalCodex", "marketCodex", "market"];
-    check("FABLE/CODEXの日誌・朝ブリーフ4系統の表示名と順序を維持",
+    // fixR3C / D04: 外側2タブ→内側作成元切替で4種類の本文と往復を検査する。
+    check("投資の外側タブは日誌・ブリーフの2つで順序と表示名を維持",
       JSON.stringify(tabs.filter(tab => fundKinds.includes(tab.id)).map(tab => [tab.id, tab.label])) === JSON.stringify([
-        ["fundJournal", "FABLE FUND日誌"], ["fundJournalCodex", "CODEX FUND日誌"],
-        ["marketCodex", "朝の投資ブリーフ CODEX"], ["market", "朝の投資ブリーフ FABLE"]
+        ["fundJournal", "FABLE FUND日誌"], ["market", "朝の投資ブリーフ"]
       ]));
+    const fundFiles = [
+      ["fundJournal", "FABLE FUND日誌", "FABLE FUND日誌", "fable"],
+      ["fundJournalCodex", "CODEX FUND日誌", "FABLE FUND日誌", "codex"],
+      ["marketCodex", "朝の投資ブリーフ_CODEX", "朝の投資ブリーフ", "codex"],
+      ["market", "朝の投資ブリーフ", "朝の投資ブリーフ", "fable"]
+    ];
+    const fundFixture = {
+      index: { generatedAt: FRESH_GENERATED_AT, files: fundFiles.map(([kind, prefix]) => ({ kind, date: TODAY, name: `${prefix}_${TODAY}.md` })) },
+      bodies: Object.fromEntries(fundFiles.map(([kind, prefix]) => [`${prefix}_${TODAY}.md`, `# 投資本文_${kind}_v283`]))
+    };
+    const fundPage = await gatedPage(browser, fundFixture);
+    try {
+      await fundPage.page.click('#bottomNav [data-view="more"]');
+      await fundPage.page.click('.more-tower-item[data-view="ai-reports"]');
+      for (const [kind, , label, engine] of [...fundFiles, ...fundFiles.slice().reverse()]) {
+        await fundPage.page.locator('[data-action="ai-report-type"]').filter({ hasText: label }).click();
+        await fundPage.page.locator(`[data-action="fund-report-engine"][data-engine="${engine}"]`).click();
+        await fundPage.page.waitForFunction(text => document.querySelector('[data-report-loaded="1"]')?.textContent.includes(text), `投資本文_${kind}_v283`);
+        check(`${kind}の本文に到達・往復できる`, (await fundPage.page.locator('[data-report-loaded="1"]').textContent()).includes(`投資本文_${kind}_v283`));
+        check(`${kind}の外側選択表示`, await fundPage.page.locator('.ai-report-types .active').textContent() === label);
+        check(`${kind}の本文直前に現在の作成元を常時表示`, await fundPage.page.locator('[data-report-loaded="1"]').evaluate((el, source) =>
+          el.previousElementSibling.matches('[data-fund-report-source]') && el.previousElementSibling.textContent === source, `作成元：${engine.toUpperCase()}`));
+      }
+      check("投資4種類の切替でpageerrorなし", fundPage.pageErrors.length === 0, JSON.stringify(fundPage.pageErrors));
+    } finally { await fundPage.context.close(); }
     const dates = await page.$$eval('[data-feedback-report-overlay] [data-action="feedback-report-date"]', (els) => els.map((el) => el.dataset.feedbackDate));
     check("feedback一覧は日付降順", JSON.stringify(dates) === JSON.stringify([TODAY, FEEDBACK_OLD_DATE]), JSON.stringify(dates));
     check("新形式フィードバック本文を全文表示", (await page.locator(".md-render").textContent()).includes("新形式全文詳細_v283"));
