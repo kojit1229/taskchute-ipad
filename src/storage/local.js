@@ -24,7 +24,7 @@
 // characterization test: tests/store-core.test.js。
 
 import { state } from "../state/store.js";
-import { validateSingleScheduleContainer } from "../core/single-schedule.js";
+import { validateScheduleContainers } from "../core/schedule-series-storage.js";
 
 const STORAGE_KEY = "taskchute-journal-pwa-state-v1";
 
@@ -63,7 +63,7 @@ function persistLocalNoSchedule() {
   // v153: _gardenJustGrewDate も同様に非永続(今日の芽のフェード演出フラグ)
   const persisted = { ...state, modal: null, _justStartedBlockId: null, _gardenJustGrewDate: null };
   try {
-    validateSingleScheduleContainer(state.singleSchedules);
+    validateScheduleContainers(state);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     _lastSaveError = null;
   } catch (error) {

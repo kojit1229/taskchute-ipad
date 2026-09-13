@@ -676,6 +676,7 @@ const APP_SHELL = [
   "./src/core/schedule-series.js",
   "./src/core/schedule-series-merge.js",
   "./src/core/schedule-series-derive.js",
+  "./src/core/schedule-series-storage.js",
   "./src/core/planned-occupancy.js",
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",
