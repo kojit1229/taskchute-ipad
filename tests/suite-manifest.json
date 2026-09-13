@@ -2675,6 +2675,31 @@
       }
     },
     {
+      "file": "remaining-handover-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "journal-health",
+        "content-ai",
+        "ui-responsive"
+      ],
+      "assertionSignals": 20,
+      "assertionHash": "db229ba88925a508",
+      "sourceHash": "a8844c754a1a15a4",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "remaining-screen-labels.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -2684,7 +2709,7 @@
       ],
       "assertionSignals": 118,
       "assertionHash": "0a7361bb99e19e0f",
-      "sourceHash": "ee12bf41765422ef",
+      "sourceHash": "c29468cd93bd55c2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3337,9 +3362,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 134,
-      "assertionHash": "1e2334a0deba2bd8",
-      "sourceHash": "e5b8d6e9b44346e8",
+      "assertionSignals": 137,
+      "assertionHash": "6926bba297c5201b",
+      "sourceHash": "7ff4f126d1ccb444",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3511,9 +3536,9 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 49,
-      "assertionHash": "8b217fa713af0a6c",
-      "sourceHash": "bf0895a5b9556c3a",
+      "assertionSignals": 50,
+      "assertionHash": "e61fc9cb1902f0a4",
+      "sourceHash": "9c0089426a112aec",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5447,7 +5472,7 @@
       ],
       "assertionSignals": 49,
       "assertionHash": "bd43f11749d15a50",
-      "sourceHash": "bd88f6e8a8335eef",
+      "sourceHash": "d401d7fc4bb7ede5",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5574,8 +5599,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 61,
-      "assertionHash": "cd7cc49853fbe57a",
-      "sourceHash": "62ecd469c84f7ab5",
+      "assertionHash": "f95cc26482a5e0c1",
+      "sourceHash": "583e4291c8aff6bf",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5692,8 +5717,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 32,
-      "assertionHash": "82901e9c7903f2aa",
-      "sourceHash": "089a9a0768604ac1",
+      "assertionHash": "cc90a75301befefc",
+      "sourceHash": "dc9e54e11fdf1b38",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5763,8 +5788,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 26,
-      "assertionHash": "c83e4874d95cb7ab",
-      "sourceHash": "0bb5863a92a53c0f",
+      "assertionHash": "559c0f1ba7736ba9",
+      "sourceHash": "98a5679351dd4147",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6567,8 +6592,8 @@
         "journal-health"
       ],
       "assertionSignals": 23,
-      "assertionHash": "f9fab353de768605",
-      "sourceHash": "be2790ba4b215596",
+      "assertionHash": "4e0fc4c615d64085",
+      "sourceHash": "da313f3e1e5025ca",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 200,
@@ -6830,8 +6855,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 22,
-      "assertionHash": "99e3a8437b304af5",
-      "sourceHash": "969222fea1050657",
+      "assertionHash": "b0895b950c0dd58d",
+      "sourceHash": "2f444b0ede05f537",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6853,8 +6878,8 @@
         "planning-execution"
       ],
       "assertionSignals": 27,
-      "assertionHash": "e254156fe43ee472",
-      "sourceHash": "bc3c0b80074ece4a",
+      "assertionHash": "56fc157cfe377a93",
+      "sourceHash": "1f9909ba11a69123",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
