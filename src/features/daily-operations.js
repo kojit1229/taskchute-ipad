@@ -16,6 +16,7 @@ import { zeroEntryOperation } from "./zero-entry.js";
 import { towerJournalOperation } from "./tower-journal.js";
 import { dailyReadingOpenOperation, dailyReadingRecordOperation } from "./daily-reading.js";
 import { recurrenceSaveOperation } from "./recurrence-save.js";
+import { twelveWeekSaveOperation } from "./twelve-week-save.js";
 
 const copyReady = Symbol("saved copy source");
 const copyRequests = new WeakMap();
@@ -29,6 +30,7 @@ const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](
 
 export const DAILY_OPERATIONS = {
   "recurrence-related-save": recurrenceSaveOperation,
+  "twelve-week-related-save": twelveWeekSaveOperation,
   "daily-reading-open": dailyReadingOpenOperation,
   "daily-reading-record": dailyReadingRecordOperation,
   "save-tower-journal": towerJournalOperation,

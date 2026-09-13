@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "twelve-week-save": {
+      "paths": ["^src/features/twelve-week-save\\.js$"],
+      "suites": ["v70", "v87", "v107", "mutation-twelve-week-e2e"]
+    },
     "recurrence-save": {
       "paths": ["^src/features/recurrence-save\\.js$"],
       "suites": ["recurrence-core", "v59", "mutation-recurrence-e2e"]

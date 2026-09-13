@@ -48,6 +48,7 @@ import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/featur
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
+import { buildTwelveWeekDraft } from "./src/features/twelve-week-save.js";
 import { renderDetailFrame } from "./src/ui/daily-parts/detail-frame.js";
 import { renderDailyBlockDetails } from "./src/features/daily-view-model.js";
 import { candidateTasks } from "./src/features/three-screen-rows.js";
@@ -833,7 +834,7 @@ registerActions({
       showToast("他端末で確定済みのため読み取り表示へ切り替えました");
       return;
     }
-    commitWeek(weekStart, [..._twyCommitSelectedBlockIds]);
+    if (commitWeek(weekStart, [..._twyCommitSelectedBlockIds])?.ok === false) return;
     saveAndRender("今週を確定しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
   },
@@ -851,7 +852,7 @@ registerActions({
     if (!item || item.completedAt || item.excused) return;
     const reason = target.closest(".twy-excuse-form")?.querySelector("[data-twy-excuse-reason]")?.value || "";
     if (!reason.trim()) { showToast("免除理由を入力してください"); return; }
-    excuseCommitmentItem(id, reason);
+    if (excuseCommitmentItem(id, reason)?.ok === false) return;
     _twyExcuseOpenItemId = null;
     saveAndRender("免除しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
@@ -867,7 +868,7 @@ registerActions({
     if (!weekStart) { openTwyCommitSheet(); showToast("週が変わったため当週のシートを開き直しました"); return; }
     const item = twyCommitItemForWeek(id, weekStart);
     if (!item?.excused) return;
-    unexcuseCommitmentItem(id);
+    if (unexcuseCommitmentItem(id)?.ok === false) return;
     saveAndRender("免除を解除しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
   },
@@ -884,7 +885,7 @@ registerActions({
     if (!_twyAddCandidateSelectedIds.size || !twyCommittedWeekMeta(weekStart)) return;
     const selected = twyAddCandidates(weekStart).filter((block) => _twyAddCandidateSelectedIds.has(block.id)).map((block) => block.id);
     if (!selected.length) { showToast("追加できる候補がありませんでした"); return; }
-    addCommitmentItems(weekStart, selected);
+    if (addCommitmentItems(weekStart, selected)?.ok === false) return;
     _twyAddPanelOpen = false;
     saveAndRender("計画に追加しました");
     renderModal(buildTwyCommitSheetHTML(weekStart));
@@ -3899,6 +3900,7 @@ function upsertWeeklyCommitment(record) {
 }
 
 function commitWeek(weekStart, selectedBlockIds) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => commitWeek(weekStart, selectedBlockIds));
   weekStart = weekRange(weekStart).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
   const candidates = candidateBlocksForWeek(state, weekStart);
@@ -3921,6 +3923,7 @@ function commitWeek(weekStart, selectedBlockIds) {
 }
 
 function autoCommitWeekIfNeeded(block) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => autoCommitWeekIfNeeded(block));
   if (!block?.date) return;
   const weekStart = weekRange(block.date).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
@@ -3942,6 +3945,7 @@ function autoCommitWeekIfNeeded(block) {
 }
 
 function stampCommitmentCompletion(block, isNowCompleted) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => stampCommitmentCompletion(block, isNowCompleted));
   if (!block?.date) return;
   const weekStart = weekRange(block.date).weekStart;
   if (weekStart !== weekRange(todayISO()).weekStart) return;
@@ -3957,16 +3961,25 @@ function stampCommitmentCompletion(block, isNowCompleted) {
 }
 
 function trackOnBlockStarted(block) {
-  autoCommitWeekIfNeeded(block);
+  return runTwelveWeekChange(() => autoCommitWeekIfNeeded(block));
 }
 
 function trackOnBlockCompletionChanged(block, isNowCompleted, { interactive = false } = {}) {
-  autoCommitWeekIfNeeded(block);
-  stampCommitmentCompletion(block, isNowCompleted);
-  if (interactive && isNowCompleted) maybeShowTrackProgressToast(block);
+  return runTwelveWeekChange(() => {
+    autoCommitWeekIfNeeded(block);
+    stampCommitmentCompletion(block, isNowCompleted);
+    if (interactive && isNowCompleted) draftSaveTransaction.defer(() => maybeShowTrackProgressToast(block));
+  });
+}
+
+function runTwelveWeekChange(work) {
+  const deps = { transaction: draftSaveTransaction, state: () => state, now: nowDateTime };
+  return draftSaveTransaction.active ? buildTwelveWeekDraft({ work }, deps)
+    : runDailyOperation("twelve-week-related-save", { work }, deps);
 }
 
 function excuseCommitmentItem(itemId, reason) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => excuseCommitmentItem(itemId, reason));
   const text = (reason || "").trim();
   if (!text) return;
   const item = (state.weeklyCommitments || []).find((record) =>
@@ -3981,6 +3994,7 @@ function excuseCommitmentItem(itemId, reason) {
 }
 
 function unexcuseCommitmentItem(itemId) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => unexcuseCommitmentItem(itemId));
   const item = (state.weeklyCommitments || []).find((record) =>
     record.id === itemId && record.recordType === "item" && !record.deleted);
   if (!item || item.weekStart !== weekRange(todayISO()).weekStart) return;
@@ -3993,6 +4007,7 @@ function unexcuseCommitmentItem(itemId) {
 }
 
 function addCommitmentItems(weekStart, blockIds) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => addCommitmentItems(weekStart, blockIds));
   if (weekStart !== weekRange(todayISO()).weekStart) return;
   if (!(state.weeklyCommitments || []).some((record) =>
     record.id === "wcw_" + weekStart && record.recordType === "week" && !record.deleted)) return;
@@ -4060,6 +4075,7 @@ function mergeEditedMilestones(existing, fields, incoming, now) {
 }
 
 function saveTrackFromForm(projectId, kind, fields) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => saveTrackFromForm(projectId, kind, fields));
   const validation = validateTrackDraft(kind, fields);
   if (!validation.ok) return validation;
   const existing = activeTrackForProject(state.tracks || [], projectId);
@@ -4085,12 +4101,14 @@ function saveTrackFromForm(projectId, kind, fields) {
 }
 
 function closeActiveTrackManual(projectId) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => closeActiveTrackManual(projectId));
   if (!closeTracksForOwner("project", projectId, "manual")) return { ok: true };
   saveState();
   return { ok: true };
 }
 
 function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => carryProjectToNewCycle(projectId, newCycleStartDate, fields));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(newCycleStartDate || "") || !dateParts(newCycleStartDate)) {
     return { ok: false, errors: ["newCycleStartDateは有効な日付が必須"] };
   }
@@ -4143,6 +4161,7 @@ function carryProjectToNewCycle(projectId, newCycleStartDate, fields = {}) {
 
 // v261: WBS/後続トーストから共有する測定追記。UI副作用は呼び出し元へ任せる。
 function recordTrackMeasurement(trackId, value, { sourceKind = "wbs", blockId = "", note = "" } = {}) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => recordTrackMeasurement(trackId, value, { sourceKind, blockId, note }));
   const track = (state.tracks || []).find((entry) => entry.id === trackId
     && entry.status === "active" && !entry.deleted && entry.kind === "numeric");
   if (!track) return { ok: false, errors: ["対象のトラックが見つかりません"] };
@@ -4162,6 +4181,7 @@ function recordTrackMeasurement(trackId, value, { sourceKind = "wbs", blockId = 
 
 // v261: 既存節目1件だけをid指定で更新し、同期勝敗に使う親track.updatedAtも進める。
 function updateTrackMilestone(trackId, milestoneId, patch) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => updateTrackMilestone(trackId, milestoneId, patch));
   const track = (state.tracks || []).find((entry) => entry.id === trackId
     && entry.status === "active" && !entry.deleted && entry.kind === "milestone");
   if (!track) return { ok: false, errors: ["対象のトラックが見つかりません"] };

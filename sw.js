@@ -694,6 +694,7 @@ const APP_SHELL = [
 
   "./src/core/recurrence.js",
   "./src/features/recurrence-save.js",
+  "./src/features/twelve-week-save.js",
 
   "./src/core/track.js",
 
