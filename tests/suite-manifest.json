@@ -484,9 +484,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 41,
-      "assertionHash": "b85310215561c873",
-      "sourceHash": "fd475ac8e4519cf6",
+      "assertionSignals": 43,
+      "assertionHash": "505caf9b48d983b7",
+      "sourceHash": "c649cdf87920661b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1027,7 +1027,7 @@
       ],
       "assertionSignals": 83,
       "assertionHash": "3171a712ac542cec",
-      "sourceHash": "c61f608f7ffba940",
+      "sourceHash": "0802006619e0efaf",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1412,7 +1412,7 @@
       ],
       "assertionSignals": 26,
       "assertionHash": "2edf1860e5e9b7c4",
-      "sourceHash": "866b51083484070e",
+      "sourceHash": "479296006d5f57ae",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2228,7 +2228,7 @@
       ],
       "assertionSignals": 178,
       "assertionHash": "26c695e12722b4cb",
-      "sourceHash": "7e0f64bf270779e5",
+      "sourceHash": "3fe151cf2be695f7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2680,9 +2680,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 18,
-      "assertionHash": "00ef8a10ad7c9944",
-      "sourceHash": "a1ecda132ee57aae",
+      "assertionSignals": 19,
+      "assertionHash": "eb132882ebde97cb",
+      "sourceHash": "9390004cc9f4469b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2819,9 +2819,9 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 43,
-      "assertionHash": "0752259b2f8f13cd",
-      "sourceHash": "9fdfcbc6759c417b",
+      "assertionSignals": 46,
+      "assertionHash": "e235f5b99faeca05",
+      "sourceHash": "0d14e288fe317dbe",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2857,6 +2857,30 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "schedule-series-sync-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution"
+      ],
+      "assertionSignals": 96,
+      "assertionHash": "2f6c7cffe5033629",
+      "sourceHash": "11825a881b854644",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
@@ -3099,9 +3123,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 24,
-      "assertionHash": "7f3041463eb9391b",
-      "sourceHash": "506db848ffebcc85",
+      "assertionSignals": 25,
+      "assertionHash": "92684c0e98274113",
+      "sourceHash": "d9fb89c09bde1512",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
