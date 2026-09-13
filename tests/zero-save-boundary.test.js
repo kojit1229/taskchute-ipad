@@ -152,11 +152,15 @@ try {
     assert.equal((await read()).currentView, 'wbs'); assert.equal((await read()).zeroThinking.entries.length, 0);
     assert.equal(await page.locator('.draft-leave-dialog').count(), 0, 'saved body/time leave has no confirmation');
     const saved = await page.evaluate(id => Object.keys(sessionStorage).map(key => JSON.parse(sessionStorage.getItem(key)))
+      .flatMap(value => Object.values(value.drafts || {}))
       .find(value => value.id === id), first.id);
+    assert.equal(saved.id, first.id, 'leaving preserves the same draft id in session storage');
     assert.equal(saved.body, '保存済み本文'); assert.equal(saved.durationSec, 20);
     console.log('PASS live saved body/time: confirmation 0, history insertion 0, preserved draft id and 20 seconds');
-    await action('nav', { view: 'zero' }); await action('zt-write', { id: 'a' }); await input.fill('失敗しても保持');
-    await page.clock.runFor(20000);
+    await action('nav', { view: 'zero' }); await action('zt-write', { id: 'a' });
+    // v399(3回-05 の自動保存)への追随(監督者 2026-09-13): 入力停止で控えが自動保存されるため、保存不能の注入は
+    // 入力の前に行う(注入が後だと離脱時点で既に保存済み=確認なしで移れるのが正しい)。検査する性質は不変=
+    // 保存不能のときは自動で離脱成功にせず、画面内本文と秒数を保つ(設計09 §4.5)。
     await page.evaluate(() => {
       window.originalZeroStorage = Storage.prototype.setItem;
       Storage.prototype.setItem = function(key, value) {
@@ -164,6 +168,8 @@ try {
         return window.originalZeroStorage.call(this, key, value);
       };
     });
+    await input.fill('失敗しても保持');
+    await page.clock.runFor(20000);
     await action('nav', { view: 'wbs' });
     assert.equal((await read()).currentView, 'zero'); assert.equal(await input.inputValue(), '失敗しても保持');
     assert.equal((await page.evaluate(() => window.zeroBoundaryProbe.read())).durationSec, 20);

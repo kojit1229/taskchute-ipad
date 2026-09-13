@@ -45,6 +45,7 @@ import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurr
 import { restoreTimelineOrigin, updateTimelineClock } from "./src/features/timeline.js";
 import { isDailyReadingBlock, markDailyReadingEdit } from "./src/core/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
+import { createZeroSession } from "./src/features/zero-session.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
@@ -648,6 +649,8 @@ registerActions({
   "zt-write": ({ id }) => openZtWrite(id),
   "zt-save": () => saveZtEntry(),
   "zt-discard": () => discardZtWrite(),
+  "zt-draft-retry": () => runZeroEntry("zero-draft-save", "#zt-write-input"),
+  "zt-body-copy": () => navigator.clipboard.writeText(document.querySelector("#zt-write-input")?.value || "").catch(() => showToast("本文を選択してコピーしてください")),
   "zt-entry-open": ({ id }) => openZtEntry(id),
   "zt-edit-close": () => closeZtEdit(),
   "zt-edit-save": ({ id }) => saveZtEdit(id),
@@ -1498,7 +1501,8 @@ let ztAddOpen = false;         // テーマ追加パネルの開閉
 let ztCurrent = null;          // 書く画面の対象 { id, text, fav } / null=一覧
 let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
-let ztTimerLeft = 60;
+let ztAutosaveTimer = null;
+const zeroSessions = new Map();
 let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
 let ztWriteStartedAt = null;   // v104: 書く画面を開いた時刻(Date.now())。durationSec計測の起点 / null=非計測中
 
@@ -1785,6 +1789,7 @@ document.addEventListener("toggle", (event) => {
 document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); towerJournal.composition(event.target, true); });
 document.addEventListener("compositionend", (event) => {
   _imeComposing = false;
+  queueZeroAutosave(event.target);
   handleWorkListComposition(event.target, false);
   towerJournal.composition(event.target, false);
   attemptFlushDeferredRender();
@@ -1801,6 +1806,7 @@ document.addEventListener("focusout", () => {
 }, true);
 
 document.addEventListener("input", (event) => {
+  queueZeroAutosave(event.target);
   const target = event.target;
   if (towerJournal.input(target, event.isComposing || _imeComposing)) return;
   if (handleWorkListInput(target)) return;
@@ -9135,15 +9141,15 @@ function renderExperimentSection() {
 //  - 日報: generateReport にその日の 0秒思考を出力
 // =========================================================
 function renderZeroThinking() {
-  if (ztCurrent) return renderZtWrite();
-  if (ztEditId) return renderZtEdit();  // v102: 回答済みentryの追記編集画面
+  if (ztCurrent) return renderZtWorkspace(renderZtNavigation(), renderZtWrite());
+  if (ztEditId) return renderZtWorkspace(renderZtNavigation(), renderZtEdit());
 
   const zt = state.zeroThinking || { themes: [], entries: [] };
   const todayCount = zt.entries.filter((e) => e.date === todayISO()).length;
   const zeroTab = state.settings.zeroTab || "theme";  // v39: テーマ / 問い の2タブ
   const openQ = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled").length;
 
-  return `
+  return renderZtWorkspace(`
     <div class="view-header">
       <div>
         <div class="view-breadcrumb">その他 › ${moreGroupLabelFor("zero")}</div>
@@ -9161,7 +9167,35 @@ function renderZeroThinking() {
       <button class="zt-toptab ${zeroTab === "question" ? "active" : ""}" data-action="zero-tab" data-tab="question">問い <span class="zt-tab-count">${openQ}</span></button>
     </div>
     ${zeroTab === "question" ? renderZtQuestionTab() : renderZtThemeTab()}
-  `;
+  `, `<div class="panel zt-editor-empty"><h2>テーマを選んで書く</h2><p>1テーマ、1分。書き終えたら「早期完了」で回答を残せます。</p><p>書きかけはこのタブに保存されます。</p></div>`);
+}
+
+function renderZtWorkspace(list, editor) {
+  return `<div class="zt-workspace ${ztCurrent || ztEditId ? "is-writing" : ""}">
+    <aside class="zt-library" aria-label="テーマと履歴">${list}</aside>
+    <section class="zt-editor" aria-label="0秒思考の入力">${editor}</section>
+  </div>`;
+}
+
+function renderZtNavigation() {
+  const zt = state.zeroThinking || { themes: [], entries: [], groups: [] };
+  const groups = new Map((zt.groups || []).map(g => [g.id, g.title]));
+  return `<div class="zt-navigation">
+    <h1>0秒思考</h1>
+    <section class="panel zt-section"><h2>テーマ</h2>
+      <div class="zt-navigation-list">${ztSortByImportance(zt.themes).map(t => `
+        <button class="zt-navigation-item ${ztCurrent?.id === t.id ? "active" : ""}" data-action="zt-write" data-id="${escapeHTML(t.id)}" ${ztCurrent?.id === t.id ? 'aria-current="true"' : ""}>
+          <span>${t.fav ? "★ " : ""}${escapeHTML(t.text)}</span>
+          <small>${escapeHTML(groups.get(t.groupId) || "未分類")}${t.questionId ? " · 問い" : ""}${t.importance === "高" ? " · 重要" : ""}</small>
+        </button>`).join("") || '<p class="zt-empty">テーマはありません。</p>'}</div>
+    </section>
+    <section class="panel zt-section"><h2>過去のテーマ</h2>
+      <div class="zt-navigation-list">${zt.entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(e => `
+        <button class="zt-navigation-item ${ztEditId === e.id ? "active" : ""}" data-action="zt-entry-open" data-id="${escapeHTML(e.id)}">
+          <span>${escapeHTML(e.theme || "0秒思考")}</span><small>${escapeHTML(e.date)}</small>
+        </button>`).join("") || '<p class="zt-empty">回答はまだありません。</p>'}</div>
+    </section>
+  </div>`;
 }
 
 // v39: テーマタブ(従来の 0秒思考 一覧)
@@ -9171,9 +9205,12 @@ function ztRenderThemeItem(t, groupsSorted) {
   const important = t.importance === "高";
   return `
         <div class="zt-theme-item ${t.fav ? "is-fav" : ""}">
+          <div class="zt-theme-main">
           <button class="zt-star ${t.fav ? "on" : ""}" data-action="zt-fav-toggle" data-id="${t.id}" title="お気に入り">${t.fav ? "★" : "☆"}</button>
-          <button class="zt-important-toggle ${important ? "on" : ""}" data-action="zt-importance-toggle" data-id="${t.id}" title="重要度: 高⇔なし" aria-label="重要度を切り替え">${important ? "❗" : "❕"}</button>
           <div class="zt-theme-text" data-action="zt-write" data-id="${t.id}">${important ? `<span class="zt-theme-important">高</span>` : ""}${escapeHTML(t.text)}${t.questionId ? `<span class="zt-theme-qtag">問い</span>` : ""}${t.source === "ai-feedback" ? `<span class="zt-theme-qtag">🤖 AI提案</span>` : ""}</div>
+          </div>
+          <div class="zt-theme-actions">
+          <button class="zt-important-toggle ${important ? "on" : ""}" data-action="zt-importance-toggle" data-id="${t.id}" title="重要度: 高⇔なし" aria-label="重要度を切り替え">${important ? "❗" : "❕"}</button>
           ${groupsSorted.length ? `
           <select class="select zt-theme-group-select" data-action="zt-theme-set-group" data-id="${t.id}" aria-label="大テーマを選ぶ" title="大テーマへ割り当て">
             <option value="">未分類</option>
@@ -9181,6 +9218,7 @@ function ztRenderThemeItem(t, groupsSorted) {
           </select>` : ""}
           <button class="zt-theme-go" data-action="zt-write" data-id="${t.id}">書く →</button>
           <button class="zt-theme-del" data-action="zt-theme-delete" data-id="${t.id}" title="削除" aria-label="このテーマを削除">×</button>
+          </div>
         </div>`;
 }
 
@@ -9314,23 +9352,27 @@ function renderZtThemeTab() {
 
 function renderZtWrite() {
   const cur = ztCurrent;
+  const clock = ztClockDisplay();
   return `
     <div class="zt-write-head">
-      <button class="zt-back-btn" data-action="zt-discard">← 一覧へ戻る(破棄)</button>
-      <div class="zt-write-date">${escapeHTML(ztFormatDate(todayISO()))}</div>
+      <button class="zt-back-btn" data-action="zt-discard">← テーマへ戻る</button>
+      <div class="zt-write-date">${escapeHTML(ztFormatDate(cur.zeroDraft.date || todayISO()))}</div>
     </div>
 
-    <div class="zt-write-card run">
+    <div class="zt-write-card">
       <div class="zt-write-eyebrow"><span class="zt-write-sq"></span>WRITING — 1 MINUTE</div>
       <div class="zt-write-theme">${escapeHTML(cur.text)}</div>
       <div class="zt-timer-bar">
-        <div class="zt-timer-time running" id="zt-timer-time">1:00</div>
-        <div class="zt-timer-state running" id="zt-timer-state">進行中</div>
+        <div class="zt-timer-time ${clock.kind}" id="zt-timer-time">${clock.text}</div>
+        <div class="zt-timer-state ${clock.kind}" id="zt-timer-state">${clock.label}</div>
       </div>
-      <textarea class="zt-write-input" id="zt-write-input" placeholder="・&#10;・&#10;・&#10;・"></textarea>
+      <textarea class="zt-write-input" id="zt-write-input" placeholder="・&#10;・&#10;・&#10;・">${escapeHTML(cur.zeroDraft.body)}</textarea>
+      <div id="zt-draft-status" role="status">下書きをこのタブに保存・完了すると日報に載ります</div>
       <div class="zt-write-actions">
-        <button class="btn ghost" data-action="zt-discard">破棄</button>
-        <button class="btn green" data-action="zt-save">保存して一覧へ</button>
+        <button class="btn ghost" data-action="zt-discard">中止</button>
+        <button class="btn green" data-action="zt-save">${clock.left ? "早期完了" : "完了"}</button>
+        <button class="btn ghost" data-action="zt-draft-retry">下書き保存を再試行</button>
+        <button class="btn ghost" data-action="zt-body-copy">本文をコピー</button>
       </div>
       <div class="zt-write-tip">1分過ぎても入力は続けられます。短く・速く・素直に。完璧に書こうとしない。</div>
     </div>
@@ -9550,15 +9592,24 @@ function ztGroupToggleOpen(groupId) {
 function beginZtWrite(id) {
   const t = state.zeroThinking.themes.find((x) => x.id === id);
   if (!t) return false;
-  ztCurrent = { id: t.id, text: t.text, fav: t.fav, questionId: t.questionId || null };  // v39: 問い紐づけを保持
-  ztWriteStartedAt = Date.now();  // v104: 実経過時間の計測開始(カウントダウン残数ではなくこちらを保存に使う)
-  ztCurrent.zeroDraft = createZeroEntryDraft({ theme: t, id: crypto.randomUUID(), connection: zeroConnectionKey(),
-    date: todayISO(), createdAt: nowDateTime(), startedAt: ztWriteStartedAt });
+  const session = getZeroSession(), oldId = session.snapshot().themeToDraft[id];
+  let restored = oldId ? session.restore(oldId, state) : null;
+  if (restored?.status === "confirm") {
+    if (!window.confirm("このタブの書きかけを戻しますか？")) return false;
+    restored = session.restore(oldId, state, true);
+  }
+  if (restored?.status === "conflict") { showToast("テーマまたは回答が変わりました。書きかけは残しています"); return false; }
+  ztWriteStartedAt = restored?.draft?.startedAt ?? Date.now();
+  ztCurrent = { ...t, zeroDraft: restored?.status === "ready" ? restored.draft
+    : createZeroEntryDraft({ theme: t, id: "", connection: zeroConnectionKey(), date: "", createdAt: "", startedAt: ztWriteStartedAt }) };
+  ztEditId = null;
   return true;
 }
 
 function openZtWrite(id) {
-  if (!beginZtWrite(id)) return;
+  if (ztCurrent?.id === id) return;
+  if ((ztCurrent || ztEditId) && requestDraftLeave(() => { ztCurrent = null; ztEditId = null; openZtWrite(id); })) return;
+  if (!beginZtWrite(id)) { render(); return; }
   render();          // 書く画面を描画(DOM 確定)
   readDailyDraft();
   startZtTimer();    // その後にタイマー開始
@@ -9576,18 +9627,17 @@ function discardZtWrite(inputSelector = "#zt-write-input") {
 }
 
 function saveZtEntry(inputSelector = "#zt-write-input", options) {
-  const draft = draftSaveTransaction.readDraft?.(inputSelector);
-  if (draft && !draft.current) return showToast("対象が変わりました。入力は残しています"), { ok: false };
-  const result = applyZtEntry(inputSelector);
-  if (result?.ok && draft) draftSaveTransaction.clearDraft(draft);
-  return result;
+  return applyZtEntry(inputSelector);
 }
 
 function applyZtEntry(inputSelector) {
   const result = runZeroEntry("zero-complete", inputSelector);
   if (!result.ok) return result;
+  ztEditId = ztCurrent.zeroDraft.id;
   stopZtTimer(); ztCurrent = null; ztWriteStartedAt = null;
-  render(); showToast("保存しました — 日報に追加");
+  render(); showToast(result.draftStored?.ok
+    ? "回答を端末に保存 — 日報に追加。同期状態は同期表示で確認できます"
+    : "回答を端末に保存 — 下書きの控えはこの画面内にだけ残っています");
   return result;
 }
 
@@ -9596,14 +9646,47 @@ function zeroConnectionKey() {
   return JSON.stringify([cfg.owner || "", cfg.repo || "", cfg.branch || "", cfg.path || ""]);
 }
 
+function getZeroSession() {
+  const connection = zeroConnectionKey();
+  if (!zeroSessions.has(connection)) zeroSessions.set(connection, createZeroSession({ connection }));
+  return zeroSessions.get(connection);
+}
+
+function queueZeroAutosave(input) {
+  if (input?.id !== "zt-write-input" || !ztCurrent) return;
+  ztCurrent.zeroDraft.body = input.value;
+  clearTimeout(ztAutosaveTimer);
+  if (_imeComposing) return;
+  const owner = ztCurrent;
+  ztAutosaveTimer = setTimeout(() => {
+    if (ztCurrent === owner && input.isConnected && !_imeComposing) runZeroEntry("zero-draft-save", "#zt-write-input");
+  }, 500);
+}
+
 function runZeroEntry(action, inputSelector) {
-  const draft = ztCurrent?.zeroDraft, input = document.querySelector(inputSelector);
+  let draft = ztCurrent?.zeroDraft;
+  const input = document.querySelector(inputSelector), session = getZeroSession();
+  if (!draft || !input || _imeComposing || draft.connection !== zeroConnectionKey()) return { ok: false };
+  if (!draft.id) {
+    if (!input.value.trim()) return { ok: false };
+    const selected = session.select(draft.theme, { id: crypto.randomUUID(), date: todayISO(), createdAt: nowDateTime(), startedAt: draft.startedAt }, { state, allowMemoryOnly: action === "zero-complete" });
+    if (selected.status !== "ready") return { ok: false };
+    selected.draft.stoppedAt = draft.stoppedAt; selected.draft.durationSec = draft.durationSec;
+    ztCurrent.zeroDraft = draft = selected.draft;
+  }
   const result = runDailyOperation(action, { draft, body: input?.value }, {
-    ...dailyOperationDeps, zeroDrafts: dailyDrafts, nowMs: () => Date.now(), today: todayISO,
+    ...dailyOperationDeps, zeroDrafts: session, nowMs: () => Date.now(), today: todayISO,
     isZeroOwner: candidate => Boolean(input?.isConnected && !_imeComposing && !state.modal
       && document.querySelector(inputSelector) === input && ztCurrent?.zeroDraft === candidate
       && candidate.connection === zeroConnectionKey())
   });
+  const status = document.querySelector("#zt-draft-status");
+  if (status) status.textContent = session.status().memoryOnly ? "この画面内にだけ残っています"
+    : !result.ok && result.status !== "invalid" ? "端末への保存に失敗しました。入力は残しています"
+    : !result.ok && action !== "zero-complete" && draft.questionRequest && !draft.questionRequest.done ? "下書き保存済み・問い更新待ち"
+    : !result.ok ? "保存できませんでした。入力は残しています"
+    : state.dataModifiedAt > (state.settings.lastPushedAt || "") ? "下書きをこのタブに保存・端末保存済みの変更は同期待ち"
+    : "下書きをこのタブに保存・完了すると日報に載ります";
   if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
   if (action !== "zero-complete" && result.ok && !result.draftStored?.ok) {
     showToast("下書きの控えを保存できません。この画面内にだけ残っています");
@@ -9618,6 +9701,9 @@ function runZeroEntry(action, inputSelector) {
 function openZtEntry(id) {
   const e = (state.zeroThinking?.entries || []).find((x) => x.id === id);
   if (!e) return;
+  if (ztEditId === id) return;
+  if ((ztCurrent || ztEditId) && requestDraftLeave(() => { ztCurrent = null; ztEditId = null; openZtEntry(id); })) return;
+  ztCurrent = null;
   ztEditId = id;
   render();
   readDailyDraft();
@@ -9657,27 +9743,28 @@ function applyZtEdit(id) {
 }
 
 // ---- タイマー(1分カウントダウン。0で停止のみ、入力は継続可) ----
+function ztClockDisplay() {
+  const deadline = ztCurrent?.zeroDraft?.deadline;
+  const left = Number.isFinite(deadline) ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0;
+  return { left, text: `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`,
+    kind: left ? "running" : "done", label: left ? "進行中" : "終了 — 書き終えたら完了" };
+}
+
 function startZtTimer() {
-  clearInterval(ztTimerInterval);
-  ztTimerLeft = 60;
+  stopZtTimer();
+  if (!ztCurrent) return;
+  ztTimerInterval = setInterval(updateZtTimerDisplay, 1000);
   updateZtTimerDisplay();
-  ztTimerInterval = setInterval(() => {
-    ztTimerLeft--;
-    updateZtTimerDisplay();
-    if (ztTimerLeft <= 0) {
-      clearInterval(ztTimerInterval);
-      ztTimerInterval = null;
-      const s = document.querySelector("#zt-timer-state");
-      const t = document.querySelector("#zt-timer-time");
-      if (s) { s.textContent = "終了 — 書き終えたら保存"; s.className = "zt-timer-state done"; }
-      if (t) t.className = "zt-timer-time done";
-    }
-  }, 1000);
 }
 function updateZtTimerDisplay() {
-  const left = Math.max(0, ztTimerLeft);
+  const clock = ztClockDisplay();
   const el = document.querySelector("#zt-timer-time");
-  if (el) el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  const status = document.querySelector("#zt-timer-state");
+  if (el) { el.textContent = clock.text; el.className = `zt-timer-time ${clock.kind}`; }
+  if (status) { status.textContent = clock.label; status.className = `zt-timer-state ${clock.kind}`; }
+  const complete = document.querySelector('.zt-write-actions [data-action="zt-save"]');
+  if (complete) complete.textContent = clock.left ? "早期完了" : "完了";
+  if (!clock.left) stopZtTimer();
 }
 function stopZtTimer() {
   clearInterval(ztTimerInterval);
@@ -13908,6 +13995,7 @@ function requestDraftLeave(leave, { allowDiscard = true, inputSelector = "#zt-wr
     }
     stopZeroEntry(session.zeroDraft, Date.now());
     stopZtTimer();
+    if (!session.zeroDraft.id && !input.value.trim()) return false;
     const entry = state.zeroThinking.entries.find(row => row.id === session.zeroDraft.id);
     if (!zeroNeedsSave(session.zeroDraft, input.value, entry)) return false;
     save = () => runZeroEntry("zero-leave", inputSelector);
@@ -15719,6 +15807,7 @@ setTimeout(maybeAutoArchive, 8000);
 // v41/v43: 復帰時。自動同期 ON なら pull(内部で日次オープン)、OFF なら日次オープンのみ。
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  if (ztCurrent) startZtTimer();
   // v196: 実行計画(plan-step)は復帰時即照合を行う。
   if (_planStepPending && !_planStepPollBusy
     && Date.now() - _planStepPending.startedAtMs >= PLAN_STEP_POLL_MS) {

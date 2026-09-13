@@ -91,6 +91,7 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
   });
   Object.assign(ctx, { commitLifecycleDraft, DAILY_OPERATIONS, runDailyOperation, buildBlockDetailDraft, twelveWeekSaveOperation, buildTwelveWeekDraft, prepareRelatedStamps,
     stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
+    getZeroSession: () => ({ put: () => ({ ok: true }) }),
     dailyDrafts: createDailyDraftStore({ storage: () => ({ setItem() {} }) }),
     dailyOperationDeps: { state: data, commitCandidate, now: ctx.nowDateTime,
       captureReport: () => ({}), buildReport: () => 'fixture report',

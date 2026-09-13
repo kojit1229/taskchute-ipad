@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "d8605bb2e17d18da",
+      "sourceHash": "d79eb5c8d7906fd6",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1027,7 +1027,7 @@
       ],
       "assertionSignals": 83,
       "assertionHash": "3171a712ac542cec",
-      "sourceHash": "46b5a4583a789b0d",
+      "sourceHash": "c61f608f7ffba940",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3772,12 +3772,12 @@
         "sync-storage",
         "content-ai"
       ],
-      "assertionSignals": 21,
-      "assertionHash": "b6f1931e3fef47ee",
-      "sourceHash": "be975f172d3c6b65",
+      "assertionSignals": 22,
+      "assertionHash": "a4e3799f72b2909a",
+      "sourceHash": "9caa83602c64b351",
       "waits": {
-        "fixedCount": 11,
-        "numericMilliseconds": 6700,
+        "fixedCount": 10,
+        "numericMilliseconds": 6000,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -7936,9 +7936,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 35,
-      "assertionHash": "9c73cf4f3fc32eb6",
-      "sourceHash": "91cca7bfdfbe537a",
+      "assertionSignals": 40,
+      "assertionHash": "74164788800ab118",
+      "sourceHash": "f49a99225b42c5f9",
       "waits": {
         "fixedCount": 16,
         "numericMilliseconds": 5100,
@@ -8409,6 +8409,52 @@
       }
     },
     {
+      "file": "zero-autosave-e2e.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 65,
+      "assertionHash": "707ffa87ac81908e",
+      "sourceHash": "8bc7f2757e364f58",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "zero-clock.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "2952aa69d39ea4a2",
+      "sourceHash": "a35b270e0f86bd50",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "zero-draft-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -8417,9 +8463,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 13,
-      "assertionHash": "6892ced63fe16bc3",
-      "sourceHash": "335b769648d45118",
+      "assertionSignals": 34,
+      "assertionHash": "a141f166fb574a94",
+      "sourceHash": "03861c5d0c64a158",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -8441,9 +8487,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 50,
-      "assertionHash": "0133c98c16024f78",
-      "sourceHash": "d8fc0b407338b975",
+      "assertionSignals": 51,
+      "assertionHash": "d037d5192397d18f",
+      "sourceHash": "3647dda8096997bb",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -8478,6 +8524,29 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "zero-sync-e2e.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage"
+      ],
+      "assertionSignals": 24,
+      "assertionHash": "b0b6276be31f0ea0",
+      "sourceHash": "77d6a6134d659004",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     }
   ]

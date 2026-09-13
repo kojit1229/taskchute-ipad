@@ -99,7 +99,7 @@
     },
     "zero-entry": {
       "paths": ["^src/features/zero-entry\\.js$"],
-      "suites": ["zero-save-boundary", "zero-draft-e2e", "draft-leave", "draft-save-transaction", "daily-operations-registry", "daily-parts-contract"]
+      "suites": ["zero-save-boundary", "zero-autosave-e2e", "zero-sync-e2e", "zero-draft-e2e", "draft-leave", "draft-save-transaction", "daily-operations-registry", "daily-parts-contract"]
     },
     "daily-parts": {
       "paths": [

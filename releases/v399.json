@@ -1,0 +1,84 @@
+{
+  "version": 399,
+  "date": "2026-09-13",
+  "title": "0秒思考の自動保存・中止・完了の一体接続、期限で表示する1分時計、左一覧・右入力と狭い幅の導線、テーマ合流の修復(第3回公開の束 R3-B)",
+  "summary": "0秒思考の入力が止まると自動で控えに保存され、中止・完了・離脱が一体で扱われる(確認拒否や衝突のときも画面と状態が一致する)。1分の時計は期限で表示し、左にテーマ一覧・右に入力欄、狭い幅では一覧と入力を縦に並べる導線。基盤の修復: テーマ一覧が端末間で同期されるとき id と更新時刻で合流し、片側のテーマが消えない(K承認 09-13 07:25)",
+  "changedFiles": [
+    "CHANGES_v399.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v399.json",
+    "src/features/zero-entry.js",
+    "src/features/zero-session.js",
+    "src/sync/github.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/draft-save-transaction.test.js",
+    "tests/impact-regression-map.json",
+    "tests/suite-manifest.json",
+    "tests/v103.test.js",
+    "tests/v90.test.js",
+    "tests/zero-autosave-e2e.test.js",
+    "tests/zero-clock.test.js",
+    "tests/zero-draft-e2e.test.js",
+    "tests/zero-save-boundary.test.js",
+    "tests/zero-sync-e2e.test.js",
+    "tests/zero-ui-fixture.js"
+  ],
+  "intent": [
+    "束 R3-B=3回-05(0秒思考の自動保存・中止・完了を一体接続)→3回-06(期限で表示する1分時計)→3回-07(左一覧・右入力・狭い幅の導線)+fixR3Bbase(テーマ合流の修復、K承認)+fixR3B/fixR3Bb。設計09 §4.4・§4.5・§8"
+  ],
+  "changes": [
+    "src/features/zero-entry.js / app.js: 自動保存・中止・完了・離脱の一体接続(false のときも render)、1分時計の期限表示、左右配置と狭い幅の導線",
+    "src/sync/github.js(fixR3Bbase 19行): 0秒思考のテーマ一覧を id と更新時刻で合流(和集合、同値は端末側)",
+    "styles.css: 左一覧・右入力の配置と狭い幅の縦並び",
+    "tests: zero-draft-e2e(完了後の控えの契約追随)・v103・v90 の追随、zero-sync-e2e / zero-autosave-e2e の新設、v399 載せ替え時の追随(draft-save-transaction の砂場注入の統合、zero-sync-e2e の自動送信=v380 adoptSyncResult の契約)",
+    "sw.js: CACHE_NAME v399"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad)は未確認",
+    "1周目の軽微(clipboard 例外・過去テーマ全件描画・44px 見た目)は次周送り"
+  ],
+  "reviewFocus": [
+    "自動保存・中止・完了・離脱で控えと正本が食い違わないか",
+    "テーマ合流で片側のテーマが消えないか、二重送信しないか",
+    "狭い幅で一覧と入力が縦に並び入力が失われないか"
+  ],
+  "verification": [
+    "受領実走(v398 main 18b0cae 起点、reports/supervision/recv-R3Bv): (a)(b)(c)=0(a/b は載せ替え時の追随後の再実走)",
+    "独立検証: Codex 223a FAIL 軽微1 / Claude 223b PASS 中1 → fixR3Bb → Codex recheck226 PASS",
+    "release-gate --final は監督者が実走(reports/impl-r1/v399/release-gate-final*.log)"
+  ],
+  "knownLimitations": [
+    "AIレポートの外側タブ(3回-08)は K回答 D04 待ち",
+    "過去テーマの全件描画は次周送り"
+  ],
+  "relatedSuites": [
+    "zero-draft-e2e",
+    "zero-sync-e2e",
+    "zero-autosave-e2e",
+    "zero-entry-core",
+    "zero-session-core",
+    "v103",
+    "v90",
+    "draft-save-transaction",
+    "draft-leave",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "merge-core",
+    "sync-load-confirm-snapshot",
+    "v364",
+    "v268",
+    "v269",
+    "v270",
+    "v271",
+    "v272",
+    "v273",
+    "daily-report-core",
+    "three-screen-connection-e2e",
+    "sw-integration"
+  ]
+}

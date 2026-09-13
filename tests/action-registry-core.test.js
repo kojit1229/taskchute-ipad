@@ -190,6 +190,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
   "zt-group-add", "zt-group-rename", "zt-group-delete", "zt-group-toggle",
   "zt-write", "zt-save", "zt-discard", "zt-entry-open", "zt-edit-close", "zt-edit-save",
+  "zt-draft-retry", "zt-body-copy",  // v399 契約追随(監督者 2026-09-13、束R3-B 3回-05): 下書き保存の再試行と本文コピー(設計09 §4.5)を app.js が直接登録(216→218、和集合 272→274)
   "zero-tab",
   "question-add", "question-edit", "question-to-theme", "question-settle", "question-reopen",
   "question-bridge", "question-bridge-submit", "question-delete",
@@ -288,6 +289,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "zt-suggestion-adopt", "zt-suggestion-dismiss",
   "zt-group-add", "zt-group-rename", "zt-group-delete", "zt-group-toggle",
   "zt-write", "zt-save", "zt-discard", "zt-entry-open", "zt-edit-close", "zt-edit-save",
+  "zt-draft-retry", "zt-body-copy",  // v399 契約追随(監督者 2026-09-13、束R3-B 3回-05): 下書き保存の再試行と本文コピー(設計09 §4.5)を app.js が直接登録(216→218、和集合 272→274)
   "zero-tab",
   "weekly-suggest-add",
   // --- v177: 問い(9。open-questionsはv230のHome撤去で到達不能化、v291孤児掃除で削除

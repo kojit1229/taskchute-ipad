@@ -1,4 +1,4 @@
-import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
+import { nextMutationStamp } from "../core/mutation-stamp.js";
 
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
 const fingerprint = value => JSON.stringify(value);
@@ -6,7 +6,7 @@ const baseline = draft => fingerprint([draft.body, draft.durationSec, draft.stop
 const questionContent = q => fingerprint(Object.fromEntries(Object.entries(q || {})
   .filter(([key]) => !["status", "lastTouchedAt", "updatedAt"].includes(key)).sort(([a], [b]) => a.localeCompare(b))));
 export const zeroAnswer = draft => ({ id: draft.id, date: draft.date, theme: draft.theme.text,
-  body: draft.body.trim(), questionId: draft.theme.questionId || null, createdAt: draft.createdAt,
+  body: draft.body, questionId: draft.theme.questionId || null, createdAt: draft.createdAt,
   durationSec: draft.durationSec });
 export const sameZeroAnswer = (entry, draft) => Object.entries(zeroAnswer(draft)).every(([key, value]) => entry?.[key] === value);
 
@@ -47,7 +47,7 @@ function prepare(mode, input, deps) {
   if (!draft.questionRequest && draft.body.trim() && draft.theme.questionId) {
     const q = deps.state.questions?.find(q => q.id === draft.theme.questionId && !q.deleted);
     if (!q) throw invalid("問いが変わりました。確認してください");
-    const date = deps.today();
+    const date = draft.date;
     draft.questionRequest = { id: q.id, date, before: { ...q },
       planned: { ...q, lastTouchedAt: date, status: q.status === "open" ? "deepening" : q.status }, done: false };
   }
@@ -86,7 +86,7 @@ function build(state, input, deps) {
   const theme = state.zeroThinking?.themes?.find(theme => theme.id === draft.themeId);
   if (!theme || fingerprint(theme) !== draft.baseFingerprint) throw invalid("テーマが変わりました。確認してください");
   const stamp = nextMutationStamp({ now: deps.now(), candidates: [draft.createdAt] });
-  const entry = stamped(zeroAnswer(draft), stamp);
+  const entry = { ...zeroAnswer(draft), updatedAt: null };
   return { records, completed: true, candidates: [stamp], values: [
     { kind: "zeroThinking", key: "entries", before: state.zeroThinking.entries, after: [...state.zeroThinking.entries, entry] },
     { kind: "zeroThinking", key: "themes", before: state.zeroThinking.themes,

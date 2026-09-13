@@ -83,7 +83,7 @@ export function createZeroSession({ connection, storage, nowMs = () => Date.now(
     retry: persist,
     remaining: id => own(data.drafts, id) ? Math.max(0, Math.ceil((data.drafts[id].deadline - nowMs()) / 1000)) : 0,
     discard: id => own(data.drafts, id) ? remove(id) : { ok: false, status: "missing" },
-    select(theme, fields, { state, confirmed = false, newWriting = false, currentDraft } = {}) {
+    select(theme, fields, { state, confirmed = false, newWriting = false, currentDraft, allowMemoryOnly = false } = {}) {
       const oldId = own(data.themeToDraft, theme.id) ? data.themeToDraft[theme.id] : null;
       const selectedId = data.themeToDraft[data.selectedThemeId];
       currentDraft ||= own(data.drafts, selectedId) ? data.drafts[selectedId] : null;
@@ -91,7 +91,7 @@ export function createZeroSession({ connection, storage, nowMs = () => Date.now(
         if (currentDraft?.id === oldId && !restored.has(oldId)) return { status: "ready", draft: currentDraft };
         if (currentDraft && currentDraft.id !== oldId) {
           stopZeroEntry(currentDraft, nowMs());
-          const saved = put(currentDraft); if (!saved.ok) return saved;
+          const saved = put(currentDraft); if (!saved.ok && !allowMemoryOnly) return saved;
         }
         return restore(oldId, state, confirmed);
       }
@@ -100,7 +100,7 @@ export function createZeroSession({ connection, storage, nowMs = () => Date.now(
       const previous = currentDraft || (oldId ? data.drafts[oldId] : null);
       if (previous) {
         stopZeroEntry(previous, nowMs());
-        const saved = put(previous); if (!saved.ok) return saved;
+        const saved = put(previous); if (!saved.ok && !allowMemoryOnly) return saved;
       }
       const draft = createZeroEntryDraft({ ...fields, theme, connection });
       const saved = put(draft);

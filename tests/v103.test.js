@@ -10,7 +10,7 @@
 //     表示される(dataModifiedAtも更新され、次回pushで届く状態になる)
 // (b) リモート採用時(remoteが新しい)にローカル限定のentriesが失われない(union)
 // (c) 同一idの重複が生じない(新しい方のupdatedAtが勝つ)
-// (d) themesはマージされない(ローカルで削除したテーマがリモートから復活しない)
+// (d) themesもidとupdatedAt || createdAtで和集合に合流し、同値は端末側を残す
 // (e) 期限切れsuggestedThemesが合流してもTTL剪定で即座に消える
 // (f) リモート取得失敗時に既存動作(マージなし・ローカル保持)を維持する
 // 補足: runAutoSyncPull(自動同期ON)/手動loadFromGitHub(GitHubから読込ボタン)でも
@@ -154,27 +154,47 @@ function check(name, cond, extra = "") {
       after2.dataModifiedAt > REMOTE_T2, `dataModifiedAt=${after2.dataModifiedAt} REMOTE_T2=${REMOTE_T2}`);
 
     // ============================================================
-    // (d) themesはマージされない(ローカルで削除したテーマがリモートから復活しない)
+    // (d) themesもidとupdatedAt || createdAtで和集合に合流し、同値は端末側を残す
     // ============================================================
-    console.log("[3] themesはマージ対象外: ローカルで削除済みのテーマは、リモートにまだ存在してもローカルへ復活しない");
+    console.log("[3] テーマの和集合・更新時刻・同値は端末側を検査する");
     const LOCAL_T3 = `${TODAY}T15:00:00`;
-    await page.evaluate(({ KEY, LOCAL_T3 }) => {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      s.dataModifiedAt = LOCAL_T3;
-      s.zeroThinking = { themes: [], entries: [], groups: [], suggestedThemes: [] };  // テーマは削除済み(空)
-      s.settings.lastPushedAt = LOCAL_T3;
-      localStorage.setItem(KEY, JSON.stringify(s));
-    }, { KEY, LOCAL_T3 });
-
-    const DELETED_THEME = { id: "t-deleted", text: "削除済みだがリモートにはまだ残るテーマ_v103", fav: false, questionId: null, groupId: null, source: null, createdAt: `${TODAY}T06:00:00` };
-    const REMOTE_T3 = `${TODAY}T09:00:00`;  // ローカルより古い((b)スキップ判定パス。entriesマージのみ発生)
-    fixtures.body = contentsBodyFor(remoteState(REMOTE_T3, { themes: [DELETED_THEME] }));
-
-    await page.reload();
-    await page.waitForTimeout(700);
-    const after3 = await stateNow();
-    const themes3 = (after3.zeroThinking && after3.zeroThinking.themes) || [];
-    check("リモートにまだ存在するテーマは復活していない(themesはマージ対象外)", themes3.length === 0, JSON.stringify(themes3));
+    const theme3 = (id, text, createdAt, updatedAt = null) => ({ id, text, fav: false, questionId: null, groupId: null, source: null, importance: "", createdAt, updatedAt });
+    const LOCAL_THEMES3 = [
+      theme3("t-local", "端末Bだけのテーマ_v103", `${TODAY}T06:00:00`),
+      theme3("t-newer", "端末の旧本文", `${TODAY}T06:00:00`, `${TODAY}T07:00:00`),
+      theme3("t-tie", "同値は端末側_v103", `${TODAY}T08:00:00`),
+      theme3("t-created", "createdAtが新しい端末側_v103", `${TODAY}T08:00:00`)
+    ];
+    const REMOTE_THEMES3 = [
+      theme3("t-remote", "相手だけに残るテーマ_v103", `${TODAY}T06:00:00`),
+      theme3("t-newer", "updatedAtが新しい相手側_v103", `${TODAY}T06:00:00`, `${TODAY}T08:00:00`),
+      theme3("t-tie", "同値の相手側", `${TODAY}T08:00:00`),
+      theme3("t-created", "createdAtが古い相手側", `${TODAY}T07:00:00`)
+    ];
+    // 全体時刻の新旧の両経路で同じ和集合と同値時の端末優先を検査する。
+    for (const REMOTE_T3 of [`${TODAY}T09:00:00`, `${TODAY}T16:00:00`]) {
+      await page.evaluate(({ KEY, LOCAL_T3, LOCAL_THEMES3 }) => {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        s.dataModifiedAt = LOCAL_T3;
+        s.zeroThinking = { themes: LOCAL_THEMES3, entries: [], groups: [], suggestedThemes: [] };
+        s.settings.lastPushedAt = LOCAL_T3;
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }, { KEY, LOCAL_T3, LOCAL_THEMES3 });
+      fixtures.body = contentsBodyFor(remoteState(REMOTE_T3, { themes: REMOTE_THEMES3 }));
+      const pulled = page.waitForResponse((response) => response.url().includes("/contents/taskchute/app-state.json") && response.status() === 200);
+      await page.reload();
+      await pulled;
+      await page.waitForFunction(({ KEY, LOCAL_T3 }) => JSON.parse(localStorage.getItem(KEY)).dataModifiedAt > LOCAL_T3, { KEY, LOCAL_T3 });
+      const themes3 = (await stateNow()).zeroThinking.themes;
+      const expected3 = [LOCAL_THEMES3[0], REMOTE_THEMES3[0], REMOTE_THEMES3[1], LOCAL_THEMES3[2], LOCAL_THEMES3[3]];
+      check(`テーマは重複・削除印の追加なしで5 IDの和集合になる(remote=${REMOTE_T3})`,
+        themes3.length === 5 && new Set(themes3.map(t => t.id)).size === 5, JSON.stringify(themes3));
+      for (const expected of expected3) {
+        const actual = themes3.find(t => t.id === expected.id);
+        check(`テーマ全フィールド保持: ${expected.text} (remote=${REMOTE_T3})`,
+          !!actual && Object.keys(actual).length === Object.keys(expected).length && Object.entries(expected).every(([key, value]) => actual[key] === value), JSON.stringify(actual));
+      }
+    }
 
     // ============================================================
     // (e) 期限切れsuggestedThemesが合流してもTTL剪定で即座に消える
