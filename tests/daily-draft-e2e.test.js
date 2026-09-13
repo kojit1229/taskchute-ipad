@@ -164,14 +164,15 @@ function storeChecks() {
     }
     // 完了印付きの0秒思考の控え(新契約で残る)は以降の件数断言の対象外なので試験側で片付ける(製品の挙動ではない)
     await page.evaluate(prefix => { for (const key of Object.keys(sessionStorage).filter(key => key.startsWith(prefix))) { const item = JSON.parse(sessionStorage.getItem(key)); if (item.kind === "zero" && Object.values(item.drafts || {}).every(draft => draft.completed)) sessionStorage.removeItem(key); } }, DAILY_DRAFT_KEY);
-    await action("edit-task", "t"); await field.fill("再読込後に無断復元しない");
+    await action("edit-task", "t"); await field.fill("再読込後に一致する下書きを復元");
     await action("modal-close"); await choose("stay");
     assert.equal((await backups()).length, 1); await page.reload();
     await page.locator('#sidebar [data-action="nav"]').first().waitFor();
     assert.equal(await page.locator(".draft-leave-dialog").count(), 0);
-    await action("edit-task", "t"); assert.notEqual(await field.inputValue(), "再読込後に無断復元しない");
+    await action("edit-task", "t"); await field.focus();
+    assert.equal(await field.inputValue(), "再読込後に一致する下書きを復元");
     assert.equal((await backups()).length, 1, "reload does not consume backup");
     assert.deepEqual(errors, []);
-    console.log("PASS row direct saves and reload without automatic restore; Chromium only");
+    console.log("PASS row direct saves and matching reload restoration without persistence; Chromium only");
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
