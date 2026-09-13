@@ -57,14 +57,14 @@ export function seriesRegistrationOperation(action) {
 }
 
 export function seriesRegistrationForm(record, escapeHTML) {
-  const field = (name, type, value = "") => `<input style="font-size:16px" data-series-field="${name}" type="${type}" ${type === "time" ? 'step="300"' : ""} value="${escapeHTML(value)}">`;
+  const field = (name, type, value = "") => `<input style="font-size:16px" data-modal-field="${name}" data-series-field="${name}" type="${type}" ${type === "time" ? 'step="300"' : ""} value="${escapeHTML(value)}">`;
   const date = record?.date || "";
   return `<section data-series-form data-origin="${escapeHTML(record?.id || "")}" data-fingerprint="${escapeHTML(record ? contentKey(record) : "")}">
     <p>${record ? "この予定を繰り返す" : "繰り返し予定を登録"}</p>
     ${record ? "" : `<label>予定名${field("title", "text")}</label><label>開始日${field("date", "date", date)}</label>
       <label>開始${field("startTime", "time")}</label><label>終了${field("endTime", "time")}</label>
-      <label>翌日終了<input data-series-field="endNextDay" type="checkbox"></label><label>メモ<textarea style="font-size:16px" data-series-field="note"></textarea></label>`}
-    <label>頻度<select style="font-size:16px" data-series-field="frequency"><option value="daily">毎日</option><option value="weekdays">平日</option><option value="weekly">毎週</option></select></label>
+      <label>翌日終了<input data-modal-field="endNextDay" data-series-field="endNextDay" type="checkbox"></label><label>メモ<textarea style="font-size:16px" data-modal-field="note" data-series-field="note"></textarea></label>`}
+    <label>頻度<select style="font-size:16px" data-modal-field="frequency" data-series-field="frequency"><option value="daily">毎日</option><option value="weekdays">平日</option><option value="weekly">毎週</option></select></label>
     <label>終了日${field("until", "date", date)}</label><button type="button" data-action="series-register-save">繰り返しを保存</button></section>`;
 }
 export function submitSeriesRegistration(target, deps, run) {
@@ -78,5 +78,5 @@ export function submitSeriesRegistration(target, deps, run) {
   const result = run(`daily-series-${id ? "convert" : "add"}`, { kind: "schedule", ...(id ? { id, baseFingerprint: form.dataset.fingerprint } : {}),
     requestId: target.dataset.requestId, values }, deps.operationDeps);
   if (!result.ok) { deps.notify(result.error?.message || "保存できません。入力を残しています"); return; }
-  deps.state().modal = null; deps.render(); deps.notify("この端末で保存・同期待ち");
+  deps.closeModal(); deps.render(); deps.notify("この端末で保存・同期待ち");
 }

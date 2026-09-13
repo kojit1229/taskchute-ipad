@@ -477,7 +477,7 @@
       "suites": ["schedule-series-sync-e2e", "single-schedule-sync-e2e"]
     },
     "schedule-series-operations": {
-      "paths": ["^src/features/schedule-series\\.js$"],
+      "paths": ["^src/features/schedule-series\\.js$", "^src/features/schedule-occurrence\\.js$"],
       "suites": ["schedule-series-sync-e2e", "daily-operations-registry", "daily-parts-contract"]
     },
     "schedule-series-core": {

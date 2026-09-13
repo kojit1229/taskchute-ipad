@@ -1654,7 +1654,7 @@ const dailyOperationDeps = {
   }
 };
 
-configureScheduleView({ state: () => state, escapeHTML, render, renderModal, modalHeaderHTML,
+configureScheduleView({ state: () => state, escapeHTML, render, renderModal, closeModal, modalHeaderHTML,
   notify: showToast, requestLeave: requestDraftLeave,
   operationDeps: dailyOperationDeps,
   run: input => runDailyOperation("daily-schedule-complete", input, dailyOperationDeps) });

@@ -726,6 +726,7 @@ const APP_SHELL = [
   "./src/features/zero-session.js",
   "./src/features/single-schedule.js",
   "./src/features/schedule-series.js",
+  "./src/features/schedule-occurrence.js",
   "./src/features/single-schedule-view.js",
   "./src/features/daily-gap-placement.js",
   "./src/features/daily-gap-sheet.js",

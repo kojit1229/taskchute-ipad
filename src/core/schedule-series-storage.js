@@ -29,6 +29,7 @@ function validate(row, parent) {
   nextMutationStamp({ now: row.createdAt }); nextMutationStamp({ now: row.updatedAt });
   if (parent) {
     requireValue(typeof row.originScheduleId === "string" && Array.isArray(row.revisions));
+    requireValue(row.originScheduleId ? row.id === `series_${row.originScheduleId}` : /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(row.id));
     stamp(row.creation); stamp(row.lifecycle); requireValue(typeof row.lifecycle.value?.deleted === "boolean");
     const { anchorDate, pattern, defaults: values } = row.creation.value;
     scheduleSeriesDates(anchorDate, pattern); defaults(values);
@@ -77,6 +78,15 @@ export function mergeStoredScheduleState(local, remote = {}) {
       requireValue(!allParents.some(p => p?.id !== id && originIds.has(p?.originScheduleId)));
       const parts = sources.map(s => ({ scheduleSeries: unique(s.scheduleSeries.filter(p => p?.id === id)), singleSchedules: unique(s.singleSchedules.filter(member)) }));
       const merged = mergeScheduleSeries(...parts);
+      for (const key of ["scheduleSeries", "singleSchedules"]) for (const record of merged[key]) {
+        const source = (key === "scheduleSeries" ? parents : rows.filter(r => r.seriesId)).filter(r => r.id === record.id);
+        const known = key === "scheduleSeries" ? ["id", "formatVersion", "originScheduleId", "creation", "revisions", "lifecycle", "createdAt", "updatedAt", "deleted"]
+          : ["id", "seriesId", "occurrenceKey", "formatVersion", "overrides", "legacyExtras", "createdAt", "updatedAt"];
+        for (const field of new Set(source.flatMap(r => Object.keys(r)).filter(k => !known.includes(k)))) {
+          const values = source.filter(r => Object.hasOwn(r, field)).map(r => r[field]);
+          requireValue(new Set(values.map(contentKey)).size === 1); record[field] = values[0];
+        }
+      }
       for (const key of ["scheduleSeries", "singleSchedules"]) { result[key].push(...merged[key]); result.readable[key].push(...merged[key]); }
     } catch {
       result.scheduleSeries.push(...unique(parents)); result.singleSchedules.push(...unique(rows));

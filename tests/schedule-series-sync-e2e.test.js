@@ -103,6 +103,67 @@ async function nodeContracts() {
     assert.ok(model.scheduleSeries[0].updatedAt > `2026-09-11T12:05:${seconds}`);
   }
   pass("K clock decision: both 300 and 301 seconds accepted; global floor includes new parent");
+  const { occurrenceFingerprint } = await load("features/schedule-occurrence.js");
+  const uid = n => `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`;
+  let request = 0;
+  const occurrenceInput = (row, extra = {}) => ({ kind: "schedule", id: row.id, seriesId: row.seriesId,
+    occurrenceKey: row.occurrenceKey, date: row.date, baseFingerprint: occurrenceFingerprint(model, row), requestId: uid(++request), ...extra });
+  model = { scheduleSeries: [structuredClone(series)], singleSchedules: [], dataModifiedAt: T, tasks: [{ id: "task" }], blocks: [{ id: "block" }] };
+  const originalParent = JSON.stringify(model.scheduleSeries), unrelated = JSON.stringify([model.tasks, model.blocks]);
+  const firstRow = derive.deriveScheduleSeries(model, "2026-09-11")[0], tomorrow = derive.deriveScheduleSeries(model, "2026-09-12")[0];
+  const noChange = occurrenceInput(firstRow, { desiredCompleted: false });
+  const beforeSaves = saves;
+  assert.equal(runDailyOperation("daily-schedule-complete", noChange, deps).unchanged, true);
+  assert.equal(saves, beforeSaves); assert.equal(model.singleSchedules.length, 0);
+  const complete = occurrenceInput(firstRow, { desiredCompleted: true });
+  assert.equal(runDailyOperation("daily-schedule-complete", complete, deps).ok, true);
+  assert.deepEqual(Object.keys(model.singleSchedules[0].overrides), ["completion"]);
+  assert.equal(derive.deriveScheduleSeries(model, "2026-09-11")[0].completed, true);
+  assert.equal(runDailyOperation("daily-schedule-complete", complete, deps).unchanged, true);
+  const active = derive.deriveScheduleSeries(model, "2026-09-11")[0];
+  const move = occurrenceInput(active, { values: { title: active.title, date: "2026-09-12", startTime: "15:00", endTime: "16:00", endNextDay: false, note: active.note } });
+  reject = true; const beforeMove = JSON.stringify(model), failedSaves = saves;
+  assert.equal(runDailyOperation("daily-schedule-edit", move, deps).ok, false);
+  assert.equal(JSON.stringify(model), beforeMove); assert.equal(saves, failedSaves);
+  reject = false;
+  assert.equal(runDailyOperation("daily-schedule-edit", move, deps).ok, true);
+  assert.equal(model.singleSchedules[0].id, active.id); assert.equal(model.singleSchedules[0].occurrenceKey, "2026-09-11");
+  assert.deepEqual(Object.keys(model.singleSchedules[0].overrides).sort(), ["completion", "date", "note", "time", "title"]);
+  assert.equal(derive.deriveScheduleSeries(model, "2026-09-11").length, 0);
+  const moved = derive.deriveScheduleSeries(model, "2026-09-12"); assert.equal(moved.length, 2);
+  assert.deepEqual(moved.find(row => row.id === tomorrow.id), tomorrow);
+  const stale = structuredClone(model), movedRow = moved.find(row => row.id === active.id);
+  const deletion = occurrenceInput(movedRow, { confirmed: true });
+  assert.equal(runDailyOperation("daily-schedule-delete", deletion, deps).ok, true);
+  const deleted = storage.mergeStoredScheduleState(model, stale);
+  assert.equal(derive.deriveScheduleSeries(deleted, "2026-09-12").length, 1);
+  assert.equal(deleted.singleSchedules[0].overrides.lifecycle.value.deleted, true);
+  assert.equal(JSON.stringify(model.scheduleSeries), originalParent); assert.equal(JSON.stringify([model.tasks, model.blocks]), unrelated);
+  const rowTomorrow = derive.deriveScheduleSeries(model, "2026-09-12")[0];
+  const oldEdit = occurrenceInput(rowTomorrow, { desiredCompleted: true });
+  model.scheduleSeries[0].extra = "remote unknown-field edit";
+  const beforeStale = saves;
+  assert.equal(runDailyOperation("daily-schedule-complete", oldEdit, deps).ok, false); assert.equal(saves, beforeStale);
+  pass("occurrence no-op0, completion occupies, move preserves fields/id and next day, rollback/retry, delete no resurrection, stale parent");
+  const extraParent = { ...series, futureField: { text: "preserve" } }, extraChild = { ...child, futureField: [1, 2] };
+  const unknowns = storage.mergeStoredScheduleState(good, { scheduleSeries: [extraParent], singleSchedules: [extraChild] });
+  assert.deepEqual(unknowns.scheduleSeries[0].futureField, extraParent.futureField);
+  assert.deepEqual(unknowns.singleSchedules.find(r => r?.id === child.id).futureField, extraChild.futureField);
+  const conflictingExtra = storage.mergeStoredScheduleState(unknowns, { scheduleSeries: [{ ...series, futureField: { text: "different" } }] });
+  assert.equal(conflictingExtra.scheduleSeries.length, 2); assert.equal(conflictingExtra.readable.scheduleSeries.length, 0);
+  const originSource = schedule("paired");
+  model = { ...createSeriesMergeCandidate({ originSchedule: originSource, pattern: values.pattern, createdAt: T, updatedAt: "2026-09-11T12:00:01", changeId: uid(100) }), dataModifiedAt: T };
+  const counterpart = { id: "schedule_series_paired_2026-09-11", seriesId: "series_paired", occurrenceKey: "2026-09-11", formatVersion: 1,
+    createdAt: T, updatedAt: "2026-09-11T12:00:03", overrides: { note: { value: "counterpart note", updatedAt: "2026-09-11T12:00:03", changeId: uid(101) } } };
+  model.singleSchedules.push(counterpart);
+  const representative = derive.deriveScheduleSeries(model, "2026-09-11")[0];
+  assert.equal(representative.id, "paired"); assert.equal(representative.note, "counterpart note");
+  const originalNote = structuredClone(model.singleSchedules[0].overrides.note);
+  assert.equal(runDailyOperation("daily-schedule-complete", occurrenceInput(representative, { desiredCompleted: true }), deps).ok, true);
+  assert.deepEqual(model.singleSchedules.find(r => r.id === "paired").overrides.note, originalNote);
+  assert.deepEqual(model.singleSchedules.find(r => r.id === counterpart.id), counterpart);
+  assert.ok(model.singleSchedules.find(r => r.id === "paired").overrides.completion.updatedAt > counterpart.updatedAt);
+  pass("unknown fields preserved or quarantined; representative edits only its explicit field with counterpart clock floor");
 }
 
 (async () => {
@@ -173,6 +234,55 @@ async function nodeContracts() {
         assert.equal(await page.evaluate(() => window.__b7.getState().scheduleSeries.length), 2);
         assert.deepEqual(await page.evaluate(() => window.__b7.getState().singleSchedules), rows);
         pass("browser gate and native registration form: parent only");
+        const id = await page.evaluate(() => "schedule_" + window.__b7.getState().scheduleSeries.find(p => p.creation.value.defaults.title === "new recurring").id + "_2026-09-11");
+        const card = () => page.locator(`[data-schedule-id="${id}"]`).first();
+        await card().locator('[data-action="schedule-view-complete"]').click();
+        assert.equal(await page.evaluate(id => window.__b7.getState().singleSchedules.find(r => r?.id === id).overrides.completion.value.completed, id), true);
+        await card().locator('[data-action="schedule-view-details"]').click();
+        await page.locator('[data-occurrence-field="note"]').fill("this occurrence only");
+        assert.equal(await page.locator('[data-occurrence-field="startTime"]').getAttribute("step"), "300");
+        await page.locator('[data-action="series-occurrence-save"]').click();
+        assert.equal(await page.evaluate(id => window.__b7.getState().singleSchedules.find(r => r?.id === id).overrides.note.value, id), "this occurrence only");
+        await card().locator('[data-action="schedule-view-details"]').click();
+        await page.locator('[data-action="series-occurrence-delete"]').click();
+        assert.equal(await card().count(), 0);
+        assert.equal(await page.evaluate(id => window.__b7.getState().singleSchedules.find(r => r?.id === id).overrides.lifecycle.value.deleted, id), true);
+        pass("browser complete/edit/delete delegated from existing detail, retained tombstone");
+      } finally { await context.close(); }
+    }
+    {
+      const { context, page } = await fixture();
+      try {
+        const capacities = await page.evaluate(async ({ T, KEY, source }) => {
+          const { createSeriesMergeCandidate } = await import("/src/core/schedule-series-merge.js");
+          const { commitCandidate } = await import("/src/core/commit.js");
+          const app = window.__b7, results = [];
+          app.getState().settings.autoSync = false; app.persistLocalNoSchedule();
+          for (const count of [1, 100, 1000]) {
+            const model = app.getState(), before = JSON.stringify(model), raw = localStorage.getItem(KEY);
+            const candidate = { scheduleSeries: [], singleSchedules: [] };
+            for (let i = 0; i < count; i++) {
+              const part = createSeriesMergeCandidate({ originSchedule: { ...source, id: `capacity-${i}`, note: "長文".repeat(512) },
+                pattern: { frequency: "daily", until: "2026-09-14" }, createdAt: T, updatedAt: T, changeId: "99999999-9999-4999-8999-999999999999" });
+              candidate.scheduleSeries.push(...part.scheduleSeries); candidate.singleSchedules.push(...part.singleSchedules);
+            }
+            const bytes = new TextEncoder().encode(JSON.stringify({ ...model, ...candidate })).length;
+            let attempts = 0;
+            const result = commitCandidate({ state: model, now: T, build: state => ({ values: Object.keys(candidate).map(key => ({ kind: null, key, before: state[key], after: candidate[key] })) }),
+              persist: state => { attempts++; localStorage.setItem(KEY, JSON.stringify(state)); return true; } });
+            results.push({ count, bytes, ok: result.ok, attempts, unchanged: JSON.stringify(model) === before,
+              rawUnchanged: localStorage.getItem(KEY) === raw, parents: model.scheduleSeries.length, children: model.singleSchedules.length });
+          }
+          return results;
+        }, { T, KEY, source: schedule("capacity") });
+        for (const result of capacities) {
+          assert.equal(result.attempts, 1);
+          if (result.ok) { assert.equal(result.parents, result.count); assert.equal(result.children, result.count); }
+          else { assert.equal(result.unchanged, true); assert.equal(result.rawUnchanged, true); }
+        }
+        console.log("capacity UTF-8 bytes/localStorage", JSON.stringify(capacities));
+        assert.ok(capacities.some(result => !result.ok), "real browser storage quota was exercised");
+        pass("browser origin1/100/1000 long-note full payload capacity and atomic rollback");
       } finally { await context.close(); }
     }
     for (const method of ["loadFromGitHub", "runAutoSyncPull", "syncFromGitHubOnStartup", "saveToGitHub", "runAutoSyncPush"]) {

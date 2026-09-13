@@ -515,8 +515,9 @@ async function syncStampFixture({ pending = true, localOnly = true } = {}) {
   const noop = () => {}, { commitCandidate } = await api();
   // v387 ハーネス追随(監督者決定 2026-09-11、束B7 単位37): adoptSyncResult / syncCoreEqual が単発予定の比較・容器検査を参照するので実物を砂場へ渡す(製品変更なし)。
   const singleSchedule = await import(pathToFileURL(path.join(__dirname, '../src/core/single-schedule.js')).href);
+  const scheduleState = await import('../src/core/schedule-series-storage.js');
   const { mergeReadingEvidence } = await import('../src/core/daily-reading-sync.js');
-  const ctx = vm.createContext({ JSON, state: local, commitCandidate, _lastSaveError: null,
+  const ctx = vm.createContext({ JSON, state: local, commitCandidate, _lastSaveError: null, ...scheduleState,
     mergeReadingEvidence,
     singleSchedulesEqual: singleSchedule.singleSchedulesEqual, validateSingleScheduleContainer: singleSchedule.validateSingleScheduleContainer, console: { warn: noop },
     nowDateTime: () => stamp(0), saveState: Object.assign(noop, { pendingStamp: stamp(20) }),
