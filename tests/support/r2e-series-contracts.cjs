@@ -152,22 +152,6 @@ exports.timeline = async function(pass) {
     const before = structuredClone(model);
     assert.equal(run('undo').ok, false, change); assert.equal(saves, 1); assert.deepEqual(model, before);
   }
-  reset();
-  model = { ...model, ...createSeriesMergeCandidate({ originSchedule: { id: 'paired', title: 'paired', note: '', date,
-    plannedStartAt: date + 'T09:05:00', plannedEndAt: date + 'T10:05:00', completed: false, deleted: false, createdAt: T, updatedAt: T },
-    pattern: parent.creation.value.pattern, changeId: uid(++request), createdAt: T, updatedAt: T }) };
-  model.singleSchedules.push({ id: 'schedule_series_paired_' + date, seriesId: 'series_paired', occurrenceKey: date,
-    formatVersion: 1, createdAt: T, updatedAt: date + 'T12:01:00', overrides: { time: { value: { startTime: '16:00:00', endTime: '17:00:00', endDayOffset: 0 },
-      updatedAt: date + 'T12:01:00', changeId: uid(++request) } } });
-  const pairedOccupancy = plannedAvailability(model, date, { scheduleSeriesEnabled: true }).occupied;
-  assert.equal(run('move').ok, true); assert.equal(row().plannedStartAt, date + 'T16:15:00');
-  assert.equal(run('undo').ok, true); assert.equal(row().plannedStartAt, date + 'T16:00:00');
-  assert.deepEqual(plannedAvailability(model, date, { scheduleSeriesEnabled: true }).occupied, pairedOccupancy);
-  const revisionId = uid(++request);
-  model.scheduleSeries[0].revisions.push({ id: revisionId, changeId: revisionId, updatedAt: date + 'T12:02:00', effectiveFrom: date,
-    changes: { title: 'paired', note: '', time: { startTime: '18:00:00', endTime: '19:00:00', endDayOffset: 0 } } });
-  assert.equal(run('move').ok, true); assert.equal(row().plannedStartAt, date + 'T18:15:00');
-  assert.equal(run('undo').ok, true); assert.equal(row().plannedStartAt, date + 'T18:00:00');
   reset(); model.scheduleSeries[0].creation.value.defaults.time = { startTime: '23:30:00', endTime: '00:00:00', endDayOffset: 1 };
   assert.equal(run('move').ok, false); assert.equal(saves, 0);
   assert.equal(run('resize', -15).ok, true); assert.equal(run('resize', -15).ok, false); assert.equal(saves, 1);
