@@ -58,6 +58,51 @@ async function nodeContracts() {
   const preserved = storage.mergeStoredScheduleState(good, { scheduleSeries: [conflict] });
   assert.equal(preserved.scheduleSeries.length, 2); assert.equal(preserved.readable.scheduleSeries.length, 0);
   pass("flag off, full payload, invalid isolation, orphan recovery, conflicting change preservation");
+  const { runDailyOperation, DAILY_OPERATIONS } = await load("features/daily-operations.js");
+  const { commitCandidate } = await load("core/commit.js");
+  let model = { singleSchedules: [], scheduleSeries: [], dataModifiedAt: T }, saves = 0, sends = 0, reject = false;
+  const memory = new Map(), deps = { get state() { return model; }, now: () => T, commitCandidate,
+    newId: () => "44444444-4444-4444-8444-444444444444",
+    persist: () => { if (reject) return false; saves++; return true; }, scheduleSync: () => sends++,
+    draftStorage: () => ({ getItem: key => memory.get(key), setItem: (key, value) => memory.set(key, value) }) };
+  const values = { anchorDate: "2026-09-11", pattern: { frequency: "daily", until: "2026-09-14" }, defaults: series.creation.value.defaults };
+  const input = { kind: "schedule", requestId: "55555555-5555-4555-8555-555555555555", values };
+  assert.equal(runDailyOperation("daily-series-add", input, deps).ok, false);
+  deps.scheduleSeriesEnabled = true;
+  for (const name of ["daily-series-add", "daily-series-convert"])
+    assert.throws(() => DAILY_OPERATIONS[name].build(model, {}, deps), error => error.code === "DAILY_OPERATION_INVALID");
+  assert.equal(runDailyOperation("daily-series-add", input, deps).ok, true);
+  assert.equal(model.scheduleSeries.length, 1); assert.equal(model.singleSchedules.length, 0);
+  assert.deepEqual([saves, sends], [1, 1]);
+  const first = JSON.stringify(model);
+  assert.equal(runDailyOperation("daily-series-add", input, deps).unchanged, true);
+  assert.equal(JSON.stringify(model), first); assert.deepEqual([saves, sends], [1, 1]);
+  model = { singleSchedules: [schedule("origin")], scheduleSeries: [], dataModifiedAt: T };
+  const { contentKey } = await load("core/single-schedule-merge.js");
+  const convert = { kind: "schedule", id: "origin", requestId: "66666666-6666-4666-8666-666666666666",
+    baseFingerprint: contentKey(model.singleSchedules[0]), values: { pattern: values.pattern } };
+  reject = true; const original = JSON.stringify(model);
+  assert.equal(runDailyOperation("daily-series-convert", convert, deps).ok, false);
+  assert.equal(JSON.stringify(model), original); assert.deepEqual([saves, sends], [1, 1]);
+  assert.ok([...memory.values()].some(raw => raw.includes("series_origin")));
+  reject = false;
+  assert.equal(runDailyOperation("daily-series-convert", convert, deps).ok, true);
+  assert.equal(model.scheduleSeries.length, 1); assert.equal(model.singleSchedules.length, 1);
+  assert.equal(model.singleSchedules[0].id, "origin"); assert.equal(model.singleSchedules[0].title, undefined);
+  const mergedOrigin = storage.mergeStoredScheduleState(model, { singleSchedules: [schedule("origin", { note: "late", updatedAt: "2026-09-11T12:10:00" })] });
+  const resend = storage.mergeStoredScheduleState(JSON.parse(JSON.stringify(mergedOrigin)), model);
+  assert.ok(storage.scheduleStateEqual(mergedOrigin, resend));
+  assert.equal(resend.singleSchedules[0].overrides.note.value, "late");
+  assert.equal(resend.singleSchedules.length, 1); assert.deepEqual([saves, sends], [2, 2]);
+  pass("registration gate, registry empty-input, parent1 child0, original id, quota rollback/draft/retry, mixed resend");
+  for (const seconds of ["00", "01"]) {
+    model = { singleSchedules: [schedule("future", { updatedAt: `2026-09-11T12:05:${seconds}` })], scheduleSeries: [], dataModifiedAt: T };
+    const requestId = seconds === "00" ? "77777777-7777-4777-8777-777777777777" : "88888888-8888-4888-8888-888888888888";
+    const result = runDailyOperation("daily-series-convert", { ...convert, id: "future", requestId, baseFingerprint: contentKey(model.singleSchedules[0]) }, deps);
+    assert.equal(result.ok, true); assert.ok(model.dataModifiedAt > model.scheduleSeries[0].updatedAt);
+    assert.ok(model.scheduleSeries[0].updatedAt > `2026-09-11T12:05:${seconds}`);
+  }
+  pass("K clock decision: both 300 and 301 seconds accepted; global floor includes new parent");
 }
 
 (async () => {
@@ -73,7 +118,7 @@ async function nodeContracts() {
     await page.route("https://**", route => route.abort());
     await page.route("**/app.js", route => route.fulfill({ contentType: "text/javascript",
       body: fs.readFileSync(path.join(__dirname, "../app.js"), "utf8")
-        + "\nwindow.__b7 = { normalizeState, getState: () => state, setState, render, sanitizedStateForGitHub, persistLocalNoSchedule, writeBackupSnapshotBeforeLoad, restoreBackup, importData, collectArchivable };" }));
+        + "\nwindow.__b7 = { normalizeState, getState: () => state, setState, render, dailyOperationDeps, sanitizedStateForGitHub, persistLocalNoSchedule, writeBackupSnapshotBeforeLoad, restoreBackup, importData, collectArchivable };" }));
     await page.addInitScript(({ KEY, rows, T, series }) => localStorage.setItem(KEY, JSON.stringify({
       singleSchedules: rows, scheduleSeries: [series], dataModifiedAt: T, blocks: [], tasks: [], projects: [], settings: {}, selectedDate: "2026-09-11"
     })), { KEY, rows, T, series });
@@ -113,6 +158,23 @@ async function nodeContracts() {
     return { context, page };
   }
   try {
+    {
+      const { context, page } = await fixture();
+      try {
+        assert.equal(await page.locator('[data-action="series-register-new"]').count(), 0);
+        await page.evaluate(() => { window.__b7.dailyOperationDeps.scheduleSeriesEnabled = true; window.__b7.render(); });
+        await page.locator('[data-action="series-register-new"]').first().click();
+        for (const [field, value] of Object.entries({ title: "new recurring", date: "2026-09-11", startTime: "17:00", endTime: "18:00", until: "2026-09-14" }))
+          await page.locator(`[data-series-field="${field}"]`).fill(value);
+        assert.equal(await page.locator('[data-series-field="startTime"]').getAttribute("step"), "300");
+        const fonts = await page.locator('[data-series-field]').evaluateAll(items => items.filter(el => el.type !== "checkbox").map(el => parseFloat(getComputedStyle(el).fontSize)));
+        assert.ok(fonts.every(size => size >= 16));
+        await page.locator('[data-action="series-register-save"]').click();
+        assert.equal(await page.evaluate(() => window.__b7.getState().scheduleSeries.length), 2);
+        assert.deepEqual(await page.evaluate(() => window.__b7.getState().singleSchedules), rows);
+        pass("browser gate and native registration form: parent only");
+      } finally { await context.close(); }
+    }
     for (const method of ["loadFromGitHub", "runAutoSyncPull", "syncFromGitHubOnStartup", "saveToGitHub", "runAutoSyncPush"]) {
       const { context, page } = await fixture();
       try {

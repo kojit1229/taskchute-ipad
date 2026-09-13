@@ -3,16 +3,27 @@ import { plannedMinute } from "../core/planned-occupancy.js";
 import { contentKey } from "../core/single-schedule-merge.js";
 import { buildDailyViewModel } from "./daily-view-model.js";
 import { registerActions } from "../ui/actions.js";
+import { seriesEnabled, seriesRegistrationForm, submitSeriesRegistration } from "./schedule-series.js";
+import { runDailyOperation } from "./daily-operations.js";
+let scheduleViewDeps;
 
 export function configureScheduleView(deps) {
+  scheduleViewDeps = deps;
   const open = (id, date) => {
     const record = scheduleDisplay(deps.state(), date).records.find(row => row.id === id);
     if (!record) { deps.notify("予定を表示できません。最新の保存値を確認してください"); return; }
     deps.state().modal = { type: "singleScheduleView", id, date };
     deps.renderModal(deps.modalHeaderHTML("単発予定", "single-schedule-detail")
-      + renderSchedule(record, date, deps.escapeHTML, { detail: true }) + "</div></div>");
+      + renderSchedule(record, date, deps.escapeHTML, { detail: true })
+      + (seriesEnabled(deps.operationDeps) && !record.seriesId ? seriesRegistrationForm(record, deps.escapeHTML)
+        + '<button type="button" data-action="series-register-new">新しい繰り返し予定</button>' : "") + "</div></div>");
   };
   registerActions({
+    "series-register-save": ({ target }) => submitSeriesRegistration(target, deps, runDailyOperation),
+    "series-register-new": () => {
+      if (!seriesEnabled(deps.operationDeps)) return;
+      deps.renderModal(deps.modalHeaderHTML("繰り返し予定", "series-register") + seriesRegistrationForm(null, deps.escapeHTML) + "</div></div>");
+    },
     "schedule-view-details": ({ id, target }) => {
       const action = () => open(id, target.dataset.date);
       if (!deps.requestLeave(action)) action();
@@ -48,9 +59,10 @@ export function scheduleDisplay(state, date) {
 
 export function renderScheduleSection(state, date, escapeHTML) {
   const display = scheduleDisplay(state, date);
-  if (!display.records.length && !display.warnings.length && !display.error) return "";
+  const register = seriesEnabled(scheduleViewDeps?.operationDeps) ? '<button type="button" data-action="series-register-new">繰り返し予定を登録</button>' : "";
+  if (!display.records.length && !display.warnings.length && !display.error && !register) return "";
   return `<section class="today-single-schedules" data-schedule-date="${escapeHTML(date)}"><h3>単発予定</h3>
-    ${scheduleWarning(display, escapeHTML)}${display.records.map(record => renderSchedule(record, date, escapeHTML)).join("")}</section>`;
+    ${register}${scheduleWarning(display, escapeHTML)}${display.records.map(record => renderSchedule(record, date, escapeHTML)).join("")}</section>`;
 }
 
 export function scheduleWarning(display, escapeHTML) {
