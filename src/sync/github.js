@@ -405,14 +405,13 @@ async function runAutoSyncPush() {
 }
 
 // v103: ===============================================================
-//  0秒思考の双方向マージ(entries[]/suggestedThemes[]のみ。idキーで和集合)。
+//  0秒思考の双方向マージ(entries[]/suggestedThemes[]/themes[]。idキーで和集合)。
 //  背景: pullは従来「新しい方の全量を採用/スキップ」の二択で、iPhoneで書いた0秒思考entryが
 //  サーバーへ到達済みでもPC側のdataModifiedAtの方が新しいと「remoteは古い」と判定して
 //  スキップし、iPhoneの記録がPCから見えなくなる事故が起きた(2026-07-15 K報告)。このまま
 //  PCが保存するとサーバー側のiPhone分ごと上書きされ消えるリスクがある。
-//  themesは対象外(ユーザーが削除できるフィールドで、和集合にすると削除済みテーマが復活して
-//  しまう。tombstone設計はスコープ外。K指示2026-07-15)。tasks/projects/journals等の他
-//  コレクションも対象外(review.mdの全体設計課題=TCJ-R01系は別途、本対応の範囲外)。
+//  fixR3Bbase(K承認2026-09-13): themesも回答と同じ規則で合流する。削除印は追加しないため、
+//  片側に残る削除済みテーマは再び合流する。送信判定の比較対象は変更しない。
 // ===============================================================
 
 // idキー配列の和集合マージ。同一idはupdatedAt(無ければcreatedAt)の新しい方を採用する。
@@ -436,11 +435,12 @@ const swipeTriageLogKey = (l) => `${l.at || ""}|${l.targetId || ""}|${l.action |
 
 // mergeById: src/core/merge.js へ抽出済み(v164)。冒頭のimportを参照。
 
-// entries[]/suggestedThemes[]だけをマージした結果を返す。失敗(想定外の型など)はcatchして
+// entries[]/suggestedThemes[]/themes[]をマージした結果を返す。失敗(想定外の型など)はcatchして
 // nullを返し、呼び出し側は従来動作(マージなし)へフォールバックする(データ消失ガード)。
 function mergeZeroThinkingLists(localZt, remoteZt) {
   try {
     return {
+      themes: mergeById(localZt?.themes, remoteZt?.themes),
       entries: mergeById(localZt?.entries, remoteZt?.entries),
       suggestedThemes: mergeById(localZt?.suggestedThemes, remoteZt?.suggestedThemes)
     };
@@ -458,12 +458,13 @@ function sameArrayByReference(a, b) {
 
 // mergedLists(mergeZeroThinkingListsの戻り値)が比較対象baseZtと実質同じ内容かどうか。
 function zeroThinkingListsEqual(mergedLists, baseZt) {
-  return sameArrayByReference(mergedLists.entries, (baseZt && baseZt.entries) || [])
+  return sameArrayByReference(mergedLists.themes, (baseZt && baseZt.themes) || [])
+    && sameArrayByReference(mergedLists.entries, (baseZt && baseZt.entries) || [])
     && sameArrayByReference(mergedLists.suggestedThemes, (baseZt && baseZt.suggestedThemes) || []);
 }
 
 // (b) リモートを採用しない(ローカルの方が新しい/同じ)場合の合流。リモートにしか無いid の
-// entries/suggestedThemesをローカルへ合流させる(今回のPC症状はこの経路で治る)。合流後に
+// themes/entries/suggestedThemesをローカルへ合流させる(今回のPC症状はこの経路で治る)。合流後に
 // suggestedThemesのTTLを再剪定する(期限切れ候補が合流してもnormalizeStateと同じ基準で
 // 即座に消える)。実際に内容が変化した場合だけtrueを返す(呼び出し側はdataModifiedAtを
 // 更新して保存する=次回pushでサーバーにも和集合が届く)。
@@ -472,9 +473,11 @@ function mergeZeroThinkingIntoLocal(remoteZt) {
   if (!merged) return false;
   const prunedSuggested = pruneExpiredSuggestedThemes(merged.suggestedThemes);
   const changed =
+    !sameArrayByReference(merged.themes, state.zeroThinking.themes || []) ||
     !sameArrayByReference(merged.entries, state.zeroThinking.entries || []) ||
     !sameArrayByReference(prunedSuggested, state.zeroThinking.suggestedThemes || []);
   if (!changed) return false;
+  state.zeroThinking.themes = merged.themes;
   state.zeroThinking.entries = merged.entries;
   state.zeroThinking.suggestedThemes = prunedSuggested;
   return true;
@@ -1171,6 +1174,7 @@ function applySyncMergeToLocal(merged) {
   state.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   state.archivedDates = v.archivedDates;  // 単位16
   if (v.zeroThinking) {
+    state.zeroThinking.themes = v.zeroThinking.themes;
     state.zeroThinking.entries = v.zeroThinking.entries;
     state.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
   }
@@ -1226,6 +1230,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   remoteNorm.archivedDates = v.archivedDates;  // 単位16
   if (v.zeroThinking) {
+    remoteNorm.zeroThinking.themes = v.zeroThinking.themes;
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
     remoteNorm.zeroThinking.suggestedThemes = pruneExpiredSuggestedThemes(v.zeroThinking.suggestedThemes);
   }
