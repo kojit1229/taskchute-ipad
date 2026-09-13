@@ -159,7 +159,7 @@ function task(id, projectId, title, extra = {}) {
     check("編集ON・12WY進行中サイクルのTaskは進捗を除く行内入力(状態/期限/カテゴリ)のみ表示", await row("t-plan").locator(".wbs-inline-input").count() === 3
       && await row("t-plan").locator(".wbs-progress-input").count() === 0);
     const projectRow = page.locator('[data-wbs-row-id="p-cycle"]');
-    check("Project選択肢はタグ・進捗・完了数を表示し詳細操作へ到達", (await projectRow.locator(".wbs-project-meta").textContent()).includes("[12WY]")
+    check("Project選択肢はタグ・進捗・完了数を表示し詳細操作へ到達", (await projectRow.locator(".wbs-project-meta").textContent()).includes("[12週計画]")
       && (await projectRow.locator(".wbs-project-meta").textContent()).includes("進捗")
       && (await projectRow.locator(".wbs-project-meta").textContent()).includes("完了")
       && await page.locator('[data-wbs-detail-id="p-cycle"] .wbs-detail-actions').isVisible());

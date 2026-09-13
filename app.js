@@ -5387,7 +5387,7 @@ function renderWBS() {
     </select>`;
   const viewOption = (action, label, on, className = "") => `<button class="btn ghost wbs-view-option${className ? ` ${className}` : ""}" data-action="${action}" aria-pressed="${on}"><span>${label}</span><b>${on ? "ON" : "OFF"}</b></button>`;
   const week = weekRange(todayISO());
-  const cycleMeta = `${state.settings.twelveWeekStartDate ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}${mdFmt(week.weekStart)} – ${mdFmt(week.weekEnd)}`;
+  const cycleMeta = `${state.settings.twelveWeekStartDate ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}${mdFmt(week.weekStart)} – ${mdFmt(week.weekEnd)}`;
   const wbsTools = `<div class="wbs-toolbar">
     <details class="wbs-view-menu"><summary class="btn ghost" data-action="wbs-view-menu-toggle">表示 ▾</summary>
       <div class="wbs-view-popover"><div class="wbs-view-options">
@@ -5408,7 +5408,7 @@ function renderWBS() {
   </div>`;
 
   return `
-    <div class="tower-skin wbs-tower" data-daily-view="wbs"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
+    <div class="tower-skin wbs-tower" data-daily-view="wbs"><header class="view-header wbs-header"><div class="wbs-heading"><h1>作業一覧</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
     ${renderWipBanner()}
     ${renderWbsThisWeek()}
     <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
@@ -6207,7 +6207,7 @@ function wbsProjectTaskModel(project) {
 
 function renderWbsProjectMeta(project, model) {
   const projDue = project.dueDate ? ` ・ 期限 ${project.dueDate.slice(5).replace("-", "/")}` : "";
-  return `${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${project.twelveWeekStartDate ? `<span>[12WY]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${model.agg.num}/${model.agg.den} ・ ${model.agg.pct}% ・ 完了 ${model.doneCount}/${model.liveTasks.length}${projDue}${isProjectSuspended(project) ? " ・ 中断" : ""}`;
+  return `${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${project.twelveWeekStartDate ? `<span>[12週計画]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${model.agg.num}/${model.agg.den} ・ ${model.agg.pct}% ・ 完了 ${model.doneCount}/${model.liveTasks.length}${projDue}${isProjectSuspended(project) ? " ・ 中断" : ""}`;
 }
 
 function renderWbsDesktopProjects(projects) {
@@ -6265,7 +6265,7 @@ function renderWbsProjectDetail(project) {
     const due = effectiveDueDate(task);
     return task.status !== "completed" && due && due < todayISO();
   }).length;
-  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
+  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
     <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button>${project.id ? `<button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}` : ""}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
     ${renderTwyTrackBlock(project)}${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
     ${renderWorkList("wbs-tasks-" + encodeURIComponent(project.id))}</div>`;
@@ -9184,7 +9184,7 @@ function renderZeroThinking() {
     <div class="view-header">
       <div>
         <div class="view-breadcrumb">その他 › ${moreGroupLabelFor("zero")}</div>
-        <div class="eyebrow">0 SECOND THINKING</div>
+        <div class="eyebrow">0秒思考</div>
         <h1>0秒思考</h1>
       </div>
       <div class="zt-day-count">
