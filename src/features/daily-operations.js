@@ -9,6 +9,7 @@ import { buildBlockEnd } from "../core/daily-end.js";
 import { buildPlanCompletion, buildTaskCompletion } from "../core/daily-completion.js";
 import { createDailyDraftStore } from "./daily-draft.js";
 import { singleScheduleOperation } from "./single-schedule.js";
+import { seriesRegistrationOperation } from "./schedule-series.js";
 import { buildActualEdit } from "../core/daily-actuals.js";
 import { buildDailyReport, affectedReportDates } from "../core/daily-report.js";
 import { gapPlacementOperation } from "./daily-gap-placement.js";
@@ -44,6 +45,8 @@ export const DAILY_OPERATIONS = {
   "daily-block-duplicate": { build: buildBlockCopy, effects: copyEffects },
   "daily-duplicate-undo": { build: (state, input, deps) => buildCopyUndo(state, input, { copyFingerprint: dailyFingerprint }), effects: copyUndoEffects },
   "daily-schedule-add": singleScheduleOperation("add"),
+  "daily-series-add": seriesRegistrationOperation("add"),
+  "daily-series-convert": seriesRegistrationOperation("convert"),
   "daily-schedule-edit": singleScheduleOperation("edit"),
   "daily-schedule-complete": singleScheduleOperation("complete"),
   "daily-schedule-delete": singleScheduleOperation("delete"),

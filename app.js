@@ -1,4 +1,5 @@
 import { normalizeSingleSchedules, validateSingleScheduleContainer, mergeStoredSingleSchedules } from "./src/core/single-schedule.js";
+import { validateScheduleContainers, mergeStoredScheduleState } from "./src/core/schedule-series-storage.js";
 import { createFeedbackReadonlyPatch } from "./src/features/feedback/feedback-readonly-patch.js";
 import { createFeedbackCanonicalReader } from "./src/features/feedback/feedback-canonical-reader.js";
 import { createFeedbackUiGateway } from "./src/features/feedback/feedback-ui-gateway.js";
@@ -1653,8 +1654,9 @@ const dailyOperationDeps = {
   }
 };
 
-configureScheduleView({ state: () => state, escapeHTML, render, renderModal, modalHeaderHTML,
+configureScheduleView({ state: () => state, escapeHTML, render, renderModal, closeModal, modalHeaderHTML,
   notify: showToast, requestLeave: requestDraftLeave,
+  operationDeps: dailyOperationDeps,
   run: input => runDailyOperation("daily-schedule-complete", input, dailyOperationDeps) });
 
 const dailyGapSheet = createDailyGapSheet({ state: () => state, escapeHTML, modalHeaderHTML,
@@ -2216,7 +2218,7 @@ function compactMap(o) {
 }
 
 function validateStateContainers(value) {
-  validateSingleScheduleContainer(value.singleSchedules);
+  validateScheduleContainers(value);
   const invalidJournals = value.journals != null &&
     (typeof value.journals !== "object" || Array.isArray(value.journals));
   const invalidRecurrences = value.recurrences != null && !Array.isArray(value.recurrences);
@@ -2230,6 +2232,7 @@ function validateStateContainers(value) {
 function normalizeState(value) {
   validateStateContainers(value);
   value.singleSchedules = normalizeSingleSchedules(value.singleSchedules).stored;
+  if (value.scheduleSeries === undefined) value.scheduleSeries = [];
   const actualSettings = value.settings && typeof value.settings === "object" && !Array.isArray(value.settings)
     ? value.settings
     : {};
@@ -10852,7 +10855,8 @@ function importData(file) {
       //      中途半端な state で動き続ける事故を防ぐ。
       const token = state.settings?.github?.token || "";
       const loaded = JSON.parse(String(reader.result));
-      loaded.singleSchedules = mergeStoredSingleSchedules(state.singleSchedules, loaded.singleSchedules).stored;
+      const schedules = mergeStoredScheduleState(state, loaded);
+      loaded.singleSchedules = schedules.singleSchedules; loaded.scheduleSeries = schedules.scheduleSeries;
       const next = normalizeState(loaded);
       // バックアップはトークンを含まないので、この端末のトークンを引き継ぐ
       if (!next.settings.github.token) next.settings.github.token = token;
@@ -10864,7 +10868,7 @@ function importData(file) {
     invalidateVisionConnection();
         maintainRecurrences({ purge: true });
         saveAndRender("データをインポートしました");
-      });
+      }, { preserveKinds: ["singleSchedules", "scheduleSeries"], sourceStamps: [loaded.dataModifiedAt] });
     } catch {
       showToast("JSONを読み込めませんでした");
     }
@@ -11252,7 +11256,7 @@ async function gitHubErrorMessage(response, isCurrent = () => true) {
 }
 
 function sanitizedStateForGitHub() {
-  validateSingleScheduleContainer(state.singleSchedules);
+  validateScheduleContainers(state);
   const copy = structuredClone(state);
   if (copy.settings?.github) copy.settings.github.token = "";
   copy.modal = null;  // v37: ローカル保存(persistLocalNoSchedule)と同様、モーダル状態は共有しない
@@ -11563,7 +11567,8 @@ async function restoreBackup(name) {
     const currentGithubSettings = state.settings.github;
     clearTimeout(autoSaveTimer);
     const loaded = JSON.parse(text);
-    loaded.singleSchedules = mergeStoredSingleSchedules(state.singleSchedules, loaded.singleSchedules).stored;
+    const schedules = mergeStoredScheduleState(state, loaded);
+    loaded.singleSchedules = schedules.singleSchedules; loaded.scheduleSeries = schedules.scheduleSeries;
     const next = normalizeState(loaded);
     next.settings.github = { ...next.settings.github, ...currentGithubSettings };
     draftSaveTransaction.run(() => {
@@ -11573,7 +11578,7 @@ async function restoreBackup(name) {
     // saveState = dataModifiedAt を今に更新。「復元」をこの端末発の最新変更として扱うことで、
     // 直後の自動 pull がリモート(誤同期後の状態)で復元を黙って上書きするのを防ぐ。
     saveAndRender(`📦 ${dateLabel} 時点に復元しました。内容を確認してください`);
-    });
+    }, { preserveKinds: ["singleSchedules", "scheduleSeries"], sourceStamps: [loaded.dataModifiedAt] });
   } catch (error) {
     showToast(`復元失敗: ${error.message}`);
   }

@@ -15,6 +15,7 @@ const extracted = names.map(name => {
   return source.slice(node.start, node.end);
 }).join('\n');
 const { commitCandidate, assertNotInsideBuild } = require('../src/core/commit.js');
+const { mergeStoredScheduleState } = require('../src/core/schedule-series-storage.js');
 const factory = ['core/mutation-stamp', 'features/draft-save', 'features/draft-leave']
   .map(name => fs.readFileSync(path.join(root, `src/${name}.js`), 'utf8')
     .replace(/^import .*;\r?$/gm, '').replace(/export (function|const)\b/g, '$1')).join('\n');
@@ -292,7 +293,7 @@ test('import and daily open persist the whole change once, including forced recu
   }).join('\n');
   x.state().settings.github = { token: '' };
   let maintenance = 0;
-  Object.assign(x.ctx, { normalizeState: copy, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
+  Object.assign(x.ctx, { normalizeState: copy, mergeStoredScheduleState, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
     invalidateFeedbackConnection() {}, invalidateKaradaConnection() {}, invalidateFundConnection() {}, invalidateVisionConnection() {},
     invalidateHealthCache() {}, ensureJournal: date => { x.ctx.state.journals[date] ||= 'journal'; },
     // fixV398b(監督者決定 2026-09-13、v326 の旧契約を優先): 取り込みと日跨ぎの実体化は外側の保存に同乗し、
@@ -321,7 +322,7 @@ test('import and daily open persist the whole change once, including forced recu
   x.state().settings.github = { token: '', branch: 'fixture' };
   const before = copy(x.state()), loaded = copy(before);
   loaded.projects[0].title = 'restored';
-  Object.assign(x.ctx, { normalizeState: copy, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
+  Object.assign(x.ctx, { normalizeState: copy, mergeStoredScheduleState, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
     clearTimeout() {}, autoSaveTimer: null, requireGitHubConfig: () => x.state().settings.github,
     gitHubBackupURL: () => 'fixture', githubHeaders: () => ({}), fromBase64: value => value,
     fetch: async () => ({ ok: true, json: async () => ({ content: JSON.stringify(loaded) }) }),

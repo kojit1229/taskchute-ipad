@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v399";  // v399: 0秒思考の自動保存・中止・完了の一体接続、期限で表示する1分時計、左一覧・右入力と狭い幅の導線、テーマ合流の修復(束 R3-B)
+const CACHE_NAME = "taskchute-journal-pwa-v400";  // v400: 繰り返し予定の系列(保存・同期・登録・各回の編集/完了/削除)の部品=旗で既定オフ(束 R2-D)
 // v397: 設定画面と筋トレ画面の表示・確認・通知の文言を日本語に(第4回公開の先行分)
 // v396: 閲覧由来の記録を日報へ渡す経路(保存は無効のまま)と、3画面の通し・失敗/日跨ぎ・スマホ/PWA の検査群
 // v395: 閲覧記録・対応設定・習慣の合流(保存は無効のまま)、実行の4〜24時と空き時間の配置枠、単発予定の新しい配置枠への接続
@@ -676,6 +676,7 @@ const APP_SHELL = [
   "./src/core/schedule-series.js",
   "./src/core/schedule-series-merge.js",
   "./src/core/schedule-series-derive.js",
+  "./src/core/schedule-series-storage.js",
   "./src/core/planned-occupancy.js",
   "./src/core/mutation-stamp.js",
   "./src/core/commit.js",
@@ -724,6 +725,8 @@ const APP_SHELL = [
   "./src/features/zero-entry.js",
   "./src/features/zero-session.js",
   "./src/features/single-schedule.js",
+  "./src/features/schedule-series.js",
+  "./src/features/schedule-occurrence.js",
   "./src/features/single-schedule-view.js",
   "./src/features/daily-gap-placement.js",
   "./src/features/daily-gap-sheet.js",

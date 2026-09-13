@@ -472,6 +472,14 @@
       "patterns": ["deriveScheduleSeries|schedulesWithSeriesForDate"],
       "suites": ["schedule-series-derive", "schedule-series-core"]
     },
+    "schedule-series-storage": {
+      "paths": ["^src/core/schedule-series-storage\\.js$"],
+      "suites": ["schedule-series-sync-e2e", "single-schedule-sync-e2e"]
+    },
+    "schedule-series-operations": {
+      "paths": ["^src/features/schedule-series\\.js$", "^src/features/schedule-occurrence\\.js$"],
+      "suites": ["schedule-series-sync-e2e", "daily-operations-registry", "daily-parts-contract"]
+    },
     "schedule-series-core": {
       "paths": ["^src/core/schedule-series\\.js$"],
       "patterns": ["createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"],

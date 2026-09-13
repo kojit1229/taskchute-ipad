@@ -13,7 +13,11 @@ const deps = { state, now: () => '2026-09-10T12:00:00',
   persist: () => { saves++; return true; }, scheduleSync: () => schedules++, legacy: {} };
 // S-B2b/3段-10(監督者の契約追随 2026-09-12 20:35): 内部登録行 daily-reading-record(記録は旗で無効)を save-tower-journal と同じ扱いで追加。design/CHANGELOG.md
 const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record',
+  'daily-series-add', 'daily-series-convert',
   'recurrence-related-save', 'twelve-week-related-save', 'lifecycle-related-save'];
+assert.equal(Object.keys(rows).length, 35);
+assert.deepEqual(Object.keys(rows).filter(name => name === 'daily-series-add' || name === 'daily-series-convert'),
+  ['daily-series-add', 'daily-series-convert']);
 assert.deepEqual(Object.keys(rows).sort(), [...expectedActions].sort());
 for (const name of expectedActions) {
   const before = JSON.parse(JSON.stringify(state));

@@ -9,7 +9,11 @@ const app = fs.readFileSync(path.join(ROOT,'app.js'),'utf8');
 const singleScheduleSource = fs.readFileSync(path.join(ROOT, 'src/core/single-schedule.js'), 'utf8').replace(/\r\n/g, '\n');
 const containerCheck = singleScheduleSource.slice(singleScheduleSource.indexOf('export function validateSingleScheduleContainer('), singleScheduleSource.indexOf('\n}\n', singleScheduleSource.indexOf('export function validateSingleScheduleContainer(')) + 3).replace('export ', '');
 assert.ok(containerCheck.includes('StateContainerError'), 'the real single-schedule container check must exist');
-const validate = vm.runInNewContext(containerCheck+'\n'+app.slice(app.indexOf('function validateStateContainers('),app.indexOf('function normalizeState('))+';validateStateContainers');
+// v400 ハーネス追随(監督者 2026-09-13、束R2-D 2回-05): validateStateContainers が系列の容器検査 validateScheduleContainers(src/core/schedule-series-storage.js)を呼ぶようになったので、実物の関数本文を砂場へ同梱(製品変更なし)。
+const seriesStorageSource = fs.readFileSync(path.join(ROOT, 'src/core/schedule-series-storage.js'), 'utf8').replace(/\r\n/g, '\n');
+const seriesContainerCheck = seriesStorageSource.slice(seriesStorageSource.indexOf('export function validateScheduleContainers('), seriesStorageSource.indexOf('\n}\n', seriesStorageSource.indexOf('export function validateScheduleContainers(')) + 3).replace('export function', 'function');
+assert.ok(seriesContainerCheck.includes('StateContainerError'), 'the real schedule-series container check must exist');
+const validate = vm.runInNewContext(containerCheck+'\n'+seriesContainerCheck+'\n'+app.slice(app.indexOf('function validateStateContainers('),app.indexOf('function normalizeState('))+';validateStateContainers');
 const clone = x => JSON.parse(JSON.stringify(x));
 function base(stamp='2026-09-06T10:00:00') {
   return {

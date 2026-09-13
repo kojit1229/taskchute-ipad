@@ -57,6 +57,7 @@ import {
 import { commitCandidate } from "../core/commit.js";
 import { mergeReadingEvidence } from "../core/daily-reading-sync.js";
 import { mergeStoredSingleSchedules, singleSchedulesEqual, validateSingleScheduleContainer } from "../core/single-schedule.js";
+import { mergeStoredScheduleState, scheduleStateEqual, validateScheduleContainers } from "../core/schedule-series-storage.js";
 import { nextMutationStamp, stamped } from "../core/mutation-stamp.js";
 import { persistLocalNoSchedule, _lastSaveError } from "../storage/local.js";
 
@@ -115,13 +116,13 @@ export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
       "chainRuns", "zeroSecThemeLog", "migrationRitualLog", "feedbackFiles", "feedbackIngestedDates",
       "aiWorkProcessedIds", "zeroThinking.entries", "zeroThinking.suggestedThemes", "zeroThinking.groups"];
     // Schedule changes are measured as whole records, including their ordering timestamps.
-    const schedulesChanged = !singleSchedulesEqual(candidate.singleSchedules, remoteNorm.singleSchedules);
+    const schedulesChanged = !scheduleStateEqual(candidate, remoteNorm);
     mode = keys.some(key => content(getByPath(candidate, key) ?? null)
       !== content(getByPath(remoteNorm, key) ?? null)) || schedulesChanged ? "merge" : "adopt";
   }
   if (mode === "adopt" && normalizeDataStamp(before.dataModifiedAt || "") > normalizeDataStamp(remoteT || "")) mode = "merge";
   const keepStamp = mode === "pushed" || (mode === "merge" && before.dataModifiedAt > remoteT
-    && content(before) === content(candidate) && singleSchedulesEqual(before.singleSchedules, candidate.singleSchedules));
+    && content(before) === content(candidate) && scheduleStateEqual(before, candidate));
   setState(before);
   const result = commitCandidate({ state: before, now: nowDateTime,
     floors: [saveState?.pendingStamp, candidate.dataModifiedAt, remoteT],
@@ -579,7 +580,7 @@ function assertPrimarySettingsSafe(remoteNorm, before) {
 // (この3キーが少しでも異なるだけで)fail-closeになり、日常的な差分でバナーが増発する
 // (単位14/14bが避けようとした問題を再発させる)。そこで比較対象(fail-close)は増やさず、
 // 「確認ダイアログを出すかどうか」の判定だけLOSS_RISK_KEYSで広げる。
-const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyReviews", "cycleReviews"];
+const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyReviews", "cycleReviews", "scheduleSeries"];
 
 // 修正フェーズ単位18(A2-H3): 外部バッチ(loop apply.py)がdataModifiedAtに日付のみ
 // (YYYY-MM-DD、10文字)を書くケースへの防御。アプリ側nowDateTime()は19文字
@@ -628,8 +629,8 @@ function syncCoreEqual(remoteNorm) {
   if (!remoteNorm) return false;
   try {
     // Schedules merge independently; content differences must not become a core conflict.
-    validateSingleScheduleContainer(state.singleSchedules);
-    validateSingleScheduleContainer(remoteNorm.singleSchedules);
+    validateScheduleContainers(state);
+    validateScheduleContainers(remoteNorm);
     const reading = computeSyncMerge(remoteNorm, "local")?.values.reading;
     if (!reading) return false;
     return SYNC_CORE_COMPARE_KEYS.every((k) => k === "habitStreaks" && reading.active
@@ -908,7 +909,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
   try {
     archiveProof.assert(remoteNorm);
     // The device is always local, even when other collections prefer the remote snapshot.
-    const schedules = mergeStoredSingleSchedules(state.singleSchedules, remoteNorm.singleSchedules);
+    const schedules = mergeStoredScheduleState(state, remoteNorm);
     for (const warning of schedules.warnings) console.warn("single-schedule", warning);
     // 単位16: archivedDates自体は文字列集合の和集合(mergeStringIdSetを再利用)。この和集合が
     // 「退避済み日付」の全体像になるため、journals/feedback(reportsを合流させる際も同様)の
@@ -1025,7 +1026,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const jsonChanged = (obj, base) => JSON.stringify(obj) !== JSON.stringify(base || {});
     const changedVsLocal =
       reading.changed[0] ||
-      !singleSchedulesEqual(schedules.stored, state.singleSchedules) ||
+      !scheduleStateEqual(schedules, state) ||
       journals.changedVsLocal ||
       jsonChanged(journalMeta, state.journalMeta) ||
       feedback.changedVsLocal ||
@@ -1068,7 +1069,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(zeroThinkingGroups, state.zeroThinking?.groups || []);
     const changedVsRemote =
       reading.changed[1] ||
-      !singleSchedulesEqual(schedules.stored, remoteNorm.singleSchedules) ||
+      !scheduleStateEqual(schedules, remoteNorm) ||
       journals.changedVsRemote ||
       jsonChanged(journalMeta, remoteNorm.journalMeta) ||
       feedback.changedVsRemote ||
@@ -1108,7 +1109,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const merged = {
       values: {
         reading,
-        singleSchedules: schedules.stored,
+        singleSchedules: schedules.singleSchedules, scheduleSeries: schedules.scheduleSeries,
         journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
         archivedDates,  // 単位16
         // unit14b追加分
@@ -1153,6 +1154,7 @@ function applySyncMergeToLocal(merged) {
   state.settings.morningEnergyLog = v.morningEnergyLog;
   state.blocks = v.blocks;
   state.singleSchedules = v.singleSchedules;
+  state.scheduleSeries = v.scheduleSeries;
   state.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   state.weeklyWishes = v.weeklyWishes;  // v121
   state.bodyScans = v.bodyScans;  // v129
@@ -1210,6 +1212,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.settings.morningEnergyLog = v.morningEnergyLog;
   remoteNorm.blocks = v.blocks;
   remoteNorm.singleSchedules = v.singleSchedules;
+  remoteNorm.scheduleSeries = v.scheduleSeries;
   remoteNorm.dailyDeclarations = v.dailyDeclarations;  // v117(A)
   remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
   remoteNorm.bodyScans = v.bodyScans;  // v129
@@ -1516,6 +1519,7 @@ async function loadFromGitHub() {
     const readingProof = requireSyncMerge(remoteNorm, "local").values.reading;
     const diffCount = remoteNorm
       ? LOSS_RISK_KEYS.filter((k) =>
+          (k !== "scheduleSeries" || state.scheduleSeries?.length || remoteNorm.scheduleSeries?.length) &&
           !(k === "habitStreaks" && readingProof.active &&
             JSON.stringify(readingProof.compareHabits[0]) === JSON.stringify(readingProof.compareHabits[1])) &&
           JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)

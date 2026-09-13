@@ -1,6 +1,7 @@
 import { scheduleSeriesDates, normalizeSeriesTime } from "./schedule-series.js";
 import { chooseSeriesChange, mergeSeriesOverrides, mergeScheduleSeries } from "./schedule-series-merge.js";
 import { normalizeSingleSchedules } from "./single-schedule.js";
+import { mergeStoredScheduleState } from "./schedule-series-storage.js";
 
 // Calendar arithmetic is UTC numeric arithmetic, independent of browser timezone.
 function shiftDate(value, offset) {
@@ -87,8 +88,10 @@ function parentRows(parent, allSaved, date, previous, next) {
 // 04-style {records,warnings}. Output rows are for display/occupancy only and must
 // never be submitted as saved series children. No state, persistence or clock IO.
 export function schedulesWithSeriesForDate(snapshot, date) {
+  try {
   const previous = shiftDate(date, -1), next = shiftDate(date, 1);
-  const merged = mergeScheduleSeries(snapshot, {});
+  const checked = mergeStoredScheduleState(snapshot);
+  const merged = { ...checked.readable, warnings: checked.warnings };
   const plain = normalizeSingleSchedules(merged.singleSchedules.filter(row => !row.seriesId));
   const records = plain.records.filter(row => intersects(row, date, next));
   for (const parent of merged.scheduleSeries)
@@ -96,6 +99,7 @@ export function schedulesWithSeriesForDate(snapshot, date) {
   records.sort((a, b) => a.plannedStartAt < b.plannedStartAt ? -1 : a.plannedStartAt > b.plannedStartAt ? 1
     : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   return { records, warnings: [...merged.warnings, ...plain.warnings] };
+  } catch { return { records: [], warnings: [{ code: "invalid-series-input", count: 1 }] }; }
 }
 
 export function deriveScheduleSeries(snapshot, date) {
