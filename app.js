@@ -266,16 +266,16 @@ function pruneExpiredSuggestedThemes(list) {
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
   { id: "exec", label: "実行", mark: "E" },
-  { id: "wbs", label: "WBS", mark: "W" },
-  { id: "journal", label: "ジャーナル", mark: "J" },
+  { id: "wbs", label: "作業一覧", mark: "W" },
+  { id: "journal", label: "日報", mark: "J" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
-  { id: "wish", label: "やりたい", mark: "✦" },
+  { id: "wish", label: "やりたいこと", mark: "✦" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "zero", label: "0秒思考", mark: "○" },
-  { id: "instruments", label: "INSTRUMENTS", mark: "◉" },
-  { id: "iron-log", label: "IRON LOG", mark: "▰" },
-  { id: "fund", label: "FUND", mark: "📈" },
-  { id: "twelveweek", label: "12WY", mark: "🎯" },  // v356: 12WYタブ(R1a)
+  { id: "instruments", label: "健康と継続", mark: "◉" },
+  { id: "iron-log", label: "筋トレ記録", mark: "▰" },
+  { id: "fund", label: "資産", mark: "📈" },
+  { id: "twelveweek", label: "12週計画", mark: "🎯" },  // v356: 12WYタブ(R1a)
   { id: "more", label: "その他", mark: "…" },  // v265: PCサイドバーに「その他」が無くinstruments/iron-logへ721px以上で到達不能だった導線欠落の修正
   { id: "settings", label: "設定", mark: "S" }
 ];
@@ -8649,15 +8649,15 @@ function renderCategoriesSettings() {
 
 // v230: 群見出しは描画せず、現在地breadcrumb用の分類だけ各項目へ保持する。
 const moreItems = [
-  { id: "wbs", label: "WBS", mark: "🧩", group: "計画" },
-  { id: "wish", label: "やりたい", mark: "✦", group: "計画" },
+  { id: "wbs", label: "作業一覧", mark: "🧩", group: "計画" },
+  { id: "wish", label: "やりたいこと", mark: "✦", group: "計画" },
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
-  { id: "twelveweek", label: "12WY", mark: "🎯", group: "計画" },  // v356: 12WYタブ(R1a)
+  { id: "twelveweek", label: "12週計画", mark: "🎯", group: "計画" },  // v356: 12WYタブ(R1a)
   { id: "zero", label: "0秒思考", mark: "💡", group: "思考" },
   { id: "ai-reports", label: "AIレポート", mark: "🤖", group: "振り返り" },
-  { id: "fund", label: "FUND", mark: "📈", group: "振り返り" },
-  { id: "instruments", label: "INSTRUMENTS", mark: "◉", group: "ツール" },
-  { id: "iron-log", label: "IRON LOG", mark: "▰", group: "ツール" },
+  { id: "fund", label: "資産", mark: "📈", group: "振り返り" },
+  { id: "instruments", label: "健康と継続", mark: "◉", group: "ツール" },
+  { id: "iron-log", label: "筋トレ記録", mark: "▰", group: "ツール" },
   { id: "settings", label: "設定", mark: "⚙️", group: "ツール" }
 ];
 
@@ -8673,8 +8673,7 @@ function renderMore() {
   return `<div class="tower-skin more-tower">
     ${renderHeader("追加画面", "その他")}
     <section class="more-tower-grid" aria-label="その他の画面">
-      ${moreItems.map((item, index) => `<button type="button" class="more-tower-item" data-action="nav" data-view="${item.id}">
-        <span class="more-tower-code">NAV ${String(index + 1).padStart(2, "0")}</span>
+      ${moreItems.map((item) => `<button type="button" class="more-tower-item" data-action="nav" data-view="${item.id}">
         <strong><span class="more-tower-mark" aria-hidden="true">${item.mark}</span>${item.label}${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}</strong>
         <small>${item.group}</small>
       </button>`).join("")}
