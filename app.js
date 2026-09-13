@@ -7174,6 +7174,19 @@ const AI_REPORT_TYPES = [
     guide: "前夜の米国市場と当日の注目材料を寄り付き前にまとめます" }
 ];
 
+// 外側は9項目。投資の作成元は専用画面の内側切替で選ぶ。
+const AI_REPORT_TABS = [
+  { id: "feedback", label: "AIフィードバック", types: ["feedback"] },
+  { id: "content", label: "コンテンツ総括", types: ["content"] },
+  { id: "self", label: "自己分析", types: ["self"] },
+  { id: "weekly", label: "週次レビュー", types: ["weekly"] },
+  { id: "english", label: "英語表現集", types: ["english"] },
+  { id: "letter", label: "未来からの手紙", types: ["letter"] },
+  { id: "excuse", label: "言い訳レポート", types: ["excuse"] },
+  { id: "fundJournal", label: "FABLE FUND日誌", types: ["fundJournal", "fundJournalCodex"] },
+  { id: "market", label: "朝の投資ブリーフ", types: ["market", "marketCodex"] }
+];
+
 // _aiReportDirCache(taskchute/直下の一覧)から、種類のprefixに合致する.mdファイルを
 // 日付降順(新しい順)で返す。一覧未取得ならnullを返し、呼び出し側で読み込みをトリガーさせる。
 function aiReportFilesForType(prefix) {
@@ -7431,13 +7444,13 @@ function renderAiReports() {
   if (fundReportsUI.isType(requestedId) && !fundReportsUI.type()) fundReportsUI.select(requestedId);
   const activeType = AI_REPORT_TYPES.find((t) => t.id === requestedId) || AI_REPORT_TYPES[0];
   const activeId = activeType.id;
-  const refreshBtn = `<button class="btn ghost" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
+  const refreshBtn = `<button class="btn ghost" style="min-height:44px" data-action="ai-report-refresh">🔄 一覧を更新</button>`;
   return `
     ${renderHeader("AIが書いた振り返りをまとめて読む", "AIレポート", refreshBtn)}
     ${renderAiReportUnreadList()}
     <div class="segmented ai-report-types">
-      ${AI_REPORT_TYPES.map((t) => `
-        <button class="${t.id === activeId ? "active" : ""}" data-action="ai-report-type" data-type="${t.id}">${escapeHTML(t.label)}</button>
+      ${AI_REPORT_TABS.map((t) => `
+        <button class="${t.types.includes(activeId) ? "active" : ""}" aria-pressed="${t.types.includes(activeId)}" data-action="ai-report-type" data-type="${t.types.includes(activeId) ? activeId : t.id}">${escapeHTML(t.label)}</button>
       `).join("")}
     </div>
     ${renderAiReportBody(activeType)}
@@ -7480,7 +7493,7 @@ function renderAiReportBody(type) {
       : renderMarkdown(body || "（本文を取得できませんでした）"));
   return `
     <div class="row" style="margin:10px 0">
-      <select data-ai-report-date data-type-id="${type.id}" style="font-size:16px">
+      <select data-ai-report-date data-type-id="${type.id}" style="font-size:16px;min-height:44px">
         ${files.map((f) => `<option value="${escapeHTML(f.date)}" ${f.date === selectedDate ? "selected" : ""}>${escapeHTML(f.date)}</option>`).join("")}
       </select>
     </div>

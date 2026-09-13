@@ -80,6 +80,7 @@ export function createFundReportView({selection,gateway,escapeHTML,renderMarkdow
       <section class="panel fund-journal"><h3>${labels[s.engine]} ${text(s.date||'日付未選択')} ${family}</h3>
       <p class="fund-status-line" role="status">${status}${validBody && report.state!=='available'?'。前回正常に取得した本文を表示しています':''}</p>
       <p class="fund-note">正常取得時刻（協定世界時・UTC）：${received(report?.lastSuccessAt)} ／ 今回の取得試行（協定世界時・UTC）：${received(report?.lastAttemptAt)}</p>
+      <p class="fund-report-source" data-fund-report-source>作成元：${labels[s.engine]}</p>
       ${validBody?`<div class="md-render readonly-md" data-report-file="${text(s.name)}" data-report-loaded="${report.state==='available'?'1':'0'}">${renderMarkdown(report.data)}</div>`:''}
       ${!s.date?'<p>読みたい日付の記録がまだありません</p>':''}</section></section>`;
   }
