@@ -229,6 +229,8 @@ export function renderLifeBand() {
     const age80 = ageSpanMetric(today, settings.birthDate, 80);
     cells.push(lifeCellHTML({ label: "45歳まで", pctLabel: "—", remaining: age45.remaining, progress: age45.progress, isCycle: false }));
     cells.push(lifeCellHTML({ label: "80歳まで", pctLabel: "—", remaining: age80.remaining, progress: age80.progress, isCycle: false }));
+  } else {
+    cells.push(`<div class="life-sig"><span>未設定</span><p>設定画面で生年月日を入力してください。</p></div>`);
   }
 
   return `

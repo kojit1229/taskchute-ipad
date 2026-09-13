@@ -28,7 +28,7 @@ function escapeHTML(value) {
 
   // ---- configure用の可変フィクスチャ ----
   let fixedToday = "2026-02-18";
-  let fixedSettings = { twelveWeekStartDate: "2026-01-01", birthDate: "" };
+  let fixedSettings = { twelveWeekStartDate: "2026-01-01", birthDate: "2000-01-01" };
   configureTopband({
     escapeHTML,
     todayISO: () => fixedToday,
@@ -89,7 +89,7 @@ function escapeHTML(value) {
   }
   {
     fixedToday = "2026-05-01";
-    fixedSettings = { twelveWeekStartDate: "", birthDate: "" }; // 未設定 → todayを起点に開始
+    fixedSettings = { twelveWeekStartDate: "", birthDate: "2000-01-01" }; // 未設定 → todayを起点に開始
     let html = renderLifeBand();
     check("twelveWeekStartDate未設定はWeek 1/12から開始", /12WY WEEK[\s\S]*?>1<em>\/12/.test(html), html);
     check("twelveWeekStartDate未設定は進捗0%", /life-sig wy[\s\S]*?width:0%/.test(html), html);
@@ -98,7 +98,7 @@ function escapeHTML(value) {
   // ==== 3. renderCountdown(): 今年カウントダウン ====
   {
     fixedToday = "2026-01-01";
-    fixedSettings = { twelveWeekStartDate: "2026-01-01", birthDate: "" };
+    fixedSettings = { twelveWeekStartDate: "2026-01-01", birthDate: "2000-01-01" };
     const html = renderLifeBand();
     check("元日は今年364日残り(2026年は非うるう年)", /今年[\s\S]*?>364<em>日/.test(html), html);
     check("元日は今年進捗0%", /今年[\s\S]*?width:0%/.test(html), html);
@@ -109,7 +109,8 @@ function escapeHTML(value) {
     fixedToday = "2026-02-18";
     fixedSettings = { twelveWeekStartDate: "2026-01-01", birthDate: "" };
     const html = renderLifeBand();
-    check("birthDate未設定はセル2枚(12週+今年のみ)", (html.match(/life-sig(?: |")/g) || []).length === 2, html);
+    check("birthDate未設定は12週・今年・未設定案内の3セル", (html.match(/life-sig(?: |")/g) || []).length === 3 && html.includes("未設定") && html.includes("設定画面で生年月日を入力してください。") && html.includes("今年"), html);
+    check("birthDate未設定でも12週セルの週番号と進捗を維持", /life-sig wy[\s\S]*?12WY WEEK[\s\S]*?>7<em>\/12[\s\S]*?width:57%/.test(html), html);
     check("birthDate未設定は45歳/80歳ラベルを含まない", !html.includes("45歳まで") && !html.includes("80歳まで"));
   }
   {

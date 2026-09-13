@@ -2245,6 +2245,7 @@ function normalizeState(value) {
     twelveWeekVision: "", twelveWeekFocus: "",  // v356: 12WYタブ CYCLE面のVISION帯(design.md §3)
     twelveWeekScoreTarget: 85,
     twelveWeekReviewWeekMinItems: 3,  // v357: 13 WEEKSバーの振り返り週(W13)参考平均の閾値(design.md §2.1裁定7)
+    birthDate: "",
     ...actualSettings
   };
   if (actualSettings.dailyReadingRoutineIds && typeof actualSettings.dailyReadingRoutineIds === "object" && !Array.isArray(actualSettings.dailyReadingRoutineIds))
@@ -2256,8 +2257,6 @@ function normalizeState(value) {
     "iron-log", "instruments", "fund", "twelveweek"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "today";
-  // v31: 残り時間表示用の生年月日(未設定なら補完)
-  if (!value.settings.birthDate) value.settings.birthDate = "1992-12-29";
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
   // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
   value.settings.morningEnergyLog ||= {};

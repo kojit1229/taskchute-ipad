@@ -382,7 +382,9 @@ process.once('beforeExit', async () => {
     assert(await jumps.getByRole('button', { name: '記録へ', exact: true }).isVisible());
     assert(await root.getByRole('region', { name: '今日の予定', exact: true }).isVisible());
     console.log('PASS fixSL2A4: weekday, remaining label, navigation labels and section labels');
-    // 誕生日の補完は app.js の所有=レーン1の別発注 fixSB2x で扱う(CHANGELOG 17:20)。
+    assert.equal(await root.locator('.life-band .life-sig').count(), 3);
+    assert.match(await root.locator('.life-band').textContent(), /未設定.*設定画面で生年月日を入力してください。/s);
+    assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings.birthDate, STATE_KEY), '');
     assert((await root.locator('#towerDate').textContent()).includes(today));
     const journal = root.locator('#towerJournalFree');
     await journal.fill('今日の入力を時計更新後も保つ');

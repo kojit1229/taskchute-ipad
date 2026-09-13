@@ -47,8 +47,9 @@ function check(name, condition, extra = "") {
   topband.configureTopband({ escapeHTML: (value) => String(value), todayISO: () => "2026-08-26",
     getSettings: () => ({ twelveWeekStartDate: "2026-08-15", birthDate: "" }), getTrackDigest: () => null });
   const noBirthHTML = topband.renderLifeBand();
-  check("birthDate未設定分岐は45/80歳セルを描画しない", (noBirthHTML.match(/class="life-sig(?: |")/g) || []).length === 2
-    && !noBirthHTML.includes("45歳まで") && !noBirthHTML.includes("80歳まで"));
+  check("birthDate未設定分岐は45/80歳セルを描画しない", (noBirthHTML.match(/class="life-sig(?: |")/g) || []).length === 3
+    && noBirthHTML.includes("未設定") && noBirthHTML.includes("設定画面で生年月日を入力してください。")
+    && noBirthHTML.includes("12WY WEEK") && !noBirthHTML.includes("45歳まで") && !noBirthHTML.includes("80歳まで"));
 
   const server = startServer(PORT);
   let browser;
@@ -226,10 +227,10 @@ function check(name, condition, extra = "") {
 
     console.log("[5] 負例: birthDate未設定・hasMeta=false・blur縮退");
     await seed({ birthDate: "", hasMeta: false, candidate: true });
-    check("既存normalize既定birthDateでもLIFE BANDは4指標を維持", await page.locator(".life-band .life-sig").count() === 4
-      && (await page.locator(".life-band").textContent()).includes("45歳まで")
-      && (await page.locator(".life-band").textContent()).includes("80歳まで"));
-    check("hasMeta=false候補ありは12WYセル内バナーを維持", await page.locator('.life-sig.wy > .twy-commit-banner [data-action="twy-open-commit"]').count() === 1
+    check("空のbirthDateはnormalize後も未設定・12週と今年を維持", await page.locator(".life-band .life-sig").count() === 3
+      && (await page.locator(".life-band").textContent()).includes("未設定")
+      && (await page.locator(".life-band").textContent()).includes("設定画面で生年月日を入力してください。"));
+    check("birthDate未設定・hasMeta=false候補ありは12WYセル内バナーを維持", await page.locator('.life-sig.wy > .twy-commit-banner [data-action="twy-open-commit"]').count() === 1
       && await page.locator(".life-band > .twy-commit-banner").count() === 0);
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
