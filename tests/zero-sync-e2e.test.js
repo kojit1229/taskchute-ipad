@@ -115,9 +115,14 @@ const { STATE_KEY } = require('./helpers');
             assert.deepEqual(bodies(sent[0]), expected);
           }
           if (name === 'runAutoSyncPush') {
-            assert.equal(sent.length, 0, 'theme-only merge keeps the existing automatic send decision');
-            assert.equal(state.dataModifiedAt, remote.dataModifiedAt);
-            assert.equal(state.settings.lastPushedAt, remote.dataModifiedAt);
+            // v399 載せ替え(監督者追随 2026-09-13): v395 以降は同期の5入口が候補保存経由(3段-11)で、和集合が相手と
+            // 異なれば v380 の adoptSyncResult の契約(内容比較→1回だけ再送)どおり和集合を送る。送った後は
+            // 相手=端末=和集合なので再送は起きない(同じ性質=テーマの和集合が失われず二重送信しない)。
+            // 相手が新しいときは採用だけ(送らない)、端末が新しいときは和集合を1回送る。
+            assert.equal(sent.length, remoteNewer ? 0 : 1, 'theme-only union: adopt when remote is newer, re-send once when local is newer (v380 adoptSyncResult)');
+            if (!remoteNewer) assert.deepEqual(bodies(sent[0]), expected);
+            assert.ok(state.dataModifiedAt >= remote.dataModifiedAt);
+            assert.equal(state.settings.lastPushedAt, remoteNewer ? remote.dataModifiedAt : state.dataModifiedAt);
           }
           console.log('PASS fixR3Bbase: ' + name + ' remoteNewer=' + remoteNewer + ' theme-only union/newer/tie/createdAt/missing stamps/core exclusion');
         } catch (error) { failures++; console.error('FAIL fixR3Bbase: ' + name + ' remoteNewer=' + remoteNewer, error); }

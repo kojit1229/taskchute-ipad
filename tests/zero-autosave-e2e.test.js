@@ -50,6 +50,7 @@ const path = require('node:path');
       };
     });
     await q.locator('#zt-write-input').fill('保存不能でも本文保持'); await q.clock.runFor(20000);
+    assert.equal(await q.locator('#zt-draft-status').textContent(), 'この画面内にだけ残っています');
     await action(q, 'zt-save');
     assert.equal((await read(q)).zeroThinking.entries.length, 0);
     assert.equal((await read(q)).zeroThinking.themes.length, 2);
@@ -73,6 +74,90 @@ const path = require('node:path');
     assert.equal((await drafts(r))[0].body, '日本語変換中');
     assert.equal(await input.evaluate(el => el === window.originalInput), true);
     console.log('PASS Z: whitespace does not allocate; IME body/caret/focus/node retained');
+
+    const rejected = await f.page();
+    await write(rejected, 'b', '復元を拒否する控え');
+    await action(rejected, 'zt-discard');
+    await rejected.reload(); await rejected.locator('[data-action="zt-write"]').first().waitFor();
+    await write(rejected, 'a', '切替前の本文');
+    rejected.removeAllListeners('dialog');
+    let rejectedCount = 0;
+    rejected.on('dialog', async d => { rejectedCount++; await d.dismiss(); });
+    await rejected.evaluate(() => {
+      window.beforeLeaveSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(k, v) {
+        if (this === sessionStorage) throw Error('fixture leave storage failure');
+        return window.beforeLeaveSetItem.call(this, k, v);
+      };
+    });
+    await action(rejected, 'zt-write', { id: 'b' });
+    await rejected.locator('[data-action="draft-leave-save"]').waitFor();
+    await rejected.evaluate(() => { Storage.prototype.setItem = window.beforeLeaveSetItem; });
+    await action(rejected, 'draft-leave-save');
+    await rejected.locator('#zt-write-input').waitFor({ state: 'detached' });
+    assert.equal(rejectedCount, 1);
+    assert.equal(await rejected.locator('#zt-write-input').count(), 0);
+    assert.equal((await drafts(rejected)).find(d => d.themeId === 'a').body, '切替前の本文');
+    assert.equal((await drafts(rejected)).find(d => d.themeId === 'b').body, '復元を拒否する控え');
+    await write(rejected, 'a', '拒否後の追記も保存する');
+    assert.equal((await drafts(rejected)).find(d => d.themeId === 'a').body, '拒否後の追記も保存する');
+    console.log('PASS Z: declined restoration removes stale input and retains both drafts and subsequent input');
+
+    const failed = await f.page();
+    await write(failed, 'a', '端末保存の失敗を区別');
+    assert.equal(await failed.locator('#zt-draft-status').textContent(), '下書きをこのタブに保存・端末保存済みの変更は同期待ち');
+    await failed.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(k, v) {
+        if (k === 'taskchute-journal-pwa-state-v1') throw Error('fixture local failure');
+        return original.call(this, k, v);
+      };
+    });
+    await action(failed, 'zt-save');
+    assert.equal(await failed.locator('#zt-draft-status').textContent(), '端末への保存に失敗しました。入力は残しています');
+    assert.equal((await read(failed)).zeroThinking.entries.length, 0);
+    assert.equal(await failed.locator('#zt-write-input').inputValue(), '端末保存の失敗を区別');
+
+    const pending = await f.page();
+    await write(pending, 'a', '問いの変更を確認');
+    await pending.evaluate(async () => {
+      const { state } = await import('/src/state/store.js');
+      state.questions[0].title = '別端末で変更された問い';
+      localStorage.setItem('taskchute-journal-pwa-state-v1', JSON.stringify(state));
+      for (const key of Object.keys(sessionStorage).filter(k => k.startsWith('taskchute-journal-daily-draft-v1:'))) {
+        const saved = JSON.parse(sessionStorage.getItem(key));
+        Object.values(saved.drafts).forEach(d => { if (d.questionRequest) d.questionRequest.done = false; });
+        sessionStorage.setItem(key, JSON.stringify(saved));
+      }
+    });
+    await pending.reload(); await pending.locator('[data-action="zt-write"]').first().waitFor();
+    await action(pending, 'zt-write', { id: 'a' });
+    await pending.locator('#zt-write-input').waitFor();
+    await action(pending, 'zt-draft-retry');
+    assert.equal(await pending.locator('#zt-draft-status').textContent(), '下書き保存済み・問い更新待ち');
+    await action(pending, 'zt-save');
+    assert.equal(await pending.locator('#zt-draft-status').textContent(), '保存できませんでした。入力は残しています');
+    console.log('PASS Z: memory-only, local persistence failure, question pending, completion failure and sync pending are distinct');
+
+    {
+      const c = await f.page();
+      await c.clock.pauseAt(await c.evaluate(() => Date.now() + 1000));
+      await action(c, 'zt-write', { id: 'b' });
+      const complete = c.locator('.zt-write-actions [data-action="zt-save"]');
+      assert.equal(await complete.textContent(), '早期完了');
+      await c.locator('#zt-write-input').fill('期限後も残る本文');
+      await c.clock.runFor(59000);
+      assert.equal(await complete.textContent(), '早期完了');
+      const before = await drafts(c), savedState = await read(c);
+      await c.clock.runFor(1000);
+      assert.equal(await complete.textContent(), '完了');
+      assert.deepEqual(await drafts(c), before);
+      assert.deepEqual(await read(c), savedState);
+      assert.equal(await c.locator('#zt-write-input').inputValue(), '期限後も残る本文');
+      await action(c, 'zt-discard'); await action(c, 'zt-write', { id: 'b' });
+      assert.equal(await complete.textContent(), '完了');
+      console.log('PASS Z: completion label changes at 60s and on reselect without saving at deadline');
+    }
 
     const l = await f.page();
     await l.evaluate(async () => {

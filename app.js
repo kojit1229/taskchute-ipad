@@ -9366,7 +9366,7 @@ function renderZtWrite() {
       <div id="zt-draft-status" role="status">下書きをこのタブに保存・完了すると日報に載ります</div>
       <div class="zt-write-actions">
         <button class="btn ghost" data-action="zt-discard">中止</button>
-        <button class="btn green" data-action="zt-save">早期完了</button>
+        <button class="btn green" data-action="zt-save">${clock.left ? "早期完了" : "完了"}</button>
         <button class="btn ghost" data-action="zt-draft-retry">下書き保存を再試行</button>
         <button class="btn ghost" data-action="zt-body-copy">本文をコピー</button>
       </div>
@@ -9605,7 +9605,7 @@ function beginZtWrite(id) {
 function openZtWrite(id) {
   if (ztCurrent?.id === id) return;
   if ((ztCurrent || ztEditId) && requestDraftLeave(() => { ztCurrent = null; ztEditId = null; openZtWrite(id); })) return;
-  if (!beginZtWrite(id)) return;
+  if (!beginZtWrite(id)) { render(); return; }
   render();          // 書く画面を描画(DOM 確定)
   readDailyDraft();
   startZtTimer();    // その後にタイマー開始
@@ -9631,7 +9631,9 @@ function applyZtEntry(inputSelector) {
   if (!result.ok) return result;
   ztEditId = ztCurrent.zeroDraft.id;
   stopZtTimer(); ztCurrent = null; ztWriteStartedAt = null;
-  render(); showToast("回答を端末に保存 — 日報に追加。同期状態は同期表示で確認できます");
+  render(); showToast(result.draftStored?.ok
+    ? "回答を端末に保存 — 日報に追加。同期状態は同期表示で確認できます"
+    : "回答を端末に保存 — 下書きの控えはこの画面内にだけ残っています");
   return result;
 }
 
@@ -9663,7 +9665,7 @@ function runZeroEntry(action, inputSelector) {
   if (!draft || !input || _imeComposing || draft.connection !== zeroConnectionKey()) return { ok: false };
   if (!draft.id) {
     if (!input.value.trim()) return { ok: false };
-    const selected = session.select(draft.theme, { id: crypto.randomUUID(), date: todayISO(), createdAt: nowDateTime(), startedAt: draft.startedAt }, { state });
+    const selected = session.select(draft.theme, { id: crypto.randomUUID(), date: todayISO(), createdAt: nowDateTime(), startedAt: draft.startedAt }, { state, allowMemoryOnly: action === "zero-complete" });
     if (selected.status !== "ready") return { ok: false };
     selected.draft.stoppedAt = draft.stoppedAt; selected.draft.durationSec = draft.durationSec;
     ztCurrent.zeroDraft = draft = selected.draft;
@@ -9675,8 +9677,12 @@ function runZeroEntry(action, inputSelector) {
       && candidate.connection === zeroConnectionKey())
   });
   const status = document.querySelector("#zt-draft-status");
-  if (status) status.textContent = !result.ok && draft.savedBaseline ? "下書き保存済み・問い更新待ち"
-    : result.ok && result.draftStored?.ok ? "下書きをこのタブに保存・完了すると日報に載ります" : "この画面内にだけ残っています";
+  if (status) status.textContent = session.status().memoryOnly ? "この画面内にだけ残っています"
+    : !result.ok && result.status !== "invalid" ? "端末への保存に失敗しました。入力は残しています"
+    : !result.ok && action !== "zero-complete" && draft.questionRequest && !draft.questionRequest.done ? "下書き保存済み・問い更新待ち"
+    : !result.ok ? "保存できませんでした。入力は残しています"
+    : state.dataModifiedAt > (state.settings.lastPushedAt || "") ? "下書きをこのタブに保存・端末保存済みの変更は同期待ち"
+    : "下書きをこのタブに保存・完了すると日報に載ります";
   if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
   if (action !== "zero-complete" && result.ok && !result.draftStored?.ok) {
     showToast("下書きの控えを保存できません。この画面内にだけ残っています");
@@ -9752,6 +9758,8 @@ function updateZtTimerDisplay() {
   const status = document.querySelector("#zt-timer-state");
   if (el) { el.textContent = clock.text; el.className = `zt-timer-time ${clock.kind}`; }
   if (status) { status.textContent = clock.label; status.className = `zt-timer-state ${clock.kind}`; }
+  const complete = document.querySelector('.zt-write-actions [data-action="zt-save"]');
+  if (complete) complete.textContent = clock.left ? "早期完了" : "完了";
   if (!clock.left) stopZtTimer();
 }
 function stopZtTimer() {

@@ -155,6 +155,26 @@ function check(name, cond, extra = "") {
       s4b.zeroThinking.entries.some((e) => e.theme === "書く対象テーマ_v90" && e.body === "0秒思考の本文_v90"));
     check("非お気に入りテーマは書いたらテーマ一覧から消える(従来どおり)", !s4b.zeroThinking.themes.some((t) => t.id === "write-t"));
 
+    const completedEntry = s4b.zeroThinking.entries.find((e) => e.theme === "書く対象テーマ_v90" && e.body === "0秒思考の本文_v90");
+    check("完了後も同じ回答の履歴編集画面に留まる", !!completedEntry &&
+      await page.locator(`[data-action="zt-edit-save"][data-id="${completedEntry.id}"]`).isVisible() &&
+      await page.locator("#zt-edit-input").inputValue() === completedEntry.body);
+    check("一覧へ戻る導線が明示される", await page.locator('.zt-back-btn[data-action="zt-edit-close"]').isVisible());
+    await page.fill("#zt-edit-input", "0秒思考の本文_v90・履歴追記");
+    const beforeExplicitSave = await readState();
+    check("履歴追記は明示保存前に正本へ反映されない",
+      beforeExplicitSave.zeroThinking.entries.find(e => e.id === completedEntry.id).body === completedEntry.body);
+    await page.click(`[data-action="zt-edit-save"][data-id="${completedEntry.id}"]`);
+    const afterExplicitSave = await readState();
+    check("履歴追記の明示保存は同じIDの回答を更新し、重複を作らない",
+      afterExplicitSave.zeroThinking.entries.length === s4b.zeroThinking.entries.length &&
+      afterExplicitSave.zeroThinking.entries.filter(e => e.id === completedEntry.id).length === 1 &&
+      afterExplicitSave.zeroThinking.entries.find(e => e.id === completedEntry.id).body === "0秒思考の本文_v90・履歴追記");
+    // 履歴保存後に同じ回答を開き、一覧への明示操作を独立して検査する。
+    await page.click(`[data-action="zt-entry-open"][data-id="${completedEntry.id}"]`);
+    await page.click('.zt-back-btn[data-action="zt-edit-close"]');
+    check("一覧へ戻る明示操作でテーマの削除ボタンへ到達する",
+      await page.locator('[data-action="zt-theme-delete"][data-id="del-t"]').isVisible());
     page.once("dialog", (d) => d.accept());
     await page.click('[data-action="zt-theme-delete"][data-id="del-t"]');
     await page.waitForTimeout(300);
