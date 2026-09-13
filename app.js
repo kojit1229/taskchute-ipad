@@ -45,6 +45,7 @@ import { recurrenceMatchesDate, makeRecurrenceInstance } from "./src/core/recurr
 import { restoreTimelineOrigin, updateTimelineClock } from "./src/features/timeline.js";
 import { isDailyReadingBlock, markDailyReadingEdit } from "./src/core/daily-reading.js";
 import { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } from "./src/features/zero-entry.js";
+import { createZeroSession } from "./src/features/zero-session.js";
 import { createDraftSaveTransaction } from "./src/features/draft-save.js";
 import { commitCandidate, assertNotInsideBuild } from "./src/core/commit.js";
 import { stamped } from "./src/core/mutation-stamp.js";
@@ -648,6 +649,8 @@ registerActions({
   "zt-write": ({ id }) => openZtWrite(id),
   "zt-save": () => saveZtEntry(),
   "zt-discard": () => discardZtWrite(),
+  "zt-draft-retry": () => runZeroEntry("zero-draft-save", "#zt-write-input"),
+  "zt-body-copy": () => navigator.clipboard.writeText(document.querySelector("#zt-write-input")?.value || "").catch(() => showToast("本文を選択してコピーしてください")),
   "zt-entry-open": ({ id }) => openZtEntry(id),
   "zt-edit-close": () => closeZtEdit(),
   "zt-edit-save": ({ id }) => saveZtEdit(id),
@@ -1499,6 +1502,8 @@ let ztCurrent = null;          // 書く画面の対象 { id, text, fav } / null
 let ztSearch = "";             // 履歴検索ワード
 let ztTimerInterval = null;    // 書く画面のカウントダウン
 let ztTimerLeft = 60;
+let ztAutosaveTimer = null;
+const zeroSessions = new Map();
 let ztEditId = null;           // v102: 回答済みentryの追記編集対象entry id / null=非編集
 let ztWriteStartedAt = null;   // v104: 書く画面を開いた時刻(Date.now())。durationSec計測の起点 / null=非計測中
 
@@ -1785,6 +1790,7 @@ document.addEventListener("toggle", (event) => {
 document.addEventListener("compositionstart", (event) => { _imeComposing = true; handleWorkListComposition(event.target, true); towerJournal.composition(event.target, true); });
 document.addEventListener("compositionend", (event) => {
   _imeComposing = false;
+  queueZeroAutosave(event.target);
   handleWorkListComposition(event.target, false);
   towerJournal.composition(event.target, false);
   attemptFlushDeferredRender();
@@ -1801,6 +1807,7 @@ document.addEventListener("focusout", () => {
 }, true);
 
 document.addEventListener("input", (event) => {
+  queueZeroAutosave(event.target);
   const target = event.target;
   if (towerJournal.input(target, event.isComposing || _imeComposing)) return;
   if (handleWorkListInput(target)) return;
@@ -9316,8 +9323,8 @@ function renderZtWrite() {
   const cur = ztCurrent;
   return `
     <div class="zt-write-head">
-      <button class="zt-back-btn" data-action="zt-discard">← 一覧へ戻る(破棄)</button>
-      <div class="zt-write-date">${escapeHTML(ztFormatDate(todayISO()))}</div>
+      <button class="zt-back-btn" data-action="zt-discard">← テーマへ戻る</button>
+      <div class="zt-write-date">${escapeHTML(ztFormatDate(cur.zeroDraft.date || todayISO()))}</div>
     </div>
 
     <div class="zt-write-card run">
@@ -9327,10 +9334,13 @@ function renderZtWrite() {
         <div class="zt-timer-time running" id="zt-timer-time">1:00</div>
         <div class="zt-timer-state running" id="zt-timer-state">進行中</div>
       </div>
-      <textarea class="zt-write-input" id="zt-write-input" placeholder="・&#10;・&#10;・&#10;・"></textarea>
+      <textarea class="zt-write-input" id="zt-write-input" placeholder="・&#10;・&#10;・&#10;・">${escapeHTML(cur.zeroDraft.body)}</textarea>
+      <div id="zt-draft-status" role="status">下書きをこのタブに保存・完了すると日報に載ります</div>
       <div class="zt-write-actions">
-        <button class="btn ghost" data-action="zt-discard">破棄</button>
-        <button class="btn green" data-action="zt-save">保存して一覧へ</button>
+        <button class="btn ghost" data-action="zt-discard">中止</button>
+        <button class="btn green" data-action="zt-save">早期完了</button>
+        <button class="btn ghost" data-action="zt-draft-retry">下書き保存を再試行</button>
+        <button class="btn ghost" data-action="zt-body-copy">本文をコピー</button>
       </div>
       <div class="zt-write-tip">1分過ぎても入力は続けられます。短く・速く・素直に。完璧に書こうとしない。</div>
     </div>
@@ -9550,14 +9560,23 @@ function ztGroupToggleOpen(groupId) {
 function beginZtWrite(id) {
   const t = state.zeroThinking.themes.find((x) => x.id === id);
   if (!t) return false;
-  ztCurrent = { id: t.id, text: t.text, fav: t.fav, questionId: t.questionId || null };  // v39: 問い紐づけを保持
-  ztWriteStartedAt = Date.now();  // v104: 実経過時間の計測開始(カウントダウン残数ではなくこちらを保存に使う)
-  ztCurrent.zeroDraft = createZeroEntryDraft({ theme: t, id: crypto.randomUUID(), connection: zeroConnectionKey(),
-    date: todayISO(), createdAt: nowDateTime(), startedAt: ztWriteStartedAt });
+  const session = getZeroSession(), oldId = session.snapshot().themeToDraft[id];
+  let restored = oldId ? session.restore(oldId, state) : null;
+  if (restored?.status === "confirm") {
+    if (!window.confirm("このタブの書きかけを戻しますか？")) return false;
+    restored = session.restore(oldId, state, true);
+  }
+  if (restored?.status === "conflict") { showToast("テーマまたは回答が変わりました。書きかけは残しています"); return false; }
+  ztWriteStartedAt = restored?.draft?.startedAt ?? Date.now();
+  ztCurrent = { ...t, zeroDraft: restored?.status === "ready" ? restored.draft
+    : createZeroEntryDraft({ theme: t, id: "", connection: zeroConnectionKey(), date: "", createdAt: "", startedAt: ztWriteStartedAt }) };
+  ztEditId = null;
   return true;
 }
 
 function openZtWrite(id) {
+  if (ztCurrent?.id === id) return;
+  if ((ztCurrent || ztEditId) && requestDraftLeave(() => { ztCurrent = null; ztEditId = null; openZtWrite(id); })) return;
   if (!beginZtWrite(id)) return;
   render();          // 書く画面を描画(DOM 確定)
   readDailyDraft();
@@ -9576,18 +9595,15 @@ function discardZtWrite(inputSelector = "#zt-write-input") {
 }
 
 function saveZtEntry(inputSelector = "#zt-write-input", options) {
-  const draft = draftSaveTransaction.readDraft?.(inputSelector);
-  if (draft && !draft.current) return showToast("対象が変わりました。入力は残しています"), { ok: false };
-  const result = applyZtEntry(inputSelector);
-  if (result?.ok && draft) draftSaveTransaction.clearDraft(draft);
-  return result;
+  return applyZtEntry(inputSelector);
 }
 
 function applyZtEntry(inputSelector) {
   const result = runZeroEntry("zero-complete", inputSelector);
   if (!result.ok) return result;
+  ztEditId = ztCurrent.zeroDraft.id;
   stopZtTimer(); ztCurrent = null; ztWriteStartedAt = null;
-  render(); showToast("保存しました — 日報に追加");
+  render(); showToast("回答を端末に保存 — 日報に追加。同期状態は同期表示で確認できます");
   return result;
 }
 
@@ -9596,14 +9612,43 @@ function zeroConnectionKey() {
   return JSON.stringify([cfg.owner || "", cfg.repo || "", cfg.branch || "", cfg.path || ""]);
 }
 
+function getZeroSession() {
+  const connection = zeroConnectionKey();
+  if (!zeroSessions.has(connection)) zeroSessions.set(connection, createZeroSession({ connection }));
+  return zeroSessions.get(connection);
+}
+
+function queueZeroAutosave(input) {
+  if (input?.id !== "zt-write-input" || !ztCurrent) return;
+  ztCurrent.zeroDraft.body = input.value;
+  clearTimeout(ztAutosaveTimer);
+  if (_imeComposing) return;
+  const owner = ztCurrent;
+  ztAutosaveTimer = setTimeout(() => {
+    if (ztCurrent === owner && input.isConnected && !_imeComposing) runZeroEntry("zero-draft-save", "#zt-write-input");
+  }, 500);
+}
+
 function runZeroEntry(action, inputSelector) {
-  const draft = ztCurrent?.zeroDraft, input = document.querySelector(inputSelector);
+  let draft = ztCurrent?.zeroDraft;
+  const input = document.querySelector(inputSelector), session = getZeroSession();
+  if (!draft || !input || _imeComposing || draft.connection !== zeroConnectionKey()) return { ok: false };
+  if (!draft.id) {
+    if (!input.value.trim()) return { ok: false };
+    const selected = session.select(draft.theme, { id: crypto.randomUUID(), date: todayISO(), createdAt: nowDateTime(), startedAt: draft.startedAt }, { state });
+    if (selected.status !== "ready") return { ok: false };
+    selected.draft.stoppedAt = draft.stoppedAt; selected.draft.durationSec = draft.durationSec;
+    ztCurrent.zeroDraft = draft = selected.draft;
+  }
   const result = runDailyOperation(action, { draft, body: input?.value }, {
-    ...dailyOperationDeps, zeroDrafts: dailyDrafts, nowMs: () => Date.now(), today: todayISO,
+    ...dailyOperationDeps, zeroDrafts: session, nowMs: () => Date.now(), today: todayISO,
     isZeroOwner: candidate => Boolean(input?.isConnected && !_imeComposing && !state.modal
       && document.querySelector(inputSelector) === input && ztCurrent?.zeroDraft === candidate
       && candidate.connection === zeroConnectionKey())
   });
+  const status = document.querySelector("#zt-draft-status");
+  if (status) status.textContent = !result.ok && draft.savedBaseline ? "下書き保存済み・問い更新待ち"
+    : result.ok && result.draftStored?.ok ? "下書きをこのタブに保存・完了すると日報に載ります" : "この画面内にだけ残っています";
   if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
   if (action !== "zero-complete" && result.ok && !result.draftStored?.ok) {
     showToast("下書きの控えを保存できません。この画面内にだけ残っています");
@@ -13908,6 +13953,7 @@ function requestDraftLeave(leave, { allowDiscard = true, inputSelector = "#zt-wr
     }
     stopZeroEntry(session.zeroDraft, Date.now());
     stopZtTimer();
+    if (!session.zeroDraft.id && !input.value.trim()) return false;
     const entry = state.zeroThinking.entries.find(row => row.id === session.zeroDraft.id);
     if (!zeroNeedsSave(session.zeroDraft, input.value, entry)) return false;
     save = () => runZeroEntry("zero-leave", inputSelector);
