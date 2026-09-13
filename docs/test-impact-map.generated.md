@@ -506,7 +506,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 2 | tests/v283.test.js | 113, 131 |
 | missing-timezone | 1 | tests/v284.test.js | 217 |
 | missing-timezone | 1 | tests/v285.test.js | 60 |
-| fixed-date | 7 | tests/v286.test.js | 131, 152, 166, 194, 242, 263, 291 |
+| fixed-date | 7 | tests/v286.test.js | 131, 155, 169, 197, 245, 266, 294 |
 | missing-timezone | 1 | tests/v286.test.js | 81 |
 | fixed-date | 9 | tests/v287.test.js | 59, 124, 214, 242, 249, 273, 287, 309, 351 |
 | missing-timezone | 1 | tests/v287.test.js | 79 |
