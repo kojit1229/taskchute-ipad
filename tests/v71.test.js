@@ -113,10 +113,11 @@ function check(name, cond, extra = "") {
     const navLabels = await page.locator(".nav-list .nav-button .nav-label").allTextContents();
     // v230: homeを削除。現行サイドバー順を固定する。
     // v278: 固定化ルーティンを確認する計器盤2画面を「その他」の前へ常設したため期待順を更新。
+    // v403 契約追随(監督者 2026-09-13、束R4-A 4回-06): 共通ナビの表示ラベルを日本語に(順序・件数は不変)。
     const expectedOrder = [
-      "今日", "実行", "WBS",
-      "ジャーナル", "AIレポート", "やりたい", "ビジョン", "0秒思考",
-      "INSTRUMENTS", "IRON LOG", "FUND", "12WY", "その他", "設定"
+      "今日", "実行", "作業一覧",
+      "日報", "AIレポート", "やりたいこと", "ビジョン", "0秒思考",
+      "健康と継続", "筋トレ記録", "資産", "12週計画", "その他", "設定"
     ];
     check("navItemsの並びが期待どおり", JSON.stringify(navLabels) === JSON.stringify(expectedOrder), JSON.stringify(navLabels));
 
