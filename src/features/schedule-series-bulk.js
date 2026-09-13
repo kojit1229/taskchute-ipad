@@ -44,6 +44,9 @@ export function seriesBulkPreview(state, input, deps) {
   return { fingerprint: scheduleSeriesFingerprint({ ...source, today, changes, rows: comparison }), candidate, rows, today };
 }
 export function prepareSeriesBulk(input, deps) {
+  if (!seriesEnabled(deps) || input?.kind !== "schedule" || typeof input.seriesId !== "string" || !input.seriesId
+      || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(input.requestId || "")
+      || typeof (deps.connection || "local") !== "string") throw seriesInvalid("全件の要求を確認してください");
   if (!stores.has(deps)) stores.set(deps, createDailyDraftStore({ restore: true, storage: deps.draftStorage || (() => globalThis.sessionStorage) }));
   const store = stores.get(deps), key = { kind: "schedule", id: input.seriesId, draftId: `series-bulk:${input.requestId}`, connection: deps.connection || "local" };
   const signature = contentKey({ values: input.values, confirmation: input.confirmation });
@@ -57,7 +60,7 @@ export function prepareSeriesBulk(input, deps) {
   return { ...input, bulkDraft: draft };
 }
 export function buildSeriesBulk(state, input, deps) {
-  const draft = input.bulkDraft;
+  const draft = input?.bulkDraft;
   if (!draft || !seriesEnabled(deps)) throw seriesInvalid("全件の下書きを確認してください");
   if (!draft.candidate) throw conflict();
   const current = (state.scheduleSeries || []).find(p => p?.id === input.seriesId);

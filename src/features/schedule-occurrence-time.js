@@ -1,6 +1,7 @@
 import { seriesEnabled, seriesInvalid } from "./schedule-series.js";
 import { occurrenceFingerprint, prepareOccurrence } from "./schedule-occurrence.js";
 import { schedulesWithSeriesForDate } from "../core/schedule-series-derive.js";
+import { mergeSeriesOverrides } from "../core/schedule-series-merge.js";
 import { plannedMinute } from "../core/planned-occupancy.js";
 
 const tickets = new WeakMap();
@@ -8,7 +9,11 @@ export function prepareOccurrenceTime(input, deps) {
   const row = schedulesWithSeriesForDate(deps.state, input.date).records.find(r => r.id === input.id && r.seriesId === input.seriesId);
   if (!seriesEnabled(deps) || !row || deps.state.selectedDate !== input.date || row.date !== input.date)
     throw seriesInvalid("時間軸の日付とこの回を確認してください");
-  const beforeTime = deps.state.singleSchedules.find(r => r?.id === row.id)?.overrides.time;
+  const parent = deps.state.scheduleSeries.find(p => p?.id === row.seriesId);
+  const counterpart = row.id === parent.originScheduleId ? deps.state.singleSchedules.find(r => r?.id === `schedule_${parent.id}_${parent.creation.value.anchorDate}`) : null;
+  const priorTime = mergeSeriesOverrides(deps.state.singleSchedules.find(r => r?.id === row.id)?.overrides, counterpart?.overrides).time;
+  const beforeTime = priorTime && !priorTime.cleared ? { ...priorTime, value: { startTime: row.plannedStartAt.slice(11),
+    endTime: row.plannedEndAt.slice(11), endDayOffset: row.plannedEndAt.slice(0, 10) === row.date ? 0 : 1 } } : priorTime;
   if (input.timeline === "undo") {
     const ticket = tickets.get(deps)?.get(row.id);
     if (!ticket || occurrenceFingerprint(deps.state, row) !== ticket.fingerprint) throw seriesInvalid("対応する予定が更新されています。取消できません");
