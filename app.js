@@ -7396,7 +7396,12 @@ async function triggerAiReportBodyLoad(fileName) {
     _aiReportBodyFailedAt[fileName] = Date.now();
   }
   delete _aiReportBodyLoadInFlight[fileName];
-  if (state.currentView === "ai-reports") render();
+  // 遅れて届いた別日の本文はキャッシュだけに置く。表示中の本文だけを更新する。
+  if (state.currentView !== "ai-reports" || fundReportsUI.type()) return;
+  const type = AI_REPORT_TYPES.find(item => item.id === state.settings.aiReportType);
+  const files = type && aiReportFilesForType(type.prefix);
+  const selected = files?.find(file => file.date === _aiReportSelectedDate[type.id]) || files?.[0];
+  if (selected?.name === fileName) render();
 }
 
 // 手動更新ボタン: 一覧キャッシュを破棄し、現在表示中ファイルの本文キャッシュも破棄して
@@ -7475,7 +7480,7 @@ function renderAiReportBody(type) {
   }
   if (files.length === 0) {
     return `
-      <div class="panel">
+      <div class="panel" data-ai-report-state="empty-list">
         <p>まだ生成されていません。</p>
         <p class="muted" style="font-size:12px">${escapeHTML(type.guide)}</p>
       </div>
@@ -7486,11 +7491,16 @@ function renderAiReportBody(type) {
   const file = files.find((f) => f.date === selectedDate) || files[0];
   const body = _aiReportBodyCache[file.name];
   if (body === undefined) triggerAiReportBodyLoad(file.name);
+  const hasBody = typeof body === "string" && body.trim().length > 0;
+  const bodyState = body !== undefined ? (hasBody ? "loaded" : "empty")
+    : (_aiReportBodyLoadInFlight[file.name] ? "loading" : _aiReportBodyFailedAt[file.name] ? "failed" : "loading");
   const renderedBody = body === undefined
-    ? "読み込み中..."
-    : (type.id === "weekly"
+    ? (bodyState === "failed"
+      ? '<p role="status">本文の取得に失敗しました。通信状況を確認して再試行してください。</p><button class="btn" style="min-height:44px" data-action="ai-report-refresh">再試行</button>'
+      : '<p role="status">読み込み中...</p>')
+    : !hasBody ? '<p role="status">本文がありません。</p>' : (type.id === "weekly"
       ? renderAiWeeklyReportBody(selectedDate, body)
-      : renderMarkdown(body || "（本文を取得できませんでした）"));
+      : renderMarkdown(body));
   return `
     <div class="row" style="margin:10px 0">
       <select data-ai-report-date data-type-id="${type.id}" style="font-size:16px;min-height:44px">
@@ -7498,7 +7508,7 @@ function renderAiReportBody(type) {
       </select>
     </div>
     <div class="panel">
-      <div class="md-render readonly-md" data-report-file="${escapeHTML(file.name)}" data-report-loaded="${typeof body === "string" && body.length > 0 ? "1" : "0"}">${renderedBody}</div>
+      <div class="md-render readonly-md" data-report-state="${bodyState}" data-report-file="${escapeHTML(file.name)}" data-report-loaded="${hasBody ? "1" : "0"}">${renderedBody}</div>
     </div>
   `;
 }
