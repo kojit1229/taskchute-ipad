@@ -96,6 +96,47 @@ function storeChecks() {
     await page.evaluate(() => { Storage.prototype.setItem = window.__draftSetItem; });
     await action("modal-save"); assert.equal((await backups()).length, 0);
 
+    for (const mode of ["candidate-exception", "invalid-clock"]) {
+      const typed = `候補失敗でも入力と控えを保持:${mode}`;
+      await action("edit-task", "t"); await field.fill(typed);
+      await field.evaluate(el => { el.focus(); el.setSelectionRange(1, 5, "backward"); });
+      await action("modal-close"); await choose("stay");
+      const backup = await backups();
+      const before = await page.evaluate(async key => {
+        window.__failureState = (await import('/src/state/store.js')).state;
+        window.__failureInput = document.querySelector('#modalRoot [data-modal-field="description"]');
+        return { state: JSON.stringify(window.__failureState), stored: localStorage.getItem(key) };
+      }, STATE_KEY);
+      await page.evaluate(({ mode, key, state }) => {
+        window.__failureHits = 0; window.__failureWrites = 0;
+        window.__failureParse = JSON.parse; window.__failureSeconds = Date.prototype.getSeconds;
+        window.__failureSet = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, value) {
+          if (this === localStorage && k === key) window.__failureWrites++;
+          return window.__failureSet.call(this, k, value);
+        };
+        if (mode === 'candidate-exception') JSON.parse = function(value, ...args) {
+          if (value === state) { window.__failureHits++; throw new Error('R2-15 candidate clone exception'); }
+          return window.__failureParse(value, ...args);
+        };
+        else Date.prototype.getSeconds = function() { window.__failureHits++; return NaN; };
+      }, { mode, key: STATE_KEY, state: before.state });
+      await action("modal-save");
+      await page.evaluate(() => { JSON.parse = window.__failureParse; Date.prototype.getSeconds = window.__failureSeconds; });
+      assert(await page.evaluate(() => window.__failureHits > 0), mode + ': injected failure reached');
+      assert.equal(await field.inputValue(), typed);
+      assert(await field.evaluate(el => el === window.__failureInput));
+      assert.deepEqual(await field.evaluate(el => [el.selectionStart, el.selectionEnd, el.selectionDirection]), [1, 5, 'backward']);
+      assert.deepEqual(await backups(), backup);
+      assert.deepEqual(await page.evaluate(async key => ({ state: JSON.stringify((await import('/src/state/store.js')).state), stored: localStorage.getItem(key) }), STATE_KEY), before);
+      assert(await page.evaluate(async () => (await import('/src/state/store.js')).state === window.__failureState));
+      assert.equal(await page.evaluate(() => window.__failureWrites), 0);
+      await action("modal-save");
+      assert.equal(await page.evaluate(() => window.__failureWrites), 1); assert.deepEqual(await backups(), []);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__failureSet; });
+      console.log(`PASS R2-15 ${mode}: original state reference/storage/input/selection/backup; zero writes, retry one`);
+    }
+
     await action("edit-task", "t"); await field.fill("控えも容量不足");
     await page.evaluate(() => {
       Storage.prototype.setItem = function(k, value) {
