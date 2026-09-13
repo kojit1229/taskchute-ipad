@@ -285,6 +285,32 @@ async function nodeContracts() {
         pass("browser origin1/100/1000 long-note full payload capacity and atomic rollback");
       } finally { await context.close(); }
     }
+    {
+      const { context, page } = await fixture();
+      try {
+        const result = await page.evaluate(async ({ local, remote, KEY }) => {
+          const app = window.__b7, io = window.__io, state = app.getState();
+          state.scheduleSeries = []; state.singleSchedules = [local];
+          io.remote = app.sanitizedStateForGitHub();
+          delete io.remote.scheduleSeries;
+          io.remote.singleSchedules = [remote];
+          io.remote.dataModifiedAt = "2026-09-11T12:05:01";
+          let confirms = 0;
+          window.confirm = () => { confirms++; return true; };
+          app.persistLocalNoSchedule();
+          await window.__sync.loadFromGitHub();
+          return { confirms, backupPuts: io.puts.filter(put => put.backup).length,
+            rows: app.getState().singleSchedules, saved: JSON.parse(localStorage.getItem(KEY)).singleSchedules,
+            parents: app.getState().scheduleSeries };
+        }, { local: schedule("local-only"), remote: schedule("remote-only"), KEY });
+        assert.equal(result.confirms, 0);
+        assert.equal(result.backupPuts, 0);
+        assert.deepEqual(result.rows, [schedule("local-only"), schedule("remote-only")]);
+        assert.deepEqual(result.saved, result.rows);
+        assert.deepEqual(result.parents, []);
+        pass("flag off ordinary singles manual load: legacy path, no confirm or backup PUT, union persisted");
+      } finally { await context.close(); }
+    }
     for (const method of ["loadFromGitHub", "runAutoSyncPull", "syncFromGitHubOnStartup", "saveToGitHub", "runAutoSyncPush"]) {
       const { context, page } = await fixture();
       try {

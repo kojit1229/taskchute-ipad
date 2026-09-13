@@ -6,7 +6,8 @@ let count = 0;
 const test = (name, run) => { run(); count++; console.log(`PASS ${name}`); };
 const id = '11111111-1111-4111-8111-111111111111';
 const time = { startTime: '09:00:00', endTime: '09:30:00', endDayOffset: 0 };
-const stamp = (value, n = 1) => ({ value, updatedAt: `2026-09-09T10:00:0${n}`, changeId: `change-${n}` });
+const changeId = n => `33333333-3333-4333-8333-${String(n).padStart(12, '0')}`;
+const stamp = (value, n = 1) => ({ value, updatedAt: `2026-09-09T10:00:0${n}`, changeId: changeId(n) });
 const child = (key, overrides = {}, seriesId = id) => ({ id: `schedule_${seriesId}_${key}`, formatVersion: 1,
   seriesId, occurrenceKey: key, overrides, createdAt: '2026-09-08T11:00:00', updatedAt: '2026-09-09T10:00:01' });
 const copy = x => JSON.parse(JSON.stringify(x));
@@ -17,9 +18,9 @@ const freeze = x => { if (x && typeof x === 'object') { Object.values(x).forEach
   const base = (extra = {}) => create(Object.fromEntries(Object.entries({ id, anchorDate: '2026-09-08', pattern: { frequency: 'daily', until: '2026-09-14' },
     defaults: { title: 'initial', time, note: 'initial note' }, createdAt: '2026-09-08T08:00:00', updatedAt: '2026-09-08T08:00:01',
     changeId: '22222222-2222-4222-8222-222222222222', ...extra }).filter(([, value]) => value !== undefined)));
-  const revision = (effectiveFrom, n, extra = {}) => ({ id: `change-${n}`, effectiveFrom,
+  const revision = (effectiveFrom, n, extra = {}) => ({ id: changeId(n), effectiveFrom,
     changes: { title: `title ${n}`, time: { startTime: '12:00:00', endTime: '12:30:00', endDayOffset: 0 }, note: `note ${n}`, ...extra },
-    updatedAt: stamp(0, n).updatedAt, changeId: `change-${n}` });
+    updatedAt: stamp(0, n).updatedAt, changeId: changeId(n) });
   test('unchanged occurrences are computed with stable ids and no saved children', () => {
     const a = freeze(base()); const row = derive(a, '2026-09-08')[0];
     assert.equal(row.id, `schedule_${id}_2026-09-08`); assert.equal(row.title, 'initial');
@@ -33,6 +34,15 @@ const freeze = x => { if (x && typeof x === 'object') { Object.values(x).forEach
     assert.equal(derive(a, '2026-09-08').length, 0);
     a.singleSchedules.push(child('2026-09-10', { date: stamp('2026-10-01') }));
     assert.equal(derive(a, '2026-10-01')[0].occurrenceKey, '2026-09-10');
+  });
+  test('non-UUID changeId excludes only its series and preserves normal derivation', () => {
+    const normal = base();
+    const invalid = base({ id: '44444444-4444-4444-8444-444444444444' });
+    invalid.scheduleSeries[0].creation.changeId = 'change-1';
+    const mixed = freeze({ scheduleSeries: [...normal.scheduleSeries, ...invalid.scheduleSeries], singleSchedules: [] });
+    assert.deepEqual(derive(mixed, '2026-09-09'), derive(normal, '2026-09-09'));
+    assert.equal(derive(mixed, '2026-09-09').length, 1);
+    assert.equal(mixed.scheduleSeries[1].creation.changeId, 'change-1');
   });
   test('cross-midnight uses same id and uncut interval; midnight endpoint is exclusive', () => {
     const a = base({ defaults: { title: 'night', note: '', time: { startTime: '23:30:00', endTime: '01:00:00', endDayOffset: 1 } } });
@@ -84,7 +94,7 @@ const freeze = x => { if (x && typeof x === 'object') { Object.values(x).forEach
   });
   test('clear restores current series fields and original date; explicit values protect a date move', () => {
     const a = base(); a.scheduleSeries[0].revisions.push(revision('2026-09-09', 2));
-    const clear = { cleared: true, updatedAt: stamp(0, 4).updatedAt, changeId: 'clear-4' };
+    const clear = { cleared: true, updatedAt: stamp(0, 4).updatedAt, changeId: changeId(4) };
     a.singleSchedules.push(child('2026-09-10', { date: clear, title: clear, note: clear, time: clear }));
     const restored = derive(a, '2026-09-10')[0]; assert.equal(restored.title, 'title 2');
     assert.equal(restored.date, '2026-09-10'); assert.equal(restored.plannedStartAt, '2026-09-10T12:00:00');
@@ -97,15 +107,16 @@ const freeze = x => { if (x && typeof x === 'object') { Object.values(x).forEach
   test('weekend direct series starts on Monday while converted weekend origin remains', () => {
     const a = base({ anchorDate: '2026-09-12', pattern: { frequency: 'weekdays', until: '2026-09-14' } });
     assert.equal(derive(a, '2026-09-12').length, 0); assert.equal(derive(a, '2026-09-14').length, 1);
+    // fixR2D(2回-05 の保存前検査への追随): 元単発は実データどおり createdAt/updatedAt を持つ(空文字は形式不正として系列ごと除外される。design/08 §6.4)
     const b = base({ originSchedule: { id: 'U', title: 'weekend', date: '2026-09-12', plannedStartAt: '2026-09-12T09:00:00',
-      plannedEndAt: '2026-09-12T09:30:00' }, anchorDate: '2026-09-12', defaults: undefined,
+      plannedEndAt: '2026-09-12T09:30:00', createdAt: '2026-09-08T08:00:00', updatedAt: '2026-09-08T08:00:00' }, anchorDate: '2026-09-12', defaults: undefined,
       pattern: { frequency: 'weekdays', until: '2026-09-14' } });
     assert.equal(derive(b, '2026-09-12')[0].id, 'U'); assert.equal(derive(b, '2026-09-12')[0].individuallyModified, true);
   });
   test('A/B/C anchor reassociation merges only display; former general tombstone stays separate', () => {
     const candidates = ['08', '09', '10'].map((day, i) => base({ anchorDate: `2026-09-${day}`, defaults: undefined,
       originSchedule: { id: 'U', title: 'origin', date: `2026-09-${day}`, plannedStartAt: `2026-09-${day}T09:00:00`,
-        plannedEndAt: `2026-09-${day}T09:30:00`, updatedAt: '2026-09-08T08:00:00' }, updatedAt: `2026-09-08T09:00:0${i}` }));
+        plannedEndAt: `2026-09-${day}T09:30:00`, createdAt: '2026-09-08T08:00:00', updatedAt: '2026-09-08T08:00:00' }, updatedAt: `2026-09-08T09:00:0${i}` }));
     candidates[0].singleSchedules.push(child('2026-09-09', { lifecycle: stamp({ deleted: true }, 4) }, 'series_U'));
     const ab = merge(candidates[0], candidates[1]), before = JSON.stringify(ab);
     assert.equal(derive(ab, '2026-09-09').length, 0); assert.equal(JSON.stringify(ab), before);

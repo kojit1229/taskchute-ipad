@@ -552,7 +552,7 @@ function primarySettingsSnapshot(value) {
 }
 function capturePrimarySyncState() {
   const modified = normalizeDataStamp(state.dataModifiedAt || "");
-  return { modified, sha: getLastSyncedSha(), primary: primarySettingsSnapshot(state), schedules: JSON.stringify([state.scheduleSeries, state.singleSchedules]),
+  return { modified, sha: getLastSyncedSha(), primary: primarySettingsSnapshot(state),
     pending: modified !== normalizeDataStamp(state.settings.lastPushedAt || "") };
 }
 function primarySettingsConflict() {
@@ -580,7 +580,7 @@ function assertPrimarySettingsSafe(remoteNorm, before) {
 // (この3キーが少しでも異なるだけで)fail-closeになり、日常的な差分でバナーが増発する
 // (単位14/14bが避けようとした問題を再発させる)。そこで比較対象(fail-close)は増やさず、
 // 「確認ダイアログを出すかどうか」の判定だけLOSS_RISK_KEYSで広げる。
-const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyReviews", "cycleReviews", "scheduleSeries", "singleSchedules"];
+const LOSS_RISK_KEYS = [...SYNC_CORE_COMPARE_KEYS, "routineChains", "weeklyReviews", "cycleReviews", "scheduleSeries"];
 
 // 修正フェーズ単位18(A2-H3): 外部バッチ(loop apply.py)がdataModifiedAtに日付のみ
 // (YYYY-MM-DD、10文字)を書くケースへの防御。アプリ側nowDateTime()は19文字
@@ -1519,6 +1519,7 @@ async function loadFromGitHub() {
     const readingProof = requireSyncMerge(remoteNorm, "local").values.reading;
     const diffCount = remoteNorm
       ? LOSS_RISK_KEYS.filter((k) =>
+          (k !== "scheduleSeries" || state.scheduleSeries?.length || remoteNorm.scheduleSeries?.length) &&
           !(k === "habitStreaks" && readingProof.active &&
             JSON.stringify(readingProof.compareHabits[0]) === JSON.stringify(readingProof.compareHabits[1])) &&
           JSON.stringify(getByPath(remoteNorm, k) ?? null) !== JSON.stringify(getByPath(state, k) ?? null)

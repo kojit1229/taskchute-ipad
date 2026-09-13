@@ -34,7 +34,7 @@ export function createDraftSaveTransaction({ getState, setState, persist, now, f
       if (effect) current.ui.push(effect);
       return true;
     },
-    run(work, { deferPost = false, kinds = null } = {}) {
+    run(work, { deferPost = false, kinds = null, preserveKinds = [], sourceStamps = [] } = {}) {
       const before = getState();
       const transaction = { ready: false, ui: [], post: [] };
       let unchanged = false;
@@ -51,13 +51,14 @@ export function createDraftSaveTransaction({ getState, setState, persist, now, f
               if (!transaction.ready) throw Object.assign(new Error("Invalid editor save"), { invalid: true });
               draft = getState();
             } finally { current = null; setState(before); }
-            // Imported state can carry a newer global clock than the pre-save state.
-            const records = [], values = [], orders = [], candidates = [draft.dataModifiedAt];
+            // Imported state can carry a newer global clock than the pre-save state (fixV398);
+            // series sync passes its own source stamps (R2-D). Both are lower bounds for the candidate clock.
+            const records = [], values = [], orders = [], candidates = [draft.dataModifiedAt, ...sourceStamps];
             for (const kind of kinds || new Set([...Object.keys(before), ...Object.keys(draft)])) {
               if (kind === "dataModifiedAt" || content(before[kind]) === content(draft[kind])) continue;
               const old = snapshot[kind], next = draft[kind];
               candidates.push(...changedStamps(before[kind], next));
-              if (Array.isArray(old) && Array.isArray(next) && [...old, ...next].every(row => row && typeof row === "object" && row.id)) {
+              if (!preserveKinds.includes(kind) && Array.isArray(old) && Array.isArray(next) && [...old, ...next].every(row => row && typeof row === "object" && row.id)) {
                 orders.push([kind, next.map(row => row.id)]);
                 // id -> row maps keep editor saves linear in the collection size (review 58b).
                 const priorById = new Map(old.map(row => [row.id, row])), nextIds = new Set(next.map(row => row.id));
