@@ -9141,15 +9141,15 @@ function renderExperimentSection() {
 //  - 日報: generateReport にその日の 0秒思考を出力
 // =========================================================
 function renderZeroThinking() {
-  if (ztCurrent) return renderZtWrite();
-  if (ztEditId) return renderZtEdit();  // v102: 回答済みentryの追記編集画面
+  if (ztCurrent) return renderZtWorkspace(renderZtNavigation(), renderZtWrite());
+  if (ztEditId) return renderZtWorkspace(renderZtNavigation(), renderZtEdit());
 
   const zt = state.zeroThinking || { themes: [], entries: [] };
   const todayCount = zt.entries.filter((e) => e.date === todayISO()).length;
   const zeroTab = state.settings.zeroTab || "theme";  // v39: テーマ / 問い の2タブ
   const openQ = (state.questions || []).filter((q) => !q.deleted && q.status !== "settled").length;
 
-  return `
+  return renderZtWorkspace(`
     <div class="view-header">
       <div>
         <div class="view-breadcrumb">その他 › ${moreGroupLabelFor("zero")}</div>
@@ -9167,7 +9167,35 @@ function renderZeroThinking() {
       <button class="zt-toptab ${zeroTab === "question" ? "active" : ""}" data-action="zero-tab" data-tab="question">問い <span class="zt-tab-count">${openQ}</span></button>
     </div>
     ${zeroTab === "question" ? renderZtQuestionTab() : renderZtThemeTab()}
-  `;
+  `, `<div class="panel zt-editor-empty"><h2>テーマを選んで書く</h2><p>1テーマ、1分。書き終えたら「早期完了」で回答を残せます。</p><p>書きかけはこのタブに保存されます。</p></div>`);
+}
+
+function renderZtWorkspace(list, editor) {
+  return `<div class="zt-workspace ${ztCurrent || ztEditId ? "is-writing" : ""}">
+    <aside class="zt-library" aria-label="テーマと履歴">${list}</aside>
+    <section class="zt-editor" aria-label="0秒思考の入力">${editor}</section>
+  </div>`;
+}
+
+function renderZtNavigation() {
+  const zt = state.zeroThinking || { themes: [], entries: [], groups: [] };
+  const groups = new Map((zt.groups || []).map(g => [g.id, g.title]));
+  return `<div class="zt-navigation">
+    <h1>0秒思考</h1>
+    <section class="panel zt-section"><h2>テーマ</h2>
+      <div class="zt-navigation-list">${ztSortByImportance(zt.themes).map(t => `
+        <button class="zt-navigation-item ${ztCurrent?.id === t.id ? "active" : ""}" data-action="zt-write" data-id="${escapeHTML(t.id)}" ${ztCurrent?.id === t.id ? 'aria-current="true"' : ""}>
+          <span>${t.fav ? "★ " : ""}${escapeHTML(t.text)}</span>
+          <small>${escapeHTML(groups.get(t.groupId) || "未分類")}${t.questionId ? " · 問い" : ""}${t.importance === "高" ? " · 重要" : ""}</small>
+        </button>`).join("") || '<p class="zt-empty">テーマはありません。</p>'}</div>
+    </section>
+    <section class="panel zt-section"><h2>過去のテーマ</h2>
+      <div class="zt-navigation-list">${zt.entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(e => `
+        <button class="zt-navigation-item ${ztEditId === e.id ? "active" : ""}" data-action="zt-entry-open" data-id="${escapeHTML(e.id)}">
+          <span>${escapeHTML(e.theme || "0秒思考")}</span><small>${escapeHTML(e.date)}</small>
+        </button>`).join("") || '<p class="zt-empty">回答はまだありません。</p>'}</div>
+    </section>
+  </div>`;
 }
 
 // v39: テーマタブ(従来の 0秒思考 一覧)
@@ -9663,6 +9691,9 @@ function runZeroEntry(action, inputSelector) {
 function openZtEntry(id) {
   const e = (state.zeroThinking?.entries || []).find((x) => x.id === id);
   if (!e) return;
+  if (ztEditId === id) return;
+  if ((ztCurrent || ztEditId) && requestDraftLeave(() => { ztCurrent = null; ztEditId = null; openZtEntry(id); })) return;
+  ztCurrent = null;
   ztEditId = id;
   render();
   readDailyDraft();

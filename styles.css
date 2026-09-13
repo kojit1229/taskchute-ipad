@@ -2622,6 +2622,43 @@ details.settings-row > .fold-summary.settings-row-summary {
    ============================================================ */
 .zt-section { margin-bottom: 14px; }
 
+/* 0秒思考: 広い画面は一覧と入力、狭い画面は一覧→入力→戻る。 */
+.zt-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.zt-workspace > * { min-width: 0; }
+.zt-workspace :is(input, select, textarea) { font-size: 16px; }
+.zt-workspace :is(button, select) { min-height: 44px; min-width: 44px; }
+.zt-workspace .zt-write-actions { flex-wrap: wrap; }
+.zt-workspace .zt-write-head { flex-wrap: wrap; gap: 8px; }
+.zt-workspace .zt-theme-item { flex-wrap: wrap; }
+.zt-workspace .zt-theme-text { order: -1; flex-basis: 100%; overflow-wrap: anywhere; }
+.zt-workspace .zt-plabel { flex-wrap: wrap; }
+.zt-workspace .zt-plabel-spacer { min-width: 0; }
+.zt-workspace .zt-day-count { text-align: left; }
+.zt-workspace .view-header { flex-wrap: wrap; gap: 12px; }
+.zt-workspace .zt-write-theme { overflow-wrap: anywhere; }
+.zt-editor-empty { color: var(--muted); line-height: 1.8; }
+.zt-editor-empty h2 { color: var(--text); }
+.zt-navigation h2 { font-size: 16px; margin: 0 0 12px; }
+.zt-navigation-list { display: grid; gap: 8px; }
+.zt-navigation-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  width: 100%; padding: 12px; text-align: left; font: inherit;
+  color: var(--text); background: var(--panel-soft); border: 1px solid var(--line);
+  border-radius: 10px; cursor: pointer; overflow-wrap: anywhere;
+}
+.zt-navigation-item small { color: var(--muted); }
+.zt-navigation-item.active { border-color: var(--orange); background: var(--orange-soft); }
+.zt-navigation-item:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+@media (min-width: 1280px) {
+  .zt-workspace { grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr); }
+  .zt-workspace .zt-editor { position: sticky; top: 20px; }
+}
+@media (max-width: 1279px) {
+  .zt-workspace.is-writing > .zt-library { display: none; }
+  .zt-workspace:not(.is-writing) > .zt-editor { display: none; }
+  .zt-workspace .zt-write-card { padding: 18px 16px; }
+}
+
 .zt-day-count { text-align: right; flex: none; }
 .zt-day-count-v { font-size: 13px; color: var(--muted); font-weight: 700; }
 .zt-day-count-v b { color: var(--orange-text); font-weight: 900; font-size: 17px; margin: 0 3px; }
