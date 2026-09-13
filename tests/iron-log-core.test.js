@@ -1,4 +1,4 @@
-// iron-log-core.test.js — IRON LOG専用画面(レーンB)のcharacterization test。
+// iron-log-core.test.js — 筋トレの記録専用画面(レーンB)のcharacterization test。
 // ブラウザ不要・自己完結。tests/avoid-core.test.js / tests/wish-core.test.js と同じ
 // 「check/failuresカウンタ + dynamic import + process.exit」形式(p4-interface.md §5)。
 // 単独実行: node tests/iron-log-core.test.js
@@ -227,9 +227,9 @@ async function loadModule() {
       ironImport: { done: true, importedTotalKg: 0, importedDays: 0 }
     };
     const htmlUnhit = renderIronLog();
-    check("renderHeaderが呼ばれる(IRON LOG/筋トレ)", htmlUnhit.includes("IRON LOG") && htmlUnhit.includes("筋トレ"));
-    check("LINKED FLIGHTを含む", htmlUnhit.includes("LINKED FLIGHT"));
-    check("1行フォーム(LOAD SET+種目/重量/回数/追加ボタン)を含む", htmlUnhit.includes("LOAD SET")
+    check("renderHeaderが呼ばれる(筋トレの記録/筋トレ記録)", htmlUnhit.includes("筋トレの記録") && htmlUnhit.includes("筋トレ記録"));
+    check("連動中のタスクを含む", htmlUnhit.includes("連動中のタスク"));
+    check("1行フォーム(セットを追加+種目/重量/回数/追加ボタン)を含む", htmlUnhit.includes("セットを追加")
       && htmlUnhit.includes('id="ironFormExercise"') && htmlUnhit.includes('id="ironFormWeight"')
       && htmlUnhit.includes('id="ironFormReps"') && htmlUnhit.includes('data-action="iron-add-set"'));
     check("当日総重量の大数字(600)を含む", htmlUnhit.includes(">600<"), htmlUnhit);
@@ -244,8 +244,8 @@ async function loadModule() {
       htmlUnhit.includes(`今月 <b>${fmt(expectedMonthKg)} kg</b> ・ 前回 ${expectedPrevMD} ・ <b>${fmt(expectedPrev.kg)} kg</b>`)
         && expectedMonthKg === 1100 && expectedPrev.kg === 500 && expectedPrev.date === isoYesterday, htmlUnhit);
     check("目標設定時の文言(目標1,000kgに対し今日600kg)を含む", htmlUnhit.includes("目標 1,000 kg に対し今日 600 kg"), htmlUnhit);
-    check("TODAY'S SETSを含む", htmlUnhit.includes("TODAY'S SETS"));
-    check("TOTALSを含む", htmlUnhit.includes("TOTALS"));
+    check("今日のセットを含む", htmlUnhit.includes("今日のセット"));
+    check("積み上げを含む", htmlUnhit.includes("積み上げ"));
 
     currentState = {
       settings: { ironDailyTarget: 1000 },
@@ -291,16 +291,16 @@ async function loadModule() {
 
       currentState = { settings: {}, condition: { logs: {} }, blocks: [] };
       const defaultHTML = renderIronLog();
-      check("未設定時はMENUへDEFAULT_EXERCISES 6件を描画",
+      check("未設定時は種目メニューへDEFAULT_EXERCISES 6件を描画",
         (defaultHTML.match(/class="iron-menu-row"/g) || []).length === 6);
       currentState = { settings: { gymExerciseList: [] }, condition: { logs: {} }, blocks: [] };
       check("空配列もDEFAULT_EXERCISES 6件へフォールバック",
         (renderIronLog().match(/class="iron-menu-row"/g) || []).length === 6);
       currentState = { settings: {}, condition: { logs: {} }, blocks: [] };
-      check("MENUはLOAD SETとTODAY'S SETSの間に描画",
-        defaultHTML.indexOf("<h2>LOAD SET") < defaultHTML.indexOf("<h2>MENU")
-          && defaultHTML.indexOf("<h2>MENU") < defaultHTML.indexOf("<h2>TODAY'S SETS"));
-      check("MENUとLOAD SETは既定6種目を共有", (defaultHTML.match(/<option value=/g) || []).length === 6
+      check("種目メニューはセットを追加と今日のセットの間に描画",
+        defaultHTML.indexOf("<h2>セットを追加") < defaultHTML.indexOf("<h2>種目メニュー")
+          && defaultHTML.indexOf("<h2>種目メニュー") < defaultHTML.indexOf("<h2>今日のセット"));
+      check("種目メニューとセットを追加は既定6種目を共有", (defaultHTML.match(/<option value=/g) || []).length === 6
         && ["ベンチプレス", "スクワット", "デッドリフト", "ラットプルダウン", "ショルダープレス", "その他"]
           .every((name) => defaultHTML.includes(name)));
       check("追加欄はmaxlength=24", defaultHTML.includes('id="ironMenuName" type="text"')
@@ -311,7 +311,7 @@ async function loadModule() {
 
       currentState = { settings: { gymExerciseList: ["<img src=x onerror=alert(1)>"] }, condition: { logs: {} }, blocks: [] };
       const escapedHTML = renderIronLog();
-      check("ユーザー入力種目名はMENU/option/titleともescapeHTML済み", !escapedHTML.includes("<img src=x")
+      check("ユーザー入力種目名は種目メニュー/option/titleともescapeHTML済み", !escapedHTML.includes("<img src=x")
         && (escapedHTML.match(/&lt;img src=x onerror=alert\(1\)&gt;/g) || []).length === 4
         && escapedHTML.includes('title="&lt;img src=x onerror=alert(1)&gt;"'));
       check("残り1件の削除はHTML側でdisabled",

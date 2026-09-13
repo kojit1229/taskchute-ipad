@@ -297,9 +297,63 @@ async function settingsJapanese(page) {
   console.log("PASS settings: Japanese groups, explanations, native inputs, every action, unchanged values and reset confirmation");
 }
 
+async function ironJapanese(page) {
+  const { STATE_KEY } = require("./helpers");
+  await page.evaluate(key => {
+    const s = JSON.parse(localStorage.getItem(key));
+    const date = "2026-07-25";
+    s.settings.gymExerciseList = ["ベンチプレス", "スクワット"];
+    s.settings.ironManualBaseKg = 0;
+    s.ironImport = { done: true, importedTotalKg: 0, importedDays: 0 };
+    for (const [day, weight] of [["2026-07-24", 50], [date, 60]]) {
+      s.condition.logs[day] = { ...s.condition.logs[day], gym: [{ id: "label-set-" + day,
+        exercise: "ベンチプレス", weight, reps: 10, at: day + "T09:15:00", deleted: false }] };
+    }
+    s.blocks = [{ id: "label-running", title: "架空の筋トレ", category: "ジム", date,
+      start: "09:00", end: "10:00", actualStartAt: date + "T09:00:00", actualEndAt: null, deleted: false }];
+    localStorage.setItem(key, JSON.stringify(s));
+  }, STATE_KEY);
+  await page.reload(); await nav(page, "iron-log");
+  const root = page.locator("#ironRoot");
+  assert.equal(await page.locator(".view-header h1").innerText(), "筋トレ記録");
+  assert.equal(await page.locator(".eyebrow").innerText(), "筋トレの記録");
+  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.trim())),
+    ["連動中のタスク", "今日の総重量", "セットを追加", "種目メニュー", "今日のセット", "積み上げ"]);
+  assert.equal(await root.locator(".iron-pr").innerText(), "自己ベスト");
+  assert.equal(await root.locator(".iron-total span").innerText(), "600");
+  assert.equal(await root.locator(".iron-set-detail").innerText(), "60kg × 10");
+  assert.equal(await root.locator(".iron-set-kg").innerText(), "+600");
+  assert.equal(await root.locator('[data-action="edit-block"]').innerText(), "連動中の予定・実行記録を開く");
+  const actions = await root.locator("[data-action]").evaluateAll(nodes => [...new Set(nodes.map(n => n.dataset.action))].sort());
+  assert.deepEqual(actions, ["edit-block", "iron-add-set", "iron-delete-set", "iron-exercise-select",
+    "iron-menu-add", "iron-menu-delete", "iron-menu-down", "iron-menu-up"].sort());
+  for (const [id, label] of [["ironFormExercise", "種目"], ["ironFormWeight", "重量（kg）"],
+    ["ironFormReps", "回数"], ["ironMenuName", "追加する種目名"]]) assert.equal(await root.locator("#" + id).getAttribute("aria-label"), label);
+  assert.equal(await root.locator('[data-action="iron-menu-up"]').first().getAttribute("aria-label"), "上へ");
+  assert.equal(await root.locator('[data-action="iron-menu-down"]').first().getAttribute("aria-label"), "下へ");
+  assert.equal(await root.locator('[data-action="iron-delete-set"]').getAttribute("aria-label"), "削除");
+  assert.equal(await root.locator("#ironFormWeight").getAttribute("type"), "number");
+  assert.equal(await root.locator("#ironFormReps").getAttribute("step"), "1");
+  const { setViewportAndWaitForStableLayout } = require("./helpers");
+  const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
+  const output = process.env.ARTIFACT_DIR || fs.mkdtempSync(path.join(os.tmpdir(), "r4b-labels-"));
+  fs.mkdirSync(output, { recursive: true });
+  const measurements = [];
+  for (const view of ["iron-log", "settings"]) {
+    await nav(page, view);
+    for (const width of [390, 1280]) {
+      await setViewportAndWaitForStableLayout(page, { width, height: 900 }, view === "iron-log" ? "#ironRoot input, #ironRoot select" : ".settings-grid input, .settings-grid select");
+      measurements.push({ view, width, ...(await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }))) });
+      await page.screenshot({ path: path.join(output, view + "-" + width + ".png"), fullPage: true });
+    }
+  }
+  fs.writeFileSync(path.join(output, "label-dimensions.json"), JSON.stringify(measurements, null, 2), "utf8");
+  console.log("PASS iron: Japanese headings/PR/linked action, all controls, accessible names and weight × reps; screenshots saved");
+}
+
 async function run() {
   const { page, browser, server } = await setup();
-  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); await settingsJapanese(page); }
+  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); await settingsJapanese(page); await ironJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

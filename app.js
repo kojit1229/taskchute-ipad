@@ -10254,7 +10254,7 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
   if (!summary) {
     if (!suppressEmptyToast) {
       // 呼び出し元の完了トーストより後に表示し、警告が同一スタック内で上書きされるのを防ぐ。
-      const notify = () => Promise.resolve().then(() => showToast("IRON LOGのセットが未記録です"));
+      const notify = () => Promise.resolve().then(() => showToast("筋トレ記録のセットが未記録です"));
       if (!draftSaveTransaction?.defer(notify, { post: true })) notify();
     }
     return;
