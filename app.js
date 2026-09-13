@@ -7566,7 +7566,10 @@ function parseSuggestedTaskTitle(raw) {
 }
 
 function addWeeklySuggestedTask(week, idx) {
-  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => addWeeklySuggestedTask(week, idx), { kinds: ["tasks"] }).ok;
+  if (!draftSaveTransaction.active) return runDailyOperation("weekly-suggest-add", { week, idx }, {
+    legacy: { "weekly-suggest-add": input => draftSaveTransaction.run(
+      () => addWeeklySuggestedTask(input.week, input.idx), { kinds: ["tasks"] }).ok }
+  });
   if (!week || !Number.isInteger(idx)) return;
   const key = `${week}:${idx}`;
   if (_weeklySuggestRegistered.has(key)) return;
@@ -7581,8 +7584,11 @@ function addWeeklySuggestedTask(week, idx) {
   const task = makeTask({ projectId: otherProject.id, title });
   if (estimateMin) task.estimateMin = estimateMin;
   state.tasks.push(task);
-  draftSaveTransaction.defer(() => _weeklySuggestRegistered.add(key));
-  saveAndRender(`「${title}」をWBSに登録しました`);
+  draftSaveTransaction.complete(() => {
+    _weeklySuggestRegistered.add(key);
+    render();
+    showToast(`「${title}」をWBSに登録しました`);
+  });
 }
 
 // v361-fix(H-1): 過去日の集計に「止め忘れ」Block(actualStartAtはあるがactualEndAtが無い)を

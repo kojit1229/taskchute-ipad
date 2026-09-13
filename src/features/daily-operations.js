@@ -28,6 +28,7 @@ const unwired = name => ({ build: () => { throw invalid(`not wired: ${name}`); }
 const legacy = name => ({ legacy: true, run: (input, deps) => deps.legacy[name](input) });
 
 export const DAILY_OPERATIONS = {
+  "weekly-suggest-add": legacy("weekly-suggest-add"),
   "recurrence-related-save": legacy("recurrence-related-save"),
   "twelve-week-related-save": legacy("twelve-week-related-save"),
   "lifecycle-related-save": legacy("lifecycle-related-save"),
