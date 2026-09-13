@@ -13,14 +13,14 @@ const deps = { state, now: () => '2026-09-10T12:00:00',
   persist: () => { saves++; return true; }, scheduleSync: () => schedules++, legacy: {} };
 // S-B2b/3段-10(監督者の契約追随 2026-09-12 20:35): 内部登録行 daily-reading-record(記録は旗で無効)を save-tower-journal と同じ扱いで追加。design/CHANGELOG.md
 const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record',
-  'daily-series-add', 'daily-series-convert',
+  'daily-series-add', 'daily-series-convert', 'daily-series-bulk',
   'weekly-suggest-add', 'recurrence-related-save', 'twelve-week-related-save', 'lifecycle-related-save'];
-// v401 載せ替え(監督者 2026-09-13): main(v400=R2-D の系列2行)と R3-C(3回-10 の weekly-suggest-add)の和=36行、legacy 11行。
-assert.equal(Object.keys(rows).length, 36);
-assert.equal(expectedActions.length, 36);
+// v402 載せ替え(監督者 2026-09-13): main(v401=系列2行+weekly-suggest-add)と R2-E(2回-08 の daily-series-bulk)の和=37行、legacy 11行。
+assert.equal(Object.keys(rows).length, 37);
+assert.equal(expectedActions.length, 37);
 assert.equal(Object.values(rows).filter(row => row.legacy).length, 11);
-assert.deepEqual(Object.keys(rows).filter(name => name === 'daily-series-add' || name === 'daily-series-convert'),
-  ['daily-series-add', 'daily-series-convert']);
+assert.deepEqual(Object.keys(rows).filter(name => name === 'daily-series-add' || name === 'daily-series-convert' || name === 'daily-series-bulk'),
+  ['daily-series-add', 'daily-series-convert', 'daily-series-bulk']);
 assert.deepEqual(Object.keys(rows).sort(), [...expectedActions].sort());
 for (const name of expectedActions) {
   const before = JSON.parse(JSON.stringify(state));

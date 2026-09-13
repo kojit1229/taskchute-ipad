@@ -14,6 +14,9 @@ let checks = 0;
 const pass = name => { checks++; console.log(`PASS ${name}`); };
 
 async function nodeContracts() {
+  await require("./support/r2e-series-contracts.cjs").bulk(pass);
+  await require("./support/r2e-series-contracts.cjs").timeline(pass);
+  await require("./support/r2e-series-contracts.cjs").report(pass);
   const load = file => import(pathToFileURL(path.join(__dirname, "../src/", file)).href);
   const { createSeriesMergeCandidate } = await load("core/schedule-series-merge.js");
   const storage = await load("core/schedule-series-storage.js");
@@ -219,6 +222,9 @@ async function nodeContracts() {
     return { context, page };
   }
   try {
+    await require("./support/r2e-series-contracts.cjs").bulkBrowser(fixture, pass);
+    await require("./support/r2e-series-contracts.cjs").timelineBrowser(fixture, pass);
+    await require("./support/r2e-series-contracts.cjs").reportBrowser(fixture, pass);
     {
       const { context, page } = await fixture();
       try {

@@ -139,4 +139,29 @@ for (const choice of ['stay', 'save', 'discard']) {
   check(x.ctx.state.currentView === (choice === 'discard' ? 'today' : 'zero'), 'failure choice protects navigation');
   check(x.input.value === 'draft' && x.ctx.state.zeroThinking.entries.length === 1, 'failure never completes answer');
 }
+{
+  const owner = { kind: 'task', id: 'item', draftId: 'old', requestId: 'request', connection: 'fixture',
+    date: '2026-09-06', fingerprint: 'original', current: true, inputs: [{ field: 'description', value: 'draft' }] };
+  const values = new Map(), storage = { get length() { return values.size; }, key: i => [...values.keys()][i],
+    getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
+  createDailyDraftStore({ storage: () => storage }).put(owner);
+  const raw = [...values];
+  const reload = createDailyDraftStore({ storage: () => storage });
+  for (const field of ['kind', 'id', 'connection', 'date', 'fingerprint']) {
+    check(!reload.recover({ ...owner, [field]: 'other' }, () => { throw Error('wrong owner applied'); }), `reload rejects ${field}`);
+    assert.deepEqual([...values], raw);
+  }
+  check(!reload.recover({ ...owner, current: false }, () => true), 'stale editor rejected');
+  check(!reload.recover(owner, () => false), 'invalid form leaves backup available');
+  const fresh = { ...owner, draftId: 'fresh', requestId: 'fresh-request' };
+  check(reload.recover(fresh, saved => { assert.deepEqual(saved, owner); return true; }), 'same owner restored after reload');
+  assert.deepEqual([...values], raw); // Reading never writes or consumes the backup.
+  check(!reload.recover(fresh, () => true), 'one restoration per loaded backup');
+  reload.put({ ...fresh, inputs: [{ field: 'description', value: 'continued' }] });
+  check(values.size === 1 && reload.get(fresh).requestId === 'request', 'continued editing retains original request and one backup');
+  check(reload.clear(fresh, 'saved') && values.size === 0, 'successful save clears restored owner');
+  createDailyDraftStore({ storage: () => storage }).put(owner);
+  createDailyDraftStore({ storage: () => storage }).put({ ...owner, draftId: 'ambiguous' });
+  check(!createDailyDraftStore({ storage: () => storage }).recover(fresh, () => true), 'ambiguous backups are not guessed');
+}
 console.log(`PASS: draft leave guard (${count} checks)`);

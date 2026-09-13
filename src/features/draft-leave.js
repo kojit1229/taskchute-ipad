@@ -13,8 +13,31 @@ export function createDraftLeaveGuard(document, { drafts, readDraft, isComposing
     catch { return false; }
   }
   const editorSelector = '[data-modal-field], [data-twy-ms-label], [data-twy-ms-date], #zt-write-input, #zt-edit-input';
+  const checkedEditors = new WeakSet();
   document.addEventListener?.("focusin", event => {
     if (event.target.matches?.(editorSelector)) lastEditor = event.target;
+    const root = event.target.closest?.("#modalRoot")?.firstElementChild
+      || (event.target.id === "zt-edit-input" ? event.target : null);
+    if (!root || checkedEditors.has(root) || isComposing()) return;
+    checkedEditors.add(root);
+    const owner = readDraft?.();
+    const elements = root.matches?.("#zt-edit-input") ? [root]
+      : Array.from(root.querySelectorAll(editorSelector));
+    drafts?.recover?.(owner, saved => {
+      if (!Array.isArray(saved.inputs) || saved.inputs.length !== elements.length) return false;
+      if (!saved.inputs.every((input, index) => input.field === (elements[index].dataset.modalField || elements[index].id || "")
+        && typeof input.value === "string" && (input.checked == null || typeof input.checked === "boolean")
+        && (input.start == null || Number.isInteger(input.start)) && (input.end == null || Number.isInteger(input.end)))) return false;
+      saved.inputs.forEach((input, index) => {
+        const element = elements[index];
+        element.value = input.value;
+        if (element.type === "checkbox") element.checked = input.checked === true;
+        if (input.start != null && input.end != null && ["text", "search", "tel", "url", "password", "textarea"].includes(element.type))
+          element.setSelectionRange(input.start, input.end, input.direction);
+      });
+      notify("再読込前の下書きを復元しました。内容を確認して保存してください");
+      return true;
+    });
   });
   function restoreFocus(saved) {
     if (!saved?.element?.isConnected) return;

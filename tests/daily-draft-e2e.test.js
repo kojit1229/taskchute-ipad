@@ -96,6 +96,47 @@ function storeChecks() {
     await page.evaluate(() => { Storage.prototype.setItem = window.__draftSetItem; });
     await action("modal-save"); assert.equal((await backups()).length, 0);
 
+    for (const mode of ["candidate-exception", "invalid-clock"]) {
+      const typed = `候補失敗でも入力と控えを保持:${mode}`;
+      await action("edit-task", "t"); await field.fill(typed);
+      await field.evaluate(el => { el.focus(); el.setSelectionRange(1, 5, "backward"); });
+      await action("modal-close"); await choose("stay");
+      const backup = await backups();
+      const before = await page.evaluate(async key => {
+        window.__failureState = (await import('/src/state/store.js')).state;
+        window.__failureInput = document.querySelector('#modalRoot [data-modal-field="description"]');
+        return { state: JSON.stringify(window.__failureState), stored: localStorage.getItem(key) };
+      }, STATE_KEY);
+      await page.evaluate(({ mode, key, state }) => {
+        window.__failureHits = 0; window.__failureWrites = 0;
+        window.__failureParse = JSON.parse; window.__failureSeconds = Date.prototype.getSeconds;
+        window.__failureSet = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, value) {
+          if (this === localStorage && k === key) window.__failureWrites++;
+          return window.__failureSet.call(this, k, value);
+        };
+        if (mode === 'candidate-exception') JSON.parse = function(value, ...args) {
+          if (value === state) { window.__failureHits++; throw new Error('R2-15 candidate clone exception'); }
+          return window.__failureParse(value, ...args);
+        };
+        else Date.prototype.getSeconds = function() { window.__failureHits++; return NaN; };
+      }, { mode, key: STATE_KEY, state: before.state });
+      await action("modal-save");
+      await page.evaluate(() => { JSON.parse = window.__failureParse; Date.prototype.getSeconds = window.__failureSeconds; });
+      assert(await page.evaluate(() => window.__failureHits > 0), mode + ': injected failure reached');
+      assert.equal(await field.inputValue(), typed);
+      assert(await field.evaluate(el => el === window.__failureInput));
+      assert.deepEqual(await field.evaluate(el => [el.selectionStart, el.selectionEnd, el.selectionDirection]), [1, 5, 'backward']);
+      assert.deepEqual(await backups(), backup);
+      assert.deepEqual(await page.evaluate(async key => ({ state: JSON.stringify((await import('/src/state/store.js')).state), stored: localStorage.getItem(key) }), STATE_KEY), before);
+      assert(await page.evaluate(async () => (await import('/src/state/store.js')).state === window.__failureState));
+      assert.equal(await page.evaluate(() => window.__failureWrites), 0);
+      await action("modal-save");
+      assert.equal(await page.evaluate(() => window.__failureWrites), 1); assert.deepEqual(await backups(), []);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__failureSet; });
+      console.log(`PASS R2-15 ${mode}: original state reference/storage/input/selection/backup; zero writes, retry one`);
+    }
+
     await action("edit-task", "t"); await field.fill("控えも容量不足");
     await page.evaluate(() => {
       Storage.prototype.setItem = function(k, value) {
@@ -164,14 +205,15 @@ function storeChecks() {
     }
     // 完了印付きの0秒思考の控え(新契約で残る)は以降の件数断言の対象外なので試験側で片付ける(製品の挙動ではない)
     await page.evaluate(prefix => { for (const key of Object.keys(sessionStorage).filter(key => key.startsWith(prefix))) { const item = JSON.parse(sessionStorage.getItem(key)); if (item.kind === "zero" && Object.values(item.drafts || {}).every(draft => draft.completed)) sessionStorage.removeItem(key); } }, DAILY_DRAFT_KEY);
-    await action("edit-task", "t"); await field.fill("再読込後に無断復元しない");
+    await action("edit-task", "t"); await field.fill("再読込後に一致する下書きを復元");
     await action("modal-close"); await choose("stay");
     assert.equal((await backups()).length, 1); await page.reload();
     await page.locator('#sidebar [data-action="nav"]').first().waitFor();
     assert.equal(await page.locator(".draft-leave-dialog").count(), 0);
-    await action("edit-task", "t"); assert.notEqual(await field.inputValue(), "再読込後に無断復元しない");
+    await action("edit-task", "t"); await field.focus();
+    assert.equal(await field.inputValue(), "再読込後に一致する下書きを復元");
     assert.equal((await backups()).length, 1, "reload does not consume backup");
     assert.deepEqual(errors, []);
-    console.log("PASS row direct saves and reload without automatic restore; Chromium only");
+    console.log("PASS row direct saves and matching reload restoration without persistence; Chromium only");
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

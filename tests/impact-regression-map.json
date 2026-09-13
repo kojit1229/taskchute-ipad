@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "schedule-occurrence-time": {
+      "paths": ["^src/features/schedule-occurrence-time\\.js$"],
+      "suites": ["schedule-series-sync-e2e", "placement-e2e"]
+    },
     "lifecycle-save": {
       "paths": ["^src/features/lifecycle-save\\.js$"],
       "suites": ["mutation-block-e2e", "v70", "v87", "v107", "today-core", "mutation-bundle-e2e"]
@@ -477,7 +481,7 @@
       "suites": ["schedule-series-sync-e2e", "single-schedule-sync-e2e"]
     },
     "schedule-series-operations": {
-      "paths": ["^src/features/schedule-series\\.js$", "^src/features/schedule-occurrence\\.js$"],
+      "paths": ["^src/features/schedule-series\\.js$", "^src/features/schedule-occurrence\\.js$", "^src/features/schedule-series-bulk\\.js$"],
       "suites": ["schedule-series-sync-e2e", "daily-operations-registry", "daily-parts-contract"]
     },
     "schedule-series-core": {

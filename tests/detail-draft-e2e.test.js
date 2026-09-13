@@ -35,6 +35,44 @@ const DAY = "2026-09-06";
     const field = name => page.locator(`#modalRoot [data-modal-field="${name}"]`);
     const choose = choice => page.locator(`[data-action="draft-leave-${choice}"]`).click();
     const readState = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+    for (const mismatch of [null, 'connection', 'target', 'fingerprint']) {
+      await action('edit-task', 't'); await field('description').fill('再読込した下書き');
+      await field('description').evaluate(el => el.setSelectionRange(1, 4, 'backward'));
+      await action('modal-close'); await choose('stay');
+      await page.evaluate(mismatch => {
+        const key = Object.keys(sessionStorage).find(key => key.startsWith('taskchute-journal-daily-draft-v1:'));
+        const value = JSON.parse(sessionStorage.getItem(key));
+        if (mismatch === 'connection') value.connection = 'other-connection';
+        if (mismatch === 'target') value.id = 'other-target';
+        if (mismatch === 'fingerprint') value.fingerprint = 'remote-edit';
+        sessionStorage.removeItem(key);
+        sessionStorage.setItem('taskchute-journal-daily-draft-v1:' + JSON.stringify([value.kind, value.id, value.draftId, value.connection]), JSON.stringify(value));
+      }, mismatch);
+      await page.reload(); await page.locator('#sidebar [data-action="nav"]').first().waitFor();
+      const before = await readState();
+      const backups = () => page.evaluate(() => Object.fromEntries(Object.keys(sessionStorage)
+        .filter(key => key.startsWith('taskchute-journal-daily-draft-v1:')).map(key => [key, sessionStorage.getItem(key)])));
+      const backup = await backups();
+      await page.evaluate(key => {
+        window.__reloadWrites = 0; window.__reloadSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, value) {
+          if (this === localStorage && k === key) window.__reloadWrites++;
+          return window.__reloadSetItem.call(this, k, value);
+        };
+      }, STATE_KEY);
+      await action('edit-task', 't'); await field('description').focus();
+      assert.equal(await field('description').inputValue(), mismatch ? '元Taskメモ' : '再読込した下書き');
+      if (!mismatch) assert.deepEqual(await field('description').evaluate(el => [el.selectionStart, el.selectionEnd, el.selectionDirection]), [1, 4, 'backward']);
+      assert.deepEqual(await readState(), before); assert.deepEqual(await backups(), backup);
+      assert.equal(await page.evaluate(() => window.__reloadWrites), 0, 'restoration never saves state');
+      if (!mismatch) { await action('modal-close'); await choose('discard'); assert.deepEqual(await backups(), {}); }
+      else { await action('modal-close'); assert.deepEqual(await backups(), backup); }
+      await page.evaluate(() => {
+        Storage.prototype.setItem = window.__reloadSetItem;
+        for (const key of Object.keys(sessionStorage)) if (key.startsWith('taskchute-journal-daily-draft-v1:')) sessionStorage.removeItem(key);
+      });
+    }
+    console.log('PASS reload: exact owner restores inputs/selection with zero writes; mismatches keep originals and backups');
     for (const [kind, id, memo] of [["task", "t", "description"], ["project", "p", "description"], ["block", "b", "comment"]]) {
       await action(`edit-${kind}`, id);
       await field(memo).fill("保存せずに書いた内容");

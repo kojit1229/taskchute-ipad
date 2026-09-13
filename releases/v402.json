@@ -1,0 +1,89 @@
+{
+  "version": 402,
+  "date": "2026-09-13",
+  "title": "系列の全件操作・時間軸の15分移動・日報の別表、再読込後の下書き復元、失敗注入の試験、第2回の引渡し(束 R2-E+R2-F。系列は旗で既定オフ)",
+  "summary": "繰り返し予定の系列について、今日以降の全件変更で影響一覧を示し受信変更後に再確認する部品、系列回を時間軸の取得・15分移動・伸縮・取消へ接続する部品、導出済みの系列回を帰属日の日報の別表へ1件ずつ載せる部品を追加(いずれも旗 SCHEDULE_SERIES_ENABLED=false の下で、系列が空なら既存経路と同じ)。再読込後に対象と接続先が一致する下書きだけを復元する。候補作成中の例外や時計の形式不正でも初回と同じ復元が成立することを試験で固定。第2回公開の引渡し文書を同梱",
+  "changedFiles": [
+    "CHANGES_v402.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v402.json",
+    "src/features/daily-draft.js",
+    "src/features/daily-gap-placement.js",
+    "src/features/daily-operations.js",
+    "src/features/draft-leave.js",
+    "src/features/feedback/report-builder.js",
+    "src/features/feedback/report-input.js",
+    "src/features/schedule-occurrence-time.js",
+    "src/features/schedule-occurrence.js",
+    "src/features/schedule-series-bulk.js",
+    "src/features/single-schedule-view.js",
+    "src/features/single-schedule.js",
+    "sw.js",
+    "tests/daily-draft-e2e.test.js",
+    "tests/daily-operations-registry.test.js",
+    "tests/detail-draft-e2e.test.js",
+    "tests/draft-leave.test.js",
+    "tests/impact-regression-map.json",
+    "tests/mutation-block-e2e.test.js",
+    "tests/schedule-series-sync-e2e.test.js",
+    "tests/suite-manifest.json",
+    "tests/support/r2e-series-contracts.cjs"
+  ],
+  "intent": [
+    "束 R2-E=2回-08(全件操作と対象集合の再確認)→2回-09a(時間軸の取得・取消)→2回-09b(日報への系列回)+fixR2E/b、束 R2-F=2回-14(再読込後の下書き復元)→2回-15(失敗注入=テストのみ)→2回-10(第2回の引渡し)。設計08 §5・§10・§11、設計03 §下書き、K回答28〜30"
+  ],
+  "changes": [
+    "src/features/schedule-series-bulk.js / schedule-occurrence-time.js(新設)、schedule-occurrence.js、single-schedule.js、single-schedule-view.js、daily-gap-placement.js、daily-operations.js(登録行 daily-series-bulk): 全件変更の再確認と conflict、時間軸への接続(旗の下)",
+    "src/features/feedback/report-input.js / report-builder.js: 導出済み系列回を帰属日に1件だけ別表へ(旗オフはキー自体を出さず既存本文同一)",
+    "src/features/daily-draft.js / draft-leave.js: 再読込後の下書き復元(kind/id/connection/date/fingerprint の完全一致・1件だけ)",
+    "tests: 注入2点×代表4経路、固定一覧37行、schedule-series-sync-e2e 拡充",
+    "sw.js: CACHE_NAME v402、APP_SHELL に新 src"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad)は未確認",
+    "有効化(旗オン)は全端末更新後の小版(K承認 2026-09-13)"
+  ],
+  "reviewFocus": [
+    "旗オフで既存経路と完全に同じか(保存回数・時刻・日報本文)",
+    "全件変更の対象集合が保存直前に再計算され変われば保存0で conflict か",
+    "再読込後の復元が対象違い・接続先違いを拒むか"
+  ],
+  "verification": [
+    "受領実走(v401 main 8577b5e 起点、reports/supervision/recv-R2Ev): (a)(b)=0、(c)=固定一覧を和(37行)に統合後 0",
+    "独立検証: R2-E=Codex 242a PASS 軽微1 / Claude 242b PASS 軽微3、R2-F=Codex 256a PASS 軽微1 / Claude 256b PASS 軽微3",
+    "release-gate --final は監督者が実走(reports/impl-r1/v402/release-gate-final*.log)"
+  ],
+  "knownLimitations": [
+    "系列の有効化・登録ボタンの公開は全端末更新後",
+    "新規作成モーダルの下書き復元は対象外(次周)"
+  ],
+  "relatedSuites": [
+    "schedule-series-core",
+    "schedule-series-merge",
+    "schedule-series-derive",
+    "schedule-series-sync-e2e",
+    "single-schedule-sync-e2e",
+    "single-schedule-flow-e2e",
+    "single-schedule-view-e2e",
+    "placement-core",
+    "placement-e2e",
+    "timeline-layout-core",
+    "timeline-render-core",
+    "exec-timeline-e2e",
+    "single-schedule-layout-e2e",
+    "draft-save-transaction",
+    "draft-leave",
+    "detail-draft-e2e",
+    "daily-draft-e2e",
+    "daily-report-e2e",
+    "daily-operations-registry",
+    "daily-parts-contract",
+    "v364",
+    "v106",
+    "recurrence-core",
+    "mutation-block-e2e",
+    "mutation-global-e2e",
+    "daily-actuals-e2e",
+    "sw-integration"
+  ]
+}

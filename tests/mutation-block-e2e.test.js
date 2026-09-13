@@ -415,6 +415,65 @@ const lifecycle = [
   }],
   ['bulk approval', f => () => f.ctx.bulkApproveAsPlanned()]
 ];
+// orders/244c: inject only inside the real run boundary, for four representative entries.
+for (const mode of ['candidate-exception', 'invalid-clock']) {
+  for (const [name, prepare] of [edits.find(([name]) => name === 'modal edit'), ...lifecycle.slice(0, 3)]) {
+    test(`R2-15 ${mode}/${name}: zero writes, original references/input/draft, one-save retry`, async () => {
+      const f = await lifecycleFixture(), execute = prepare(f);
+      f.ctx._scheduleDraft = { date: DATE, items: [{ id: 'retained-draft', title: 'typed draft' }] };
+      const before = clone(f.ctx.state), reference = f.ctx.state, stored = f.raw();
+      const input = clone(f.input || {}), draft = f.ctx._scheduleDraft, undo = f.ctx._draftUndo;
+      const draftValue = clone(draft), undoValue = clone(undo), quick = clone(f.ctx._quickCompleteSnapshots);
+      const create = f.ctx.createDraftSaveTransaction;
+      let injecting = true, injected = 0, failure, built = 0;
+      const candidateError = new Error('R2-15 injected candidate exception');
+      f.ctx.createDraftSaveTransaction = options => {
+        const transaction = create({ ...options,
+          now: () => {
+            if (injecting && mode === 'invalid-clock') { injected++; return 'invalid-clock'; }
+            return options.now();
+          },
+          onFailure: error => { failure = error; options.onFailure(error); }
+        });
+        const run = transaction.run;
+        transaction.run = (work, options) => run(() => {
+          const result = work();
+          if (injecting) {
+            assert.equal(transaction.active, true, 'injection is inside candidate build');
+            assert.notEqual(f.ctx.state, reference, 'candidate uses a separate state');
+            assert.notDeepEqual(clone(f.ctx.state.blocks), before.blocks, 'real entry built its changes');
+            built++;
+            if (mode === 'candidate-exception') { injected++; throw candidateError; }
+          }
+          return result;
+        }, options);
+        return transaction;
+      };
+      const init = ast.body.find(n => n.type === 'ExpressionStatement' && n.expression.left?.name === 'draftSaveTransaction');
+      vm.runInContext(source.slice(init.start, init.end), f.ctx);
+      f.ctx.createDraftSaveTransaction = create;
+      assert.equal(execute(), false);
+      assert.equal(built, 1); assert.equal(injected, 1, 'failure reached the real boundary once');
+      if (mode === 'candidate-exception') assert.equal(failure, candidateError);
+      else { assert(failure instanceof TypeError); assert.match(failure.stack, /nextMutationStamp/); }
+      assert.equal(f.ctx.state, reference); expectRestored(before, clone(f.ctx.state));
+      assert.equal(f.raw(), stored); assert.equal(f.counts.writes, 0); assert.equal(f.persisted.length, 0);
+      expectRestored(input, clone(f.input || {}));
+      assert.equal(f.ctx._scheduleDraft, draft); expectRestored(draftValue, clone(f.ctx._scheduleDraft));
+      assert.equal(f.ctx._draftUndo, undo); expectRestored(undoValue, clone(f.ctx._draftUndo));
+      expectRestored(quick, clone(f.ctx._quickCompleteSnapshots));
+      assert.equal(f.counts.close + f.counts.render + f.counts.autoSync + f.counts.autoSave + f.counts.timer + f.counts.tracking + f.counts.startEffect + (f.counts.guidedAccess || 0), 0);
+      injecting = false;
+      execute();
+      assert.equal(f.counts.writes, 1); assert.equal(f.persisted.length, 1);
+      assert.equal(f.counts.autoSync, 1); assert.equal(f.counts.autoSave, 1);
+      assert.notDeepEqual(clone(f.ctx.state.blocks), before.blocks);
+      assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+      assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
+    });
+  }
+}
+
 for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents later effects; retry stamps once`, async () => {
   const f = await lifecycleFixture(), execute = prepare(f), before = clone(f.ctx.state);
   const input = clone(f.input || {}), blocks = f.ctx.state.blocks, snapshots = clone(f.ctx._quickCompleteSnapshots);

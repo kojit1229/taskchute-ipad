@@ -45,15 +45,15 @@ function hasIncompleteReason(block) {
   return Boolean(block && block.incompleteReason && block.incompleteReason.chip);
 }
 
-function scheduleReportLines(summary) {
+function scheduleReportLines(summary, label = '単発予定') {
   if (!summary || (!summary.count && !summary.excluded.invalid)) return [];
   const cell = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/[\\`*_[\]{}()|]/g, '\\$&').replace(/[\r\n]+/g, ' ');
   const time = (value, date) => `${value.slice(0, 10) === date ? '' : `${value.slice(0, 10)} `}${timeFromDateTime(value)}`;
-  const lines = ['', '## 単発予定（別表）', '', `${summary.count}件（予定完了${summary.completed}件）`, '',
+  const lines = ['', `## ${label}（別表）`, '', `${summary.count}件（予定完了${summary.completed}件）`, '',
     '| 時刻 | 名前 | 予定完了 |', '|---|---|---|'];
   for (const row of summary.records) lines.push(`| ${time(row.plannedStartAt, row.date)} – ${time(row.plannedEndAt, row.date)} | ${cell(row.title)} | ${row.completed ? '完了' : '未完了'} |`);
-  if (summary.excluded.invalid) lines.push('', `不正な単発予定${summary.excluded.invalid}件を除外しました。`);
+  if (summary.excluded.invalid) lines.push('', `不正な${label}${summary.excluded.invalid}件を除外しました。`);
   return lines;
 }
 
@@ -424,6 +424,7 @@ export function buildReportMarkdown(input) {
   lines.push("```");
 
   lines.push(...scheduleReportLines(input.singleSchedules));
+  lines.push(...scheduleReportLines(input.seriesSchedules, '繰り返し予定'));
   const report = lines.join("\n");
   return report;
 }

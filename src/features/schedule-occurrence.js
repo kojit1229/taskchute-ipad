@@ -29,6 +29,7 @@ function draftOwner(action, input, deps) {
     draftId: `occurrence-${action}:${input.requestId}`, connection: deps.connection || "local" } };
 }
 function changedFields(action, input, row) {
+  if (action === "restore-time") return { time: input.restoreTime };
   if (action === "delete") { if (input.confirmed !== true) throw seriesInvalid("この回の削除を確認してください"); return { lifecycle: { deleted: true } }; }
   if (action === "complete") {
     if (typeof input.desiredCompleted !== "boolean") throw seriesInvalid("完了の希望値を確認してください");
@@ -47,7 +48,7 @@ function changedFields(action, input, row) {
 }
 export function prepareOccurrence(action, input, deps) {
   const { store, key } = draftOwner(action, input, deps);
-  const signature = contentKey({ values: input.values ?? null, completed: input.desiredCompleted ?? null, confirmed: input.confirmed ?? null, base: input.baseFingerprint });
+  const signature = contentKey({ values: input.values ?? null, restoreTime: input.restoreTime ?? null, completed: input.desiredCompleted ?? null, confirmed: input.confirmed ?? null, base: input.baseFingerprint });
   const previous = store.get(key);
   if (previous) {
     if (previous.signature !== signature) throw seriesInvalid("入力を変えたら新しい要求として保存してください");
@@ -60,7 +61,7 @@ export function prepareOccurrence(action, input, deps) {
   const updatedAt = nextMutationStamp({ now, candidates: stamps(related(deps.state, row)) });
   const candidate = Object.keys(fields).length ? stamped({ ...(saved || { id: row.id, seriesId: row.seriesId,
     occurrenceKey: row.occurrenceKey, formatVersion: 1, createdAt: now }), overrides: { ...saved?.overrides,
-    ...Object.fromEntries(Object.entries(fields).map(([field, value]) => [field, { value, updatedAt, changeId: input.requestId }])) } }, updatedAt) : null;
+    ...Object.fromEntries(Object.entries(fields).map(([field, value]) => [field, { ...(action === "restore-time" && value === null ? { cleared: true } : { value }), updatedAt, changeId: input.requestId }])) } }, updatedAt) : null;
   const draft = { ...key, signature, candidate, baseFingerprint: input.baseFingerprint };
   if (!store.put(draft).ok) throw seriesInvalid("下書きの控えを保存できません。入力を残しています");
   return { ...input, occurrenceDraft: draft };
@@ -77,13 +78,13 @@ export function buildOccurrence(state, input, deps) {
   return { records: [], candidates: [draft.candidate?.updatedAt], values: unchanged ? [] : [
     { kind: null, key: "singleSchedules", before: state.singleSchedules, after: result.singleSchedules }] };
 }
-export function occurrenceForm(row, escapeHTML) {
+export function occurrenceForm(row, escapeHTML, bulkControls = "") {
   const field = (name, type, value) => `<label>${({ title: "予定名", date: "日付", startTime: "開始", endTime: "終了" })[name]}<input style="font-size:16px" data-modal-field="${name}" data-occurrence-field="${name}" type="${type}" ${type === "time" ? 'step="300"' : ""} value="${escapeHTML(value)}"></label>`;
   return `<section data-occurrence-form data-id="${escapeHTML(row.id)}" data-series-id="${escapeHTML(row.seriesId)}" data-key="${row.occurrenceKey}" data-date="${row.date}" data-fingerprint="${escapeHTML(row.seriesFingerprint)}">
     ${field("title", "text", row.title)}${field("date", "date", row.date)}${field("startTime", "time", row.plannedStartAt.slice(11))}${field("endTime", "time", row.plannedEndAt.slice(11))}
     <label>翌日終了<input data-modal-field="endNextDay" data-occurrence-field="endNextDay" type="checkbox" ${row.plannedEndAt.slice(0, 10) !== row.date ? "checked" : ""}></label>
     <label>メモ<textarea style="font-size:16px" data-modal-field="note" data-occurrence-field="note">${escapeHTML(row.note)}</textarea></label>
-    <button type="button" data-action="series-occurrence-save">この回だけ保存</button><button type="button" data-action="series-occurrence-delete">この回だけ削除</button></section>`;
+    <button type="button" data-action="series-occurrence-save">この回だけ保存</button><button type="button" data-action="series-occurrence-delete">この回だけ削除</button>${bulkControls}</section>`;
 }
 export function submitOccurrence(action, target, deps, run) {
   if (!seriesEnabled(deps.operationDeps)) return;
