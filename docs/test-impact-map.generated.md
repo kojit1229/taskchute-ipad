@@ -46,7 +46,7 @@
 | detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 25 | 0 | 0 |
 | directory-fallback.test.js | node | full | content-ai | 14 | 0 | 0 |
 | draft-leave.test.js | node | full | legacy-crosscutting | 24 | 0 | 0 |
-| draft-save-transaction.test.js | node | full | legacy-crosscutting | 82 | 0 | 0 |
+| draft-save-transaction.test.js | node | full | legacy-crosscutting | 83 | 0 | 0 |
 | exec-layout-media.test.js | node | full | planning-execution, ui-responsive | 34 | 0 | 0 |
 | exec-timeline-e2e.test.js | e2e | full | planning-execution | 21 | 0 | 0 |
 | feedback-busy-boundary.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 21 | 0 | 0 |

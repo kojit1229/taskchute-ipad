@@ -294,10 +294,12 @@ test('import and daily open persist the whole change once, including forced recu
   Object.assign(x.ctx, { normalizeState: copy, mergeStoredSingleSchedules: (_, rows) => ({ stored: rows || [] }),
     invalidateFeedbackConnection() {}, invalidateKaradaConnection() {}, invalidateFundConnection() {}, invalidateVisionConnection() {},
     invalidateHealthCache() {}, ensureJournal: date => { x.ctx.state.journals[date] ||= 'journal'; },
-    maintainRecurrences: () => {
-      assert.equal(x.ctx.draftSaveTransaction.active, true, 'maintenance belongs to the outer save');
+    // fixV398b(監督者決定 2026-09-13、v326 の旧契約を優先): 取り込みと日跨ぎの実体化は外側の保存に同乗し、
+    // 同じ日の強制再オープンは候補保存を開かずメモリ上だけ(次の利用者操作の保存に同乗)。
+    maintainRecurrences: ({ persist = true } = {}) => {
       maintenance++;
-      if (maintenance > 2) x.ctx.state.recurrences.push({ id: 'forced', title: 'generated' });
+      assert.equal(x.ctx.draftSaveTransaction.active, maintenance <= 2, maintenance <= 2 ? 'maintenance belongs to the outer save' : 'same-day forced open must not open a save');
+      if (maintenance > 2) { assert.equal(persist, false); x.ctx.state.recurrences.push({ id: 'forced', title: 'generated' }); }
     },
     FileReader: class { readAsText(file) { this.result = file; this.onload(); } } });
   vm.runInContext(functions, x.ctx);
@@ -309,8 +311,8 @@ test('import and daily open persist the whole change once, including forced recu
   assert.equal(x.effects.persisted.length, 2);
   assert.equal(x.effects.persisted[1].settings.lastOpenedDate, x.ctx.todayISO());
   assert.equal(x.ctx.runDailyOpen({ force: true }), false);
-  assert.equal(x.effects.persisted.length, 3);
-  assert.equal(x.effects.persisted[2].recurrences[0].id, 'forced');
+  assert.equal(x.effects.persisted.length, 2, 'same-day forced open persists nothing (v326)');
+  assert.equal(x.ctx.state.recurrences.at(-1).id, 'forced', 'materialization stays in memory until the next user save');
 });
 
 (async () => {

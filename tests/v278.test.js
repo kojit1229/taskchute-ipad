@@ -94,9 +94,10 @@ const block = (id, ruleId, title = "朝の読書") => ({
     const fixed = await storedRule("daily");
     const fixedModifiedAt = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).dataModifiedAt, KEY);
     check("ONでstreakSinceへ当日を付与しupdatedAt更新", fixed.streakSince === TODAY && fixed.updatedAt === `${TODAY}T10:00:01`, JSON.stringify(fixed));
-    // 関連保存でruleは実時計+1秒。ON直前の全体時刻10:00:02を下限に全体は10:00:03。
+    // 関連保存でruleは実時計+1秒(10:00:01)、全体はその下限+1秒(10:00:02)。fixV398b で起動時の
+    // 端末保存が無くなったため ON直前の全体時刻は fixture のまま(監督者追随 2026-09-13)。
     // OFFは実時計10:05:00→rule 10:05:01→全体10:05:02(max(比較対象, 実時計)+1秒)。
-    check("ONはsaveState経由でdataModifiedAt更新", fixedModifiedAt === `${TODAY}T10:00:03`, fixedModifiedAt);
+    check("ONはsaveState経由でdataModifiedAt更新", fixedModifiedAt === `${TODAY}T10:00:02`, fixedModifiedAt);
     await page.locator('.nav-button[data-view="instruments"]').click();
     await page.waitForSelector('.instr-habit-panel');
     check("固定化したルーティンがINSTRUMENTSのHABITパネルへ出現", (await page.locator('.instr-habit-panel').first().textContent()).includes("朝の読書"));
