@@ -260,7 +260,7 @@ function sourceBetween(source, startMarker, endMarker) {
     check("B-6 #17 closed track", await (await projectCard("p17")).locator(".twy-row,.twy-stale-note").count() === 0);
     check("B-6 #18 現サイクルactive 12WYの第三の進捗非表示", await (await projectCard("p18")).locator(".wbs-progress-row").count() === 0
       && await (await projectCard("p18")).locator(".wbs-progress-agg").count() === 0
-      && (await (await projectCard("p18")).locator(".wbs-project-meta").textContent()).includes("[12WY]"));
+      && (await (await projectCard("p18")).locator(".wbs-project-meta").textContent()).includes("[12週計画]"));
     check("B-6 #19 対象外Task/Project進捗は維持", (await (async () => {
       const results = [];
       for (const id of ["p19-past", "p19-non", "p19-inactive", "p19-future"])

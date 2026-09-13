@@ -459,7 +459,7 @@ function writeMeditationCandidates(kind, date) {
     });
   (state.blocks || [])
     .filter((b) => !b.deleted && b.date === date && b.completed && b.title)
-    .forEach((b) => candidates.push({ text: b.title, tag: "完了Block" }));
+    .forEach((b) => candidates.push({ text: b.title, tag: "終了実績" }));
   if (kind === "charge") {
     const eveningNote = (state.condition?.logs?.[date]?.eveningNote || "").trim();
     if (eveningNote) candidates.push({ text: eveningNote, tag: "今日の記録" });
@@ -641,7 +641,7 @@ const JOURNAL_PROMPTS = {
   // 見出し自体は後方互換のため残し、ヒント文言だけを誘導文に差し替える(v73責め語彙禁止=
   // 「未記入」ではなく「上へ」という事実案内のみ)。
   "🙏 感謝(3 つ)": "「書く瞑想」パネル(上)の②充電へ移りました。良かったこと・感謝したいことはそちらへどうぞ。",
-  "✨ 今日のハイライト": "同じく「書く瞑想」パネル(上)の②充電へ。候補チップから完了Blockを選ぶと早いです。",
+  "✨ 今日のハイライト": "同じく「書く瞑想」パネル(上)の②充電へ。候補チップから終了実績を選ぶと早いです。",
   "💡 気付き・学び": "「書く瞑想」パネル(上)③の深掘り(放電/充電セルフトーク)へ移りました。うまくいった/いかなかった理由はそこで言語化できます。",
   "📝 自由記述": "・いまなに考えてる?\n・言葉にならない違和感を、まず雑に書き出す。コントロールできないことは手放してOK。\n・夢・思いつき・心配ごと・読書メモ・なんでも。",
   // v91: 「### 依頼」見出し配下のヒント(JOURNAL_REQUEST_SECTIONの見出しテキストと対応させる)
@@ -736,16 +736,16 @@ function renderJournal() {
   const fundSummary = fundJournalSummaryForDate(date);
   return `
     <div class="tower-skin journal-tower">
-      ${renderHeader("過去の自分・今の自分・外部視点", "ジャーナル")}
+      ${renderHeader("生活の記録と生成した本文", "日報")}
       ${renderDateBar()}
       ${renderExperimentSection()}
       <section class="journal-grid">
         <details class="panel fold journal-panel-prev">
-          <summary class="fold-summary"><span class="fold-chevron">▶</span>前日 <span>(${previous})</span></summary>
+          <summary class="fold-summary"><span class="fold-chevron">▶</span>前日の本文 <span>(${previous})</span></summary>
           <div class="fold-body"><div class="md-render readonly-md">${renderMarkdown(state.journals[previous] || "記載なし")}</div></div>
         </details>
         <div class="panel journal-panel-today">
-          <div class="journal-daysummary">着手率 ${rate.pct}%・完了 ${completedCount} Block・充放電 ${energyNet > 0 ? "+" : ""}${energyNet}</div>
+          <div class="journal-daysummary">着手率 ${rate.pct}%・終了実績 ${completedCount}件・充放電 ${energyNet > 0 ? "+" : ""}${energyNet}</div>
           <details class="fold journal-segment journal-segment-morning" data-journal-section="morning" ${morningOpen ? "open" : ""}>
             <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="morning"><span class="fold-chevron">▶</span>けさ <span>朝(前夜の睡眠・体調・睡眠時間・服薬・余力)</span></summary>
             <div class="fold-body">
@@ -756,18 +756,18 @@ function renderJournal() {
             </div>
           </details>
           <details class="fold journal-segment" data-journal-section="body" ${bodyLogOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="bodyLog"><span class="fold-chevron">▶</span>BODY <span>筋トレ・身体スキャン</span></summary>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="bodyLog"><span class="fold-chevron">▶</span>からだの記録 <span>筋トレ・身体スキャン</span></summary>
             <div class="fold-body">
               ${renderGymLogCard(date)}
               ${scanSummary ? `<div class="journal-bodyscan">身体スキャン　疲労Σ${scanSummary.fatigue}・回復Σ${scanSummary.recovery}・${scanSummary.total}件</div>` : ""}
             </div>
           </details>
           ${flightBlocks.length ? `<details class="fold journal-segment" data-journal-section="flight" ${flightLogOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="flightLog"><span class="fold-chevron">▶</span>FLIGHT LOG <span>完了Block</span></summary>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="flightLog"><span class="fold-chevron">▶</span>やったこと <span>終了実績</span></summary>
             <div class="fold-body">${journalFlightRows(flightBlocks)}</div>
           </details>` : ""}
           <section class="fold journal-segment" data-journal-section="mind">
-            <div class="fold-summary">MIND <span>書く瞑想・夜の体調</span></div>
+            <div class="fold-summary">心の記録 <span>書く瞑想・夜の体調</span></div>
             <div class="fold-body">
               <details class="fold journal-segment journal-segment-writeMeditation" ${kakuMeisouOpen ? "open" : ""}>
                 <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="writeMeditation"><span class="fold-chevron">▶</span>🌗 書く瞑想 <span id="km-oneliner">${escapeHTML(writeMeditationOnelinerText(date))}</span></summary>
@@ -780,22 +780,22 @@ function renderJournal() {
             </div>
           </section>
           <section class="fold journal-segment" data-journal-section="life">
-            <div class="fold-summary">LIFE <span>今日行ったお店</span></div>
+            <div class="fold-summary">暮らしの記録 <span>今日行ったお店</span></div>
             <div class="fold-body">${renderStoreVisitsCard(date)}</div>
           </section>
           ${fundSummary ? `<details class="fold journal-segment" data-journal-section="money" ${moneyOpen ? "open" : ""}>
-            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="money"><span class="fold-chevron">▶</span>MONEY <span>FABLE / CODEX FUND日誌</span></summary>
+            <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="money"><span class="fold-chevron">▶</span>資産の日誌 <span>FABLE / CODEX FUND</span></summary>
             <div class="fold-body">${fundSummary}</div>
           </details>` : ""}
           <details class="fold journal-segment journal-segment-body" data-journal-section="journal" ${bodyOpen ? "open" : ""}>
             <summary class="fold-summary" data-action="toggle-journal-segment" data-segment="body"><span class="fold-chevron">▶</span>自由記述 <span>本文</span></summary>
             <div class="fold-body">
-              <div class="row" style="margin-bottom:10px; flex-wrap:wrap">
-                <button class="btn primary" data-action="generate-report">📊 日報を生成</button>
+              <div class="row journal-report-actions">
+                <button class="btn primary" data-action="generate-report">📊 ${report ? "日報を再生成" : "日報を生成"}</button>
                 ${report ? `<button class="btn" data-action="report-copy-ai">📋 AI用にコピー</button>` : ""}
                 ${report && typeof navigator !== "undefined" && navigator.share ? `<button class="btn" data-action="report-share-ai">↗ 共有</button>` : ""}
-                <button class="btn" data-action="download-report">Markdown保存</button>
-                ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 GitHubに日報push</button>` : ""}
+                <button class="btn" data-action="download-report">日報ファイルを保存</button>
+                ${personalDataReady(state.settings.github) ? `<button class="btn" data-action="push-report">📤 日報をクラウドに保存</button>` : ""}
               </div>
               <details class="journal-prompts" style="margin-bottom:10px; padding:8px 12px; background:var(--panel-soft); border-radius:8px">
                 <summary style="cursor:pointer; font-size:13px; color:var(--muted); font-weight:600">💡 思考のヒント(クリックで開閉)</summary>
@@ -812,6 +812,14 @@ function renderJournal() {
               <textarea ${isArchivedDate(state, date) ? "readonly" : ""} id="journalFreeText" class="textarea journal-free" data-journal-date="${date}" placeholder="気づき・所感をそのまま書く&#10;AIへの依頼は本文の『### 依頼』見出しの下に書く">${escapeHTML(state.journals[date] || "")}</textarea>
             </div>
           </details>
+          <section class="fold journal-segment journal-report" aria-labelledby="journal-report-title">
+            <h2 class="fold-summary" id="journal-report-title">生成した日報 <span>${date}</span></h2>
+            <div class="fold-body">
+              <p class="journal-report-help">生活の記録と自由記述から日報を作ります。生成後に入力を変えた場合は、もう一度生成してください。AIによる外部の再処理は行いません。</p>
+              <p class="journal-report-help">ファイル保存は日報を生成してMarkdown形式で書き出します。クラウド保存は設定済みのGitHubを使います。</p>
+              ${report ? `<div class="md-render readonly-md journal-report-preview" data-report-date="${date}">${renderMarkdown(report)}</div>` : `<p class="journal-report-empty" role="status">この日の日報はまだ生成していません。</p>`}
+            </div>
+          </section>
         </div>
       </section>
     </div>

@@ -266,16 +266,16 @@ function pruneExpiredSuggestedThemes(list) {
 const navItems = [
   { id: "today", label: "今日", mark: "▶" },
   { id: "exec", label: "実行", mark: "E" },
-  { id: "wbs", label: "WBS", mark: "W" },
-  { id: "journal", label: "ジャーナル", mark: "J" },
+  { id: "wbs", label: "作業一覧", mark: "W" },
+  { id: "journal", label: "日報", mark: "J" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
-  { id: "wish", label: "やりたい", mark: "✦" },
+  { id: "wish", label: "やりたいこと", mark: "✦" },
   { id: "vision", label: "ビジョン", mark: "V" },
   { id: "zero", label: "0秒思考", mark: "○" },
-  { id: "instruments", label: "INSTRUMENTS", mark: "◉" },
-  { id: "iron-log", label: "IRON LOG", mark: "▰" },
-  { id: "fund", label: "FUND", mark: "📈" },
-  { id: "twelveweek", label: "12WY", mark: "🎯" },  // v356: 12WYタブ(R1a)
+  { id: "instruments", label: "健康と継続", mark: "◉" },
+  { id: "iron-log", label: "筋トレ記録", mark: "▰" },
+  { id: "fund", label: "資産", mark: "📈" },
+  { id: "twelveweek", label: "12週計画", mark: "🎯" },  // v356: 12WYタブ(R1a)
   { id: "more", label: "その他", mark: "…" },  // v265: PCサイドバーに「その他」が無くinstruments/iron-logへ721px以上で到達不能だった導線欠落の修正
   { id: "settings", label: "設定", mark: "S" }
 ];
@@ -2245,6 +2245,7 @@ function normalizeState(value) {
     twelveWeekVision: "", twelveWeekFocus: "",  // v356: 12WYタブ CYCLE面のVISION帯(design.md §3)
     twelveWeekScoreTarget: 85,
     twelveWeekReviewWeekMinItems: 3,  // v357: 13 WEEKSバーの振り返り週(W13)参考平均の閾値(design.md §2.1裁定7)
+    birthDate: "",
     ...actualSettings
   };
   if (actualSettings.dailyReadingRoutineIds && typeof actualSettings.dailyReadingRoutineIds === "object" && !Array.isArray(actualSettings.dailyReadingRoutineIds))
@@ -2256,8 +2257,6 @@ function normalizeState(value) {
     "iron-log", "instruments", "fund", "twelveweek"
   ]);
   if (!allowedViews.has(value.currentView)) value.currentView = "today";
-  // v31: 残り時間表示用の生年月日(未設定なら補完)
-  if (!value.settings.birthDate) value.settings.birthDate = "1992-12-29";
   value.settings.staticFilesLoaded ||= { vision: false, affirmation: false };
   // v37: インポート/同期で欠けていると描画がクラッシュするキーを補完
   value.settings.morningEnergyLog ||= {};
@@ -5387,7 +5386,7 @@ function renderWBS() {
     </select>`;
   const viewOption = (action, label, on, className = "") => `<button class="btn ghost wbs-view-option${className ? ` ${className}` : ""}" data-action="${action}" aria-pressed="${on}"><span>${label}</span><b>${on ? "ON" : "OFF"}</b></button>`;
   const week = weekRange(todayISO());
-  const cycleMeta = `${state.settings.twelveWeekStartDate ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}${mdFmt(week.weekStart)} – ${mdFmt(week.weekEnd)}`;
+  const cycleMeta = `${state.settings.twelveWeekStartDate ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}${mdFmt(week.weekStart)} – ${mdFmt(week.weekEnd)}`;
   const wbsTools = `<div class="wbs-toolbar">
     <details class="wbs-view-menu"><summary class="btn ghost" data-action="wbs-view-menu-toggle">表示 ▾</summary>
       <div class="wbs-view-popover"><div class="wbs-view-options">
@@ -5408,7 +5407,7 @@ function renderWBS() {
   </div>`;
 
   return `
-    <div class="tower-skin wbs-tower" data-daily-view="wbs"><header class="view-header wbs-header"><div class="wbs-heading"><h1>TOWER / WBS</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
+    <div class="tower-skin wbs-tower" data-daily-view="wbs"><header class="view-header wbs-header"><div class="wbs-heading"><h1>作業一覧</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
     ${renderWipBanner()}
     ${renderWbsThisWeek()}
     <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
@@ -6207,7 +6206,7 @@ function wbsProjectTaskModel(project) {
 
 function renderWbsProjectMeta(project, model) {
   const projDue = project.dueDate ? ` ・ 期限 ${project.dueDate.slice(5).replace("-", "/")}` : "";
-  return `${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${project.twelveWeekStartDate ? `<span>[12WY]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${model.agg.num}/${model.agg.den} ・ ${model.agg.pct}% ・ 完了 ${model.doneCount}/${model.liveTasks.length}${projDue}${isProjectSuspended(project) ? " ・ 中断" : ""}`;
+  return `${project.kind === "wish" ? `<span>[Wish]</span>` : ""}${project.twelveWeekStartDate ? `<span>[12週計画]</span>` : ""}${project.category ? `<span>[${escapeHTML(project.category)}]</span>` : ""} 進捗 ${model.agg.num}/${model.agg.den} ・ ${model.agg.pct}% ・ 完了 ${model.doneCount}/${model.liveTasks.length}${projDue}${isProjectSuspended(project) ? " ・ 中断" : ""}`;
 }
 
 function renderWbsDesktopProjects(projects) {
@@ -6265,7 +6264,7 @@ function renderWbsProjectDetail(project) {
     const due = effectiveDueDate(task);
     return task.status !== "completed" && due && due < todayISO();
   }).length;
-  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12WY 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
+  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
     <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button>${project.id ? `<button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}` : ""}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
     ${renderTwyTrackBlock(project)}${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
     ${renderWorkList("wbs-tasks-" + encodeURIComponent(project.id))}</div>`;
@@ -8649,15 +8648,15 @@ function renderCategoriesSettings() {
 
 // v230: 群見出しは描画せず、現在地breadcrumb用の分類だけ各項目へ保持する。
 const moreItems = [
-  { id: "wbs", label: "WBS", mark: "🧩", group: "計画" },
-  { id: "wish", label: "やりたい", mark: "✦", group: "計画" },
+  { id: "wbs", label: "作業一覧", mark: "🧩", group: "計画" },
+  { id: "wish", label: "やりたいこと", mark: "✦", group: "計画" },
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
-  { id: "twelveweek", label: "12WY", mark: "🎯", group: "計画" },  // v356: 12WYタブ(R1a)
+  { id: "twelveweek", label: "12週計画", mark: "🎯", group: "計画" },  // v356: 12WYタブ(R1a)
   { id: "zero", label: "0秒思考", mark: "💡", group: "思考" },
   { id: "ai-reports", label: "AIレポート", mark: "🤖", group: "振り返り" },
-  { id: "fund", label: "FUND", mark: "📈", group: "振り返り" },
-  { id: "instruments", label: "INSTRUMENTS", mark: "◉", group: "ツール" },
-  { id: "iron-log", label: "IRON LOG", mark: "▰", group: "ツール" },
+  { id: "fund", label: "資産", mark: "📈", group: "振り返り" },
+  { id: "instruments", label: "健康と継続", mark: "◉", group: "ツール" },
+  { id: "iron-log", label: "筋トレ記録", mark: "▰", group: "ツール" },
   { id: "settings", label: "設定", mark: "⚙️", group: "ツール" }
 ];
 
@@ -8673,8 +8672,7 @@ function renderMore() {
   return `<div class="tower-skin more-tower">
     ${renderHeader("追加画面", "その他")}
     <section class="more-tower-grid" aria-label="その他の画面">
-      ${moreItems.map((item, index) => `<button type="button" class="more-tower-item" data-action="nav" data-view="${item.id}">
-        <span class="more-tower-code">NAV ${String(index + 1).padStart(2, "0")}</span>
+      ${moreItems.map((item) => `<button type="button" class="more-tower-item" data-action="nav" data-view="${item.id}">
         <strong><span class="more-tower-mark" aria-hidden="true">${item.mark}</span>${item.label}${item.id === "ai-reports" && unreadCount > 0 ? `<span class="nav-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}</strong>
         <small>${item.group}</small>
       </button>`).join("")}
@@ -9143,8 +9141,8 @@ function renderExperimentSection() {
           <label class="field-label">結論(1行)</label>
           <input class="input" id="exp-conclusion-input" style="font-size:16px" placeholder="続ける/手放す理由を1行で">
           <div class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap">
-            <button class="btn primary" data-action="experiment-keep" data-id="${exp.id}">続ける(kept)</button>
-            <button class="btn" data-action="experiment-drop" data-id="${exp.id}">手放す(dropped)</button>
+            <button class="btn primary" data-action="experiment-keep" data-id="${exp.id}">続ける</button>
+            <button class="btn" data-action="experiment-drop" data-id="${exp.id}">手放す</button>
           </div>
         </div>` : `
         <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
@@ -9185,7 +9183,7 @@ function renderZeroThinking() {
     <div class="view-header">
       <div>
         <div class="view-breadcrumb">その他 › ${moreGroupLabelFor("zero")}</div>
-        <div class="eyebrow">0 SECOND THINKING</div>
+        <div class="eyebrow">0秒思考</div>
         <h1>0秒思考</h1>
       </div>
       <div class="zt-day-count">

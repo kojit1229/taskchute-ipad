@@ -117,7 +117,7 @@ function block(id, date, start, end, completed, charge = 0, discharge = 0) {
     await page.waitForSelector('[data-journal-section="money"]');
     const order = await page.locator(".journal-panel-today > [data-journal-section]").evaluateAll((nodes) => nodes.map((node) => node.dataset.journalSection));
     check("節が MORNING→BODY→FLIGHT LOG→MIND→LIFE→MONEY→JOURNAL LOG 順", JSON.stringify(order) === JSON.stringify(["morning", "body", "flight", "mind", "life", "money", "journal"]), JSON.stringify(order));
-    check("進行中・未着手Blockの充放電を除外して日付サマリを表示", (await page.locator(".journal-daysummary").textContent()).includes("着手率 80%・完了 3 Block・充放電 +3"));
+    check("進行中・未着手Blockの充放電を除外して日付サマリを表示", (await page.locator(".journal-daysummary").textContent()).includes("着手率 80%・終了実績 3件・充放電 +3"));
     const journalText = await page.locator(".journal-panel-today").textContent();
     check("筋トレ2セット・身体スキャン集計・健康日次・睡眠・書く瞑想・お店が同じ日付ページにある",
       ["スクワット", "ベンチプレス", "疲労Σ5・回復Σ5・2件", "歩数 8,000", "前夜の睡眠", "疲れ", "テスト書店"].every((text) => journalText.includes(text)), journalText);

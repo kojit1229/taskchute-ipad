@@ -73,8 +73,9 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   topband.configureTopband({ escapeHTML: (value) => String(value), todayISO: () => "2026-08-25",
     getSettings: () => ({ twelveWeekStartDate: "2026-08-15", birthDate: "" }), getTrackDigest: () => null });
   const noBirthHTML = topband.renderLifeBand();
-  check("birthDate未設定ならtopbandは寿命2セルを描画しない", countMatches(noBirthHTML, /class="life-sig(?: |")/g) === 2
-    && !noBirthHTML.includes("45歳まで") && !noBirthHTML.includes("80歳まで"));
+  check("birthDate未設定ならtopbandは寿命2セルを描画しない", countMatches(noBirthHTML, /class="life-sig(?: |")/g) === 3
+    && noBirthHTML.includes("未設定") && noBirthHTML.includes("設定画面で生年月日を入力してください。")
+    && noBirthHTML.includes("12WY WEEK") && !noBirthHTML.includes("45歳まで") && !noBirthHTML.includes("80歳まで"));
 
   // Test-Reduction: cachedAiWorkResultsへ直接注入するwindow.__v266SetAiWorkResults計測フック
   // (旧AI作業結果_<today>.json hydrationの残留防止リセット専用。本ファイル自体は同fixtureを

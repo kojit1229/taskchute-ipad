@@ -75,8 +75,8 @@ function task(id, projectId, title, extra = {}) {
     await page.waitForSelector(".wbs-header");
 
     console.log("[1] モバイルの常時ツールバーと非永続の表示メニュー");
-    check("TOWER / WBSと12WY週・日付範囲を表示", /TOWER \/ WBS/.test(await page.locator(".wbs-heading").textContent())
-      && (await page.locator(".wbs-heading").textContent()).includes("12WY 第3週 ・ 8/29 – 9/4"));
+    check("作業一覧と12週計画の週・日付範囲を表示", /作業一覧/.test(await page.locator(".wbs-heading").textContent())
+      && (await page.locator(".wbs-heading").textContent()).includes("12週計画 第3週 ・ 8/29 – 9/4"));
     check("検索は常設し、閉時のツールバー操作は表示と追加を保持", await page.locator(".wbs-view-menu > summary").isVisible()
       && await page.locator(".wbs-add-menu > summary").isVisible()
       && await page.locator('#wbs-projects-query').isVisible() && await page.locator('#wbs-tasks-p-cycle-query').isVisible() && !await page.locator(".wbs-edit-toggle").isVisible());
