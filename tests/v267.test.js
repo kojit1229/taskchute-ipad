@@ -269,6 +269,8 @@ function configureSync(syncMod) {
       `[data-twy-track-id="${numeric.id}"] .t-state`).textContent()) === "未更新");
   } catch (error) {
     failures++; console.log("  ❌ 例外:", error.stack || error.message);
+    console.log("v267 failure surface", await page.evaluate(() => ({ body: document.body.innerText.slice(0, 1600),
+      projects: [...document.querySelectorAll('[data-action="wbs-select-project"]')].map(node => node.dataset.id) })));
   } finally {
     await browser.close(); await new Promise((resolve) => server.close(resolve));
   }

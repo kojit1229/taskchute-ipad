@@ -30,6 +30,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
 (async () => {
   const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
   const trackCore = await import(pathToFileURL(path.join(ROOT, "src", "core", "track.js")).href);
+  const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
+  const { twelveWeekSaveOperation } = await import('../src/features/twelve-week-save.js');
 
   console.log("[1] データ層2関数: 成功・失敗不変・保存回数・同期時刻契約");
   const dataSource = sourceBetween(appSource,
@@ -59,6 +61,11 @@ function clone(value) { return JSON.parse(JSON.stringify(value)); }
     saveAndRender: (message) => { dataSandbox.saveCalls += 1; dataCalls.push(["save-render", message]); }
   };
   vm.createContext(dataSandbox);
+  dataSandbox.draftSaveTransaction = createDraftSaveTransaction({ getState: () => dataSandbox.state,
+    setState: state => { dataSandbox.state = state; }, now: () => dataSandbox.now,
+    persist: () => true, schedule() {}, onFailure() {} });
+  dataSandbox.runTwelveWeekChange = work => twelveWeekSaveOperation.run({ work }, {
+    transaction: dataSandbox.draftSaveTransaction, state: () => dataSandbox.state, now: () => dataSandbox.now });
   vm.runInContext(`${dataSource}\n${committedSource}`, dataSandbox);
   const numeric = (id, extra = {}) => ({ id, kind: "numeric", status: "active", deleted: false, ...extra });
   const milestone = (id, extra = {}) => ({ id, label: id, plannedDate: "2026-09-01",

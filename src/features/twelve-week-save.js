@@ -26,6 +26,7 @@ export function prepareRelatedStamps(before, after, kinds, now) {
   for (const row of rows) for (const key of fields.slice(1)) {
     if (row.after[key] && row.after[key] !== row.before?.[key]) row.after[key] = stamp;
   }
+  return stamp;
 }
 
 export function buildTwelveWeekDraft(input, deps) {
@@ -43,6 +44,7 @@ export const twelveWeekSaveOperation = {
     let value;
     const result = deps.transaction.run(() => { value = buildTwelveWeekDraft(input, deps); },
       { kinds: ["weeklyCommitments", "tracks", "trackMeasurements", "projects"] });
-    return result.ok ? value ?? { ok: true } : { ok: false, errors: ["保存できませんでした。入力は残しています"] };
+    return result.ok ? value ?? { ok: true } : value?.ok === false ? value
+      : { ok: false, errors: ["保存できませんでした。入力は残しています"] };
   }
 };

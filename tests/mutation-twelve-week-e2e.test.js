@@ -14,6 +14,29 @@ const names = ['autoCommitWeekIfNeeded', 'stampCommitmentCompletion', 'trackOnBl
 const code = names.map(name => { const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
   assert.ok(node); return source.slice(node.start, node.end); }).join('\n');
 
+test('212 nested track edit: milestone and parent advance together above future child clocks', async () => {
+  const { prepareRelatedStamps } = await moduleAt('src/features/twelve-week-save.js');
+  const { createDraftSaveTransaction } = await moduleAt('src/features/draft-save.js');
+  const now = '2026-09-13T10:00:00';
+  let state = { tracks: [{ id: 'track', updatedAt: now, milestones: [{ id: 'ms', label: 'before',
+    doneAt: '', updatedAt: '2026-09-13T10:10:00' }] }], dataModifiedAt: now };
+  const before = state;
+  let fail = true, writes = 0;
+  const transaction = createDraftSaveTransaction({ getState: () => state, setState: s => { state = s; },
+    now: () => now, persist: () => { writes++; return !fail; }, schedule() {}, onFailure() {} });
+  const save = () => transaction.run(() => {
+    const snapshot = JSON.parse(JSON.stringify(state));
+    Object.assign(state.tracks[0].milestones[0], { label: 'after', doneAt: '2026-09-13', doneChangedAt: now, updatedAt: now });
+    prepareRelatedStamps(snapshot, state, ['tracks'], now);
+    transaction.complete();
+  });
+  assert.equal(save().ok, false); assert.equal(state, before);
+  fail = false; assert.equal(save().ok, true); assert.equal(writes, 2);
+  assert.equal(state.tracks[0].updatedAt, '2026-09-13T10:10:01');
+  assert.equal(state.tracks[0].milestones[0].updatedAt, state.tracks[0].updatedAt);
+  assert.equal(state.tracks[0].milestones[0].doneChangedAt, state.tracks[0].updatedAt);
+});
+
 test('212 twelve week: actual old entry restores weekly records and suppresses toast; retry persists once', async () => {
   const { createDraftSaveTransaction } = await moduleAt('src/features/draft-save.js');
   const { runDailyOperation } = await moduleAt('src/features/daily-operations.js');

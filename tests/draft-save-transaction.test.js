@@ -8,7 +8,7 @@ const names = ['saveState', 'saveAndRender', 'closeModal', 'submitModal', 'readM
   'runZeroEntry', 'saveZtEntry', 'applyZtEntry', 'saveZtEdit', 'applyZtEdit', 'saveTrackFromForm', 'saveProjectTrackFromModal',
   'readTrackDraft', 'autoCloseStaleRoutineRuns', 'resetPomodoroForBlock', 'transferIronLogToCompletedBlock',
   'trackOnBlockStarted', 'trackOnBlockCompletionChanged', 'autoCommitWeekIfNeeded', 'stampCommitmentCompletion',
-  'toggleTaskCompleteFromBlock', 'commitBlockChanges'];
+  'toggleTaskCompleteFromBlock', 'commitBlockChanges', 'runTwelveWeekChange', 'runLifecycleChange', 'lifecycleSaveDeps'];
 const extracted = names.map(name => {
   const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
   assert(node, name); assert.equal(node.async, false, `${name} must remain synchronous`);
@@ -25,6 +25,7 @@ const { createZeroEntryDraft, stopZeroEntry, zeroNeedsSave } = require('../src/f
 const { createDailyDraftStore } = require('../src/features/daily-draft.js');
 const { runDailyOperation } = require('../src/features/daily-operations.js');
 const { buildBlockDetailDraft } = require('../src/features/block-detail.js');
+const { buildTwelveWeekDraft, prepareRelatedStamps } = require('../src/features/twelve-week-save.js');
 const copy = value => JSON.parse(JSON.stringify(value));
 function setup(mode, { storageFail = true, completed = false, track = false } = {}) {
   const effects = { persisted: [], schedules: 0, renders: 0, stops: 0, post: [], toasts: [], sequence: [], dialogs: [] };
@@ -59,6 +60,7 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
     createElement: () => ({ close() {}, remove() {}, showModal() {}, setAttribute() {} }), body: { append: dialog => effects.dialogs.push(dialog) } };
   const ctx = vm.createContext({ commitCandidate, assertNotInsideBuild, state: data, document, modalRoot, modalDraftBaseline: null,
     draftSaveTransaction: null, _lastSaveError: null, _quotaToastShown: false, _blockSaveInFlight: false,
+    _quickCompleteSnapshots: {}, _pendingInterruptBlockId: null,
     _migrationRitualCtx: null, _pendingLifecycleCtx: null, _pendingBodyScanCtx: null, _aiStepConfirmCtx: null, _aiStepPending: null,
     ztCurrent: mode === 'zero-new' ? { id: 'theme', text: 'theme', fav: false, questionId: 'q' } : null,
     ztEditId: mode === 'zero-edit' ? 'past' : null, ztWriteStartedAt: 12,
@@ -86,9 +88,11 @@ function setup(mode, { storageFail = true, completed = false, track = false } = 
       ctx.state.modal = { type: 'bodyScan', id }; effects.post.push(id); effects.sequence.push('post');
     }
   });
-  Object.assign(ctx, { runDailyOperation, buildBlockDetailDraft, stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
+  Object.assign(ctx, { runDailyOperation, buildBlockDetailDraft, buildTwelveWeekDraft, prepareRelatedStamps,
+    stopZeroEntry, zeroNeedsSave, _imeComposing: false, zeroConnectionKey: () => 'fixture',
     dailyDrafts: createDailyDraftStore({ storage: () => ({ setItem() {} }) }),
     dailyOperationDeps: { state: data, commitCandidate, now: ctx.nowDateTime,
+      captureReport: () => ({}), buildReport: () => 'fixture report',
       persist: () => { ctx.persistLocalNoSchedule(); return !ctx._lastSaveError; },
       scheduleSync: () => { ctx.scheduleAutoSave(); ctx.scheduleAutoSync(); } } });
   if (ctx.ztCurrent) {

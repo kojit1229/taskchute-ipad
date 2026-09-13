@@ -55,17 +55,25 @@ const instrumentedTrackUiSource = trackUiSource.replace(
 );
 
 console.log("[0] 共通フック契約と全経路の機械検査");
-{
+async function checkHooks() {
+  const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
+  const { buildTwelveWeekDraft } = await import('../src/features/twelve-week-save.js');
+  const { runDailyOperation } = await import('../src/features/daily-operations.js');
   const hookStart = appSource.indexOf("function trackOnBlockStarted(");
   const hookEnd = appSource.indexOf("function excuseCommitmentItem(", hookStart);
   const calls = [];
   const hookSource = `function maybeShowTrackProgressToast(block) { calls.push(\`toast:\${block.id}\`); }\n`
     + appSource.slice(hookStart, hookEnd);
   const sandbox = {
-    calls,
+    calls, buildTwelveWeekDraft, runDailyOperation,
+    state: { weeklyCommitments: [], tracks: [], trackMeasurements: [], projects: [] },
+    nowDateTime: () => "2026-09-13T10:00:00",
     autoCommitWeekIfNeeded: (block) => calls.push(`auto:${block.id}`),
     stampCommitmentCompletion: (block, completed) => calls.push(`stamp:${block.id}:${completed}`)
   };
+  sandbox.draftSaveTransaction = createDraftSaveTransaction({ getState: () => sandbox.state,
+    setState: state => { sandbox.state = state; }, now: sandbox.nowDateTime,
+    persist: () => true, schedule() {}, onFailure() {} });
   vm.createContext(sandbox);
   vm.runInContext(hookSource, sandbox);
   sandbox.trackOnBlockStarted({ id: "started" });
@@ -114,6 +122,7 @@ console.log("[0] 共通フック契約と全経路の機械検査");
 }
 
 (async () => {
+  await checkHooks();
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 768, height: 900 } });

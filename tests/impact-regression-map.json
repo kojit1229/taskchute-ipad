@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "lifecycle-save": {
+      "paths": ["^src/features/lifecycle-save\\.js$"],
+      "suites": ["mutation-block-e2e", "v70", "v87", "v107", "today-core", "mutation-bundle-e2e"]
+    },
     "twelve-week-save": {
       "paths": ["^src/features/twelve-week-save\\.js$"],
       "suites": ["v70", "v87", "v107", "mutation-twelve-week-e2e"]

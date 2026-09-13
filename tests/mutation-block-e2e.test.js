@@ -106,7 +106,7 @@ async function pomodoroFixture() {
     dateToLocalDateTime: date => date.toISOString().slice(0, 19),
     advanceIncompleteReasonQueue: () => { f.ctx._pendingIncompleteReasonCtx.queue.shift(); f.counts.close++; },
     skipIncompleteReasonModal: () => { throw Error('unexpected skip'); },
-    openBodyScanModal: () => f.counts.close++
+    openBodyScanModal: () => f.ctx.draftSaveTransaction.defer(() => f.counts.close++)
   });
   f.note = { value: 'typed reason' };
   f.ctx.modalRoot.querySelector = () => f.note;
@@ -194,6 +194,8 @@ async function fixture(extraNames = []) {
   const { stamped } = await import('../src/core/mutation-stamp.js');
   const { createDraftSaveTransaction } = await import('../src/features/draft-save.js');
   const { buildBlockDetailDraft } = await import('../src/features/block-detail.js');
+  const { commitLifecycleDraft } = await import('../src/features/lifecycle-save.js');
+  const { runDailyOperation } = await import('../src/features/daily-operations.js');
   // v388 契約追随(監督者決定 2026-09-11、束B8 41c+fixB8): confirmScheduleDraft が daily-gap-placement.js の validatePlannedDraft / gapWarning を呼ぶため実物を砂場へ渡す(製品変更なし、design/CHANGELOG.md)。
   const { validatePlannedDraft, gapWarning } = await import('../src/features/daily-gap-placement.js');
   const clock = fixedClock(Date.UTC(2026, 8, 10, 10));
@@ -202,7 +204,8 @@ async function fixture(extraNames = []) {
   const persisted = [];
   const ctx = vm.createContext({ ...core, stamped, createDraftSaveTransaction, validatePlannedDraft, gapWarning, console: { error() {} },
     // v393: run the real detail builder; lifecycleFixture supplies the full app wiring.
-    buildBlockDetailDraft, dailyOperationDeps: {},
+    buildBlockDetailDraft, commitLifecycleDraft, runDailyOperation, dailyOperationDeps: {},
+    _quickCompleteSnapshots: {}, _pendingInterruptBlockId: null,
     dailyReading: { open() {}, close() {}, current: () => null },
     recurrenceMatchesDate: () => false, makeRecurrenceInstance: () => null,
     isDailyReadingBlock: () => false, markDailyReadingEdit: value => value,
@@ -225,7 +228,8 @@ async function fixture(extraNames = []) {
     stampEverStarted: b => ({ ...b, everStartedAt: b.everStartedAt || b.actualStartAt || '' }),
     habitStreakEdit: () => ({ ok: true, value: '' }),
     syncHabitStreakForBlock() {}, transferIronLogToCompletedBlock() {}, generateReport() {},
-    trackOnBlockStarted: () => counts.tracking++, trackOnBlockCompletionChanged: () => counts.tracking++,
+    trackOnBlockStarted: () => ctx.draftSaveTransaction.defer(() => counts.tracking++),
+    trackOnBlockCompletionChanged: () => ctx.draftSaveTransaction.defer(() => counts.tracking++),
     autoCloseStaleRoutineRuns() {}, openBodyScanModal() {},
     blockById: id => ctx.state.blocks.find(b => b.id === id),
     minToHHMM: min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`,
@@ -235,13 +239,14 @@ async function fixture(extraNames = []) {
       selector === '[data-modal-field="taskCompleted"]' ? null : ({ focus() {} }) }
   });
   vm.runInContext(functions(['makeBlock', 'openTimelineNewBlock', 'commitBlockChanges', 'updateBlockField',
+    'runLifecycleChange', 'lifecycleSaveDeps',
     'updateCategoryField', 'confirmScheduleDraft', 'saveBlockFromModal', 'saveState', 'saveAndRender', ...extraNames]), ctx);
   ctx.state = { blocks: [], singleSchedules: [] /* v388 契約追随: normalizeState が常に配列へ揃える前提(未取得は配置停止)。監督者決定 2026-09-11 */, tasks: [{ id: 'task', category: 'work', status: 'todo', updatedAt: NOW }],
     projects: [{ id: 'project', category: 'work', updatedAt: NOW }],
     recurrences: [{ id: 'rule', category: 'work', updatedAt: NOW }],
     weeklyCommitments: [{ id: 'week', updatedAt: NOW }],
     settings: { categories: [{ id: 'cat', name: 'work' }], lastPushedAt: FUTURE },
-    pomodoro: { running: false }, selectedDate: DATE, dataModifiedAt: NOW, modal: { type: 'block', id: 'b' } };
+    reports: {}, pomodoro: { running: false }, selectedDate: DATE, dataModifiedAt: NOW, modal: { type: 'block', id: 'b' } };
   ctx.state.blocks = [{ ...ctx.makeBlock({ title: 'saved', category: 'work',
     plannedStartAt: `${DATE}T09:00:00`, plannedEndAt: `${DATE}T11:00:00` }), id: 'b', updatedAt: FUTURE },
   { ...ctx.makeBlock({ title: 'unrelated', category: 'other' }), id: 'other' }];
@@ -367,6 +372,7 @@ async function lifecycleFixture() {
     maybeQueueNextAiStep() {}, closeAiStepConfirmIfUndone() {}, rerenderActiveModal() {},
     isStaleBlock: () => false, window: { confirm: () => true }, completePomodoro: () => f.counts.timer++
   });
+  vm.runInContext(functions(['resetPomodoroForBlock']), f.ctx);
   const wiring = ast.body.filter(n => n.type === 'VariableDeclaration'
     && n.declarations.some(d => ['dailyOperationDeps', 'COMMITMENT_SOURCE_PRIORITY'].includes(d.id.name)));
   vm.runInContext(wiring.map(n => source.slice(n.start, n.end)).join('\n'), f.ctx);
