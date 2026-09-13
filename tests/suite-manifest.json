@@ -30,6 +30,31 @@
       }
     },
     {
+      "file": "ai-tabs-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "sync-storage",
+        "ui-responsive"
+      ],
+      "assertionSignals": 27,
+      "assertionHash": "a447d871fd70f72a",
+      "sourceHash": "38b8cd5911fc4b7e",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "archive-date-protection-e2e.test.js",
       "kind": "e2e",
       "tier": "full",
@@ -484,9 +509,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 43,
-      "assertionHash": "505caf9b48d983b7",
-      "sourceHash": "c649cdf87920661b",
+      "assertionSignals": 45,
+      "assertionHash": "662fde8959763bc1",
+      "sourceHash": "8e0c591b3e0c2c67",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2553,6 +2578,30 @@
         "fileWrite": false,
         "networkMock": true,
         "clock": true
+      }
+    },
+    {
+      "file": "r3-delivery-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "ui-responsive",
+        "security-offline"
+      ],
+      "assertionSignals": 6,
+      "assertionHash": "4239b46c46e540ab",
+      "sourceHash": "ed53046996d08e23",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": false
       }
     },
     {
@@ -5811,9 +5860,9 @@
         "sync-storage",
         "ui-responsive"
       ],
-      "assertionSignals": 43,
-      "assertionHash": "76619e8497bc9728",
-      "sourceHash": "6704edfc81b56bef",
+      "assertionSignals": 47,
+      "assertionHash": "54e3d2cb0af14b9f",
+      "sourceHash": "be79f98027266fb2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -8292,6 +8341,31 @@
       }
     },
     {
+      "file": "weekly-save-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "content-ai",
+        "sync-storage",
+        "ui-responsive"
+      ],
+      "assertionSignals": 17,
+      "assertionHash": "8a1d424298a3f08b",
+      "sourceHash": "2702441d7a9b24ba",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "wish-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -8500,6 +8574,31 @@
         "server": true,
         "fileWrite": false,
         "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "zero-export-e2e.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health",
+        "content-ai"
+      ],
+      "assertionSignals": 18,
+      "assertionHash": "a43b30c00c4d3261",
+      "sourceHash": "8a894d4885bf7cb4",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": false,
+        "fileWrite": true,
+        "networkMock": false,
         "clock": true
       }
     },
