@@ -8091,14 +8091,14 @@ function renderMarkdownUncached(text) {
 // のみ。他3群は判定材料が無いため既定false=閉。将来異常検出を増やす場合はここへ足す)。
 function renderSettingsProfilePanel() {
   return `
-    <h3>プロフィール</h3>
+    <h3>基本情報</h3>
     <label>生年月日
       <input class="input" type="date" data-setting-field="birthDate" value="${escapeHTML(state.settings.birthDate || "")}">
     </label>
-    <label>12WY開始日
+    <label>12週計画の開始日
       <input class="input" type="date" data-setting-field="twelveWeekStartDate" value="${state.settings.twelveWeekStartDate || todayISO()}">
     </label>
-    <label>12WY週次実行率の目安(%・70〜100)
+    <label>12週計画の週ごとの実行率の目安(%・70〜100)
       <input class="input" type="number" min="70" max="100" step="1" data-setting-scoretarget
         value="${Number.isFinite(state.settings.twelveWeekScoreTarget) ? state.settings.twelveWeekScoreTarget : 85}">
     </label>
@@ -8107,13 +8107,13 @@ function renderSettingsProfilePanel() {
 
 function renderSettingsBufferPanel() {
   return `
-    <h3>⏳ 1日バッファ</h3>
+    <h3>⏳ 1日余白時間</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      個々のBlockの見積もりに余裕を足さず、1日の終わりに置く「バッファ」1つに余裕を
-      集約します(クリティカルチェーン法)。ヘッダーの「バッファ残量」は今日を表示中の
+      個々の予定の見積もりに余裕を足さず、1日の終わりに置く「余白時間」1つに余裕を
+      集約します(クリティカルチェーン法)。ヘッダーの「余白時間残量」は今日を表示中の
       ときだけ出ます。0以下にすると未設定扱いになり、メーターは表示されません。
     </div>
-    <label>バッファサイズ(分)
+    <label>余白時間サイズ(分)
       <input class="input" type="number" min="0" step="5" data-setting-dailybuffermin
         value="${Number.isFinite(state.settings.dailyBufferMin) ? state.settings.dailyBufferMin : ""}">
     </label>
@@ -8122,8 +8122,8 @@ function renderSettingsBufferPanel() {
         value="${Number.isFinite(state.settings.dayCloseHours) ? state.settings.dayCloseHours : ""}">
     </label>
     <div class="muted" style="font-size:11px; line-height:1.6">
-      締め時刻は「計画過積載ガード」(その日最初の予定Blockの開始時刻〜締め時刻の枠に
-      見積合計+バッファが収まらない場合の警告)にのみ使います。タスクの自動削除・
+      締め時刻は「計画過積載ガード」(その日最初の予定の開始時刻〜締め時刻の枠に
+      見積合計+余白時間が収まらない場合の警告)にのみ使います。タスクの自動削除・
       移動・並べ替えはしません(気づきの提示のみ)。
     </div>
   `;
@@ -8133,7 +8133,7 @@ function renderSettingsBatteryPanel() {
   return `
     <h3>🔋 エネルギーバッテリー</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      朝の残量が時間とともに自動で減り、完了Blockの充電/放電で増減します(通知・アラートは
+      朝の残量が時間とともに自動で減り、終了実績の充電/放電で増減します(通知・アラートは
       出しません。表示だけで「回復させないと」に気づくための計器です)。開始値は体力予算
       (🔋体力予算チップ)の判定に連動します。
     </div>
@@ -8165,12 +8165,12 @@ function renderSettingsBatteryPanel() {
 }
 
 // v358修正(M3): 「データ」はモックどおり一覧のトップレベル群として出す(「接続の詳細」の
-// 2階層下に埋没させない)。中身(JSONエクスポート/生活記録CSV/JSONインポート/自動アーカイブ/
+// 2階層下に埋没させない)。中身(ファイルに書き出す（JSON）/生活記録CSV/ファイルから復元（JSON）/自動アーカイブ/
 // デモリセット)は既存のdata-action/data-setting-*をそのまま行として再配置しただけで、
 // 保存ロジック・アクション名は無改変。
 function renderSettingsDataGroupRows() {
   const exportBody = `
-    <button class="btn primary" data-action="download-data">JSONエクスポート</button>
+    <button class="btn primary" data-action="download-data">ファイルに書き出す（JSON）</button>
     <div class="row" style="justify-content:flex-start; gap:6px; flex-wrap:wrap">
       <span class="muted" style="font-size:12px">生活記録を種別で書き出す:</span>
       ${[
@@ -8181,23 +8181,23 @@ function renderSettingsDataGroupRows() {
   `;
   const importBody = `
     <label class="btn" style="text-align:center">
-      JSONインポート
+      ファイルから復元（JSON）
       <input id="importData" type="file" accept="application/json" hidden>
     </label>
   `;
   const archiveDetail = `
     <div style="font-weight:700; font-size:13.5px; margin-bottom:6px">📦 アーカイブ(容量対策)</div>
     <div class="muted" style="font-size:11.5px; line-height:1.7">
-      端末内データ: <b>${stateSizeLabel()}</b>(localStorage の目安上限 約5MB)<br>
-      ${ARCHIVE_TEXT_KEEP_DAYS}日より古い日報・AIフィードバック・ジャーナルと、${ARCHIVE_BLOCK_KEEP_DAYS}日より古いBlockを
+      端末内データ: <b>${stateSizeLabel()}</b>(ブラウザー内の保存容量の目安上限 約5MB)<br>
+      ${ARCHIVE_TEXT_KEEP_DAYS}日より古い日報・AIフィードバック・ジャーナルと、${ARCHIVE_BLOCK_KEEP_DAYS}日より古い予定・実行記録を
       <code>archive/archive-年.json</code> へ退避して本体を軽く保ちます。退避分は横断検索の「アーカイブも検索」から読めます。
     </div>
     <button class="btn" data-action="run-archive" style="margin-top:6px">今すぐアーカイブ</button>
   `;
   const archiveDesc = `1日1回、GitHub保存の書き込み成功後にのみ削除${state.settings.lastArchivedAt ? `・最終 ${state.settings.lastArchivedAt.replace("T", " ").slice(0, 16)}` : "・最終 未実行"}`;
   return [
-    settingsExpandRow("data-export", "書き出し", "", exportBody, undefined, "全体JSON・種別CSV(筋トレ/睡眠/体調/お店/身体スキャン/書く瞑想)"),
-    settingsExpandRow("data-import", "読み込み(JSON)", "", importBody, undefined, "エクスポートしたJSONから復元"),
+    settingsExpandRow("data-export", "書き出し", "", exportBody, undefined, "全体の保存形式（JSON）・種別ごとの表形式（CSV）(筋トレ/睡眠/体調/お店/身体スキャン/書く瞑想)"),
+    settingsExpandRow("data-import", "ファイルから復元（JSON）", "", importBody, undefined, "書き出したファイルから復元（保存形式: JSON）"),
     // v53/v316の既存テストがrun-archive/life-export等を直接クリックする経路のため、
     // このボタンだけは折りたたみに入れず常時表示にする(fullDetailHTML=折りたたみは
     // render()のたびに閉じ直る一時的なUI状態しか持たないため、クリック直後の再renderで
@@ -8212,44 +8212,44 @@ function renderSettingsCloudPanel(github) {
     <h3>クラウド保存(個人データリポジトリ)</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
       個人データ(app-state.json・日報・AIフィードバック・AIプラン・週次レビュー・AI作業結果・
-      Vision/Affirmation)は、あなた専用の <b>private</b> GitHubリポジトリの <code>taskchute/</code> 配下に
-      Contents API 経由で保存します(v72。旧・同一オリジンfetchへのフォールバックはありません)。<br>
-      自動保存を ON にすると変更後 30 秒で push。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
+      ビジョン・毎日の宣言)は、あなた専用の <b>非公開</b> GitHubリポジトリの <code>taskchute/</code> 配下に
+      保存します。<br>
+      自動保存を有効にすると変更後30秒で保存します。起動時に GitHub 側が新しければ自動で取り込みます(新しい方を採用)。
     </div>
     <form class="stack" autocomplete="on" onsubmit="return false">
-      <label>Owner
+      <label>所有者（Owner）
         <input class="input" data-github-field="dataOwner" value="${escapeHTML(github.dataOwner || "")}"
           id="gh-owner" name="gh-username" autocomplete="username"
           autocapitalize="off" autocorrect="off" spellcheck="false">
       </label>
-      <label>Repository
+      <label>保存先（Repository）
         <input class="input" data-github-field="dataRepo" value="${escapeHTML(github.dataRepo || "")}" autocomplete="off" placeholder="personal-data">
       </label>
-      <label>Branch
+      <label>保存する枝（Branch）
         <input class="input" data-github-field="branch" value="${escapeHTML(github.branch)}" autocomplete="off">
       </label>
       <label>保存先ファイル名(taskchute/配下。taskchute/は自動付与されるため入力不要)
         <input class="input" data-github-field="path" value="${escapeHTML(github.path)}" autocomplete="off" placeholder="app-state.json(taskchute/は付けない)">
       </label>
       <div class="muted" style="font-size:11px">推奨: <code>app-state.json</code>(taskchute/ は自動で付くので<b>ここには含めないでください</b>。実際の保存先は <code>taskchute/app-state.json</code>)</div>
-      <label>Fine-grained token
+      <label>アクセス用の鍵（Fine-grained token）
         <input class="input" type="password" data-github-field="token" value="${escapeHTML(github.token)}"
           id="gh-token" name="gh-token" autocomplete="current-password"
-          autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="GitHub token">
+          autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="GitHubのトークン">
       </label>
       <div class="muted" style="font-size:11px; line-height:1.6">
-        🔑 Owner と Token を入力すると、iOS が「パスワードを保存」を提案します。保存すると次回から
+        🔑 所有者とトークンを入力すると、iOS が「パスワードを保存」を提案します。保存すると次回から
         <b>タップで自動入力</b>でき、iCloud キーチェーン経由で他の Apple 端末にも同期されます
         (トークンは端末内の安全な保管庫にのみ保存され、GitHub には送られません)。
       </div>
     </form>
     <!-- v358: 自動保存/自動同期トグルと保存/読込ボタンはrenderSettingsConnectPanelへ移設済み -->
     <div class="muted" style="font-size:11px; line-height:1.7">
-      この端末: ${getLastSyncPushAt() ? `push成功 ${getLastSyncPushAt().replace("T", " ").slice(0, 16)}` : "push成功 記録なし"}
-      ・ ${getLastSyncPullAt() ? `pull成功 ${getLastSyncPullAt().replace("T", " ").slice(0, 16)}` : "pull成功 記録なし"}
+      この端末: ${getLastSyncPushAt() ? `保存成功 ${getLastSyncPushAt().replace("T", " ").slice(0, 16)}` : "保存成功 記録なし"}
+      ・ ${getLastSyncPullAt() ? `読込成功 ${getLastSyncPullAt().replace("T", " ").slice(0, 16)}` : "読込成功 記録なし"}
     </div>
     <div data-sync-error-detail-slot>${syncErrorDetailHTML()}</div>
-    <div class="muted" style="font-size:11px">TokenはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
+    <div class="muted" style="font-size:11px">トークンはGitHubへ保存しません。この端末のブラウザ内(＋任意でiOSキーチェーン)だけに保持します。</div>
     <button class="btn" data-action="open-backup-list">📦 バックアップ世代から復元</button>
     <div class="muted" style="font-size:11px; line-height:1.6">
       GitHub保存時に1日1回、<code>backups/app-state-日付.json</code> の日次スナップショットを自動で残します(直近14日分)。
@@ -8262,7 +8262,7 @@ function renderSettingsDraftSchedulePanel() {
   return `
     <h3>下書きスケジュール</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      「📋 下書きスケジュール」は、当日の未着手Blockを空き時間へ機械的に再配置する
+      「📋 下書きスケジュール」は、当日の未着手の予定を空き時間へ機械的に再配置する
       決定論ロジックです(APIキーは不要)。タイムラインから実行し、確認後に確定できます。
     </div>
   `;
@@ -8279,14 +8279,14 @@ function renderSettingsThemePanel() {
   return `
     <h3>🌗 テーマ</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      画面配色です。既定はダーク。コックピットは全画面を管制室調にします。「OS追従」は端末の外観設定に合わせます。
+      画面配色です。既定はダーク。コックピットは全画面を管制室調にします。「端末の設定に合わせる」は端末の外観設定に合わせます。
     </div>
     <label>テーマ
       <select class="select" data-setting-field="theme">
         <option value="dark" ${theme === "dark" ? "selected" : ""}>ダーク</option>
         <option value="light" ${theme === "light" ? "selected" : ""}>ライト</option>
         <option value="cockpit" ${theme === "cockpit" ? "selected" : ""}>コックピット</option>
-        <option value="auto" ${theme === "auto" ? "selected" : ""}>OS追従</option>
+        <option value="auto" ${theme === "auto" ? "selected" : ""}>端末の設定に合わせる</option>
       </select>
     </label>
     <label>タワーの動き
@@ -8312,7 +8312,7 @@ function renderSettingsFileStructurePanel() {
 ├── 45_vision.pdf
 └── 80_vision.pdf</pre>
         <div class="muted" style="font-size:11px; margin-top:8px">
-          現状はすべてリポジトリのルート直下に配置。git の commit 履歴がデータ履歴になるので、復元可能。<br>
+          現状はすべてリポジトリのルート直下に配置。Gitの変更履歴がデータ履歴になるので、復元可能。<br>
           整理したい場合は <code>data/</code> サブフォルダに移動して、上の「保存先パス」と app.js のパスも合わせて変更してください。
         </div>
       </div>
@@ -8324,11 +8324,11 @@ function renderSettingsCategoryPanel() {
   return `
     <h3>カテゴリ管理</h3>
     <div class="muted" style="font-size:12px; line-height:1.6">
-      Project / Task / Block で選択できるカテゴリと色を管理します。タイムラインのブロック色などに反映されます。
+      プロジェクト・タスク・予定と実行記録 で選択できるカテゴリと色を管理します。タイムラインのブロック色などに反映されます。
     </div>
     ${renderCategoriesSettings()}
     <div class="muted vision-direct-note">
-      「直結」はALIGNMENTの集計対象です。カテゴリ改名には追従しません。改名後はここで選び直してください。
+      「直結」はビジョンとのつながりの集計対象です。カテゴリ改名には追従しません。改名後はここで選び直してください。
     </div>
     <button class="btn primary" data-action="add-category">+ カテゴリを追加</button>
   `;
@@ -8336,9 +8336,9 @@ function renderSettingsCategoryPanel() {
 
 function renderSettingsPagesPanel() {
   return `
-    <h3>GitHub Pages</h3>
-    <div class="muted">このフォルダをGitHubリポジトリへpushし、Pagesの公開元をルートにすると公開できます。</div>
-    <a class="btn" href="./concept.html" target="_blank" rel="noopener">設計思想(CONCEPT)</a>
+    <h3>公開先（GitHub Pages）</h3>
+    <div class="muted">このフォルダをGitHubリポジトリへ保存し、GitHub Pagesの公開元を最上位フォルダにすると公開できます。</div>
+    <a class="btn" href="./concept.html" target="_blank" rel="noopener">設計思想</a>
   `;
 }
 
@@ -8386,20 +8386,20 @@ function renderSettings() {
   const github = state.settings.github || defaultGitHubSettings();
   const battery = state.settings.battery || defaultBatterySettings();
   const bufferValue = `${Number.isFinite(state.settings.dailyBufferMin) && state.settings.dailyBufferMin > 0 ? `${state.settings.dailyBufferMin}分` : "未設定"}・${Number.isFinite(state.settings.dayCloseHours) ? state.settings.dayCloseHours : 24}時`;
-  const batteryValue = `${battery.start.deficit}/${battery.start.low}/${battery.start.normal}・${battery.decayPerHour}/h・${minutesToTimeInputValue(battery.decayStartMinutes)}`;
-  const themeLabelMap = { dark: "ダーク", light: "ライト", cockpit: "コックピット", auto: "OS追従" };
+  const batteryValue = `${battery.start.deficit}/${battery.start.low}/${battery.start.normal}・${battery.decayPerHour}/時間・${minutesToTimeInputValue(battery.decayStartMinutes)}`;
+  const themeLabelMap = { dark: "ダーク", light: "ライト", cockpit: "コックピット", auto: "端末の設定に合わせる" };
   const motionLabelMap = { normal: "通常", calm: "控えめ", off: "なし" };
   const themeValue = `${themeLabelMap[state.settings.theme] || "ダーク"}・${motionLabelMap[state.settings.towerMotion] || "通常"}`;
-  const profileValue = `${state.settings.birthDate || "未設定"}・12WY ${state.settings.twelveWeekStartDate || todayISO()}`;
+  const profileValue = `${state.settings.birthDate || "未設定"}・12週計画 ${state.settings.twelveWeekStartDate || todayISO()}`;
   const categoryValue = `${(state.settings.categories || []).length}件`;
   const groups = [
     {
       id: "daily", label: "日々の使い方", subtitle: "いまの値をそのまま表示",
       rows: [
-        settingsExpandRow("buffer", "バッファ", bufferValue, renderSettingsBufferPanel()),
+        settingsExpandRow("buffer", "余白時間", bufferValue, renderSettingsBufferPanel()),
         settingsExpandRow("battery", "電池", batteryValue, renderSettingsBatteryPanel(), "settings-daily"),
-        settingsToggleRow("フォーカスタイマーの自動起動", "Block開始で自動起動", `<input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>`,
-          "Blockを開始する(▶いま開始/いま着手する/Now画面の開始)と、既存のポモドーロUIを流用した" +
+        settingsToggleRow("フォーカスタイマーの自動起動", "予定の開始で自動起動", `<input type="checkbox" data-setting-focustimerauto ${state.settings.focusTimerAuto ? "checked" : ""}>`,
+          "予定を開始する(▶いま開始/いま着手する/実行画面の開始)と、既存のポモドーロ画面を流用した" +
           "フォーカスタイマー(25分)を自動で起動します。既に別のタイマーが動いている場合は乗っ取りません。"),
         settingsExpandRow("draft", "下書きスケジュール", "説明のみ", renderSettingsDraftSchedulePanel())
       ]
@@ -8410,14 +8410,14 @@ function renderSettings() {
         settingsExpandRow("theme", "テーマ", themeValue, renderSettingsThemePanel(), "settings-display"),
         settingsToggleRow("ガイド付きアクセスの案内", "ポモドーロ開始時に案内", `<input type="checkbox" data-setting-pomoguidedaccesshint ${state.settings.pomoGuidedAccessHint ? "checked" : ""}>`,
           "iPad/iPhoneでポモドーロタイマーを開始すると、ガイド付きアクセス(画面ロック)の" +
-          "操作方法を案内するポップアップを出します。PWAから自動でロックすることはiOSの制約上" +
-          "できないため、手動操作の案内のみです。ポップアップの「今後表示しない」でもOFFにできます。")
+          "操作方法を案内するポップアップを出します。ホーム画面に追加したアプリから自動でロックすることはiOSの制約上" +
+          "できないため、手動操作の案内のみです。ポップアップの「今後表示しない」でも無効にできます。")
       ]
     },
     {
-      id: "profile", label: "プロフィールとマスタ", subtitle: "12WY・カテゴリ",
+      id: "profile", label: "基本情報", subtitle: "12週計画・カテゴリ",
       rows: [
-        settingsExpandRow("profile", "プロフィール(生年月日・12WY)", profileValue, renderSettingsProfilePanel()),
+        settingsExpandRow("profile", "基本情報(生年月日・12週計画)", profileValue, renderSettingsProfilePanel()),
         settingsExpandRow("category", "カテゴリ管理", categoryValue, renderSettingsCategoryPanel())
       ]
     },
@@ -8426,7 +8426,7 @@ function renderSettings() {
       rows: [renderSettingsDataGroupRows()]
     },
     {
-      id: "other", label: "その他", subtitle: "モックにない既存設定",
+      id: "other", label: "その他", subtitle: "ファイル構成の説明",
       rows: [renderSettingsFileStructurePanel()]
     }
   ];
@@ -8522,7 +8522,7 @@ function renderSettingsSyncGroup(github) {
   const body = [renderSettingsCloudPanel(github), renderSettingsPagesPanel()].join("");
   return `
     <details class="fold panel settings-group" data-settings-sync ${open ? "open" : ""}>
-      <summary class="fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="fold-chevron">▶</span>接続の詳細(データ管理・クラウド保存・GitHub Pages)</summary>
+      <summary class="fold-summary settings-group-summary" data-action="toggle-settings-sync"><span class="fold-chevron">▶</span>接続の詳細(データ管理・クラウド保存・公開先（GitHub Pages）)</summary>
       <div class="fold-body"><div class="stack" style="gap:16px">${body}</div></div>
     </details>
   `;
@@ -11645,7 +11645,7 @@ async function loadArchiveForSearch() {
 }
 
 function resetDemoData() {
-  if (!window.confirm("この端末の全データ(Block・ジャーナル・0秒思考・IRON LOG等)をデモデータへ置き換えます。\nGitHub同期設定(トークン)も初期化され、取り消せません。よろしいですか?")) return;
+  if (!window.confirm("この端末の全データ(予定・実行記録・ジャーナル・0秒思考・筋トレ記録等)をデモデータへ置き換えます。\nGitHub同期設定(トークン)も初期化され、取り消せません。よろしいですか?")) return;
   setState(normalizeState(seedState()));
   invalidateFeedbackConnection();
   invalidateKaradaConnection();

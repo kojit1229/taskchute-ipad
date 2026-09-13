@@ -255,9 +255,51 @@ async function wishJapanese(page) {
   console.log("PASS wish: Japanese headings/empty states, all controls, realization and existing IDs");
 }
 
+async function settingsJapanese(page) {
+  const { STATE_KEY } = require("./helpers");
+  await nav(page, "settings");
+  const root = page.locator(".settings-grid");
+  const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, STATE_KEY);
+  assert.deepEqual(await root.locator(".settings-group-flat-label").allTextContents(),
+    ["日々の使い方", "表示", "基本情報", "データ", "その他"]);
+  for (const [id, label] of [["buffer", "余白時間"], ["battery", "電池"], ["draft", "下書きスケジュール"],
+    ["theme", "テーマ"], ["profile", "基本情報(生年月日・12週計画)"], ["category", "カテゴリ管理"],
+    ["data-export", "書き出し"], ["data-import", "ファイルから復元（JSON）"], ["data-reset", "デモデータに戻す"]]) {
+    const row = root.locator('[data-settings-row="' + id + '"]');
+    assert.equal(await row.locator(".settings-row-label").innerText(), label);
+    await row.locator("summary").click();
+    assert.equal(await row.evaluate(el => el.open), true);
+  }
+  const text = await root.textContent();
+  for (const label of ["予定の開始で自動起動", "実行画面の開始", "端末の設定に合わせる", "ホーム画面に追加したアプリ",
+    "ファイルに書き出す（JSON）", "保存形式（JSON）", "公開先（GitHub Pages）", "有効", "無効"]) assert.ok(text.includes(label), label);
+  const actions = await root.locator("[data-action]").evaluateAll(nodes => [...new Set(nodes.map(n => n.dataset.action))].sort());
+  const expected = ["save-github", "load-github", "toggle-settings-sync", "open-backup-list", "settings-row-toggle",
+    "add-category", "download-data", "life-export", "run-archive", "reset-demo", "delete-category", "toggle-vision-direct-category"];
+  if (await root.locator(".settings-group-nav").count()) expected.push("settings-group-select");
+  assert.deepEqual(actions, expected.sort(), "all settings actions remain available");
+  for (const field of ["birthDate", "twelveWeekStartDate"]) assert.equal(await root.locator('[data-setting-field="' + field + '"]').getAttribute("type"), "date");
+  const time = root.locator('[data-setting-battery-field="decayStartMinutes"]');
+  assert.equal(await time.getAttribute("type"), "time");
+  assert.equal(await time.getAttribute("step"), "300");
+  assert.equal(await root.locator('[data-setting-field="theme"] option[value="auto"]').textContent(), "端末の設定に合わせる");
+  assert.equal(await root.locator("#importData").getAttribute("accept"), "application/json");
+  assert.equal(await root.locator('[data-github-field="token"]').getAttribute("type"), "password");
+  assert.deepEqual(await root.locator('[data-action="life-export"]').evaluateAll(nodes => nodes.map(n => n.dataset.kind)),
+    ["gym", "sleep", "condition", "store", "bodyScan", "writeMeditation"]);
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, STATE_KEY), before, "opening settings preserves every value");
+  const dialogPromise = page.waitForEvent("dialog");
+  const clicked = root.locator('[data-action="reset-demo"]').click();
+  const dialog = await dialogPromise;
+  assert.equal(dialog.message(), "この端末の全データ(予定・実行記録・ジャーナル・0秒思考・筋トレ記録等)をデモデータへ置き換えます。\nGitHub同期設定(トークン)も初期化され、取り消せません。よろしいですか?");
+  await dialog.dismiss(); await clicked;
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, STATE_KEY), before, "cancelled restoration preserves settings");
+  console.log("PASS settings: Japanese groups, explanations, native inputs, every action, unchanged values and reset confirmation");
+}
+
 async function run() {
   const { page, browser, server } = await setup();
-  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); }
+  try { await twelveWeek(page); await healthJapanese(page); await fundJapanese(page); await wishJapanese(page); await settingsJapanese(page); }
   finally { await page.context().close(); await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

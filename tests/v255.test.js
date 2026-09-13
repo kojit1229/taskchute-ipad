@@ -58,9 +58,9 @@ function maxReleaseVersion(files) {
     await page.reload();
 
     console.log("[2] 設定画面に設計思想リンクを正しい属性で描画");
-    const link = page.locator('.settings-grid a:has-text("設計思想(CONCEPT)")');
+    const link = page.locator('.settings-grid a:has-text("設計思想")');
     await link.waitFor({ state: "attached" });
-    check("設計思想(CONCEPT)リンクが1件描画される", await link.count() === 1, String(await link.count()));
+    check("設計思想リンクが1件描画される", await link.count() === 1, String(await link.count()));
     check("hrefが./concept.html", await link.getAttribute("href") === "./concept.html", String(await link.getAttribute("href")));
     check("targetが_blank", await link.getAttribute("target") === "_blank", String(await link.getAttribute("target")));
     check("relがnoopener", await link.getAttribute("rel") === "noopener", String(await link.getAttribute("rel")));

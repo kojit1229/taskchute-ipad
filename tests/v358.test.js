@@ -93,7 +93,7 @@ async function stateNow(page) {
       await syncDetail.evaluate((el) => el.open) === false
       && await dataGroup.isVisible()
       && await dataGroup.locator("summary:has-text('書き出し')").first().isVisible()
-      && await dataGroup.locator("summary:has-text('読み込み(JSON)')").first().isVisible()
+      && await dataGroup.locator("summary:has-text('ファイルから復元（JSON）')").first().isVisible()
       && await dataGroup.locator("label.settings-row-toggle:has-text('自動アーカイブ')").first().isVisible()
       && await dataGroup.locator("summary:has-text('デモデータに戻す')").first().isVisible());
     if (initialSyncOpen) {
@@ -113,9 +113,9 @@ async function stateNow(page) {
     // ============================================================
     const rowsText = await page.locator(".settings-rows").allInnerTexts();
     const rowsJoined = rowsText.join("\n");
-    check("バッファのいまの値(60分・24時)", rowsJoined.includes("60分") && rowsJoined.includes("24時"), rowsJoined.slice(0, 200));
-    check("電池のいまの値(60/80/100・5/h・07:00)",
-      rowsJoined.includes("60/80/100") && rowsJoined.includes("5/h") && rowsJoined.includes("07:00"));
+    check("余白時間のいまの値(60分・24時)", rowsJoined.includes("60分") && rowsJoined.includes("24時"), rowsJoined.slice(0, 200));
+    check("電池のいまの値(60/80/100・5/時間・07:00)",
+      rowsJoined.includes("60/80/100") && rowsJoined.includes("5/時間") && rowsJoined.includes("07:00"));
     check("テーマのいまの値(ダーク・通常)", rowsJoined.includes("ダーク") && rowsJoined.includes("通常"));
     check("プロフィールのいまの値(生年月日・12WY開始日)",
       rowsJoined.includes("1990-01-01") && rowsJoined.includes("2026-07-06"));
@@ -147,7 +147,7 @@ async function stateNow(page) {
     const bufferRow = page.locator('[data-settings-row="buffer"]');
     const batteryRow = page.locator('[data-settings-row="battery"]');
     const themeRow = page.locator('[data-settings-row="theme"]');
-    check("バッファ行は既定closed", await bufferRow.evaluate((el) => el.open) === false);
+    check("余白時間行は既定closed", await bufferRow.evaluate((el) => el.open) === false);
     await bufferRow.locator("summary").click();
     await page.waitForFunction(() => document.querySelector('[data-settings-row="buffer"]')?.open === true);
     check("行タップで展開する", await bufferRow.evaluate((el) => el.open) === true);
@@ -158,7 +158,7 @@ async function stateNow(page) {
 
     await batteryRow.locator("summary").click();
     await page.waitForFunction(() => document.querySelector('[data-settings-row="battery"]')?.open === true);
-    check("別行タップで前の行(バッファ)が閉じる", await bufferRow.evaluate((el) => el.open) === false);
+    check("別行タップで前の行(余白時間)が閉じる", await bufferRow.evaluate((el) => el.open) === false);
     check("タップした行(電池)は開く(legacyFoldId=settings-dailyを持つ行)", await batteryRow.evaluate((el) => el.open) === true);
 
     // legacyFoldId=settings-displayを持つテーマ行も同様に開閉できることを確認(H2で問題視された
@@ -193,7 +193,7 @@ async function stateNow(page) {
     check("「現在のファイル構成」(モックに無い既存設定)は「その他」群に残っている",
       await page.locator("details:has-text('現在のファイル構成')").count() === 1);
     check("GitHub Pagesリンク(モックに無い既存設定)も消えていない",
-      await page.locator("a:has-text('設計思想(CONCEPT)')").count() === 1);
+      await page.locator("a:has-text('設計思想')").count() === 1);
 
     // ============================================================
     console.log("[5] GitHubトークン欄は既存UIのまま・入力中に文字が飛ばない");
