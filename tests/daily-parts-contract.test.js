@@ -40,6 +40,27 @@ function freeze(value) {
 }
 (async () => {
   const mod = await import(pathToFileURL(modulePath).href);
+  const { renderPlanRow } = await import(pathToFileURL(path.join(root, "src/ui/daily-parts/plan-row.js")).href);
+  check("F4-2 Task display strings pass the common contract and render only nonempty escaped details", () => {
+    const base = { plannedStartText: "", plannedEndText: "", estimateText: "", overlapLabel: "",
+      endNextDay: false, planCompleted: false, taskCompleted: false, running: false, canDuplicate: false,
+      canStart: false, canEnd: false, highlighted: false, saving: false, undoAvailable: false, draftId: null, draft: null };
+    const escapeHTML = value => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const values = { doneCriteriaText: '完了 & "確認"', firstStepText: '1 < 3 を読む', progressText: '進捗 3/10' };
+    for (let mask = 0; mask < 8; mask++) {
+      const plan = { ...base, ...Object.fromEntries(Object.entries(values).map(([key, value], i) => [key, mask & (1 << i) ? value : ""])) };
+      const before = JSON.stringify(plan);
+      assert.equal(mod.validateDailyContract("notification", { ...notification(), values: plan }).valid, true);
+      const html = renderPlanRow(display(), plan, escapeHTML);
+      assert.equal(html.includes('class="daily-plan-task"'), mask !== 0);
+      for (const [key, value] of Object.entries(values)) assert.equal(html.includes(escapeHTML(value)), Boolean(plan[key]));
+      assert.equal(html.includes('🎯 '), Boolean(mask & 1)); assert.equal(html.includes('▶ '), Boolean(mask & 2));
+      assert.equal(JSON.stringify(plan), before);
+    }
+    assert.doesNotMatch(renderPlanRow(display(), base, escapeHTML), /daily-plan-task/);
+    for (const key of Object.keys(values)) for (const value of [null, 3, {}, '<img src=x>'])
+      assert.throws(() => renderPlanRow(display(), { ...base, [key]: value }, escapeHTML), TypeError);
+  });
   const { renderSearchFrame } = await import(pathToFileURL(path.join(root, "src/ui/daily-parts/search-frame.js")).href);
   check("検索枠: 許可操作・既存互換名を保持し未知操作を拒否", () => {
     const model = { scope: "wbs", query: "", filters: { status: "", project: "", category: "", due: "" },
