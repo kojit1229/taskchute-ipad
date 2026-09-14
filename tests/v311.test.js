@@ -217,11 +217,15 @@ const idlePomodoro = () => ({
     await seed([block("actual-save", "実績保存経由", "10:00", { actualStartAt: at("10:00") })], active("actual-save"));
     await page.click('.tower-runway [data-action="complete-block-with-actual"][data-id="actual-save"]');
     await page.waitForSelector('#modalRoot.open [data-action="modal-save"]');
+    await resetWriteCount();
     await page.click('#modalRoot [data-action="modal-save"]');
     state = await stateNow();
-    check("saveActualEntryFromModal経路で実績完了+着陸し入力した終了時刻を維持",
+    const actualSaveWrites = await writeCount();
+    console.log(`  actual completion candidate writes: ${actualSaveWrites}`);
+    check("実績完了とポモドーロ着陸を候補保存1回で確定", actualSaveWrites === 1, String(actualSaveWrites));
+    check("saveActualEntryFromModal経路で実績完了+着陸し既定終了を現在10:00に制限",
       !state.pomodoro.running && state.blocks[0].completed && state.blocks[0].pomodoroCount === 1
-      && state.blocks[0].actualEndAt.startsWith(`${TODAY}T11:00`), JSON.stringify(state));
+      && state.blocks[0].actualEndAt === at("10:00"), JSON.stringify(state));
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

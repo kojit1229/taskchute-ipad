@@ -95,7 +95,9 @@ function fixture() {
     await page.locator('#modalRoot [data-action="modal-save"]').click();
     const pending = await stored();
     assert.equal(pending.blocks.find(b => b.id === 'overnight').actualEndAt, `${NEXT}T00:20:00`);
-    assert.equal(pending.blocks.find(b => b.id === 'overnight').completed, false);
+    // F2-1追随(fixV404d B-6): complete-block-with-actual→実績登録モーダル保存は
+    // 「実績付きで完了」の意味になったため、actualEndAtが入るとcompleted=trueになる。
+    assert.equal(pending.blocks.find(b => b.id === 'overnight').completed, true);
     assert.equal(pending.reports[DAY], REPORT_PENDING);
     await trigger('report-share-ai', ''); assert.equal(await page.evaluate(() => window.__shares.length), 0);
     await page.evaluate(async () => { (await import('/src/features/daily-operations.js')).DAILY_OPERATIONS['daily-report-refresh'].build = window.__reportBuild; });

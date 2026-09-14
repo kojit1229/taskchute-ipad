@@ -82,6 +82,24 @@ const DAY = '2026-09-12';
     await page.locator('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]').click();
     assert.equal(await warning.count(), 0);
     console.log('PASS actual overlap warning is half-open, excludes zero durations and stays separate from plans/filters');
+    await seed([
+      block('tomorrow-timed', '08:00', '09:00', { date: '2026-09-13', plannedStartAt: '2026-09-13T08:00', plannedEndAt: '2026-09-13T09:00' }),
+      block('today-untimed', '', '', { plannedStartAt: '', plannedEndAt: '' }),
+      block('today-late', '13:00', '14:00'),
+      block('today-early-routine', '07:00', '08:00', { category: 'ルーティン' }),
+      block('tomorrow-untimed-routine', '', '', { date: '2026-09-13', plannedStartAt: '', plannedEndAt: '', category: 'ルーティン' })
+    ]);
+    const beforeUpcoming = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY);
+    const list = page.locator('[data-work-list="exec"]');
+    await list.locator('[data-work-filter="mode"]').selectOption('upcoming');
+    assert.deepEqual(await list.locator('[data-work-key]').evaluateAll(rows => rows.map(row => row.dataset.workKey)),
+      ['block:today-early-routine', 'block:today-late', 'block:today-untimed', 'block:tomorrow-timed', 'block:tomorrow-untimed-routine']);
+    await list.locator('[data-work-filter="query"]').fill('untimed');
+    assert.deepEqual(await list.locator('[data-work-key]').evaluateAll(rows => rows.map(row => row.dataset.workKey)),
+      ['block:today-untimed', 'block:tomorrow-untimed-routine']);
+    assert.equal(await list.locator('[data-work-filter="query"]').evaluate(el => el === document.activeElement), true);
+    assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks, STATE_KEY), beforeUpcoming);
+    console.log('PASS F1-3 upcoming keeps date/time order across groups, untimed before tomorrow, filtered focus and saved Blocks unchanged');
     assert.equal(errors.length, 0, errors.join('\n'));
     console.log('PASS legacy 23:59 stays 14 minutes; clock updates actual height without saving');
   } finally { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); }

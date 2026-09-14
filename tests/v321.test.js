@@ -91,7 +91,8 @@ function block(id, title, start, end, extra = {}) {
       block("mit-done", "朝のMIT", "08:00", "08:20", {
         isMIT: true, estimateMin: 20, actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:20`, completed: true
       }),
-      block("mit-next", "次のMIT", "11:00", "11:30", { isMIT: true })
+      // fixV404f(監督者追随 2026-09-14): v404(F1-2/M-16)で MIT は同日1件。2件目は MIT なしの通常予定。
+      block("mit-next", "次の予定", "11:00", "11:30")
     ];
     await seed(mitTwo);
     const mitLayout = await page.locator(".tower-mit").evaluate((mit) => {
@@ -104,8 +105,8 @@ function block(id, title, start, end, extra = {}) {
       };
     });
     check(".tower-mitは現在作業内・予定より前に2行・各行★付き", mitLayout.beforeBand
-      && await page.locator(".tower-mit-row").count() === 2
-      && await page.locator(".tower-mit-row .mit-star").count() === 2, JSON.stringify(mitLayout));
+      && await page.locator(".tower-mit-row").count() === 1
+      && await page.locator(".tower-mit-row .mit-star").count() === 1, JSON.stringify(mitLayout));
     check("MIT行は44px・11px以上でアンバー枠", mitLayout.rowHeight >= 44 && mitLayout.fontSize >= 11
       && mitLayout.borderColor !== "rgba(0, 0, 0, 0)", JSON.stringify(mitLayout));
     await seed([block("plain", "通常予定", "11:00", "11:30")]);
@@ -121,7 +122,8 @@ function block(id, title, start, end, extra = {}) {
     ];
     await seed(mitPopulation);
     const mitTitles = await page.locator(".tower-mit-title").allTextContents();
-    check("MIT母集団は当日・未削除を時刻順で最大3件", JSON.stringify(mitTitles) === JSON.stringify(["当日1", "当日2", "当日3"]), JSON.stringify(mitTitles));
+    // fixV404f(監督者追随): 同日1件の契約。旧データに複数あっても表示は時刻順の先頭1件だけ(データは触らない)。
+    check("MIT母集団は当日・未削除の時刻順先頭1件(旧データに複数あっても1件)", JSON.stringify(mitTitles) === JSON.stringify(["当日1"]), JSON.stringify(mitTitles));
 
     console.log("[2] LIFE BAND OFFでもMITカードを残し、同期stateへ書かない");
     await seed(mitTwo);
@@ -165,17 +167,20 @@ function block(id, title, start, end, extra = {}) {
 
     console.log("[4] 次の予定・やったこと・NOW LANDINGへMIT★を復元する");
     await page.setViewportSize({ width: 390, height: 900 });
-    const starBlocks = [
+    // fixV404f(監督者追随): 同日の MIT は1件なので、★を出す場所ごとに MIT を1件だけ立てて seed し直す。
+    const starBlocks = mitId => [
       block("star-done", "完了MIT", "08:00", "08:30", {
-        isMIT: true, actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:30`, completed: true
+        isMIT: mitId === "star-done", actualStartAt: `${TODAY}T08:00`, actualEndAt: `${TODAY}T08:30`, completed: true
       }),
-      block("star-running", "進行MIT", "09:30", "10:30", { isMIT: true, actualStartAt: `${TODAY}T09:30` }),
-      block("star-next", "予定MIT", "11:00", "11:30", { isMIT: true })
+      block("star-running", "進行MIT", "09:30", "10:30", { isMIT: mitId === "star-running", actualStartAt: `${TODAY}T09:30` }),
+      block("star-next", "予定MIT", "11:00", "11:30", { isMIT: mitId === "star-next" })
     ];
-    await seed(starBlocks);
+    await seed(starBlocks("star-next"));
     check("次の予定のMIT行に★", await page.locator('[data-work-list="today"] [data-work-key="block:star-next"] .mit-star').count() === 1);
+    await seed(starBlocks("star-done"));
     check("やったことのMIT行に★", await page.locator('.tower-log-row[data-flight-id="star-done"] .mit-star').count() === 1);
     check("今日の全件一覧の完了MIT行にも★", await page.locator('[data-work-list="today"] [data-work-key="block:star-done"] .mit-star').count() === 1);
+    await seed(starBlocks("star-running"));
     check("NOW LANDINGのMITタイトルに★", await page.locator('.tower-now-title[data-id="star-running"] .mit-star').count() === 1);
 
     console.log("[6][7] 予定0件HUD・390px横スクロール・pageerror・state非書込");

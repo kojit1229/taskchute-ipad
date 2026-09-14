@@ -1291,7 +1291,7 @@ function check(name, cond, extra = "") {
 
     // ============================================================
 
-    console.log("[73] ポモドーロのタイマー満了ではblock.actualEndAtを書かず、NOW LANDINGに残り続ける");
+    console.log("[73] ポモドーロ満了で実績終了を保存し、予定は自動完了しない");
     await page.clock.setFixedTime(fixedTime(9, 0, 0));
     await seed({
       view: "today",
@@ -1312,15 +1312,15 @@ function check(name, cond, extra = "") {
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).pomodoro?.mode === "break", KEY, { timeout: 10000 });
     const stAfterAutoBreak = await stateNow();
     const pomoBlockAfter = stAfterAutoBreak.blocks.find((b) => b.id === "c1-pomo");
-    check("自動休憩遷移後もblock.actualEndAtは空のまま(C1: 完了を押すまで計測継続)",
-      !pomoBlockAfter.actualEndAt, JSON.stringify(pomoBlockAfter));
-    check("actualStartAtは維持されたまま(計測は継続中)", pomoBlockAfter.actualStartAt === at("09:00"));
+    check("自動休憩遷移でactualEndAtは満了時刻09:25になり予定は未完了",
+      pomoBlockAfter.actualEndAt === at("09:25") && pomoBlockAfter.completed === false, JSON.stringify(pomoBlockAfter));
+    check("actualStartAtは開始時刻のまま維持する", pomoBlockAfter.actualStartAt === at("09:00"));
     check("pomodoroCountは従来どおり加算される(タイマー機能自体は維持)",
       pomoBlockAfter.pomodoroCount === 1, JSON.stringify(pomoBlockAfter));
     check("state.pomodoro.modeが休憩(break)へ遷移する(休憩自体は維持)", stAfterAutoBreak.pomodoro.mode === "break");
     const nfTextAfterBreak = await panelText(".tower-nowhud");
-    check("自動休憩遷移後もNOW LANDINGに実行中Blockが残り続ける",
-      (nfTextAfterBreak || "").includes("C1-POMO-満了タスク"), nfTextAfterBreak);
+    check("自動休憩遷移後はNOW LANDINGの実行中表示から外れる",
+      !(nfTextAfterBreak || "").includes("C1-POMO-満了タスク"), nfTextAfterBreak);
     // ============================================================
     // [74] 1-H1(修正フェーズ 単位8): taskchuteBlocks/computeFreeGaps の migratedTo 除外
     //   K16「送済Blockは今日の占有として残さない」+2026-09-05 K回答「computeFreeGapsでも外す」

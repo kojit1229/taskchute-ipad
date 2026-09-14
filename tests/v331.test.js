@@ -3,7 +3,7 @@
 // タスク一覧+ヘッダ統合(A-1b)は実行コード差分200行の都合で本バージョンでは対象外。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate,
-  randomPort, STATE_KEY
+  randomPort, STATE_KEY, dismissBodyScanIfOpen
 } = require("./helpers");
 
 const PORT = randomPort();
@@ -140,10 +140,18 @@ async function seed(page, values) {
     await page.waitForSelector('.exec-row-now:has([data-action="edit-block"][data-id="b-up-b"])');
     check("b-up-bが「いま」に移動した",
       await page.locator('.exec-row-now [data-id="b-up-b"]').count() > 0);
+    // F2-1追随(fixV404d B-4): 実行中Block(actualStartAtあり・actualEndAtなし)への✓は、
+    // 設計03の「実行中なら終了確認へ進める」どおりまず終了報告モーダルを開く(即座には消えない)。
     await page.click('.exec-row-now:has([data-action="edit-block"][data-id="b-doing"]) [data-action="toggle-block"]');
+    await page.locator("#modalRoot .modal-title", { hasText: "終了報告" }).waitFor();
+    await page.click('[data-action="report-skip"]');
+    await dismissBodyScanIfOpen(page);
     await page.waitForFunction(() => !document.body.textContent.includes("見つからないダミー_v331"));
     const stillThere = await page.locator('.exec-row-now:has([data-action="edit-block"][data-id="b-doing"])').count();
-    check("完了操作したb-doingは「いま」から消える(実行中ではなくなる)", stillThere === 0);
+    check("終了確認後にb-doingは「いま」から消える(実行中ではなくなる)", stillThere === 0);
+    const doingState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
+    const doingBlock = doingState.blocks.find((b) => b.id === "b-doing");
+    check("completed=true・actualEndAtが記録される", doingBlock?.completed === true && Boolean(doingBlock.actualEndAt), JSON.stringify(doingBlock));
 
     console.log("[4] 390px/1280px 横スクロールなし・pageerror 0");
     const scrollW390 = await page.evaluate(() => document.documentElement.scrollWidth);

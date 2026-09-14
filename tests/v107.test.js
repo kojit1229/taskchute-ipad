@@ -164,7 +164,8 @@ function check(name, cond, extra = "") {
     const t1 = s1.tasks.find((t) => t.id === "task-A");
     const b1 = s1.blocks.find((b) => b.id === "block-A");
     check("Blockはcompletedになる", b1?.completed === true, JSON.stringify(b1));
-    check("Taskのstatusはcompletedにならない(doingのまま)", t1?.status === "doing", JSON.stringify(t1));
+    // F2-1追随(fixV404d B-1): ✓は実績なしの予定完了。実績補完が消えたためTaskはtodoのまま(doingへは進まない)。
+    check("✓ではTask.statusを変えない(todoのまま)", t1?.status === "todo", JSON.stringify(t1));
     check("Taskの進捗(分子)は変化しない", t1?.progressNum === 0, JSON.stringify(t1));
     await dismissBodyScanIfOpen(page);
     await page.locator("#modalRoot.open").waitFor({ state: "detached" });

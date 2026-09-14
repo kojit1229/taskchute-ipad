@@ -190,7 +190,8 @@ function check(name, cond, extra = "") {
     // v293追随: 直前のtoggleBlockは新規完了(justCompleted)のため身体スキャンモーダルが
     // 開いたままになっている。実績モード切替ボタンがこれに遮られるため先に片付ける。
     await dismissBodyScanIfOpen(page);
-    await page.locator('[data-action="timeline-mode"][data-mode="actual"]').click();
+    // fixV404f(監督者追随 2026-09-14): v404(F2/M-06)で✓は実績なしの予定完了になり、実績の時間軸には
+    // 出ない。完了取消は予定側の編集シートから行う(検査の性質=ログの対称削除は同じ)。
     await page.waitForSelector('[data-action="edit-block"][data-id="habit-block"]');
     await page.locator('[data-action="edit-block"][data-id="habit-block"]').evaluate((element) => element.click());
     await openBlockDetails();
@@ -223,7 +224,10 @@ function check(name, cond, extra = "") {
     await seed(habitRule(), [block("pomodoro-block", "habit", "ポモドーロ完了")], {}, {
       pomodoro: {
         running: true, blockId: "pomodoro-block", startedAt: `${TODAY}T09:00:00`,
-        endsAt: `${TODAY}T09:50:00`, mode: "focus"
+        // fixV404g(監督者追随 2026-09-14): v404(F2-2/M-07)で満了した focus は tick が実績終了を入れて休憩へ移る
+        // (blockId が外れる)。固定時計 10:00 より前に満了する seed だと complete-pomodoro の前に休憩へ移ることが
+        // あり結果が揺れるため、進行中(10:25 満了)の seed にする(検査の性質=完了で当日ログ、は同じ)。
+        endsAt: `${TODAY}T10:25:00`, mode: "focus"
       }
     });
     await clickSyntheticAction("complete-pomodoro");

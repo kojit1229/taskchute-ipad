@@ -4,6 +4,8 @@ function workListRows({ tasks = [], projects = [], blocks = [] }, { scope, date,
   const taskById = new Map(tasks.map(task => [task.id, task]));
   const projectById = new Map(projects.map(project => [project.id, project]));
   function row(kind, item) {
+    if (kind === "block" && item.isMIT && blocks.find(b => !b.deleted && b.date === item.date && b.isMIT)?.id !== item.id)
+      item = { ...item, isMIT: false };
     const task = kind === "block" ? taskById.get(item.taskId) : kind === "task" ? item : null;
     const project = kind === "project" ? item : projectById.get(task?.projectId);
     const status = kind === "block" ? (item.completed ? "completed" : item.actualEndAt ? "ended" : item.actualStartAt ? "running" : "open")

@@ -29,7 +29,7 @@ export function buildDailyViewModel(block, deps, actual = false) {
   };
   const planCompleted = Boolean(block.completed);
   const running = Boolean(block.actualStartAt && !block.actualEndAt);
-  const taskCompleted = linkedTask?.status === "done";
+  const taskCompleted = linkedTask?.status === "completed";
   const kind = actual ? "actual" : "block";
   const display = {
     key: `${kind}:${block.id}`, kind, id: block.id, dateLabel: text(block.date), title: text(block.title),

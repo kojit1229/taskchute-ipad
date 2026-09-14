@@ -411,7 +411,9 @@ test("local report readback failure restores memory/storage and retry retains th
   assert.equal(JSON.parse(raw).dataModifiedAt, stamp(81));
 });
 
-for (const route of ['condition', 'vision']) test(`${route}: failure restores prior state/input and does not schedule the request`, async () => {
+// F3追随(fixV404d B-7、orders/13監督者決定(1)): 保存失敗時は入力欄の文章を消さず控えに残す。
+// condition/visionもjournal/idealと同じ挙動へ統一され、beforeValueへは戻さず入力値を保持する。
+for (const route of ['condition', 'vision']) test(`${route}: failure restores state, retains input and does not schedule the request`, async () => {
   const f = await globalSaveFixture();
   const selector = route === 'condition' ? '[data-condition-note-date]' : '[data-vision-field]';
   f.input.dataset = route === 'condition' ? { conditionNoteDate: f.date } : { visionField: 'vision' };
@@ -422,7 +424,9 @@ for (const route of ['condition', 'vision']) test(`${route}: failure restores pr
   f.fail(true);
   assert.equal(f.inputEvent(f.input), false);
   assert.equal(f.ctx.state, before); assert.equal(JSON.stringify(f.ctx.state), snapshot);
-  assert.equal(f.raw(), raw); assert.equal(f.input.value, 'before');
+  assert.equal(f.raw(), raw); assert.equal(f.input.value, 'typed journal');
+  const key = route === 'condition' ? `condition:${f.date}` : 'vision:vision';
+  assert.equal(f.ctx.globalInputDrafts[key]?.value, 'typed journal');
   assert.deepEqual([f.counts.writes, f.counts.autoSave, f.counts.autoSync, f.counts.render], [1, 0, 0, 0]);
   f.fail(false); assert.equal(f.ctx.saveState(), true);
   assert.equal(route === 'condition' ? JSON.parse(f.raw()).condition.logs[f.date].eveningNote : JSON.parse(f.raw()).settings.vision, 'before');

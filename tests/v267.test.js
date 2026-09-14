@@ -162,13 +162,15 @@ function configureSync(syncMod) {
     await resetSaveProbe(); await completionButton.click();
     await page.waitForSelector("#trackToast:not([hidden])"); state = await savedState();
     const completedItem = state.weeklyCommitments.find((record) => record.id === completionSeed.id);
-    // v386 契約追随(監督者決定 2026-09-11、束B6): 完了後の quiet 日報が候補保存になり saveState は 4→3(日報の存在は下で断言)。
-    check("条件2 完了刻印は対象から単調増加・内部saveState2回・日報込み", completedItem?.completedAt === NOW
+    // D-2追随(fixV404d、2026-09-14裁定): affectedReportDatesがcompletedの変化(実績なし)も
+    // 日報の再生成対象に拾うようになったため、日報生成は同じlifecycle transaction内で完結し
+    // 内部saveStateは1回のまま(以前のような別途quiet日報呼び出しの2回目は無い)。
+    check("条件2 完了刻印は対象から単調増加・内部saveState1回・日報込み", completedItem?.completedAt === NOW
       && completedItem.completedChangedAt === `${TODAY}T10:00:02`
        && completedItem.updatedAt === completedItem.completedChangedAt
-       && completedItem.updatedAt > completionSeed.updatedAt && await saveCalls() === 2
+       && completedItem.updatedAt > completionSeed.updatedAt && await saveCalls() === 1
       && typeof state.reports?.[TODAY] === "string" && state.reports[TODAY].length > 0,
-    JSON.stringify({ completedItem, saves: await saveCalls() }));
+    JSON.stringify({ completedItem, saves: await saveCalls(), report: state.reports?.[TODAY] }));
     // v293追随: この完了(toggle-block、新規完了)は身体スキャンモーダルを開く。以降のnavクリック等が
     // 遮られるため、後続操作の前に片付ける(検証意図=完了刻印・保存回数は上のcheckで既に確定済み)。
     await dismissBodyScanIfOpen(page);
@@ -209,10 +211,11 @@ function configureSync(syncMod) {
     // v331〜v334: execの計画一覧(renderExecNowRow/UpcomingRow)は未完了Blockだけを対象にし、
     // 実績タイムラインの完了解除ボタン(↺)も実績モードでは出さない設計になったため、完了済み
     // Blockへのtoggle-block直接クリックが届かなくなった。編集モーダルの「完了」チェックボックス
-    // (data-modal-field="completed")で同じ状態変更を行う(セレクタ追随・assert不変)
+    // (data-modal-field="completed")で同じ状態変更を行う(セレクタ追随・assert不変)。
+    // F2-1/D-2追随(fixV404d): b-numは実績なしの予定完了(actualEndAt空)のため、
+    // 「やったこと」(exec-actual、actualEndAt必須)には出ない。計画(タスクシュート)一覧の
+    // ままでも完了BlockはrenderExecDoneRowで表示されるため、モード切替なしでedit-blockへ到達する。
     await page.locator('.nav-button[data-view="exec"]').click();
-    await page.click('.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="actual"]');
-    await page.waitForTimeout(200);
     await page.click(`[data-action="edit-block"][data-id="${completionSeed.blockId}"]`);
     await page.waitForSelector('[data-modal-field="completed"]', { state: "attached" });
     // fixSB2d: 予定枠の全項目は詳細枠に常設。完了操作への到達性と後続の免除断言を維持する。

@@ -105,10 +105,14 @@ try {
     assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'past').actualStartAt), `${PREV}T23:50:00`);
     await page.evaluate(() => { Storage.prototype.setItem = window.__actualSet; });
     await page.locator('#modalRoot [data-action="modal-save"]').click();
+    // v404: 明示完了なので保存後に身体スキャン(v293)が開く。閉じてから保存内容を見る。
+    await page.locator('#modalRoot .btn[data-action="body-scan-discard"]').click();
     await page.waitForFunction(() => !document.querySelector('#modalRoot.open'));
     const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY), past = saved.blocks.find(b => b.id === 'past');
-    assert.equal(past.actualStartAt, `${PREV}T23:45:00`); assert.equal(past.date, PREV); assert.equal(past.completed, false);
-    assert.deepEqual(saved.tasks, before.tasks); assert.equal(actualDurationMinutes(past), 30);
+    assert.equal(past.actualStartAt, `${PREV}T23:45:00`); assert.equal(past.date, PREV); assert.equal(past.completed, true); // v404: 「実績付きで完了」の入口は明示完了(設計03 の2種類の完了、K決定 2026-09-14)
+    // v404: 明示完了なので、結び付いた Task は todo→doing になる(実績付き完了の既存の振る舞い)。他の項目は不変。
+    const savedTask = saved.tasks.find(t => t.id === 'task'); assert(savedTask.updatedAt);
+    assert.deepEqual(saved.tasks, before.tasks.map(t => t.id === 'task' ? { ...t, status: 'doing', updatedAt: savedTask.updatedAt } : t)); assert.equal(actualDurationMinutes(past), 30);
     await page.reload(); assert.equal((await page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY)).blocks.find(b => b.id === 'past').comment, '保存失敗からの訂正');
     assert.deepEqual(errors, []);
     console.log('PASS browser: today uses actual day, exec agrees on ids/times/durations; old modal past edit, failed save retains DOM/state, retry and reload');

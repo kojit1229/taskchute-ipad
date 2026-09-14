@@ -82,7 +82,9 @@ for (const entry of ['toggle', 'timer', 'actual', 'start', 'end', 'stale']) test
   assert.equal(c.state, before); assert.equal(JSON.stringify(c.state), json);
   assert.equal(JSON.stringify(c._quickCompleteSnapshots), quick);
   assert.equal(c._pendingInterruptBlockId, 'typed-interrupt'); assert.equal(input.comment, 'typed input');
-  assert.deepEqual(f.counts(), { writes: 1, sync: 0, ui: 0, persisted: undefined });
+  // fixV404f(監督者追随 2026-09-14): toggle は利用者向けの入口 toggleBlock で、失敗時に案内トースト1件を出す
+  // (resumeLifecycleStart と同じ作法)。保存境界の外なので ui=1。他の入口は操作そのものを直接呼ぶため ui=0。
+  assert.deepEqual(f.counts(), { writes: 1, sync: 0, ui: entry === 'toggle' ? 1 : 0, persisted: undefined });
   f.fail(false); assert.equal(invoke(), true);
   assert.equal(f.counts().writes, 2); assert.equal(f.counts().sync, 1);
   assert.equal(f.counts().persisted, JSON.stringify(c.state));

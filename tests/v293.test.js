@@ -4,9 +4,14 @@
 // openBodyScanModal(完了したBlockのid)を呼ぶだけの最小追加。ポモドーロ経路
 // (completePomodoro)は既存のv129フックのまま無改修(このテストでは触らない)。
 //
+// F2-1追随(fixV404d B-2、2026-09-14): ✓(toggleBlock/data-action="toggle-block")は
+// 実績なしの予定完了になり、身体スキャンはもう開かない。now-conveyor-complete(旧ルーティン
+// GATE入口)もtoggleBlockへ委譲するだけなので同じく開かない(D-1裁定)。身体スキャンは
+// 「実績付きで完了」(complete-block-with-actual→実績登録モーダル保存)と、Block編集モーダルの
+// 「完了」チェック保存・タスク完了(🏁)にだけ残る。[1]/[5]/[6]/[9]/[10]/[11]をこの契約へ更新した。
+//
 // 接続点(現物コードで確認した手動完了の全導線→フック位置):
-//   1. toggleBlock (data-action="toggle-block": 完了チェック✓/○/↺)
-//        → 関数末尾、justCompleted時のみ
+//   1. saveActualEntryFromModal(実績付きで完了→実績登録モーダル保存)が主入口(旧toggleBlock分は撤去)
 //   2. toggleTaskCompleteFromBlock (data-action="toggle-task-complete": Block編集モーダル内🏁)
 //        → 関数末尾、Block新規完了時のみ
 //   3. saveBlockFromModal (data-action="modal-save", state.modal.type==="block":
@@ -167,9 +172,11 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (a) 全経路: 手動完了→身体スキャンモーダル→記録
     // ============================================================
-    console.log("[1] toggleBlock(完了チェック)で身体スキャンモーダルが開き記録される");
-    await seed({ blocks: [makeBlock({ id: "r1", title: "対象1", startMin: 9 * 60 })] });
-    await clickReal('[data-action="toggle-block"][data-id="r1"]');
+    console.log("[1] 実績付きで完了(complete-block-with-actual→実績登録モーダル保存)で身体スキャンモーダルが開き記録される");
+    await seed({ view: "tasks", blocks: [makeBlock({ id: "r1", title: "対象1", startMin: 9 * 60 })] });
+    await clickReal('[data-action="complete-block-with-actual"][data-id="r1"]');
+    await page.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
     await recordBodyScan(3, "肩");
@@ -229,39 +236,39 @@ function check(name, cond, extra = "") {
       s.bodyScans.length === 1 && s.bodyScans[0].pomodoroBlockId === "r4" && s.bodyScans[0].fatigue === 3 && s.bodyScans[0].part === "目",
       JSON.stringify(s.bodyScans));
 
-    console.log("[5] now-conveyor-complete(TOWER GATE「▶ 次へ」・ポモドーロ非実行)はtoggleBlockへ委譲され開く");
+    console.log("[5] now-conveyor-complete(TOWER GATE「▶ 次へ」・ポモドーロ非実行)はtoggleBlockへ委譲され実績なしの予定完了になり、身体スキャンは開かない");
+    // D-1裁定(2026-09-14): 旧ルーティンGATE入口も✓と同じ「実績なしの予定完了」に統一。0分実績で埋めない。
     await seed({ blocks: [makeBlock({ id: "r5", title: "対象5", startMin: 13 * 60 })] });
     await clickAction("now-conveyor-complete", { id: "r5" });  // TOWER GATE選定条件のため合成注入を維持
-    await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
-    check("身体スキャンモーダルが開く", await bodyScanOpen() === 1);
-    await recordBodyScan(4, "");
+    await page.waitForFunction(({ KEY, id }) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === id)?.completed === true, { KEY, id: "r5" });
+    check("身体スキャンモーダルは開かない", await bodyScanOpen() === 0);
     s = await stateNow();
-    check("bodyScansに1件、fatigue=4・part=\"\"・pomodoroBlockId=r5で記録される",
-      s.bodyScans.length === 1 && s.bodyScans[0].pomodoroBlockId === "r5" && s.bodyScans[0].fatigue === 4 && s.bodyScans[0].part === "",
-      JSON.stringify(s.bodyScans));
+    const r5 = s.blocks.find((b) => b.id === "r5");
+    check("完了はするが実績は空・bodyScansは追加されない",
+      r5?.completed === true && r5.actualStartAt === "" && r5.actualEndAt === "" && s.bodyScans.length === 0, JSON.stringify(s.bodyScans));
 
     // ============================================================
     // (b) ガード負例
     // ============================================================
-    console.log("[6] 完了取り消し(toggleBlockで完了→再度toggleBlockで解除)では発火しない");
-    await seed({ blocks: [makeBlock({ id: "r6", title: "対象6", startMin: 14 * 60 })] });
-    await clickReal('[data-action="toggle-block"][data-id="r6"]');
+    console.log("[6] 完了取り消し(実績付き完了→詳細の✓で解除)では発火しない");
+    // F2-1追随: 実績なしのtoggle-blockでは解除経路には出られない(実績が無いと「やったこと」に
+    // 出ずtoggle-block「解除」に到達しないため)。実績付きで完了させてから解除する経路に差し替えた。
+    await seed({ view: "tasks", blocks: [makeBlock({ id: "r6", title: "対象6", startMin: 14 * 60 })] });
+    await clickReal('[data-action="complete-block-with-actual"][data-id="r6"]');
+    await page.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.click('.modal-footer [data-action="body-scan-discard"]');  // 完了自体は記録せず閉じる
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
-    // 完了解除(2回目のtoggle)。timeline(予定モード)は完了済みBlockを表示対象から除外する
-    // (renderTimeline: !b.completedフィルタ、実績モードでもcompleteBtnHTMLは常に非表示)ため、
-    // 完了直後の同じチェックボックスへ実クリックで再到達する経路はこのview構成では存在しない
-    // (実UIで解除するには別途Project/Task紐付けを要するrenderTasksビューが必要で、この
-    // テストの目的には過剰な複雑さ)。ここだけ合成注入を維持する。
-    await clickAction("toggle-block", { id: "r6" });
+    // 完了解除(「やったこと」欄の実績付きBlockの✓=解除ボタン)。
+    await page.locator('.checkbox-button.done[data-action="toggle-block"][data-id="r6"]').click();
     await page.waitForFunction(
       ({ KEY, id }) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === id)?.completed === false,
       { KEY, id: "r6" }
     );
     check("完了取り消しでは身体スキャンモーダルが開かない", await bodyScanOpen() === 0);
     s = await stateNow();
-    check("bodyScansは追加されない", s.bodyScans.length === 0, JSON.stringify(s.bodyScans));
+    check("bodyScansは追加されない(discardのため)", s.bodyScans.length === 0, JSON.stringify(s.bodyScans));
 
     console.log("[7] 同期由来の完了反映(computeSyncMerge→applySyncMergeToLocalの実経路)では発火しない");
     {
@@ -329,22 +336,28 @@ function check(name, cond, extra = "") {
     check("bodyScansは追加されない", s.bodyScans.length === 0, JSON.stringify(s.bodyScans));
 
     console.log("[9] discard(×/「記録せず閉じる」/背景タップ)はいずれもbodyScansに追加されない(3経路個別)");
-    await seed({ blocks: [makeBlock({ id: "r9a", title: "対象9a", startMin: 17 * 60 })] });
-    await clickReal('[data-action="toggle-block"][data-id="r9a"]');
+    await seed({ view: "tasks", blocks: [makeBlock({ id: "r9a", title: "対象9a", startMin: 17 * 60 })] });
+    await clickReal('[data-action="complete-block-with-actual"][data-id="r9a"]');
+    await page.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.click('.modal-close[data-action="body-scan-discard"]');  // ×
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     check("×(modal-close)discardでは記録されない", (await stateNow()).bodyScans.length === 0);
 
-    await seed({ blocks: [makeBlock({ id: "r9b", title: "対象9b", startMin: 17 * 60 + 20 })] });
-    await clickReal('[data-action="toggle-block"][data-id="r9b"]');
+    await seed({ view: "tasks", blocks: [makeBlock({ id: "r9b", title: "対象9b", startMin: 17 * 60 + 20 })] });
+    await clickReal('[data-action="complete-block-with-actual"][data-id="r9b"]');
+    await page.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.click('.modal-footer [data-action="body-scan-discard"]');  // 記録せず閉じる
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
     check("「記録せず閉じる」(footer)discardでは記録されない", (await stateNow()).bodyScans.length === 0);
 
-    await seed({ blocks: [makeBlock({ id: "r9c", title: "対象9c", startMin: 17 * 60 + 40 })] });
-    await clickReal('[data-action="toggle-block"][data-id="r9c"]');
+    await seed({ view: "tasks", blocks: [makeBlock({ id: "r9c", title: "対象9c", startMin: 17 * 60 + 40 })] });
+    await clickReal('[data-action="complete-block-with-actual"][data-id="r9c"]');
+    await page.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     await page.locator("#modalRoot").click({ position: { x: 5, y: 5 } });  // 背景タップ(v132と同じ手法)
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor({ state: "detached" });
@@ -353,18 +366,20 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (c) 永続化
     // ============================================================
-    console.log("[10] 記録がsaveState経由でdataModifiedAtを更新する(toggle-block自身の保存とは分離)");
-    await seed({ blocks: [makeBlock({ id: "r10", title: "対象10", startMin: 18 * 60 })] });
-    await clickReal('[data-action="toggle-block"][data-id="r10"]');
+    console.log("[10] 記録がsaveState経由でdataModifiedAtを更新する(実績登録モーダル保存自身とは分離)");
+    await seed({ view: "tasks", blocks: [makeBlock({ id: "r10", title: "対象10", startMin: 18 * 60 })] });
+    await clickReal('[data-action="complete-block-with-actual"][data-id="r10"]');
+    await page.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await page.locator('[data-action="modal-save"]').click();
     await page.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
-    // 比較基準はBlock完了後・身体スキャン記録前(toggle-block自身のsaveStateで偽陽性にしないため)。
+    // 比較基準はBlock完了後・身体スキャン記録前(実績登録モーダル保存自身のsaveStateで偽陽性にしないため)。
     const before = (await stateNow()).dataModifiedAt;
     // 固定時刻(page.clock)のままだとnowDateTime()が変化せず「更新された」ことを検出できないため、
     // 記録直前に時刻を進める(実行時刻依存フレーク回避の方針=v117/v129等はそのまま維持)。
     await page.clock.setFixedTime(new Date(now0.getTime() + 5 * 60 * 1000));
     await recordBodyScan(3, "胃");
     const after = await stateNow();
-    check("記録後にdataModifiedAtが更新される(身体スキャン記録由来。toggle-block自身の保存は基準から除外済み)",
+    check("記録後にdataModifiedAtが更新される(身体スキャン記録由来。実績登録モーダル保存自身は基準から除外済み)",
       after.dataModifiedAt > before, JSON.stringify({ before, after: after.dataModifiedAt }));
     check("pomodoroBlockIdに完了BlockのIDが入る(フィールド名は凍結のまま流用)",
       after.bodyScans[0]?.pomodoroBlockId === "r10");
@@ -388,13 +403,15 @@ function check(name, cond, extra = "") {
       st.tasks = [];
       st.bodyScans = [];
       st.selectedDate = TODAY;
-      st.currentView = "timeline";
+      st.currentView = "tasks";
       st.pomodoro = { running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus" };
       localStorage.setItem(KEY, JSON.stringify(st));
     }, { KEY, blocks: [makeBlock({ id: "r11", title: "対象11", startMin: 9 * 60 })], TODAY });
     await narrowPage.reload();
-    await narrowPage.waitForSelector('#app[data-view="timeline"]');
-    await narrowPage.locator('[data-action="toggle-block"][data-id="r11"]').click();
+    await narrowPage.waitForSelector('#app[data-view="tasks"]');
+    await narrowPage.locator('[data-action="complete-block-with-actual"][data-id="r11"]').click();
+    await narrowPage.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await narrowPage.locator('[data-action="modal-save"]').click();
     await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).waitFor();
     check("390px幅でも身体スキャンモーダル(疲労)が開く",
       await narrowPage.locator(".modal-title", { hasText: "身体スキャン" }).count() === 1);

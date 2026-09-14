@@ -93,8 +93,12 @@ const which = process.argv.find(arg => arg.startsWith('--case='))?.slice(7);
      await search.fill('長い架空タイトル');
      const initialTop = await page.locator('[data-work-list="exec"] [data-work-list-rows]').evaluate(el=>el.scrollTop);
      const row = page.locator('[data-work-key="block:block"]');
+     // F2-1追随(fixV404d B-8): ✓の直後に「実績付きで完了」ボタンが同じexec-completion-actionsへ
+     // 増えたため、Tabの到達順は ✓→実績付きで完了→行の展開 になる。
      await row.locator('.checkbox-button').focus(); await page.keyboard.press('Tab');
-     assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'block-row-toggle', 'Tab reaches planned row disclosure');
+     assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'complete-block-with-actual', 'Tab reaches complete-with-actual button first');
+     await page.keyboard.press('Tab');
+     assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'block-row-toggle', 'Tab then reaches planned row disclosure');
      await page.keyboard.press('Enter');
      assert.equal(await row.locator('[data-action="edit-block"]').count(), 1);
      for (let i = 0; i < 6 && !(await row.locator('[data-action="edit-block"]').evaluate(el => el === document.activeElement)); i++) await page.keyboard.press('Tab');
@@ -109,7 +113,8 @@ const which = process.argv.find(arg => arg.startsWith('--case='))?.slice(7);
       await page.setViewportSize({width,height:width===1024?768:844});
       await page.locator('#sidebar [data-action="nav"][data-view="exec"]').evaluate(el=>el.click());
       const disclosure = row.locator('button[data-action="block-row-toggle"]');
-      await row.locator('.checkbox-button').focus(); await page.keyboard.press('Tab');
+      // F2-1追随: ✓→実績付きで完了→行の展開の順でTabが進むため、展開ボタンへは2回Tabする。
+      await row.locator('.checkbox-button').focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
       const metrics = await disclosure.evaluate(el => { const r=el.getBoundingClientRect(),title=el.querySelector('strong'),meta=el.querySelector('.exec-row-meta'); return {width:r.width,height:r.height,title:title.textContent,titleClipped:title.scrollHeight>title.clientHeight+1,metaBelow:meta.getBoundingClientRect().top>=title.getBoundingClientRect().bottom-1,overflow:document.documentElement.scrollWidth>innerWidth,expanded:el.getAttribute('aria-expanded'),focus:el.matches(':focus-visible')}; });
       assert(metrics.height>=44 && metrics.width>=44 && !metrics.titleClipped && metrics.metaBelow && !metrics.overflow && metrics.focus, JSON.stringify({width,metrics}));
       assert.equal(metrics.title,'予定行の長い架空タイトル'.repeat(6));

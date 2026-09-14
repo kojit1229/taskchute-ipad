@@ -95,6 +95,96 @@ test('15c repeated deletion and unchanged scan do not stamp Blocks again', async
 });
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00', DATE = NOW.slice(0, 10);
 
+test('F1-2 MIT replacement commits both Blocks once; failed save restores both, including modal entry', async () => {
+  for (const entry of ['toggle', 'modal']) {
+    const f = await fixture(['toggleMIT']);
+    f.ctx.state.blocks[1].isMIT = true;
+    f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[1]), id: 'tomorrow', date: '2026-09-11' });
+    const before = clone(f.ctx.state), input = { ...fields(f), isMIT: true };
+    const execute = () => entry === 'toggle' ? f.ctx.toggleMIT('b') : f.ctx.saveBlockFromModal('b', input);
+    await withLocalSaveFailure(async fail => {
+      f.fail(fail); assert.equal(execute(), false); expectRestored(before, clone(f.ctx.state));
+      assert.equal(f.counts.writes, 1); assert.equal(f.counts.autoSync, 0);
+      f.fail(null); assert.equal(execute(), true);
+    });
+    assert.equal(f.counts.writes, 2); assert.equal(f.persisted.length, 1);
+    assert.deepEqual(f.persisted[0].blocks.filter(b => b.date === DATE && b.isMIT).map(b => b.id), ['b']);
+    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+    for (const index of [0, 1])
+      assert.ok(f.persisted[0].blocks[index].updatedAt > before.blocks[index].updatedAt);
+    assert.deepEqual(f.persisted[0].blocks[2], before.blocks[2]);
+  }
+});
+
+test('F1-2 legacy duplicate MITs display only the first per day without changing saved data', async () => {
+  const { workListRows } = await import('../src/core/work-list.js');
+  const f = await fixture();
+  f.ctx.state.blocks.forEach(b => { b.isMIT = true; });
+  f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[1]), id: 'tomorrow', date: '2026-09-11' });
+  const before = clone(f.ctx.state);
+  const rows = workListRows(f.ctx.state, { scope: 'exec', date: DATE, mode: 'upcoming' });
+  assert.deepEqual(rows.filter(r => r.item.isMIT).map(r => r.id), ['b', 'tomorrow']);
+  expectRestored(before, clone(f.ctx.state));
+  const toggle = vm.runInContext(functions(['toggleMIT']) + '\n toggleMIT', f.ctx);
+  assert.equal(toggle('other'), true);
+  assert.deepEqual(f.persisted[0].blocks.filter(b => b.date === DATE && b.isMIT).map(b => b.id), ['other']);
+});
+
+test('F1-4 actual entry defaults cap future plans at now and starts at end without saving', async () => {
+  const f = await fixture(['completeBlockWithActual']);
+  f.ctx.buildActualEntryModal = (block, start, end) => ({ start, end });
+  for (const [plannedStart, plannedEnd, actualStart, actualEnd, start, end] of [
+    ['09:00:00', '13:30:00', '', '', '09:00:00', '10:00:00'],
+    ['11:00:00', '13:30:00', '', '', '10:00:00', '10:00:00'],
+    ['08:00:00', '09:00:00', '', '', '08:00:00', '09:00:00'],
+    ['', '', '', '', '10:00:00', '10:00:00'],
+    ['', '09:00:00', '09:30:00', '', '09:30:00', '10:00:00'],
+    ['08:00:00', '13:30:00', '', '09:45:00', '', '09:45:00'],
+    ['08:00:00', '13:30:00', '08:15:00', '09:45:00', '08:15:00', '09:45:00']
+  ]) {
+    const at = value => value ? `${DATE}T${value}` : '';
+    Object.assign(f.ctx.state.blocks[0], { plannedStartAt: at(plannedStart), plannedEndAt: at(plannedEnd),
+      actualStartAt: at(actualStart), actualEndAt: at(actualEnd) });
+    const before = clone(f.ctx.state.blocks);
+    f.ctx.completeBlockWithActual('b');
+    assert.deepEqual(f.ctx.displayedBlock, { start: at(start), end: at(end) });
+    expectRestored(before, clone(f.ctx.state.blocks));
+  }
+  assert.equal(f.counts.writes, 0);
+});
+
+test('fixV404c delayed start at or after planned end defaults to now without saving', async () => {
+  const f = await fixture(['completeBlockWithActual']);
+  f.ctx.buildActualEntryModal = (block, start, end) => ({ start, end });
+  for (const time of ['09:00:00', '09:30:00', '10:30:00']) {
+    const start = DATE + 'T' + time;
+    Object.assign(f.ctx.state.blocks[0], { plannedEndAt: DATE + 'T09:00:00', actualStartAt: start, actualEndAt: '' });
+    const before = clone(f.ctx.state.blocks);
+    f.ctx.completeBlockWithActual('b');
+    assert.deepEqual(f.ctx.displayedBlock, { start: start > NOW ? NOW : start, end: NOW });
+    expectRestored(before, clone(f.ctx.state.blocks));
+  }
+  assert.equal(f.counts.writes, 0);
+});
+
+test('F1-4 capped actual defaults use the existing atomic save and rollback path', async () => {
+  const f = await lifecycleFixture();
+  vm.runInContext(functions(['completeBlockWithActual']), f.ctx);
+  f.ctx.buildActualEntryModal = (block, actualStartAt, actualEndAt) => ({ actualStartAt, actualEndAt });
+  f.ctx.completeBlockWithActual('b');
+  const input = { ...f.ctx.displayedBlock, charge: '0', discharge: '0', comment: 'F1-4' }, before = clone(f.ctx.state);
+  assert.equal(input.actualEndAt, NOW);
+  await withLocalSaveFailure(async fail => {
+    f.fail(fail); assert.equal(f.ctx.saveActualEntryFromModal('b', input), false);
+    expectRestored(before, clone(f.ctx.state));
+    assert.equal(f.counts.autoSync, 0); assert.equal(f.counts.writes, 1);
+    f.fail(null); assert.equal(f.ctx.saveActualEntryFromModal('b', input), true);
+  });
+  assert.equal(f.persisted.length, 1); assert.equal(f.counts.writes, 2);
+  assert.equal(f.persisted[0].blocks[0].actualEndAt, NOW);
+  assert.equal(f.persisted[0].blocks[0].completed, true);
+});
+
 async function pomodoroFixture() {
   const f = await fixture(['recordBlockInterruption', 'stopPomodoro', 'completePomodoro',
     'goBreakPomodoro', 'recordIncompleteReasonChip']);
@@ -523,15 +613,19 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
   });
 });
 
-test('failed completion undo retains the snapshot for a successful retry', async () => {
+test('plan completion keeps actuals empty; failed undo retains completion for retry', async () => {
   const f = await lifecycleFixture();
   f.ctx.toggleBlock('b');
-  const completed = clone(f.ctx.state.blocks[0]), snapshot = clone(f.ctx._quickCompleteSnapshots.b);
+  const completed = clone(f.ctx.state.blocks[0]);
+  assert.equal(completed.completed, true);
+  assert.equal(completed.actualStartAt, '');
+  assert.equal(completed.actualEndAt, '');
+  assert.equal(f.ctx._quickCompleteSnapshots.b, undefined);
   await withLocalSaveFailure(async fail => {
     f.fail(fail);
     assert.equal(f.ctx.toggleBlock('b'), false);
     expectRestored(completed, clone(f.ctx.state.blocks[0]));
-    expectRestored(snapshot, clone(f.ctx._quickCompleteSnapshots.b));
+    assert.equal(f.ctx._quickCompleteSnapshots.b, undefined);
     f.fail(null);
     f.ctx.toggleBlock('b');
     assert.equal(f.ctx.state.blocks[0].completed, false);
