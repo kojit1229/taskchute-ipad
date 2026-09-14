@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskchute-journal-pwa-v404";  // v404: 公開後レビューの修正(完了表示のバグ、MIT 1件、これからの並び、実績付き完了の既定時刻、✓=実績なしの予定完了、ポモドーロ満了で実績終了、夜のひとこと等の保存失敗時の控え)
+const CACHE_NAME = "taskchute-journal-pwa-v405";  // v405: 今日タブの見た目をモックに合わせる(束 F6)。v404: 公開後レビューの修正(完了表示のバグ、MIT 1件、これからの並び、実績付き完了の既定時刻、✓=実績なしの予定完了、ポモドーロ満了で実績終了、夜のひとこと等の保存失敗時の控え)
 // v397: 設定画面と筋トレ画面の表示・確認・通知の文言を日本語に(第4回公開の先行分)
 // v396: 閲覧由来の記録を日報へ渡す経路(保存は無効のまま)と、3画面の通し・失敗/日跨ぎ・スマホ/PWA の検査群
 // v395: 閲覧記録・対応設定・習慣の合流(保存は無効のまま)、実行の4〜24時と空き時間の配置枠、単発予定の新しい配置枠への接続
@@ -808,6 +808,7 @@ const APP_SHELL = [
   "./src/ui/daily-parts/actual-row.js",
   "./src/ui/daily-parts/search-frame.js",
   "./src/ui/daily-parts/detail-frame.js",
+  "./src/ui/daily-parts/today-table.js",  // v405: 今日の一覧の表(F6-3)
   "./src/ui/daily-parts/daily-parts.css"
 
 ];
