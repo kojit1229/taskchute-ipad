@@ -6024,3 +6024,9 @@ details.settings-row > .fold-summary.settings-row-summary {
 .exec-row-now, .exec-row-upcoming { grid-template-columns: auto minmax(0, 1fr) auto; }
 .exec-completion-actions { display: flex; align-items: center; gap: 4px; }
 .exec-completion-actions .exec-actual-complete { min-width: 44px; min-height: 44px; white-space: normal; }
+/* fixV404g(監督者裁定 2026-09-14): 390px などの狭幅で「実績付きで完了」がタイトルを 4ch 未満に押し潰す退行(v308)を
+   防ぐ。767px 以下は ✓ と実績ボタンを縦積みにし、実績ボタンは 44px 角に収める(文字は小さく折り返す)。 */
+@media (max-width: 767px) {
+  .exec-completion-actions { flex-direction: column; align-items: stretch; width: 44px; }
+  .exec-completion-actions .exec-actual-complete { width: 44px; min-width: 44px; padding: 2px 1px; font-size: 11px; line-height: 1.15; }
+}
