@@ -6599,7 +6599,10 @@ function renderExecNowRow(block) {
   const expanded = _execExpandedBlockId === block.id;
   return `
     <div class="item exec-row exec-row-now${expanded ? " is-expanded" : ""}">
-      <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
+      <div class="exec-completion-actions">
+        <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="予定完了" aria-label="予定完了">✓</button>
+        <button type="button" class="btn exec-actual-complete" data-action="complete-block-with-actual" data-id="${block.id}">実績付きで完了</button>
+      </div>
       <div class="exec-row-copy">
         <button type="button" class="btn ghost" data-action="edit-block" data-id="${block.id}" title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</button>
         <div class="exec-row-meta" data-action="block-row-toggle" data-id="${block.id}"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</div>
@@ -6632,7 +6635,10 @@ function renderExecUpcomingRow(block) {
   const metaHTML = `${start}${estimateMin ? ` ・ 見積${estimateMin}分` : ""}${block.category ? ` ・ ${escapeHTML(block.category)}` : ""}${task ? ` ・ ${escapeHTML(projectName(task.projectId))}` : ""}`;
   return `
     <div class="item exec-row exec-row-upcoming${expanded ? " is-expanded" : ""}">
-      <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="Block完了" aria-label="Block完了">✓</button>
+      <div class="exec-completion-actions">
+        <button class="checkbox-button" data-action="toggle-block" data-id="${block.id}" title="予定完了" aria-label="予定完了">✓</button>
+        <button type="button" class="btn exec-actual-complete" data-action="complete-block-with-actual" data-id="${block.id}">実績付きで完了</button>
+      </div>
       <button type="button" class="btn ghost exec-row-copy" data-action="block-row-toggle" data-id="${block.id}" aria-expanded="${expanded}">
         <strong title="${escapeHTML(block.title)}">${isMIT ? `<span class="mit-star" style="color:#F5A623">★</span> ` : ""}${escapeHTML(block.title)}</strong>
         <span class="exec-row-meta"><span class="exec-row-meta-text">${metaHTML}</span>${leverageTypeMarkHTML(block.leverageType)}</span>
@@ -10448,103 +10454,32 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
 // 完了解除のたびに巻き戻してしまわないための安全策)。
 let _quickCompleteSnapshots = {};
 
-// v150(UI改善計画Phase4b・R3): 「完了」作法の統一。ホーム今日タブのドット/タスクシュートの✓/
-// タイムラインの○/ながれのチェックなど、完了へ向かうすべての導線をこの関数(即完了)に一本化した
-// (従来はtoggle-block=即完了 / complete-block-with-actual=実績モーダル、の2系統が混在し
-// 入口によって挙動が変わっていた=T4/H4)。完了へ切り替わる瞬間に実績開始/終了時刻を
-// (未設定なら)現在時刻ベースで補完し、充放電はprefillEnergy(過去実績の中央値)で自動記録する
-// (v150レビュー対応: 手入力済みの充放電は上書きしない、項目3)。
-// 従来どおり実績入力モーダル自体は削除せず、完了直後のトーストの「実績を編集」ボタンから
-// 開けるようにした(saveAndRenderのtoastOpts、下記参照)。ポモドーロ完了経路(completePomodoro)
-// は対象外(現行維持、K指示)。
+// F2-1: ✓は詳細と同じ予定完了。実績は専用ボタンから登録する。
 function toggleBlock(id) {
+  const block = state.blocks.find(row => row.id === id && !row.deleted);
+  if (!block) return false;
+  if (!block.completed) {
+    const result = runDailyOperation("daily-plan-complete", {
+      kind: "block", id, desiredCompleted: true
+    }, dailyOperationDeps);
+    if (!result.ok) showToast(result.error?.message || "予定完了を保存できませんでした");
+    return result.ok;
+  }
+  // 完了解除は従来どおり、同セッションの自動補完だけ復元する。
   if (!draftSaveTransaction.active) return runLifecycleChange(() => toggleBlock(id));
-  let justCompleted = false;
-  let completedBlock = null;
-  let changedBlock = null;
-  const priorSnapshot = _quickCompleteSnapshots[id];
-  const blocks = state.blocks.map((block) => {
-    if (block.id !== id) return block;
-    const completed = !block.completed;
-    if (completed && block.taskId) {
-      state.tasks = state.tasks.map((task) => task.id === block.taskId && task.status === "todo" ? { ...task, status: "doing", updatedAt: nowDateTime() } : task);
+  const snap = _quickCompleteSnapshots[id];
+  const next = { ...block, completed: false };
+  if (snap) {
+    for (const field of ["everStartedAt", "actualStartAt", "actualEndAt", "charge", "discharge"]) {
+      if (snap[field] && next[field] === snap[field].after) next[field] = snap[field].before;
     }
-    let next = { ...block, completed };
-    if (completed) {
-      justCompleted = true;
-      const snapshot = {};
-      if (!next.actualEndAt) {
-        next.actualEndAt = nowDateTime();
-        snapshot.actualEndAt = { before: block.actualEndAt, after: next.actualEndAt };
-      }
-      if (!next.actualStartAt) {
-        // v150レビュー対応(項目2): plannedStartAt優先+開始>終了の丸め込み(上記関数参照)。
-        next.actualStartAt = quickCompleteActualStart(block, next.actualEndAt);
-        snapshot.actualStartAt = { before: block.actualStartAt, after: next.actualStartAt };
-      }
-      next.everStartedAt = next.everStartedAt || next.actualStartAt;
-      snapshot.everStartedAt = { before: block.everStartedAt, after: next.everStartedAt };
-      // v150レビュー対応(項目3、両レビュー一致): 充放電は実績モーダル(buildActualEntryModal)と
-      // 同じprefillEnergyを使うが、既に手入力の値(charge/dischargeのどちらかが非0)がある場合は
-      // 上書きしない(過去実績が3件未満ならprefillEnergy自体がnullを返し従来どおり無補完)。
-      if (!block.charge && !block.discharge) {
-        const pf = prefillEnergy(next);
-        if (pf) {
-          next.charge = pf.charge;
-          next.discharge = pf.discharge;
-          snapshot.charge = { before: block.charge, after: next.charge };
-          snapshot.discharge = { before: block.discharge, after: next.discharge };
-        }
-      }
-      if (Object.keys(snapshot).length) _quickCompleteSnapshots[id] = snapshot;
-      else delete _quickCompleteSnapshots[id];
-      completedBlock = next;
-    } else {
-      // v150レビュー対応(項目4): 完了解除。このセッション内でこのBlockを即完了したときの
-      // 自動補完スナップショットがあれば、「補完後に手で変更されていない」フィールドだけ元へ戻す。
-      const snap = _quickCompleteSnapshots[id];
-      if (snap) {
-        for (const field of ["everStartedAt", "actualStartAt", "actualEndAt", "charge", "discharge"]) {
-          if (snap[field] && next[field] === snap[field].after) next[field] = snap[field].before;
-        }
-        delete _quickCompleteSnapshots[id];
-      }
-    }
-    changedBlock = next;
-    return next;
-  });
-  if (!commitBlockChanges(blocks)) {
-    if (priorSnapshot === undefined) delete _quickCompleteSnapshots[id];
-    else _quickCompleteSnapshots[id] = priorSnapshot;
-    return false;
   }
-  syncHabitStreakForBlock(state.blocks.find((block) => block.id === id));
-  // v115: アンカー配置(提案G③)。完了したBlockが繰り返しルーティンに属していれば、
-  // それをアンカーにする後続のルーティン/チェーンを直後の時刻に自動配置する。
-  if (justCompleted && completedBlock && completedBlock.recurrenceGroupId) {
-    triggerAnchorPlacements(completedBlock.recurrenceGroupId, nowDateTime());
-  }
-  if (justCompleted && completedBlock) {
-    transferIronLogToCompletedBlock(id);
-    generateReport(completedBlock.date, { quiet: true });
-    saveState();
-    trackOnBlockCompletionChanged(changedBlock, true, { interactive: true });
-    // v150: 完了直後だけ「実績を編集」ボタン付きトースト(既存の実績モーダルを編集導線として再利用)。
-    saveAndRender("Blockを完了しました", { blockId: id, actionLabel: "実績を編集" });
-  } else {
-    if (changedBlock) {
-      saveState();
-      trackOnBlockCompletionChanged(changedBlock, false, { interactive: true });
-    }
-    saveAndRender("Blockを更新しました");
-  }
-  // v17/v18: 完了時の演出(常にランダム祝福)
-  if (justCompleted && completedBlock) {
-    const celebrateMsg = getRandomCelebrate();
-    triggerCompletionEffect(celebrateMsg, completedBlock.isMIT);
-  }
-  // v293: 身体スキャン復活(ユーザーの手動完了操作のみ発火。完了取り消し・演出の後に出す)。
-  if (justCompleted && completedBlock) openBodyScanModal(completedBlock.id);
+  if (!commitBlockChanges(state.blocks.map(row => row.id === id ? next : row))) return false;
+  delete _quickCompleteSnapshots[id];
+  syncHabitStreakForBlock(next);
+  trackOnBlockCompletionChanged(next, false, { interactive: true });
+  saveAndRender("Blockを更新しました");
+  return true;
 }
 
 // v107: タスクシュートのBlock行「タスク完了」チェック(K指示 2026-07-15)。
@@ -12554,30 +12489,36 @@ function finishReport(outcome, note) {
   return result.ok;
 }
 
-// v9: 「☕ 休憩へ」: focus → break に遷移(+5分休憩開始)
-// C1(v192): 以前はここで block.actualEndAt を書いて暗黙的に「完了扱い」にしていたが、
-// タイマー満了による自動発火(startTimerTicker)でNOW FOCUSが勝手に空になる副作用があった。
-// 休憩は完了ではなく一時停止のため、actualEndAtは書かない(タスクの計測は完了操作まで継続する)。
-// pomodoroCount加算のみ維持する(手動「☕ 休憩へ」・自動発火どちらの呼び出しも同じ関数のため統一)。
-function goBreakPomodoro() {
-  const blockId = state.pomodoro.blockId;
-  return commitBlockChanges(state.blocks.map((block) => block.id === blockId
-    ? { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1 } : block), () => {
-  // v14: 完全再構築 + 5分休憩開始
-  // v19: lastFocusBlockId に保存(休憩後に「続ける/完了」選択用)
+// F2-2: focus満了の実績終了と休憩への遷移を1候補で保存する。
+// 手動の「休憩へ」は従来どおり実績終了を入れない。
+function goBreakPomodoro({ expired = false } = {}) {
+  if (!state.pomodoro.running || state.pomodoro.mode === "break") return false;
+  if (expired && (state.pomodoro.paused || localDateTimeToMs(state.pomodoro.endsAt) > Date.now())) return false;
+  if (!draftSaveTransaction.active) return runLifecycleChange(() => goBreakPomodoro({ expired }));
+  const { blockId, startedAt, endsAt } = state.pomodoro;
+  if (!commitBlockChanges(state.blocks.map((block) => {
+    if (block.id !== blockId || block.deleted) return block;
+    const actualStartAt = block.actualStartAt || startedAt;
+    return { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1,
+      ...(expired ? {
+        actualStartAt, actualEndAt: endsAt,
+        everStartedAt: block.everStartedAt || actualStartAt
+      } : {}) };
+  }))) return false;
+  // タブ復帰が遅れても実績には満了時刻、休憩開始には現在時刻を使う。
+  // commitBlockChangesのeffectsは保存後なので、タイマーもここで候補に含める。
   const now = Date.now();
   state.pomodoro = {
     running: true,
     blockId: "",
-    lastFocusBlockId: blockId || "",  // v19
+    lastFocusBlockId: blockId || "",
     startedAt: dateToLocalDateTime(new Date(now)),
     endsAt: dateToLocalDateTime(new Date(now + 5 * 60 * 1000)),
     mode: "break",
     paused: false,
     pausedRemainMs: 0
   };
-  saveAndRender("休憩を開始しました");
-  });
+  return saveAndRender("休憩を開始しました");
 }
 
 // v9: 「✓ 休憩終了」: break セッションを終わって未起動状態に
@@ -12641,7 +12582,7 @@ function startTimerTicker() {
           endBreakPomodoro();
         } else {
           // focus フェーズ終了 → 自動で休憩へ
-          goBreakPomodoro();
+          goBreakPomodoro({ expired: true });
         }
       } else if (state.currentView === "today" && personalDataReady(state.settings.github)) {
         updatePomodoroTick();

@@ -6019,3 +6019,8 @@ details.settings-row > .fold-summary.settings-row-summary {
   #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .tower-mit { grid-column: 2; grid-row: 1 / 4; }
   #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .today-pomodoro { grid-column: 3; grid-row: 1 / 4; }
 }
+
+/* F2-1: 予定完了と実績登録を隣接した44pxの操作に分ける。 */
+.exec-row-now, .exec-row-upcoming { grid-template-columns: auto minmax(0, 1fr) auto; }
+.exec-completion-actions { display: flex; align-items: center; gap: 4px; }
+.exec-completion-actions .exec-actual-complete { min-width: 44px; min-height: 44px; white-space: normal; }
