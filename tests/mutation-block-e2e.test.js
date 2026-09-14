@@ -763,7 +763,7 @@ test('factories keep unsaved timeline input out of state; persistence owns the s
 });
 
 async function lifecycleFixture() {
-  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'offerStartOverlap', 'toggleBlock', 'autoCloseStaleRoutineRuns',
+  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'offerStartOverlap', 'chooseStartOverlap', 'toggleBlock', 'autoCloseStaleRoutineRuns',
     'weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock', 'parseDate', 'addDays',
     'dateToISO', 'dateToLocalDateTime', 'localDateTimeToMs',
     'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned',
@@ -772,6 +772,8 @@ async function lifecycleFixture() {
     runDailyOperation: (await import('../src/features/daily-operations.js')).runDailyOperation,
     mergeWeeklyCommitments: (await import('../src/core/merge.js')).mergeWeeklyCommitments,
     ...await import('../src/core/track.js'),
+    modalHeaderHTML: title => title, escapeHTML: value => value,
+    _pendingStartChoice: null, _pendingLifecycleCtx: null,
     queueMicrotask: callback => callback(),
     maybeShowGuidedAccessHint: () => { f.counts.guidedAccess = (f.counts.guidedAccess || 0) + 1; },
     _quickCompleteSnapshots: {}, requestDraftLeave: () => false,
@@ -791,20 +793,32 @@ async function lifecycleFixture() {
   f.counts.startEffect = 0;
   f.ctx.observeStartEffect = result => {
     f.counts.startEffect++;
-    assert.equal(f.persisted.length, 1, 'startEffect runs after the successful candidate save');
-    assert.deepEqual(f.persisted[0].pomodoro, clone(f.ctx.state.pomodoro));
+    assert.equal(f.persisted.length, f.expectedStartSaves || 1, 'startEffect runs after all required candidate saves');
+    assert.deepEqual(f.persisted.at(-1).pomodoro, clone(f.ctx.state.pomodoro));
     assert.equal(result.block.id, 'b');
   };
   vm.runInContext(`const originalStartEffect = dailyOperationDeps.startEffect;
     dailyOperationDeps.startEffect = result => { observeStartEffect(result); originalStartEffect(result); };`, f.ctx);
   return f;
 }
+// F5-3: open the real choice sheet before injecting persistence failures.
+function prepareOverlapStart(f) {
+  f.ctx.setBlockTime('b', 'actualStartAt');
+  assert.equal(f.ctx.state.modal?.type, 'startOverlap');
+  assert.match(f.ctx.displayedBlock, /data-choice="end"/);
+  assert.equal(f.counts.writes, 0, 'opening the choice sheet does not save');
+  f.expectedStartSaves = 2;
+  return () => {
+    f.ctx.chooseStartOverlap('end');
+    return Boolean(f.ctx.state.blocks[0].actualStartAt);
+  };
+}
 const lifecycle = [
   ['start and close stale routine', f => {
     f.ctx.state.settings.focusTimerAuto = true;
     f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[0]), id: 'stale', date: '2026-09-09',
       category: 'ルーティン', actualStartAt: '2026-09-09T23:10:00', actualEndAt: '' });
-    return () => f.ctx.setBlockTime('b', 'actualStartAt');
+    return prepareOverlapStart(f);
   }],
   ['end', f => () => f.ctx.setBlockTime('b', 'actualEndAt')],
   ['complete', f => () => f.ctx.toggleBlock('b')],
@@ -875,10 +889,11 @@ for (const mode of ['candidate-exception', 'invalid-clock']) {
       assert.equal(f.counts.close + f.counts.render + f.counts.autoSync + f.counts.autoSave + f.counts.timer + f.counts.tracking + f.counts.startEffect + (f.counts.guidedAccess || 0), 0);
       injecting = false;
       execute();
-      assert.equal(f.counts.writes, 1); assert.equal(f.persisted.length, 1);
-      assert.equal(f.counts.autoSync, 1); assert.equal(f.counts.autoSave, 1);
+      const saves = name === 'start and close stale routine' ? 2 : 1;
+      assert.equal(f.counts.writes, saves); assert.equal(f.persisted.length, saves);
+      assert.equal(f.counts.autoSync, saves); assert.equal(f.counts.autoSave, saves);
       assert.notDeepEqual(clone(f.ctx.state.blocks), before.blocks);
-      assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+      assert.deepEqual(f.persisted.at(-1).blocks, clone(f.ctx.state.blocks));
       assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
     });
   }
@@ -907,21 +922,25 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
     const changed = f.ctx.state.blocks[0];
     assert.equal(changed.updatedAt, '2026-09-10T10:05:01');
     assert.equal(changed.createdAt, before.blocks[0].createdAt);
-    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(f.persisted.at(-1).blocks, clone(f.ctx.state.blocks));
     assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
-    assert.equal(f.persisted.filter((image, i) => !i || image.blocks[0].updatedAt !== f.persisted[i - 1].blocks[0].updatedAt).length, 1);
+    assert.equal(f.persisted.filter((image, i) => image.blocks[0].updatedAt !== (i ? f.persisted[i - 1].blocks[0].updatedAt : before.blocks[0].updatedAt)).length, 1);
     if (name === 'start and close stale routine') {
       assert.equal(changed.actualStartAt, NOW);
-      assert.equal(f.ctx.state.blocks[2].actualEndAt, '2026-09-09T23:59:00');
+      assert.equal(f.ctx.state.blocks[2].actualEndAt, NOW);
+      assert.equal(f.ctx.state.blocks[2].completed, false);
+      assert.equal(f.persisted.length, 2);
+      assert.equal(f.persisted[0].blocks[0].actualStartAt, '');
+      assert.equal(f.persisted[0].blocks[2].actualEndAt, NOW);
       assert.equal(f.ctx.state.blocks[2].updatedAt, '2026-09-10T10:05:01');
       // B5 の契約追随(監督者決定 2026-09-10)
       assert.equal(f.counts.timer, 0, 'legacy timer functions are not called directly');
       assert.equal(f.counts.startEffect, 1);
-      assert.deepEqual(f.persisted[0].pomodoro, {
+      assert.deepEqual(f.persisted[1].pomodoro, {
         running: true, blockId: 'b', startedAt: NOW, endsAt: `${DATE}T10:25:00`,
         mode: 'focus', paused: false, pausedRemainMs: 0
       });
-      assert.deepEqual(clone(f.ctx.state.pomodoro), f.persisted[0].pomodoro);
+      assert.deepEqual(clone(f.ctx.state.pomodoro), f.persisted[1].pomodoro);
     }
     if (name === 'end') assert.equal(changed.actualEndAt, NOW);
     if (name === 'actual modal') {
@@ -961,24 +980,28 @@ test('stale timer reset is persisted in the Block candidate without stamping Blo
   f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[0]), id: 'stale', category: 'ルーティン',
     actualStartAt: `${DATE}T09:00:00`, actualEndAt: '' });
   f.ctx.state.pomodoro = { running: true, blockId: 'stale', startedAt: `${DATE}T09:00:00` };
-  const before = clone(f.ctx.state);
+  const execute = prepareOverlapStart(f), before = clone(f.ctx.state);
   await withLocalSaveFailure(async fail => {
     f.fail(fail);
-    assert.equal(f.ctx.setBlockTime('b', 'actualStartAt'), false);
+    assert.equal(execute(), false);
     expectRestored(before, clone(f.ctx.state));
     f.fail(null);
-    f.ctx.setBlockTime('b', 'actualStartAt');
+    execute();
+    // F5-3: recommended end is saved before the new start.
     // B5 の契約追随(監督者決定 2026-09-10)
-    assert.equal(f.counts.writes, 2); // failed candidate write, successful Block + timer candidate write
+    assert.equal(f.counts.writes, 3); // failed end, successful end, successful start
     const saved = JSON.parse(f.raw());
     assert.equal(saved.pomodoro.running, false);
     assert.equal(saved.pomodoro.blockId, '');
     assert.equal(saved.blocks[0].actualStartAt, NOW);
-    assert.equal(f.persisted.length, 1, 'Block and timer share one successful save');
-    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
-    assert.deepEqual(f.persisted[0].pomodoro, clone(f.ctx.state.pomodoro));
-    assert.deepEqual(f.persisted[0].blocks, saved.blocks);
-    assert.deepEqual(f.persisted[0].pomodoro, saved.pomodoro);
+    assert.equal(f.persisted.length, 2, 'recommended end and start each save their Block and timer together');
+    assert.equal(f.persisted[0].blocks[0].actualStartAt, '');
+    assert.equal(f.persisted[0].blocks[2].actualEndAt, NOW);
+    assert.equal(f.persisted[0].pomodoro.running, false);
+    assert.deepEqual(f.persisted.at(-1).blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(f.persisted[1].pomodoro, clone(f.ctx.state.pomodoro));
+    assert.deepEqual(f.persisted[1].blocks, saved.blocks);
+    assert.deepEqual(f.persisted[1].pomodoro, saved.pomodoro);
     assert.equal(saved.blocks[0].updatedAt, '2026-09-10T10:05:01');
   });
 });

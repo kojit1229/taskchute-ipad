@@ -39,7 +39,6 @@ import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js
 import { DAILY_OPERATIONS, runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
-let _pendingStartChoice = null; // 表示中の開始候補だけ。stateには保存しない。
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createDailyReading } from "./src/features/daily-reading.js";
@@ -1543,6 +1542,7 @@ let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
 // { blockId, phase: "declare"|"report", kind: "pomodoro"|"block" }
 let _pendingLifecycleCtx = null;
+let _pendingStartChoice = null; // 表示中の開始候補だけ。stateには保存しない。
 // v108: Block保存モーダルの二重送信ガード(iOS Safariでの保存ボタン二重発火対策)。非永続。
 //       saveBlockFromModal の実行中だけ true になり、完了/失敗いずれも finally で必ず解除する。
 let _blockSaveInFlight = false;

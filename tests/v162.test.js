@@ -128,11 +128,12 @@ const mkTodayBlock = (id, title, extra = {}) => ({
     check("完了済みBlock(未完了B)は対象にならない(モーダル本文に出ない)", !(await page.locator(".modal-body").textContent()).includes("未完了B"));
     check("対象Blockのタイトルが出る", (await page.locator(".modal-body").textContent()).includes("未完了A"));
 
-    console.log("[3] チップ1タップで記録→次へ→全件処理後にgenerateReport()が走り理由が保存される");
+    console.log("[3] 一覧でチップ選択→記録して日報へ→理由が保存される");
     await page.fill("[data-incomplete-reason-note]", "会議が長引いた");
     await page.click('[data-action="incomplete-reason-chip"][data-chip="時間切れ"]');
-    await page.waitForTimeout(300);
-    // v296(R1b)追随: このチップがキュー最後の1件のため、直後にdailyClose完了経路(generateReport
+    check("選択だけでは保存も日報生成もされない", (await stateNow()).blocks.find(b => b.id === "blk-close-1").incompleteReason === null && !(await stateNow()).reports[TODAY]);
+    await page.click('[data-action="incomplete-reason-save"]');
+    // F5-4追随: 一覧の保存ボタンでdailyClose完了経路(generateReport
     // 手前)へ進む。当日の書く瞑想は未保存(このスイートは対象外)なのでゲートが挟まる。
     // 「モーダルが閉じている」検証意図(次のcheck)を成立させるため片付けてから読む。
     await dismissWriteMeditationGateIfOpen(page);
@@ -148,12 +149,10 @@ const mkTodayBlock = (id, title, extra = {}) => ({
     await generateReportThroughGate(page);
     await page.waitForTimeout(300);
     check("(準備)モーダルが開く", await page.locator(".modal-root.open").count() === 1);
+    check("2件とも同じ一覧に表示される", await page.locator('[data-reason-block]').count() === 2 &&
+      await page.locator('[data-reason-block="blk-skip-1"]').isVisible() && await page.locator('[data-reason-block="blk-skip-2"]').isVisible());
     await page.click('[data-action="incomplete-reason-skip"]');
-    await page.waitForTimeout(200);
-    check("(準備)2件目のモーダルへ進む(まだ閉じない)", await page.locator(".modal-root.open").count() === 1);
-    await page.click('[data-action="incomplete-reason-skip"]');
-    await page.waitForTimeout(300);
-    // v296(R1b)追随: 2件目(キュー最後)のスキップでdailyClose完了経路→書く瞑想ゲートが挟まる。
+    // F5-4追随: 一覧全件の一括スキップでdailyClose完了経路→書く瞑想ゲートが挟まる。
     await dismissWriteMeditationGateIfOpen(page);
     const s4 = await stateNow();
     check("全件スキップ後にgenerateReport()が走る", !!s4.reports[TODAY]);

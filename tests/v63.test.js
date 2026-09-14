@@ -142,6 +142,8 @@ function check(name, cond, extra = "") {
     check("4件それぞれに保留ボタンがある", await page.locator(".wip-banner-row").count() === 4);
 
     console.log("[6] WIPバナー: 「保留」ワンタップでstatus=pausedになり、3件に減れば非表示になる");
+    // v406(F5-6 M-22): 進行中の注意は1行の件数表示+details(既定は閉じる)。一覧は開いてから操作する(CHANGELOG 2026-09-14)
+    if (await page.locator("details.wip-banner").count()) await page.locator("details.wip-banner > summary").click();
     await page.locator('.wip-banner-row:has-text("案件D") button[data-action="suspend-project"]').click();
     await page.waitForTimeout(300);
     const s6 = await stateNow();

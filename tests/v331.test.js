@@ -135,6 +135,7 @@ async function seed(page, values) {
 
     console.log("[3] ▶開始で「いま」へ移り、完了ボタンで消える");
     await page.click('.exec-row-upcoming:has(strong:has-text("b-up-b")) [data-action="now-start"]');
+    await page.click('[data-action="start-overlap-choice"][data-choice="parallel"]');
     await page.waitForSelector('[data-action="declare-skip"]');
     await page.click('[data-action="declare-skip"]');
     await page.waitForSelector('.exec-row-now:has([data-action="edit-block"][data-id="b-up-b"])');
