@@ -1178,6 +1178,8 @@ registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
   "today-add-interruption": () => openTodayActualBlock(true),
   "today-add-actual": () => openTodayActualBlock(false),
+  "remaining-shift": () => adjustRemainingBlocks(false),
+  "remaining-tomorrow": () => adjustRemainingBlocks(true),
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
@@ -5019,6 +5021,45 @@ function requestCarryOver(id) {
   carryOverBlock(id);
 }
 
+function remainingBlocks() {
+  const now = nowDateTime();
+  return state.blocks.filter(b => !b.deleted && !b.migratedTo && b.date === todayISO()
+    && !b.completed && !b.actualStartAt && b.plannedStartAt && b.plannedStartAt <= now)
+    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt));
+}
+
+function renderRemainingActions() {
+  if (state.selectedDate !== todayISO()) return "";
+  const disabled = remainingBlocks().length ? "" : "disabled";
+  return `<div class="row" style="flex-wrap:wrap"><button class="btn" style="min-height:44px" data-action="remaining-shift" ${disabled}>残りを後ろへ</button><button class="btn" style="min-height:44px" data-action="remaining-tomorrow" ${disabled}>残りを明日へ</button></div>`;
+}
+
+function adjustRemainingBlocks(tomorrow) {
+  if (state.selectedDate !== todayISO()) return;
+  const targets = remainingBlocks();
+  if (!targets.length || !window.confirm(`${targets.length}件の残りの予定を${tomorrow ? "明日へ送ります" : "後ろへずらします"}か？`)) return;
+  const nowMin = Math.min(1435, Math.round(minutesOf(nowDateTime()) / 5) * 5);
+  const delta = Math.max(0, nowMin - minutesOf(targets[0].plannedStartAt));
+  const toDate = addDays(todayISO(), 1), replacements = new Map(), additions = [];
+  for (const src of targets) {
+    if (tomorrow) {
+      const shift = dt => dt ? `${toDate}${dt.slice(10)}` : "";
+      const block = makeBlock({ taskId: src.taskId, date: toDate, title: src.title, category: src.category,
+        plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt), estimateMin: src.estimateMin,
+        comment: src.comment, leverageType: src.leverageType, expectedCharge: src.expectedCharge, expectedDischarge: src.expectedDischarge });
+      Object.assign(block, { source: src.source || "", carryCount: (src.carryCount || 0) + 1, isMIT: false });
+      additions.push(block);
+      replacements.set(src.id, { ...src, migratedTo: block.id });
+    } else {
+      const shift = dt => !dt ? "" : `${src.date}T${minToHHMM(Math.min(1435,
+        (dt.slice(0, 10) > src.date ? 1440 : 0) + minutesOf(dt) + delta))}:00`;
+      replacements.set(src.id, { ...src, plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt) });
+    }
+  }
+  return commitBlockChanges([...state.blocks.map(b => replacements.get(b.id) || b), ...additions],
+    () => { render(); showToast(`${targets.length}件の予定を${tomorrow ? "明日へ送りました" : "後ろへずらしました"}`); });
+}
+
 function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
   const src = blockById(id);
   if (!src || src.migratedTo) return;
@@ -6601,7 +6642,7 @@ function renderExecView() {
 function renderTasks(opts = {}) {
   const embedded = opts.embedded === true;
   return `${embedded ? "" : execHeaderHTML() + renderDateBar()}
-    ${carryOverPanel()}${renderWorkList("exec")}${renderWorkList("exec-candidates")}
+    ${carryOverPanel()}${renderRemainingActions()}${renderWorkList("exec")}${renderWorkList("exec-candidates")}
     ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="daily-gap-choose">計画の空きへ配置</button><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
 }
 // v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・

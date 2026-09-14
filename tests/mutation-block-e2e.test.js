@@ -166,6 +166,63 @@ test('15c repeated deletion and unchanged scan do not stamp Blocks again', async
 });
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00', DATE = NOW.slice(0, 10);
 
+async function f5RemainingFixture() {
+  const f = await fixture(['remainingBlocks', 'adjustRemainingBlocks', 'renderRemainingActions']);
+  Object.assign(f.ctx, { minutesOf: dt => Number(dt.slice(11, 13)) * 60 + Number(dt.slice(14, 16)),
+    nowDateTime: () => NOW, addDays: () => '2026-09-11', window: { confirm: text => { f.confirmation = text; return true; } } });
+  f.ctx.state.blocks = [
+    { id: 'a', plannedStartAt: DATE + 'T08:00:00', plannedEndAt: DATE + 'T08:30:00', isMIT: true, comment: 'keep plan' },
+    { id: 'b', plannedStartAt: DATE + 'T09:00:00', plannedEndAt: DATE + 'T23:50:00' },
+    { id: 'running', actualStartAt: DATE + 'T09:00:00', plannedStartAt: DATE + 'T09:00:00' },
+    { id: 'future', plannedStartAt: DATE + 'T11:00:00' },
+    { id: 'done', completed: true, plannedStartAt: DATE + 'T09:00:00' },
+    { id: 'moved', migratedTo: 'old-copy', plannedStartAt: DATE + 'T09:00:00' }
+  ].map(b => ({ ...f.ctx.makeBlock({ date: DATE, title: b.id }), ...b }));
+  return f;
+}
+
+test('F5-2 remaining plans shift together or carry together, excluding running, done and future Blocks', async () => {
+  for (const tomorrow of [false, true]) {
+    const f = await f5RemainingFixture(), before = clone(f.ctx.state.blocks);
+    assert.equal(f.ctx.adjustRemainingBlocks(tomorrow), true);
+    assert.match(f.confirmation, /2件/);
+    assert.equal(f.counts.writes, 1);
+    assert.deepEqual(clone(f.ctx.state.blocks.slice(2, 6)), before.slice(2));
+    if (tomorrow) {
+      const copies = f.ctx.state.blocks.slice(6);
+      assert.equal(copies.length, 2);
+      assert.equal(copies[0].date, '2026-09-11');
+      assert.equal(copies[0].plannedStartAt, '2026-09-11T08:00:00');
+      assert.equal(copies[0].comment, 'keep plan');
+      assert.equal(copies[0].isMIT, false);
+      assert.equal(copies[0].carryCount, 1);
+      assert.equal(f.ctx.state.blocks[0].migratedTo, copies[0].id);
+      assert.match(f.ctx.renderRemainingActions(), /disabled/);
+    } else {
+      assert.equal(f.ctx.state.blocks[0].plannedStartAt, DATE + 'T10:00:00');
+      assert.equal(f.ctx.state.blocks[0].plannedEndAt, DATE + 'T10:30:00');
+      assert.equal(f.ctx.state.blocks[1].plannedStartAt, DATE + 'T11:00:00');
+      assert.equal(f.ctx.state.blocks[1].plannedEndAt, DATE + 'T23:55:00');
+    }
+    f.ctx.state.selectedDate = '2026-09-11';
+    assert.equal(f.ctx.renderRemainingActions(), '');
+  }
+});
+
+test('F5-2 failed batch restores every Block and creates no carry copy or success effect', async () => {
+  for (const tomorrow of [false, true]) {
+    const f = await f5RemainingFixture(), before = clone(f.ctx.state);
+    await withLocalSaveFailure(async fail => {
+      f.fail(fail);
+      assert.equal(f.ctx.adjustRemainingBlocks(tomorrow), false);
+      expectRestored(before, clone(f.ctx.state));
+      assert.equal(f.counts.writes, 1);
+      assert.equal(f.counts.render + f.counts.autoSync, 0);
+      assert.ok(f.ctx.lastToast);
+    });
+  }
+});
+
 test('F1-2 MIT replacement commits both Blocks once; failed save restores both, including modal entry', async () => {
   for (const entry of ['toggle', 'modal']) {
     const f = await fixture(['toggleMIT']);
