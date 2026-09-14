@@ -43,7 +43,8 @@ const shots = process.env.F6_SHOTS_DIR;
     check('MITは上部に1枠、NOW横に重複なし', await page.locator('.today-tower > .tower-mit').count() === 1 && await page.locator('.tower-runway .tower-mit').count() === 0);
     check('MITにタイトル・時刻・見積・状態', /読書ノートをまとめる[\s\S]*14:00–14:30・見積 30分・進行中/.test(await page.locator('.tower-mit').innerText()));
     check('生年月日未設定は年齢2枠とも未設定', JSON.stringify(await page.locator('.life-unset').allTextContents()) === JSON.stringify(['未設定', '未設定']));
-    check('からだの帯なし・からだのきろくあり', await page.locator('.tower-condition').count() === 0 && await page.locator('.sec-bodymind').count() === 1);
+    check('記録群はルーティン/実績一覧の2つ・からだの帯/きろくなし', await page.locator('.tower-condition').count() === 0 && await page.locator('.sec-bodymind').count() === 0
+      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']));
     const root = page.locator('[data-work-list="today"]');
     check('次の予定7件、やったこと1件', JSON.stringify(await root.locator('[role="tab"]').allTextContents()) === JSON.stringify(['次の予定 7', 'やったこと 1']));
     await root.locator('[data-tab="actuals"]').click();

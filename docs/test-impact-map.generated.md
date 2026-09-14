@@ -162,7 +162,7 @@
 | track-merge-core.test.js | node | full | sync-storage | 20 | 0 | 0 |
 | track-normalize.test.js | e2e | full | sync-storage, security-offline | 22 | 0 | 0 |
 | track-sync-characterization.test.js | node | full | sync-storage | 15 | 0 | 0 |
-| ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 22 | 0 | 0 |
+| ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 23 | 0 | 0 |
 | unit9-carryover-fields.test.js | e2e | full | planning-execution | 40 | 5 | 1800 |
 | v100.test.js | e2e | full | content-ai, ui-responsive | 31 | 9 | 3300 |
 | v101.test.js | e2e | full | content-ai, ui-responsive | 22 | 6 | 1400 |
@@ -244,7 +244,7 @@
 | v268.test.js | e2e | full | planning-execution | 11 | 0 | 0 |
 | v271.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
 | v274.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
-| v275.test.js | e2e | full | ui-responsive | 32 | 0 | 0 |
+| v275.test.js | e2e | full | ui-responsive | 34 | 0 | 0 |
 | v276.test.js | e2e | full | planning-execution, ui-responsive | 35 | 0 | 0 |
 | v277.test.js | e2e | full | ui-responsive | 28 | 0 | 0 |
 | v278.test.js | e2e | full | planning-execution, ui-responsive | 26 | 0 | 0 |
@@ -500,7 +500,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v266.test.js | 104 |
 | fixed-date | 5 | tests/v267.test.js | 111, 114, 118, 281, 285 |
 | missing-timezone | 1 | tests/v274.test.js | 81 |
-| missing-timezone | 1 | tests/v275.test.js | 64 |
+| missing-timezone | 1 | tests/v275.test.js | 63 |
 | fixed-date | 3 | tests/v276.test.js | 77, 201, 276 |
 | missing-timezone | 1 | tests/v277.test.js | 18 |
 | missing-timezone | 1 | tests/v278.test.js | 31 |

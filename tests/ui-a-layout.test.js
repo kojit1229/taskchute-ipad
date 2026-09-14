@@ -54,7 +54,7 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
       sections:selectors.map(selector=>({selector,count:tower.querySelectorAll(selector).length,visible:!!tower.querySelector(selector)?.getClientRects().length})),
       life:rect('.life-band'),so:rect('.so-row'),plansBox:rect('#dailyTodayPlans'),records:rect('.daily-today-records'),journalBox:rect('.tower-journal'),
       // fixF6d(監督者決定2、F6-3): 表形式化でJOURNALは記録群(.daily-today-records)の外へ出て
-      // 本体の3枠目になった。記録群自体はルーティン/からだのきろく/実績一覧(折りたたみ)の3つ。
+      // 本体の3枠目になった。C-1/D06で記録群はルーティン/実績一覧(折りたたみ)の2つ。
       recordOrder:[...tower.querySelector('.daily-today-records').children].map(el=>el.matches('.sec-gates')?'gates':el.matches('.sec-bodymind')?'body':el.tagName==='DETAILS'?'actuals-details':'other'),
       recordGaps:[...tower.querySelector('.daily-today-records').children].slice(1).map(el=>el.getBoundingClientRect().top-el.previousElementSibling.getBoundingClientRect().bottom)};
     },STATE_KEY);
@@ -72,8 +72,9 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
      assert.equal(metrics.creeds,3);assert.deepEqual(metrics.subtitles,['決めた一つを100%やり切る','実行率より、進んだ量','朝は集中、夜は充電']);
      assert.equal(metrics.sections.length,8);assert(metrics.sections.every(s=>s.count===1&&s.visible),'eight sections remain visible with old focus settings');
      // fixF6d(監督者決定2、F6-3): JOURNALは記録群の外の本体3枠目になったため、記録群自体は
-     // ルーティン/からだのきろく/実績一覧(折りたたみ)の3つを検査する(同じ「3つ・順序」の性質)。
-     assert.deepEqual(metrics.recordOrder,['gates','body','actuals-details']);
+     // C-1/D06: 記録群2つの件数・順序と、からだのきろく不在を検査する。
+     assert.deepEqual(metrics.recordOrder,['gates','actuals-details']);
+     assert.equal(await page.locator('[data-daily-view="today"] .sec-bodymind').count(),0);
      assert(metrics.recordGaps.every(gap=>gap>=8),'record panels separated by at least 8px');
      if(width>=1280) {
       // fixF6d(監督者決定2、F6-2/F6-3): LIFE BAND/信条は常に縦積み(同高・同幅の2枠は廃止)。

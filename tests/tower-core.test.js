@@ -329,9 +329,10 @@ function check(name, cond, extra = "") {
       await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], [data-work-list="today"] :text("明日8時半")').count() === 0);
     const sectionOrder = await page.locator('[data-daily-view="today"] .life-band, [data-daily-view="today"] .so-row, [data-daily-view="today"] .sec-rwy, [data-daily-view="today"] .sec-arrivals, [data-daily-view="today"] .sec-log, [data-daily-view="today"] .sec-gates, [data-daily-view="today"] .sec-journal').evaluateAll(sections =>
       sections.map(section => [...section.classList].find(name => name.startsWith('sec-')) || (section.classList.contains('life-band') ? 'life' : 'creeds')));
-    check("人生の時間→信条→いまの作業→予定→ルーティン→やったこと→ジャーナル、からだの帯なし・きろくあり",
+    check("人生の時間→信条→いまの作業→予定→ルーティン→やったこと→ジャーナル、記録群2つ・からだなし",
       JSON.stringify(sectionOrder) === JSON.stringify(['life', 'creeds', 'sec-rwy', 'sec-arrivals', 'sec-gates', 'sec-log', 'sec-journal'])
-      && await page.locator('[data-daily-view="today"] .sec-condition').count() === 0 && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 1,
+      && await page.locator('[data-daily-view="today"] .sec-condition').count() === 0 && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 0
+      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']),
       JSON.stringify(sectionOrder));
     check("今日の全件一覧とGATEは引き続き表示", await page.locator('[data-work-list="today"].sec-arrivals').count() === 1
       && await page.locator(".sec-gates").count() === 1);

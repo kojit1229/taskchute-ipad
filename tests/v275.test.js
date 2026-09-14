@@ -37,8 +37,7 @@ async function openLifeDetails(page) {
   check("旧二重DOMクラスは実行コード/CSSから消滅", !/sec-(?:life|creed)(?:-pc)?|tower-topband-pc/.test(`${topbandSource}\n${towerSource}\n${stylesSource}`));
   check("LIFE BANDはGLASS共通クラス・ビーコン・12WY内訳を含む", /tower-glass-panel life-band/.test(topbandSource)
     && /tower-beacon/.test(topbandSource) && /twyScoreHTML\(digest\).*twyCommitBannerHTML\(digest\)/s.test(topbandSource));
-  check("今日の親へ限定したLIFE/SO縦順・主領域3列と信条横3枠", stylesSource.includes('.daily-today-main { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.4fr); align-items: stretch; gap: 8px; }')
-    && stylesSource.includes('[data-daily-view="today"] .so-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
+  check("今日の親へ限定したLIFE/SO縦順と信条横3枠(主領域は1440px実測)", stylesSource.includes('[data-daily-view="today"] .so-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
     && towerSource.includes('<div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>'));
   check("人生の角丸と信条の非切詰め・時計の共通GLASSを維持", stylesSource.includes('[data-daily-view="today"] .so-row { overflow: visible; }')
     && /\.life-band\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
@@ -131,9 +130,10 @@ async function openLifeDetails(page) {
     console.log("[2] モバイル単一DOM・情報順・時計ticker");
     await seed();
     let mobile;
-    for (const width of [390, 768, 1024]) {
+    for (const width of [390, 768, 1024, 1279]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1024 });
       mobile = await layout();
+      check(`${width}pxは主領域が縦積み1列`, mobile.mainColumns.trim().split(/\s+/).length === 1, JSON.stringify(mobile));
       check(`${width}pxは時計→LIFE→SO→現在作業→予定/記録の縦順・全幅`, mobile.clock.bottom < mobile.life.top && mobile.life.bottom <= mobile.so.top
         && mobile.so.bottom < mobile.mit.top && mobile.mit.bottom < mobile.focus.top
         && [mobile.life.width, mobile.clock.width, mobile.so.width].every((value) => Math.abs(value - mobile.band.width) < 1), JSON.stringify(mobile));
@@ -188,6 +188,8 @@ async function openLifeDetails(page) {
     check("1280px境界の親は縦flex、人生/信条は1列・予定/記録/ジャーナルは3列", boundaryPc.gridAreas === 'none'
       && boundaryPc.rootDisplay === 'flex' && boundaryPc.rootDirection === 'column'
       && boundaryPc.valueColumns.trim().split(/\s+/).length === 1 && boundaryPc.mainColumns.trim().split(/\s+/).length === 3, JSON.stringify(boundaryPc));
+    const pcColumns = pc.mainColumns.trim().split(/\s+/).map(parseFloat);
+    check("1440pxは主領域3列・各列320px以上", pcColumns.length === 3 && pcColumns.every(width => width >= 320), JSON.stringify(pc));
     check("PCは信条横3件・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 3
       && pc.sigs === 4 && pc.soItems === 3 && pc.duplicateCount === 3, JSON.stringify(pc));
     const soType = await page.locator(".so-item").first().evaluate((item) => {
