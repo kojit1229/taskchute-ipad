@@ -138,7 +138,7 @@ test('F1-4 actual entry defaults cap future plans at now and starts at end witho
     ['11:00:00', '13:30:00', '', '', '10:00:00', '10:00:00'],
     ['08:00:00', '09:00:00', '', '', '08:00:00', '09:00:00'],
     ['', '', '', '', '10:00:00', '10:00:00'],
-    ['', '09:00:00', '09:30:00', '', '09:00:00', '09:00:00'],
+    ['', '09:00:00', '09:30:00', '', '09:30:00', '10:00:00'],
     ['08:00:00', '13:30:00', '', '09:45:00', '', '09:45:00'],
     ['08:00:00', '13:30:00', '08:15:00', '09:45:00', '08:15:00', '09:45:00']
   ]) {
@@ -148,6 +148,20 @@ test('F1-4 actual entry defaults cap future plans at now and starts at end witho
     const before = clone(f.ctx.state.blocks);
     f.ctx.completeBlockWithActual('b');
     assert.deepEqual(f.ctx.displayedBlock, { start: at(start), end: at(end) });
+    expectRestored(before, clone(f.ctx.state.blocks));
+  }
+  assert.equal(f.counts.writes, 0);
+});
+
+test('fixV404c delayed start at or after planned end defaults to now without saving', async () => {
+  const f = await fixture(['completeBlockWithActual']);
+  f.ctx.buildActualEntryModal = (block, start, end) => ({ start, end });
+  for (const time of ['09:00:00', '09:30:00', '10:30:00']) {
+    const start = DATE + 'T' + time;
+    Object.assign(f.ctx.state.blocks[0], { plannedEndAt: DATE + 'T09:00:00', actualStartAt: start, actualEndAt: '' });
+    const before = clone(f.ctx.state.blocks);
+    f.ctx.completeBlockWithActual('b');
+    assert.deepEqual(f.ctx.displayedBlock, { start: start > NOW ? NOW : start, end: NOW });
     expectRestored(before, clone(f.ctx.state.blocks));
   }
   assert.equal(f.counts.writes, 0);
@@ -599,15 +613,19 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
   });
 });
 
-test('failed completion undo retains the snapshot for a successful retry', async () => {
+test('plan completion keeps actuals empty; failed undo retains completion for retry', async () => {
   const f = await lifecycleFixture();
   f.ctx.toggleBlock('b');
-  const completed = clone(f.ctx.state.blocks[0]), snapshot = clone(f.ctx._quickCompleteSnapshots.b);
+  const completed = clone(f.ctx.state.blocks[0]);
+  assert.equal(completed.completed, true);
+  assert.equal(completed.actualStartAt, '');
+  assert.equal(completed.actualEndAt, '');
+  assert.equal(f.ctx._quickCompleteSnapshots.b, undefined);
   await withLocalSaveFailure(async fail => {
     f.fail(fail);
     assert.equal(f.ctx.toggleBlock('b'), false);
     expectRestored(completed, clone(f.ctx.state.blocks[0]));
-    expectRestored(snapshot, clone(f.ctx._quickCompleteSnapshots.b));
+    assert.equal(f.ctx._quickCompleteSnapshots.b, undefined);
     f.fail(null);
     f.ctx.toggleBlock('b');
     assert.equal(f.ctx.state.blocks[0].completed, false);

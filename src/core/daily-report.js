@@ -10,7 +10,8 @@ export function reportActuals(state, date) {
 
 export function affectedReportDates(state, result) {
   return [...new Set((result.records || []).flatMap(row => row.kind === "blocks"
-    ? [row.before, row.after].filter(block => block?.actualEndAt).map(block => block.date)
+    // D-2: 実績なしの予定完了(completedの変化)も日報の再生成対象に拾う(2026-09-14裁定)。
+    ? [row.before, row.after].filter(block => block && (block.actualEndAt || Boolean(row.before?.completed) !== Boolean(row.after?.completed))).map(block => block.date)
     : row.kind === "tasks" ? state.blocks.filter(block => !block.deleted && block.actualEndAt
       && [row.before?.id, row.after?.id].includes(block.taskId)).map(block => block.date) : []))];
 }

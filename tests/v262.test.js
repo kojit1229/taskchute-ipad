@@ -345,8 +345,8 @@ class FakeToast {
       && hookSource.indexOf("stampCommitmentCompletion") < hookSource.indexOf("maybeShowTrackProgressToast"));
     // v386 契約追随(監督者決定 2026-09-11、design/03 §5、fixB6): 33 が終了ハンドラの再生成呼出を登録表の refreshActualReports へ移した。
     // 旧completePomodoroはnow-conveyor-complete→nowConveyorCompleteおよびsaveActualEntryFromModalから到達。
-    check("quiet日報13箇所(refreshActualReports 1+旧実績登録を含む既存12)、#11はfeature内1箇所",
-      (appSource.match(/generateReport\([^\n]+\{ quiet: true \}\)/g) || []).length === 13
+    check("quiet日報12箇所(予定完了は候補保存へ移動)、#11はfeature内1箇所",
+      (appSource.match(/generateReport\([^\n]+\{ quiet: true \}\)/g) || []).length === 12
       && (trackUiSource.match(/generateReport\(todayISO\(\), \{ quiet: true \}\)/g) || []).length === 1);
     check("#9/#10所有関数をtrack-uiへ複製せずrecordTrackMeasurementをDI再利用", appSource.includes("function renderTwyTrackRow(track)")
       && appSource.includes("function recordTrackMeasurement(trackId, value,")

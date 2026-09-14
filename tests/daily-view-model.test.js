@@ -51,7 +51,7 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
   check("plan complete, running and Task complete remain independent in all eight combinations", () => {
     for (const completed of [false, true]) for (const running of [false, true]) for (const done of [false, true]) {
       const m = build(block({ completed, actualStartAt: running ? `${DAY}T09:05:00` : "" }),
-        { ...deps, getTask: () => ({ ...task, status: done ? "done" : "todo" }) });
+        { ...deps, getTask: () => ({ ...task, status: done ? "completed" : "todo" }) });
       assert.deepEqual([m.plan.planCompleted, m.plan.running, m.plan.taskCompleted], [completed, running, done]);
     }
   });

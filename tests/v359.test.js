@@ -9,9 +9,9 @@
 // (1) 静的検査: buildBlockModal内の節見出しが基本→時間→エネルギー→繰り返し→メモの順で
 //     出現し、各data-modal-field(renderCategorySelect()由来のcategoryを含む)がどの節に
 //     属するかを個別にpinする(A-M3/B-M1/B-M2)。new Date("...")を含まないことも確認する。
-// (2) MIT(★今日の主役)の4パターン(false→true / true→false / 上限超過で拒否 / 既存MITの
-//     維持)をすべて検証する(B-H2)。上限超過時は既存toggleMIT()と同様に保存自体を中断し、
-//     モーダルは開いたまま・他フィールドも書き込まれないことを確認する(A-M1/B-M5)。
+// (2) MIT(★今日の主役)の4パターン(false→true / true→false / 既存MITの維持 / 同日は1件)を
+//     すべて検証する(B-H2)。F1-2追随(2026-09-14裁定): 同日のMITは1件になり、別のBlockを
+//     ★にすると既存MITは自動的に外れる(保存中断は無くなった)。
 // (3) 「完了済み(Block)」🏁タスク完了トグルは時間節の末尾にあることを節所属pinで固定する
 //     (A-M2)。
 // (4) 充電/放電セレクトを変更して保存すると block.charge/discharge に反映される(回帰)。
@@ -217,38 +217,22 @@ function staticChecks() {
     check("既存MIT(true)はコメントだけ編集しても維持される", s1c.blocks.find((b) => b.id === "k1")?.isMIT === true, JSON.stringify(s1c.blocks.find((b) => b.id === "k1")));
     check("コメントは正しく保存される", s1c.blocks.find((b) => b.id === "k1")?.comment === "別フィールドの編集のみ");
 
-    // A-M1/B-M5レビュー反映(監督者裁定): 上限超過時は既存toggleMIT()と同様に保存自体を
-    // 中断する。トーストだけ出してreturnし、モーダルは開いたまま・他フィールドも書き込まない。
-    console.log("[4] MIT: 同日に既にMIT3件あると4件目は保存自体が中断される(トーストのみ・モーダル維持・他フィールド不変)");
-    await seed({
-      blocks: [
-        makeBlock("m1", { isMIT: true }), makeBlock("m2", { isMIT: true }), makeBlock("m3", { isMIT: true }),
-        makeBlock("m4")
-      ]
-    });
+    // F1-2追随(fixV404d B-5、2026-09-14裁定): 同日のMITは1件。上限超過での保存中断は無くなり、
+    // 別のBlockを★にすると同日の既存MITは自動的に外れる(trackSavedBlockTransitions)。
+    // Test-Reduction: 旧[4]の「3件上限・保存中断・他フィールド不変」断言は新契約と食い違うため
+    // 削除し、同じ性質(件数・状態・保存内容)の新しい断言(同日MITはちょうど1件)へ置換した。
+    console.log("[4] MIT: 同日に既存MIT(m1)がある状態でm4を★にすると、m1は自動的に外れ同日MITはm4の1件になる");
+    await seed({ blocks: [makeBlock("m1", { isMIT: true }), makeBlock("m4")] });
     await openEditor("m4");
     await page.locator('.modal-card [data-modal-field="isMIT"]').check();
-    // 「他フィールドも書かない」ことを検出できるよう、タイトルも同時に変更しておく。
-    await page.locator('.modal-card [data-modal-field="title"]').fill("m4 renamed(保存されないはず)");
+    await page.locator('.modal-card [data-modal-field="title"]').fill("m4 renamed");
     await page.click('[data-action="modal-save"]');
-    await page.waitForFunction(() => {
-      const t = document.querySelector("#toast");
-      return !!t && t.classList.contains("show") && t.textContent.includes("今日の主役は最大3個まで");
-    });
-    const toastText = await page.locator("#toast").innerText();
-    check("上限超過ガードのトーストが表示される", toastText.includes("今日の主役は最大3個まで。先に他を外してください"), toastText);
-    const modalStillOpen = await page.evaluate(() => document.querySelector("#modalRoot")?.classList.contains("open"));
-    check("保存が中断されモーダルは閉じない", modalStillOpen === true);
-    const s2 = await stateNow();
-    check("4件目はisMIT=falseのまま(保存自体が中断される)", s2.blocks.find((b) => b.id === "m4")?.isMIT === false, JSON.stringify(s2.blocks.find((b) => b.id === "m4")));
-    check("4件目のtitleも書き込まれない(他フィールドも保存されない)", s2.blocks.find((b) => b.id === "m4")?.title === "Block m4", JSON.stringify(s2.blocks.find((b) => b.id === "m4")));
-    check("既存3件のisMITは変化しない", ["m1", "m2", "m3"].every((id) => s2.blocks.find((b) => b.id === id)?.isMIT === true));
-    await page.click('[data-action="modal-close"]');
-    await page.waitForSelector('.draft-leave-dialog[open]');
-    check("上限拒否後の閉じるは保存できなかった入力を保持する", await page.locator('[data-modal-field="title"]').inputValue() === "m4 renamed(保存されないはず)" && await page.locator('[data-modal-field="isMIT"]').isChecked());
-    await page.locator('.draft-leave-dialog [data-action="draft-leave-discard"]').click();
     await waitForModalClosed(page);
-    check("明示破棄後も全Blockは拒否時の状態のまま", JSON.stringify((await stateNow()).blocks) === JSON.stringify(s2.blocks));
+    const s2 = await stateNow();
+    check("m4はisMIT=trueで保存される", s2.blocks.find((b) => b.id === "m4")?.isMIT === true, JSON.stringify(s2.blocks.find((b) => b.id === "m4")));
+    check("m4のtitleも保存される", s2.blocks.find((b) => b.id === "m4")?.title === "m4 renamed", JSON.stringify(s2.blocks.find((b) => b.id === "m4")));
+    check("既存MIT(m1)は自動的に外れる", s2.blocks.find((b) => b.id === "m1")?.isMIT === false, JSON.stringify(s2.blocks.find((b) => b.id === "m1")));
+    check("同日のMITはちょうど1件", s2.blocks.filter((b) => b.date === s2.blocks.find((b2) => b2.id === "m4").date && b.isMIT === true).length === 1);
 
     // ============================================================
     // (4) 充電/放電セレクトの保存反映(回帰)

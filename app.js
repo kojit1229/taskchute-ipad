@@ -12503,7 +12503,7 @@ function goBreakPomodoro({ expired = false } = {}) {
     const actualStartAt = block.actualStartAt || startedAt;
     return { ...block, pomodoroCount: Number(block.pomodoroCount || 0) + 1,
       ...(expired ? {
-        actualStartAt, actualEndAt: endsAt,
+        actualStartAt, actualEndAt: block.actualEndAt || endsAt,
         everStartedAt: block.everStartedAt || actualStartAt
       } : {}) };
   }))) return false;
@@ -15365,10 +15365,11 @@ setSelectedDate = function(date) {
 function completeBlockWithActual(blockId) {
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return;
-  // 未記録の終了は予定終了と現在時刻の早い方、開始は終了を超えない値にする。
+  // Preserve recorded ends; delayed starts default to now.
   const now = nowDateTime();
-  const defaultEnd = block.actualEndAt || (block.plannedEndAt && block.plannedEndAt < now ? block.plannedEndAt : now);
   const start = block.actualStartAt || (block.actualEndAt ? "" : block.plannedStartAt || now);
+  const delayedStart = block.plannedEndAt && start >= block.plannedEndAt;
+  const defaultEnd = block.actualEndAt || (!delayedStart && block.plannedEndAt && block.plannedEndAt < now ? block.plannedEndAt : now);
   const defaultStart = start > defaultEnd ? defaultEnd : start;
   state.modal = { type: "actualEntry", id: blockId };
   renderModal(buildActualEntryModal(block, defaultStart, defaultEnd));
@@ -15425,7 +15426,7 @@ function buildActualEntryModal(block, defaultStart, defaultEnd) {
 }
 
 function saveActualEntryFromModal(blockId, fields) {
-  if (state.blocks.find((b) => b.id === blockId)?.actualEndAt) {
+  if (state.blocks.find((b) => b.id === blockId)?.completed) {
   const result = runDailyOperation("daily-actual-edit", { kind: "actual", id: blockId, values: fields }, dailyOperationDeps);
   if (!result.ok) showToast(result.error?.message || "保存できませんでした。入力は残しています");
   return result.ok === true;

@@ -292,21 +292,31 @@ async function checkHooks() {
     const record = state.weeklyCommitments.find((entry) => entry.id === `wci_${WEEK_START}_${blockId}`);
     const spies = await hookSpies();
     const routeCalls = spies.completions.filter((call) => call.blockId === blockId);
+    console.log("MEASURE completion-route " + JSON.stringify({ label, saves: spies.saves.length, writes: spies.writes.length, completions: routeCalls, order: spies.order }));
     check(`${label}: 完了フックを1回呼ぶ`, routeCalls.length === 1, JSON.stringify(spies));
-    check(`${label}: 日次終了の候補フックはfalse・旧入口はinteractive指定を保持`,
-      routeCalls[0]?.interactive === (expectedSaveCalls === "daily-end" ? false : interactive) && routeCalls[0]?.isNowCompleted === true,
+    check(`${label}: 予定完了と日次終了の候補フックはfalse・旧入口はinteractive指定を保持`,
+      routeCalls[0]?.interactive === (["daily-end", "plan"].includes(expectedSaveCalls) ? false : interactive) && routeCalls[0]?.isNowCompleted === true,
       JSON.stringify(routeCalls));
     check(`${label}: interactive経路だけ進捗トースト判定を1回呼ぶ`,
       spies.toasts.filter((id) => id === blockId).length === (interactive ? 1 : 0), JSON.stringify(spies));
     // fixR2C: 日報を含めた候補をpersist1回で保存する。実績なし新規Blockは日報対象外。
-    const expectsReport = expectedSaveCalls !== "atomic-new";
+    const expectsReport = expectedSaveCalls !== "atomic-new" && expectedSaveCalls !== "plan";
     const lastWrite = spies.writes[spies.writes.length - 1];
     const lastDate = lastWrite?.blocks.find((entry) => entry.id === blockId)?.date;
     const lastReport = lastWrite?.reports?.[lastDate];
     if (expectsReport) check(`${label}: 最後の書き込みに対象日の日報(更新待ちでない)`,
       typeof lastReport === "string" && lastReport.length > 0 && lastReport !== "日報更新待ち",
       JSON.stringify({ lastDate, lastReport: String(lastReport).slice(0, 80) }));
-    if (expectedSaveCalls === "atomic" || expectedSaveCalls === "atomic-new") {
+    if (expectedSaveCalls === "plan") {
+      const savedBlock = lastWrite?.blocks.find(entry => entry.id === blockId);
+      // D-2(2026-09-14 裁定): 実績なしの予定完了でも当日の日報は同じ候補保存で再生成される
+      check(`${label}: 予定完了は実績空のまま、日報込みで候補保存1回`,
+        spies.saves.length === 1 && spies.writes.length === 1
+        && savedBlock?.completed === true && savedBlock.actualStartAt === "" && savedBlock.actualEndAt === ""
+        && typeof lastReport === "string" && lastReport.length > 0 && lastReport !== "日報更新待ち"
+        && lastWrite.weeklyCommitments.find(entry => entry.id === record.id)?.completedChangedAt === record.completedChangedAt,
+        JSON.stringify(spies));
+    } else if (expectedSaveCalls === "atomic" || expectedSaveCalls === "atomic-new") {
       const saved = spies.writes[0];
       const savedBlock = saved?.blocks.find((entry) => entry.id === blockId);
       const savedItem = saved?.weeklyCommitments.find((entry) => entry.id === `wci_${WEEK_START}_${blockId}`);
@@ -368,7 +378,7 @@ async function checkHooks() {
 
     console.log("[1] 完了6経路を個別に刻印");
     // v386 契約追随(監督者決定 2026-09-11、束B6): 各経路の saveState は 4→3(日報の裏側再生成が候補保存へ移った。assertCompletionRoute の断言を参照)。
-    await runCommittedCompletion("toggleBlock", "toggle", true, 3,
+    await runCommittedCompletion("toggleBlock", "toggle", true, "plan",
       () => clickAction("toggle-block", { id: "toggle" }));
     await clickAction("toggle-block", { id: "toggle" });
     await page.waitForFunction(({ KEY, WEEK_START }) => !JSON.parse(localStorage.getItem(KEY)).weeklyCommitments

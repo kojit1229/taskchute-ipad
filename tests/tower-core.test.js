@@ -732,14 +732,14 @@ function check(name, cond, extra = "") {
     check("タップした完了ゲートはDOMから消える", await page.locator('.tower-gate[data-id="gate-open"]').count() === 0);
     check("完了済み通常ゲートは就航灯や完了演出ごと残留しない", await page.locator('.tower-gate:not(.tower-gate-fixed)[data-docked="1"], .tower-gate:not(.tower-gate-fixed).is-docking').count() === 0);
     check("完了後は未完了1件・完了2件へ更新", (await page.locator("#towerGateCount").textContent()) === "未完了1件・完了2件を表示");
-    check("toggleBlock後のstate.reportsへ完了便を反映", await page.evaluate(({ KEY, today }) => {
-      const report = JSON.parse(localStorage.getItem(KEY)).reports[today] || "";
-      return report !== "STALE_TOGGLE" && report.includes("昼便");
+    check("toggleBlockは実績を補完せず、当日の日報は再生成される(D-2 裁定 2026-09-14)", await page.evaluate(({ KEY, today }) => {
+      const state = JSON.parse(localStorage.getItem(KEY));
+      const completed = state.blocks.find((b) => b.id === "gate-open");
+      return typeof state.reports[today] === "string" && state.reports[today] !== "STALE_TOGGLE" && state.reports[today].length > 0 && completed.actualStartAt === "" && completed.actualEndAt === "";
     }, { KEY, today }));
     const latestLog = page.locator('.tower-log-row[data-flight-id="gate-open"]');
-    check("最新完了行に既存is-flip/tower-touchdownの1回演出", await latestLog.evaluate((el) => el.classList.contains("is-flip")
-      && getComputedStyle(el).animationName === "tower-board-flip")
-      && await latestLog.locator(".tower-touchdown").count() === 1);
+    check("実績なしの予定完了はFLIGHT LOG行や着陸演出を作らない", await latestLog.count() === 0
+      && await page.locator(".tower-touchdown").count() === 0);
     await dismissBodyScanIfOpen(page);
     await page.locator('[data-action="tower-gate-showdone-toggle"]').click();
     await page.waitForSelector('.tower-gate[data-id="gate-open"][data-docked="1"]');

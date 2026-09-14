@@ -15,21 +15,21 @@ const { chromium, launchOptions, defaultContextOptions, startServer, randomPort,
     await page.goto(`http://localhost:${port}/`);
     await passGithubGate(page);
     const read = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-    async function seed(actualStartAt, fail = false) {
+    async function seed(actualStartAt, fail = false, actualEndAt = "") {
       await page.clock.setSystemTime(new Date(2026, 8, 14, 10));
-      await page.evaluate(({ key, actualStartAt }) => {
+      await page.evaluate(({ key, actualStartAt, actualEndAt }) => {
         const state = JSON.parse(localStorage.getItem(key));
         const date = "2026-09-14", at = time => `${date}T${time}:00`;
         Object.assign(state, { currentView: "today", selectedDate: date, tasks: [], projects: [], recurrences: [],
           blocks: [{ id: "focus", date, title: "focus", taskId: "", deleted: false,
-            plannedStartAt: at("10:00"), plannedEndAt: at("11:00"), actualStartAt, actualEndAt: "",
+            plannedStartAt: at("10:00"), plannedEndAt: at("11:00"), actualStartAt, actualEndAt,
             everStartedAt: actualStartAt, completed: false, charge: 0, discharge: 0, comment: "",
             createdAt: at("08:00"), updatedAt: at("08:00"), pomodoroCount: 0, recurrenceGroupId: "" }],
           pomodoro: { running: true, mode: "focus", blockId: "focus", startedAt: at("10:00"),
             endsAt: at("10:25"), paused: false, pausedRemainMs: 0 } });
         Object.assign(state.settings, { autoSync: false, autoArchive: false, lastOpenedDate: date, focusTimerAuto: false });
         localStorage.setItem(key, JSON.stringify(state));
-      }, { key: STATE_KEY, actualStartAt });
+      }, { key: STATE_KEY, actualStartAt, actualEndAt });
       await page.reload();
       await page.locator(".today-pomodoro").waitFor();
       await page.evaluate(({ key, fail }) => {
@@ -61,6 +61,30 @@ const { chromium, launchOptions, defaultContextOptions, startServer, randomPort,
       assert.equal(writes[0].pomodoro.mode, "break");
     }
     console.log("PASS F2-2 満了時刻で実績終了・未完了・開始補完/既存開始保持・保存1回");
+    await seed("2026-09-14T10:00:00");
+    await page.clock.fastForward(26 * 60 * 1000);
+    await page.evaluate(() => {
+      const button = document.createElement("button");
+      Object.assign(button.dataset, { action: "complete-block-with-actual", id: "focus" });
+      document.body.append(button); button.click(); button.remove();
+    });
+    await page.locator('[data-action="modal-save"]').click();
+    const completed = (await read()).blocks.find(b => b.id === "focus");
+    assert.equal(completed.completed, true);
+    assert.equal(completed.actualStartAt, "2026-09-14T10:00:00");
+    assert.equal(completed.actualEndAt, "2026-09-14T10:25:00");
+    await page.reload();
+    assert.equal((await read()).blocks.find(b => b.id === "focus").completed, true);
+    console.log("PASS fixV404c completion after expiry persists across reload");
+    await seed("2026-09-14T10:00:00", false, "2026-09-14T10:20:00");
+    await page.clock.fastForward(26 * 60 * 1000);
+    const preserved = await read(), ended = preserved.blocks.find(b => b.id === "focus");
+    assert.equal(ended.actualEndAt, "2026-09-14T10:20:00");
+    assert.equal(ended.completed, false);
+    assert.equal(ended.pomodoroCount, 1);
+    assert.equal(preserved.pomodoro.mode, "break");
+    assert.equal(await page.evaluate(() => window.f2Writes.length), 1);
+    console.log("PASS fixV404c expiry preserves existing actual end");
     await seed("", true);
     const before = await read();
     await page.clock.fastForward(26 * 60 * 1000);

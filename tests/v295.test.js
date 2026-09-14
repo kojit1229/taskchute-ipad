@@ -78,7 +78,9 @@ function check(name, cond, extra = "") {
     };
   }
 
-  async function seed(p, { blocks = [], bodyScans = [], view = "timeline" } = {}) {
+  // F2-1追随(fixV404d B-3): ✓(toggle-block)は実績なしの予定完了になり身体スキャンを開かなくなった
+  // ため、既定viewを"tasks"にして「実績付きで完了」ボタンから開く経路へ揃える(openScanFor参照)。
+  async function seed(p, { blocks = [], bodyScans = [], view = "tasks" } = {}) {
     await p.evaluate(({ KEY, blocks, bodyScans, TODAY, view }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.blocks = blocks;
@@ -101,7 +103,9 @@ function check(name, cond, extra = "") {
   }
   const scanTitle = (p) => p.locator(".modal-title", { hasText: "身体スキャン" });
   async function openScanFor(p, blockId) {
-    await clickReal(p, `[data-action="toggle-block"][data-id="${blockId}"]`);
+    await clickReal(p, `[data-action="complete-block-with-actual"][data-id="${blockId}"]`);
+    await p.locator('.modal-title', { hasText: "実績を登録" }).waitFor();
+    await clickReal(p, '[data-action="modal-save"]');
     await scanTitle(p).waitFor();
   }
 
