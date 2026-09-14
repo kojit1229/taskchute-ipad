@@ -165,10 +165,10 @@ function renderTowerMIT(blocks) {
     const start = timeFromDateTime(block.plannedStartAt) || "--:--";
     const end = timeFromDateTime(block.plannedEndAt) || "--:--";
     const status = block.completed || block.actualEndAt ? "完了" : block.actualStartAt ? "進行中" : "未着手";
-    return `<div class="tower-mit-row">${mitStarHTML(block)}<span class="tower-mit-title">${escapeHTML(block.title)}</span><span class="tower-mit-meta">/ ${start}–${end}・${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
+    return `<div class="tower-mit-row">${mitStarHTML(block)}<strong class="tower-mit-title">${escapeHTML(block.title)}</strong><span class="tower-mit-meta">${start}–${end}・見積 ${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
   }).join("");
-  return `<section class="tower-mit sec-mit"><h2>★ MIT <span>本日の一つ</span></h2>
-    ${rows || '<div class="tower-mit-empty">MITは未設定(実行タブの「これから」で行をタップ→☆)</div>'}
+  return `<section class="tower-mit sec-mit${rows ? "" : " is-empty"}" aria-label="本日のMIT"><h2>★ MIT <span>― 本日の一つ</span></h2>
+    ${rows || '<div class="tower-mit-empty">MIT を決める <span>実行の予定詳細で ☆ を選択</span></div>'}
   </section>`;
 }
 
@@ -275,7 +275,7 @@ function renderTowerRunway(now, blocks, flights) {
       <span class="tower-rwy-mark end">${escapeHTML(metrics.landing)} 着陸予定</span>` : ""}
     </div>
     ${hud}
-    ${renderTowerMIT(blocks)}${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
+    ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
   </section>`;
 }
 
@@ -571,11 +571,14 @@ function renderTodayTower() {
       <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
       <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
-    <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
+    ${renderTowerMIT(blocks)}
+    <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
+    <nav class="daily-today-sections" aria-label="今日の表示位置">${[["focus", "◎ FOCUS"], ["records", "運航・体調"], ["journal", "ジャーナル"], ["life", "LIFE BAND"]].map(([section, label]) => `<button type="button" data-action="today-section-jump" data-section="${section}">${label}</button>`).join("")}</nav>
     <div class="daily-today-main">
       <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
-      <div class="daily-today-records">${renderFlightLog(today, blocks)}${renderTowerGates(blocks)}${renderTowerJournal(today)}</div>
+      <div class="daily-today-records">${renderTowerGates(blocks)}<details><summary>実績の簡易一覧</summary>${renderFlightLog(today, blocks)}</details></div>
+      ${renderTowerJournal(today)}
     </div>
   </div>`;
 }

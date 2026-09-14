@@ -55,7 +55,10 @@ const checked={workflows:0,layouts:0};
    assert.equal(await rows.evaluate(el=>el.scrollTop),scrolledTop,'unchanged native change must not reset scroll');
    // v390(3段-01、設計06 §3 の契約追随・監督者 2026-09-12): today/exec は予定・実績などの群([data-screen-group])に分けて並べるため
    // 「時刻順の一列で block-299 が末尾」は旧契約。末尾まで届くことの検査は「容器内で最後に描画された行」に対して行う(wbs は従来どおり task-299)。
-   const last=scope==='wbs'?rows.locator('[data-work-key="task:task-299"]'):rows.locator('[data-work-key]').last();
+   // fixF6d(監督者決定2): today は束F6で予定/実績タブ([data-today-table-group])に分かれ、非表示側の
+   // タブにも行がDOMへ残る。末尾は「表示中の」最後の行を対象にする(隠れた行を掴んで
+   // 到達不能と誤判定しないため。exec/wbsは従来どおり)。
+   const last=scope==='wbs'?rows.locator('[data-work-key="task:task-299"]'):rows.locator('[data-work-key]:visible').last();
    const reachable=await last.evaluate(el=>{const r=el.getBoundingClientRect(),p=el.closest('[data-work-list-rows]').getBoundingClientRect();return r.top<p.bottom&&r.bottom>p.top;});
    assert(reachable,'last row scroll reachable '+scope);
    if(scope==='wbs') {
@@ -75,6 +78,10 @@ const checked={workflows:0,layouts:0};
     assert(Math.abs((await rows.evaluate(el=>el.scrollTop))-top)<3,'cancel keeps WBS scroll');
    }
    await root.locator('[data-action="work-list-clear"]').click();
+   // fixF6d(監督者決定2、F6-3): today(scope='today')の絞り込みは「検索と絞り込みは1行に」
+   // (search-frame.js compact=true)で.daily-table-filtersの折りたたみに入った。製品の
+   // 折りたたみは変えず、開いてから選ぶ(exec/wbsは従来どおり折りたたみ無し)。
+   if (scope === 'today') await root.locator('.daily-table-filters summary').click();
    await root.locator('[data-work-filter="status"]').selectOption('completed');
    assert.equal(await rows.locator('[data-work-key]').count(),1,scope+' completed only');
    await root.locator('[data-action="work-list-clear"]').click();

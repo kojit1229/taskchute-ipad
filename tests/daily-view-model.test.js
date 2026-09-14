@@ -125,10 +125,11 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
   const listSource = fs.readFileSync(path.join(root, "src/features/work-list.js"), "utf8");
   const listAst = acorn.parse(listSource, { ecmaVersion: "latest", sourceType: "module" });
   const { existingPlacement } = await import(pathToFileURL(path.join(root, "src/core/placement.js")).href);
+  const { renderTodayTableRow, isTodayActual } = await import(pathToFileURL(path.join(root, "src/ui/daily-parts/today-table.js")).href);
   const listHarness = vm.runInNewContext(listAst.body.filter(node => node.type === "VariableDeclaration"
     || node.type === "FunctionDeclaration" && ["configureWorkList", "placementActions", "listRow"].includes(node.id.name))
     .map(node => listSource.slice(node.start, node.end)).join("\n") + "\n({configureWorkList,listRow})",
-    { registerActions: () => {}, existingPlacement, state: { blocks: [] } });
+    { registerActions: () => {}, existingPlacement, renderTodayTableRow, isTodayActual, state: { blocks: [] } });
   const listDeps = { todayISO: () => DAY, escapeHTML: helpers.escapeHTML, resolveEstimateMin: () => 30 };
   const listBlock = (b = block()) => ({ kind: "block", key: `block:${b.id}`, id: b.id, item: b,
     date: DAY, time: b.plannedStartAt, title: b.title, status: "open" });
@@ -246,6 +247,7 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
       await page.setViewportSize({ width, height: 900 });
       await page.reload();
       const todayRow = page.locator('[data-work-list="today"] [data-work-key="block:up"]');
+      await todayRow.locator('summary > span').last().click();
       await todayRow.locator('[data-daily-key="block:up"]').waitFor();
       assert.match(await todayRow.innerText(), /開始 11:00/);
       assert.equal(await todayRow.locator('[data-action="edit-block"]').count(), 1);

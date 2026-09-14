@@ -193,8 +193,12 @@ function check(name, condition, extra = "") {
       && journalState.writes.state === 0, JSON.stringify({ unchanged: journalState.expected === journalState.actual, writes: journalState.writes }));
 
     await openView("today", ".today-tower", "today-score");
+    await page.locator('.life-cycle-details summary').click();
     const scoreToggle = page.locator('[data-action="twy-score-toggle"]');
     if (await scoreToggle.getAttribute("aria-expanded") !== "true") await scoreToggle.click();
+    if (!await page.locator(".life-cycle-details").evaluate((details) => details.open)) {
+      await page.locator(".life-cycle-details summary").click();
+    }
     await page.waitForSelector(".twy-score-detail");
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector(".tower-gate-edit-row");
@@ -210,7 +214,9 @@ function check(name, condition, extra = "") {
     check("Today初期描画はfixture不変・app stateキーへの内容変更書込0回", todayState.expected === todayState.actual
       && todayState.writes.state === 0, JSON.stringify({ unchanged: todayState.expected === todayState.actual, writes: todayState.writes }));
 
-    await openView("today", ".twy-commit-banner", "today-banner");
+    await openView("today", ".today-tower", "today-banner");
+    await page.locator(".life-cycle-details summary").click();
+    await page.waitForSelector(".twy-commit-banner");
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector(".tower-gate-edit-row");
     await openAllDetails(".today-tower");

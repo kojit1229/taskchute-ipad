@@ -4,6 +4,7 @@ import { existingPlacement } from "../core/placement.js";
 import { renderSearchFrame, patchSearchFrame } from "../ui/daily-parts/search-frame.js";
 import { buildThreeScreenRows, renderScreenGroups } from "./three-screen-rows.js";
 import { renderScheduleSection } from "./single-schedule-view.js";
+import { isTodayActual, renderTodayTable, renderTodayTableRow } from "../ui/daily-parts/today-table.js";
 
 let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails;
 let modalOrigin;
@@ -25,6 +26,12 @@ function configureWorkList(deps) {
     patchWorkList(root, true);
   };
   registerActions({ "work-list-clear": clear, "daily-search-clear": clear,
+    "today-list-tab": ({ target }) => {
+      const root = target.closest('[data-work-list="today"]');
+      if (!root || !["plans", "actuals"].includes(target.dataset.tab)) return;
+      view("today").todayTab = target.dataset.tab;
+      patchWorkList(root, true);
+    },
     "daily-search-change": ({ target }) => handleWorkListInput(target) });
 }
 function rowsFor(scope) {
@@ -44,6 +51,9 @@ function placementActions(row, scope) {
     + (existing && active ? `<button class="btn" data-action="placement-add-another" data-id="${escapeHTML(row.id)}">別の予定を追加</button>` : "");
 }
 function listRow(row, scope) {
+  if (scope === "today") return renderTodayTableRow(row, { escapeHTML,
+    estimate: row.kind === "block" ? resolveEstimateMin(row.item) : row.item.estimateMin,
+    detailsHTML: row.kind === "block" && dailyBlockDetails ? dailyBlockDetails(row.item, isTodayActual(row), false) : "" });
   if (scope.startsWith("exec") && row.kind === "block") return `<div data-work-key="${escapeHTML(row.key)}"><div class="work-list-date">${escapeHTML(row.date)}</div>${renderBlock(row.item)}</div>`;
   const status = { completed: "完了", ended: "終了・未完了", running: "実行中", open: "未完了", suspended: "中断" }[row.status];
   const estimate = row.kind === "block" ? resolveEstimateMin(row.item) : row.item.estimateMin;
@@ -56,7 +66,10 @@ function listRow(row, scope) {
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }
-function rowsHTML(model, scope) { return scope.startsWith("wbs-") ? screenDeps.wbsSearchRows(model, scope) : scope === "wbs" ? model.shown.map(row => listRow(row, scope)).join("") : renderScreenGroups(model.shown, row => listRow(row, scope), scope === "exec" && view(scope).mode === "upcoming"); }
+function rowsHTML(model, scope) { return scope === "today" ? renderTodayTable(model.shown, row => listRow(row, scope), view(scope).todayTab || "plans") : scope.startsWith("wbs-") ? screenDeps.wbsSearchRows(model, scope) : scope === "wbs" ? model.shown.map(row => listRow(row, scope)).join("") : renderScreenGroups(model.shown, row => listRow(row, scope), scope === "exec" && view(scope).mode === "upcoming"); }
+function todayTabs(model) {
+  return `<div class="daily-table-tabs" role="tablist" aria-label="予定と実績">${["plans", "actuals"].map(tab => `<button type="button" role="tab" data-action="today-list-tab" data-tab="${tab}" aria-selected="${(view("today").todayTab || "plans") === tab}">${tab === "plans" ? "次の予定" : "やったこと"} ${model.shown.filter(row => isTodayActual(row) === (tab === "actuals")).length}</button>`).join("")}</div>`;
+}
 function searchModel(scope, model, composing = false) {
   const ui = view(scope);
   const projects = state.projects.filter(project => !project.deleted).map(project => [String(project.id ?? ""), String(project.title ?? "")]);
@@ -81,8 +94,8 @@ function renderWorkList(scope) {
   })}</section>`;
   return `<section class="work-list tower-panel-box${scope === "today" ? " sec-arrivals" : scope === "exec-actual" ? " exec-done-section" : ""}" data-work-list="${scope}">
     <h2>${scope === "wbs" ? "Project / Task を探す" : scope === "today" ? "今日の予定・実績" : scope === "exec-candidates" ? "追加候補（今日へ追加）" : scope === "exec-actual" ? "やったこと" : "予定一覧"}${scope === "wbs" ? "" : ` <span>${scope === "today" ? "今日" : "選択日"} ${escapeHTML(model.date)}</span>`}</h2>
-    ${scope === "today" ? renderScheduleSection(state, model.date, escapeHTML) : ""}
-    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear", queryId: scope === "wbs" ? "wbs-search-input" : "work-search-" + scope })}
+    ${scope === "today" ? todayTabs(model) + renderScheduleSection(state, model.date, escapeHTML) : ""}
+    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), compact: scope === "today", clearAction: "work-list-clear", queryId: scope === "wbs" ? "wbs-search-input" : "work-search-" + scope })}
     ${scope === "today" ? '<p><button class="btn" data-action="nav" data-view="exec">予定へ</button><button class="btn" data-action="nav" data-view="journal">記録へ</button></p>' : ""}
     ${scope === "exec" ? '<p class="muted">Taskは <button class="btn ghost" data-action="nav" data-view="wbs">作業一覧で見る</button></p>' : ""}
   </section>`;
@@ -93,6 +106,17 @@ function patchWorkList(root, reset = false) {
   // Compare browser-serialized HTML so attribute whitespace never replaces unchanged rows.
   const template = root.ownerDocument.createElement("template");
   template.innerHTML = rowsHTML(model, scope);
+  if (scope === "today") {
+    const open = new Set([...root.querySelectorAll('details[data-work-key][open]')].map(el => el.dataset.workKey));
+    template.content.querySelectorAll('details[data-work-key]').forEach(el => { el.open = open.has(el.dataset.workKey); });
+    const tabs = root.querySelector('.daily-table-tabs');
+    // Keep the focused tab itself in place while counts and selection change.
+    const next = root.ownerDocument.createElement('template'); next.innerHTML = todayTabs(model);
+    tabs.querySelectorAll('button').forEach((button, index) => {
+      const replacement = next.content.querySelectorAll('button')[index];
+      button.textContent = replacement.textContent; button.setAttribute('aria-selected', replacement.getAttribute('aria-selected'));
+    });
+  }
   patchSearchFrame(root, searchModel(scope, model), { escapeHTML, resultsHTML: template.innerHTML, reset });
 }
 function handleWorkListInput(target) {

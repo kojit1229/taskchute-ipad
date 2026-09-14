@@ -105,7 +105,7 @@ function check(name, cond, extra = "") {
     check("その他カードは全て280px以上", moreGrid.cardWidths.length > 0
       && moreGrid.cardWidths.every((width) => width >= 280), JSON.stringify(moreGrid));
 
-    console.log("[3] UI-A Todayは1280px境界で予定/記録の同幅2列へ切替");
+    console.log("[3] UI-A Todayは1280px境界で予定/記録/ジャーナルの3列へ切替");
     for (const width of [1279, 1280, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await openView("today");
@@ -120,8 +120,10 @@ function check(name, cond, extra = "") {
       } else {
         check(`${width}px Todayの上限はUI-Aの1600pxで横溢れなし`, today.maxWidth === "1600px" && !today.overflow, JSON.stringify(today));
         const total = today.columns.reduce((sum, value) => sum + value, 0);
-        check(`${width}px Todayは予定/記録の同幅2列`, today.columns.length === 2 && total > 0
-          && today.columns.every((value, index) => Math.abs(value / total - [0.5, 0.5][index]) < 0.002), JSON.stringify(today));
+        // v405 fix(CHANGELOG 2026-09-14 16:50 C-2): 記録列は minmax(320px, 1.4fr) で最小幅を持つため、
+        // 比率 1.8:1:1.4 の厳密一致ではなく「3列・記録列≥320px・予定列が最も広い・はみ出しなし」を検査する。
+        check(`${width}px Todayは3列で記録列が320px以上・予定列が最も広い`, today.columns.length === 3 && total > 0
+          && today.columns[1] >= 320 && today.columns[0] > today.columns[1] && today.columns[0] > today.columns[2] && !today.overflow, JSON.stringify(today));
       }
     }
 

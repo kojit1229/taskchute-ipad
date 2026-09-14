@@ -57,7 +57,9 @@ function check(name, cond, extra = "") {
     check("旧stateにaiWorkProcessedIds空配列を補完", Array.isArray(normalized.aiWorkProcessedIds) && normalized.aiWorkProcessedIds.length === 0);
     check("旧journalMetaの依頼・候補stateを保持", normalized.journalMeta[TODAY]?.aiRequest === "旧依頼"
       && normalized.journalMeta[TODAY]?.aiTaskCandidates?.[0] === "旧候補", JSON.stringify(normalized.journalMeta[TODAY]));
-    check("today記録列にJOURNALを正常描画", await page.locator(".daily-today-records > .sec-journal").count() === 1);
+    // fixF6v(載せ替え追随 2026-09-14): F6-3 で JOURNAL は記録列の中でなく3列目(独立の枠)に出る(fixF6c と同じ性質)。
+    // 今日の画面に JOURNAL が1つ正常描画されることを検査する(性質は同じ)。
+    check("today画面にJOURNALを正常描画", await page.locator('[data-daily-view="today"] .sec-journal').count() === 1);
     check("廃止済みAI集約UIの操作要素を描画しない",
       await page.locator('[data-action="ai-work-approve"], [data-action="ai-work-question"], [data-action="ai-task-adopt"], [data-action="ai-task-dismiss"], .ai-freshness-line').count() === 0);
 

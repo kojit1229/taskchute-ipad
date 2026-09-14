@@ -61,6 +61,12 @@ function check(name, cond, extra = "") {
     check('新移動操作後も実行中の1秒tickerを継続', (await page.locator('#towerNowRemain').textContent()) !== beforeTick);
     check('tickerも同期stateへ非書込', await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === stateBefore);
     console.log('[8] 旧side/journal/life全8通りを両幅で検査');
+    // fixF6d(監督者決定2、F6-1/F6-2/F6-3): MITはNOW LANDINGの外の独立見出しへ移動し、
+    // LIFE BAND/信条は常に縦積み(旧「同高・同幅の2枠」は廃止)、予定/記録群/本文は
+    // 1280px以上で横3列・767px以下で縦積みになった(v241と同じ新配置)。8通り×2幅の
+    // 「常設・旧設定非適用・順序・包含・44px」という同じ性質を新配置の列(mit/records/journal
+    // を含む)で検査する。
+    const layoutSelectors = ['.daily-today-clock', '.tower-mit', '.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.daily-today-records', '.tower-journal'];
     for (const width of [1440, 390]) for (let mask = 0; mask < 8; mask++) {
       const sections = { side: Boolean(mask & 4), journal: Boolean(mask & 2), life: Boolean(mask & 1) };
       const saved = JSON.stringify({ sections, restore: sections });
@@ -71,19 +77,18 @@ function check(name, cond, extra = "") {
       const layout = await page.evaluate(selectors => {
         const r = s => document.querySelector(s).getBoundingClientRect().toJSON();
         const root = document.querySelector('.today-tower');
-        return { panels: selectors.map(r), mit: r('.tower-mit'), timer: r('.today-pomodoro'), ring: r('.pomo-circle-wrap'),
+        return { panels: selectors.map(r), timer: r('.today-pomodoro'), ring: r('.pomo-circle-wrap'),
           legacyAttributes: ['data-view-side','data-view-journal','data-view-life','data-focus-mode'].filter(a => root.hasAttribute(a)),
           scrollWidth: document.documentElement.scrollWidth, innerWidth };
-      }, selectors);
-      const [clock, life, creed, current, plans, log, gates, journal] = layout.panels;
+      }, layoutSelectors);
+      const [clock, mit, life, creed, current, plans, records, journal] = layout.panels;
       check(width + 'px mask=' + mask + ': 常設8項目・旧設定を非適用', await permanent() && layout.legacyAttributes.length === 0 && layout.panels.every(r => r.width > 0 && r.height > 0), JSON.stringify(layout));
       check(width + 'px mask=' + mask + ': 旧保存を保持', await page.evaluate(key => localStorage.getItem(key), FOCUS_KEY) === saved);
       check(width + 'px mask=' + mask + ': 固定GATE・単一タイマー・横溢れなし', await page.locator('.tower-gate-fixed').count() === 1 && await page.locator('.today-pomodoro').count() === 1 && layout.scrollWidth <= layout.innerWidth + 1, JSON.stringify(layout));
-      check(width + 'px mask=' + mask + ': 主役/タイマーを現在作業内に包含', [layout.timer, layout.mit].every(r => r.left >= current.left && r.right <= current.right && r.top >= current.top && r.bottom <= current.bottom) && Math.abs(layout.ring.width - 56) < .5, JSON.stringify(layout));
-      check(width + 'px mask=' + mask + ': 時計→値→作業→予定、記録順', life.top >= clock.bottom && current.top >= Math.max(life.bottom, creed.bottom) && plans.top >= current.bottom && gates.top >= log.bottom && journal.top >= gates.bottom, JSON.stringify(layout));
+      check(width + 'px mask=' + mask + ': タイマーを現在作業内に包含・MITは独立', layout.timer.left >= current.left && layout.timer.right <= current.right && layout.timer.top >= current.top && layout.timer.bottom <= current.bottom && mit.bottom <= current.top && Math.abs(layout.ring.width - 56) < .5, JSON.stringify(layout));
+      check(width + 'px mask=' + mask + ': 時計→MIT→値→作業→予定、記録順', mit.top >= clock.bottom && life.top >= mit.bottom && current.top >= Math.max(life.bottom, creed.bottom) && plans.top >= current.bottom, JSON.stringify(layout));
       if (width >= 1280) {
-        check('PCは同高・同幅の人生/信条', Math.abs(life.top - creed.top) < 1 && Math.abs(life.height - creed.height) < 1 && Math.abs(life.width - creed.width) < 1 && life.right < creed.left, JSON.stringify(layout));
-        check('PCは予定/記録の2列', Math.abs(plans.top - log.top) < 1 && plans.right < log.left && Math.abs(plans.width - log.width) < 1, JSON.stringify(layout));
+        check('PCは予定・記録群・本文が横3列で同じ高さ', Math.abs(plans.top - records.top) < 1 && Math.abs(plans.top - journal.top) < 1 && records.left > plans.right && journal.left > records.right, JSON.stringify(layout));
       } else {
         check('390pxは8項目が順に縦積み', layout.panels.every((r,i,a) => !i || r.top >= a[i-1].bottom) && layout.panels.every(r => Math.abs(r.left - current.left) < 1), JSON.stringify(layout));
       }

@@ -111,7 +111,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "daily-block-start", "daily-block-end",
   "modal-save",
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
-  "today-plans-jump", "today-journal-jump",
+  "today-plans-jump", "today-journal-jump", "today-section-jump",  // fixF6d: 4つの切替のスクロール導線を意図的に追加
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
@@ -242,6 +242,9 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "drift-postpone",
   // fixV392 / 設計06 §4: 常設化後の予定/記録への移動。集合の完全一致・重複なしは維持。
   "today-plans-jump", "today-journal-jump",
+  // fixF6d(設計11 §登録表の約束、束F6 4つの切替のスクロール導線): today.js configureTodayの
+  // registerActionsへ意図的に追加(44→45、和集合 274→275)。
+  "today-section-jump",
   // v262: src/features/track-ui.jsの12WY進捗トースト
   "twy-toast-inc", "twy-toast-same", "twy-toast-other", "twy-toast-other-confirm", "twy-toast-later",
   // FUNDはconfigureFundで実bridgeを構築し、9操作を登録する。

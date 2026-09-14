@@ -197,15 +197,20 @@ function check(name, cond, extra = "") {
     check("1280px未満でも当日16件のID集合が全て表示される", JSON.stringify(await todayIds()) === JSON.stringify(arrivals.map(item => `block:${item.id}`).sort()));
     check("全件数16/16を表示し省略窓は無い", (await page.locator('[data-work-list="today"] .work-list-count').textContent()).startsWith("16 / 16件") && await page.locator('.tower-flight-summary').count() === 0);
     check("callsign列は存在しない", await page.locator('[data-work-list="today"] .tower-callsign').count() === 0);
-    const arrivalEstimates = await Promise.all(arrivals.slice(0, 13).map(item => todayRow(item.id).locator('.work-list-meta').textContent()));
-    check("全13通常行をIDで照合しarr-4だけ45分、他は既定30分", arrivalEstimates.every((text, i) => text.includes(`見積${i === 4 ? 45 : 30}分`)), JSON.stringify(arrivalEstimates));
-    const labels = await todayRows().locator('.work-list-meta').allTextContents();
-    check("状態ラベルは実記録の未完了と完了を区別する", labels.length === 16 && labels.filter(text => text.endsWith('未完了')).length === 15 && (await todayRow('arr-completed').locator('.work-list-meta').textContent()).endsWith(' ・ 完了'));
+    const arrivalEstimates = await Promise.all(arrivals.slice(0, 13).map(item => todayRow(item.id).locator('summary [role="cell"]').nth(3).textContent()));
+    check("全13通常行をIDで照合しarr-4だけ45分、他は既定30分", arrivalEstimates.every((text, i) => text === `${i === 4 ? 45 : 30}分`), JSON.stringify(arrivalEstimates));
+    const labels = await todayRows().locator('summary [role="cell"]:nth-child(5)').allTextContents();
+    check("状態ラベルは実記録の未完了と完了を区別する", labels.length === 16 && labels.filter(text => text === '未完了 ▾').length === 15 && (await todayRow('arr-completed').locator('summary [role="cell"]').nth(4).textContent()) === '完了 ▾');
     check("ルーティンも今日一覧に出る", await todayRow('routine-hidden').count() === 1);
     check("oneTapも今日一覧に出る", await todayRow('onetap-hidden').count() === 1);
     check("完了便も今日一覧に1件含む", await todayRow('arr-completed').count() === 1);
     check("同Taskの別BlockとProjectなしをまとめず、前後日と削除を含めない", await todayRow('arr-1').count() === 1 && await todayRow('arr-2').count() === 1 && await todayRow('deleted-today').count() === 0 && await todayRow('previous-day').count() === 0 && await todayRow('dep-first').count() === 0);
-    check("全件一覧の編集操作は44px以上", await todayRows().locator('button').evaluateAll(buttons => buttons.length === 16 && buttons.every(button => { const box = button.getBoundingClientRect(); return box.width >= 44 && box.height >= 44; })));
+    for (const [tab, count] of [['plans', 15], ['actuals', 1]]) {
+      await page.locator(`[data-action="today-list-tab"][data-tab="${tab}"]`).click();
+      check(`${tab}の全件一覧の編集操作は44px以上`, await todayRows().locator('summary button:visible').evaluateAll((buttons, expected) => buttons.length === expected && buttons.every(button => { const box = button.getBoundingClientRect(); return box.width >= 44 && box.height >= 44; }), count));
+    }
+    await page.locator('[data-action="today-list-tab"][data-tab="plans"]').click();
+    await page.locator('.daily-today-records > details > summary').click();
     const completedLog = page.locator('.tower-log-row[data-flight-id="arr-completed"]');
     check("完了便はFLIGHT LOGへ時系列表示", await completedLog.count() === 1
       && (await completedLog.locator("time").textContent()) === "08:00-08:25"
@@ -280,6 +285,7 @@ function check(name, cond, extra = "") {
     check("終了のみBlockは今日一覧に終了・未完了として残る", await todayRow('ended-only').count() === 1 && (await todayRow('ended-only').textContent()).includes('終了・未完了'));
     check("終了のみBlockはFLIGHT LOGへ終了ラベル付きで出る", await page.locator('[data-flight-id="ended-only"] .tower-log-state[data-state="ended"]', { hasText: "終了" }).count() === 1);
     check("completed+actualEndAtは従来どおり完了実績として出る", await page.locator('[data-flight-id="completed-actual"] .tower-log-state[data-state="completed"]', { hasText: "完了" }).count() === 1);
+    await page.locator('.daily-today-records > details > summary').click();
     await page.locator('.tower-log-row[data-flight-id="ended-only"]').click();
     await page.waitForSelector(".modal-card", { state: "attached" });
     check("終了のみFLIGHT LOG行タップで対象Block編集モーダルを開く",
@@ -323,9 +329,10 @@ function check(name, cond, extra = "") {
       await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], [data-work-list="today"] :text("明日8時半")').count() === 0);
     const sectionOrder = await page.locator('[data-daily-view="today"] .life-band, [data-daily-view="today"] .so-row, [data-daily-view="today"] .sec-rwy, [data-daily-view="today"] .sec-arrivals, [data-daily-view="today"] .sec-log, [data-daily-view="today"] .sec-gates, [data-daily-view="today"] .sec-journal').evaluateAll(sections =>
       sections.map(section => [...section.classList].find(name => name.startsWith('sec-')) || (section.classList.contains('life-band') ? 'life' : 'creeds')));
-    check("人生の時間→信条→いまの作業→予定→やったこと→ルーティン→ジャーナル、健康2欄は今日に無い",
-      JSON.stringify(sectionOrder) === JSON.stringify(['life', 'creeds', 'sec-rwy', 'sec-arrivals', 'sec-log', 'sec-gates', 'sec-journal'])
-      && await page.locator('[data-daily-view="today"] .sec-bodymind, [data-daily-view="today"] .sec-condition').count() === 0,
+    check("人生の時間→信条→いまの作業→予定→ルーティン→やったこと→ジャーナル、記録群2つ・からだなし",
+      JSON.stringify(sectionOrder) === JSON.stringify(['life', 'creeds', 'sec-rwy', 'sec-arrivals', 'sec-gates', 'sec-log', 'sec-journal'])
+      && await page.locator('[data-daily-view="today"] .sec-condition').count() === 0 && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 0
+      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']),
       JSON.stringify(sectionOrder));
     check("今日の全件一覧とGATEは引き続き表示", await page.locator('[data-work-list="today"].sec-arrivals').count() === 1
       && await page.locator(".sec-gates").count() === 1);
@@ -336,8 +343,8 @@ function check(name, cond, extra = "") {
     await seedBoard(crossing, []);
     // 起動時同期(404)後のアプリ全体render()がDOMを一度差し替えるため、沈静化してから同一性を計測する。
     await page.waitForLoadState("networkidle");
-    const crossingStatus = todayRow('flip-first').locator('.work-list-meta');
-    check("境界前の未着手Blockは未完了", (await crossingStatus.textContent()).endsWith('未完了'));
+    const crossingStatus = todayRow('flip-first').locator('summary [role="cell"]').nth(4);
+    check("境界前の未着手Blockは未完了", (await crossingStatus.textContent()) === '未完了 ▾');
     // レビューM2反映: locator再解決ではDOM同一性を検証できないため、遷移前のElementHandleの生存で「再構築していない」を固定する。
     // fixed clock下ではアニメーションイベントが発火しない(=is-flipはanimationendで外れず残る)ため、クラス+computedで検証する。
     const statusHandle = await crossingStatus.elementHandle();
@@ -346,8 +353,8 @@ function check(name, cond, extra = "") {
     await focusedRow.focus();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 1, 0, 0));
     await page.waitForFunction(() => document.getElementById('towerClock')?.textContent === '12:01:00');
-    check("時刻経過だけでは実記録の未完了を変えない", (await crossingStatus.textContent()).endsWith('未完了'));
-    check("状態セルのDOM要素は再構築されず同一のまま", await statusHandle.evaluate(el => el.isConnected && el.textContent.endsWith('未完了')));
+    check("時刻経過だけでは実記録の未完了を変えない", (await crossingStatus.textContent()) === '未完了 ▾');
+    check("状態セルのDOM要素は再構築されず同一のまま", await statusHandle.evaluate(el => el.isConnected && el.textContent === '未完了 ▾'));
     check("廃止した時刻だけのflipを足さず入力位置とBlock値を維持", await focusedRow.evaluate(el => el.isConnected && document.activeElement === el) && await statusHandle.evaluate(el => !el.classList.contains('is-flip')) && await page.evaluate(KEY => JSON.stringify(JSON.parse(localStorage.getItem(KEY)).blocks), KEY) === beforeCrossingBlocks);
     await page.evaluate(() => document.activeElement.blur());
 
@@ -901,6 +908,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(fixture));
     }, KEY);
     await seedBoard(Array.from({ length: 4 }, (_, i) => block('layout-' + i, '配置検査予定' + i, today, 13 * 60 + i * 30)), []);
+    await page.locator('.daily-today-records > details > summary').click();
     const measureLayout = () => page.evaluate(() => {
       const root = document.querySelector('[data-daily-view="today"]');
       const rect = selector => {
@@ -919,15 +927,15 @@ function check(name, cond, extra = "") {
       await page.evaluate(() => window.scrollTo(0, 0));
       const m = await measureLayout();
       console.log('SL2A_MEASURE ' + JSON.stringify({ width, ...m }));
-      check(width + 'pxはタイマーと主役を現在作業内に表示', [m.timer, m.mit].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom), JSON.stringify(m));
+      check(width + 'pxはタイマーを現在作業内、MITを人生の時間より上に表示', [m.timer].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom) && m.mit.width > 0 && m.mit.height > 0 && m.mit.bottom <= m.life.top, JSON.stringify(m));
       const columns = m.columns.split(/\s+/).map(Number.parseFloat);
-      check(width + 'pxは正幅2列', columns.length === 2 && columns.every(value => value > 0), m.columns);
-      check(width + 'pxは人生・信条が同じ段・同じ高さの2枠', m.life.width > 0 && m.life.height > 0
-        && m.so.x >= m.life.right && Math.abs(m.life.top - m.so.top) < 1 && Math.abs(m.life.height - m.so.height) < 1, JSON.stringify(m));
-      check(width + 'pxは現在作業の下に左予定・右実績/ルーティン/本文', m.runway.top >= Math.max(m.life.bottom, m.so.bottom)
-        && m.board.top >= m.runway.bottom && Math.abs(m.board.top - m.log.top) < 1 && m.log.x >= m.board.right
-        && Math.abs(m.log.x - m.gates.x) < 1 && Math.abs(m.gates.x - m.journal.x) < 1
-        && m.gates.top >= m.log.bottom && m.journal.top >= m.gates.bottom, JSON.stringify(m));
+      check(width + 'pxは正幅3列', columns.length === 3 && columns.every(value => value > 0), m.columns);
+      check(width + 'pxは人生・信条を上下に配置', m.life.width > 0 && m.life.height > 0
+        && Math.abs(m.so.x - m.life.x) < 1 && m.so.top >= m.life.bottom && m.so.height > 0, JSON.stringify(m));
+      check(width + 'pxは現在作業の下に予定・運航記録・本文の3列', m.runway.top >= Math.max(m.life.bottom, m.so.bottom)
+        && m.board.top >= m.runway.bottom && Math.abs(m.board.top - m.gates.top) < 1 && m.gates.x >= m.board.right
+        && Math.abs(m.log.x - m.gates.x) < 1 && m.journal.x >= m.gates.right
+        && m.log.top >= m.gates.bottom && Math.abs(m.journal.top - m.board.top) < 1, JSON.stringify(m));
       check(width + 'pxでも人生・信条は各1マークアップ、信条3件', await page.locator('.life-band').count() === 1
         && await page.locator('.so-row').count() === 1 && await page.locator('.so-item').count() === 3);
       if (width === 1440) {
@@ -939,11 +947,11 @@ function check(name, cond, extra = "") {
     for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
       await page.setViewportSize(viewport);
       const m = await measureLayout();
-      const panels = [m.life, m.so, m.runway, m.board, m.log, m.gates, m.journal];
-      check(viewport.width + 'pxはタイマーと主役を現在作業内に表示', [m.timer, m.mit].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom), JSON.stringify(m));
+      const panels = [m.mit, m.life, m.so, m.runway, m.board, m.gates, m.log, m.journal];
+      check(viewport.width + 'pxはタイマーを現在作業内、MITを人生の時間より上に表示', [m.timer].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom) && m.mit.width > 0 && m.mit.height > 0 && m.mit.bottom <= m.life.top, JSON.stringify(m));
       check(viewport.width + 'pxはboard/runwayが縦積み', Math.abs(m.board.x - m.runway.x) < 1, JSON.stringify(m));
       check(viewport.width + 'pxは横はみ出しなし', m.scrollWidth <= m.innerWidth, JSON.stringify(m));
-      check(viewport.width + 'pxは人生→信条→現在作業→予定→実績→ルーティン→本文',
+      check(viewport.width + 'pxはMIT→人生→信条→現在作業→予定→ルーティン→実績→本文',
         m.columns.split(/\s+/).length === 1 && panels.every((r, i) => r.height > 0 && (!i || r.top >= panels[i - 1].bottom)), JSON.stringify(m));
       check(viewport.width + 'pxは各パネルの左端が揃う', panels.every(r => Math.abs(r.x - m.runway.x) < 1), JSON.stringify(m));
     }

@@ -12,6 +12,17 @@ const PORT = randomPort();
 const TODAY = "2026-09-04";
 const FIXED_NOW = new Date(2026, 8, 4, 10, 0, 0);
 
+async function tokenColor(page, selector, token) {
+  return page.locator(selector).first().evaluate((root, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(root).getPropertyValue(name).trim();
+    root.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 let failures = 0;
 function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
@@ -189,7 +200,7 @@ async function seed(page, values) {
     check("絞り込み・解除は保存しない", await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === beforeFilters && await contentChangingWrites(page, STATE_KEY) === 0);
     const tree = id => page.locator(`.wbs-projects [data-wbs-row-id="${id}"] > .wbs-task-row`);
     await results.locator('[data-work-key="task:t-overdue"]').scrollIntoViewIfNeeded();
-    check("超過TaskはWBSでアンバー表示", await tree("t-overdue").locator('.wbs-overdue').evaluate(el => getComputedStyle(el).color) === "rgb(242, 184, 75)");
+    check("超過TaskはWBSでアンバー表示", await tree("t-overdue").locator('.wbs-overdue').evaluate(el => getComputedStyle(el).color) === await tokenColor(page, ".wbs-tower", "--tower-amber"));
     const beforeExisting = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
     await tree("t-today").locator('[data-action="placement-add-today"]').click();
     await page.waitForSelector('[data-action="placement-return"]');

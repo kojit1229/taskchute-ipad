@@ -7,6 +7,17 @@ const PORT = randomPort();
 const TODAY = "2026-08-31";
 const FIXED_NOW = new Date(2026, 7, 31, 10, 0, 0);
 
+async function tokenColor(page, selector, token) {
+  return page.locator(selector).first().evaluate((root, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(root).getPropertyValue(name).trim();
+    root.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 let failures = 0;
 function check(name, cond, extra = "") {
   if (cond) console.log(`  ✅ ${name}`);
@@ -55,10 +66,11 @@ function runningBlock() {
     console.log("[1] 現在作業領域へ主役とタイマーを収める");
     await seed([runningBlock()]);
     check("現在作業/主役/ポモドーロは各1つ", await page.locator('.tower-runway.now-hero').count() === 1
-      && await page.locator('.tower-runway > .today-pomodoro.pomo').count() === 1 && await page.locator('.tower-runway > .tower-mit').count() === 1);
+      && await page.locator('.tower-runway > .today-pomodoro.pomo').count() === 1 && await page.locator('.today-tower[data-daily-view="today"] > .tower-mit').count() === 1
+      && await page.locator('.tower-runway .tower-mit').count() === 0);
     check("予定は左、実績/ルーティン/本文は記録列、健康は別画面", await page.locator('#dailyTodayPlans > [data-work-list="today"]').count() === 1
-      && await page.locator('.daily-today-records > .sec-log').count() === 1 && await page.locator('.daily-today-records > .sec-gates').count() === 1
-      && await page.locator('.daily-today-records > .sec-journal').count() === 1 && await page.locator('.sec-bodymind').count() === 0);
+      && await page.locator('.daily-today-records > details > .sec-log').count() === 1 && await page.locator('.daily-today-records > .sec-gates').count() === 1
+      && await page.locator('.daily-today-main > .sec-journal').count() === 1 && await page.locator('.sec-bodymind').count() === 0);
     const layout = await page.evaluate(() => {
       const r = s => document.querySelector(s).getBoundingClientRect();
       return { life: r('.life-band').toJSON(), creed: r('.so-row').toJSON(), current: r('.tower-runway').toJSON(), timer: r('.today-pomodoro').toJSON(), plans: r('#dailyTodayPlans').toJSON() };
@@ -74,14 +86,14 @@ function runningBlock() {
       const remain = hero.querySelector("#towerNowRemain");
       const ring = document.querySelector(".pomo-circle-wrap");
       const progress = ring.querySelector(".pomo-progress-circle");
-      // --tower-purpleの実際の解決色を、progressStrokeとの厳密一致検証に使う
+      // --tower-blueの実際の解決色を、progressStrokeとの厳密一致検証に使う
       // (「none以外」という緩い検証では、cyanや旧色へ戻る回帰を検出できないため)。
-      // --tower-purpleは.today-towerスコープ内でのみ定義されるため、documentの
+      // --tower-blueは.today-towerスコープ内でのみ定義されるため、documentの
       // ルートではなくhero配下(同じカスケード内)へプローブを差し込む。
       const probe = document.createElement("span");
-      probe.style.cssText = "position:absolute; visibility:hidden; color: var(--tower-purple);";
+      probe.style.cssText = "position:absolute; visibility:hidden; color: var(--tower-blue);";
       hero.appendChild(probe);
-      const purpleColor = getComputedStyle(probe).color;
+      const blueColor = getComputedStyle(probe).color;
       probe.remove();
       return {
         heroBorder: getComputedStyle(hero).borderTopColor,
@@ -93,19 +105,19 @@ function runningBlock() {
         ringWidth: ring.getBoundingClientRect().width,
         ringTag: ring.querySelector("svg")?.tagName,
         progressStroke: getComputedStyle(progress).stroke,
-        purpleColor
+        blueColor
       };
     });
-    check("amber縁・発光・明るめ地・上端アクセントラインを持つ",
-      visual.heroBorder !== "rgba(0, 0, 0, 0)" && visual.heroShadow !== "none"
-      && visual.heroBackground.includes("gradient") && visual.accentLine.includes("gradient"), JSON.stringify(visual));
-    check("PCの共通タスク名1rem・残り時間26px", visual.titleSize === 16 && visual.remainSize === 26, JSON.stringify(visual));
-    check("ポモドーロ見出し・56px SVG円弧・--tower-purpleと厳密一致するstrokeを使う",
+    check("共通パネルの枠・影なし・平面背景・上端アクセントラインを持つ",
+      visual.heroBorder === await tokenColor(page, ".now-hero", "--tower-line") && visual.heroShadow === "none"
+      && visual.heroBackground === "none" && visual.accentLine.includes("gradient"), JSON.stringify(visual));
+    check("PCの共通タスク名18px・残り時間26px", visual.titleSize === 18 && visual.remainSize === 26, JSON.stringify(visual));
+    check("ポモドーロ見出し・56px SVG円弧・--tower-blueと厳密一致するstrokeを使う",
       (await page.locator(".today-pomodoro .today-panel-title").textContent()).includes("ポモドーロ")
       && Math.abs(visual.ringWidth - 56) < 0.5 && visual.ringTag === "svg"
-      && visual.progressStroke === visual.purpleColor, JSON.stringify(visual));
+      && visual.progressStroke === visual.blueColor, JSON.stringify(visual));
 
-    console.log('[2b] data-glass-blur="off"でもNOW LANDINGヒーローはGLASS縮退契約の半透明白背景を保つ');
+    console.log('[2b] data-glass-blur="off"でもNOW LANDINGヒーローはGLASS縮退契約の不透明パネル背景を保つ');
     // v310レビュー(Codex)で発見: .now-heroのbackground-imageだけの検証では、`background`
     // ショートハンド(v274のGLASS縮退契約=.tower-runwayのbackground-colorを暗黙にtransparent
     // へ上書きする回帰)を検出できない。実際にblur-off状態を再現しbackgroundColorを直接見る。
@@ -117,8 +129,8 @@ function runningBlock() {
       backdropFilter: getComputedStyle(hero).backdropFilter,
       backgroundColor: getComputedStyle(hero).backgroundColor
     }));
-    check("blur-off時もNOW LANDINGヒーローはv274のGLASS半透明白背景(rgba(255,255,255,0.07))を維持",
-      blurOff.backdropFilter === "none" && blurOff.backgroundColor === "rgba(255, 255, 255, 0.07)",
+    check("blur-off時もNOW LANDINGヒーローはv274の共通パネル背景を維持",
+      blurOff.backdropFilter === "none" && blurOff.backgroundColor === await tokenColor(page, ".now-hero", "--tower-panel"),
       JSON.stringify(blurOff));
     await page.evaluate((key) => localStorage.removeItem(key), BLUR_KEY);
     await page.reload();

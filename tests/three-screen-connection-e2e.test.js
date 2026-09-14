@@ -382,8 +382,12 @@ process.once('beforeExit', async () => {
     assert(await jumps.getByRole('button', { name: '記録へ', exact: true }).isVisible());
     assert(await root.getByRole('region', { name: '今日の予定', exact: true }).isVisible());
     console.log('PASS fixSL2A4: weekday, remaining label, navigation labels and section labels');
-    assert.equal(await root.locator('.life-band .life-sig').count(), 3);
-    assert.match(await root.locator('.life-band').textContent(), /未設定.*設定画面で生年月日を入力してください。/s);
+    assert.equal(await root.locator('.life-band .life-sig').count(), 4);
+    for (const [index, label] of [[2, '45歳まで'], [3, '80歳まで']]) {
+      const age = root.locator('.life-band .life-sig').nth(index);
+      assert.equal(await age.locator('span').textContent(), label);
+      assert.equal(await age.locator('strong').textContent(), '未設定');
+    }
     assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings.birthDate, STATE_KEY), '');
     assert((await root.locator('#towerDate').textContent()).includes(today));
     const journal = root.locator('#towerJournalFree');
@@ -402,13 +406,13 @@ process.once('beforeExit', async () => {
   finally { if (browser) await browser.close(); if (server) await new Promise(resolve => server.close(resolve)); }
 });
 
-// S3-08: Japanese subtitles retain their full rendered contents.
+// F6/S3-08: narrow creeds retain subtitle text while the approved compact view hides it.
 dailyLayoutChecks.push(async (page, root) => {
   assert(await root.locator('.so-item small').evaluateAll(nodes => {
     const expected = ['決めた一つを100%やり切る', '実行率より、進んだ量', '朝は集中、夜は充電'];
-    return nodes.length === 3 && nodes.every((el, i) => el.textContent === expected[i] && el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1 && getComputedStyle(el).textOverflow !== 'ellipsis');
-  }), 'three Japanese creed subtitles are displayed without clipping');
-  console.log('PASS S3-08: Japanese subtitles without clipping');
+    return nodes.length === 3 && nodes.every((el, i) => el.textContent === expected[i] && getComputedStyle(el).display === 'none');
+  }), '390px: three Japanese creed subtitles retain their text and are hidden');
+  console.log('PASS F6/S3-08: narrow creed subtitle text retained and hidden');
 });
 
 // S3-09: measure the unmodified production parents in all four views.
@@ -431,8 +435,7 @@ dailyLayoutChecks.push(async page => {
       const overlaps = [];
       for (let i = 0; i < regions.length; i++) for (let j = i + 1; j < regions.length; j++) {
         const a = regions[i], b = regions[j];
-        if (a.name.includes('daily-today-records') || b.name.includes('daily-today-records')) continue;
-        if ([a, b].some(r => r.name.includes('tower-runway')) && [a, b].some(r => /today-pomodoro|tower-mit/.test(r.name))) continue;
+        if ([a, b].some(r => r.name.includes('tower-runway')) && [a, b].some(r => /today-pomodoro/.test(r.name))) continue;
         if (Math.min(a.right, b.right) - Math.max(a.x, b.x) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y) > 1) overlaps.push([a.name, b.name]);
       }
       const inputs = [...root.querySelectorAll('input:not([type="hidden"]),select,textarea')];
@@ -440,7 +443,14 @@ dailyLayoutChecks.push(async page => {
       const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
       const layout = root.querySelector(({ today: '.daily-today-main', exec: '.exec-two-pane', wbs: '.wbs-projects', detail: '.detail-columns' })[view]) || root;
       const style = getComputedStyle(layout);
+      const rects = selector => [...root.querySelectorAll(selector)].map(el => {
+        const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+      });
       return { view, regions, overlaps, rootWidth: root.getBoundingClientRect().width,
+        main: rects('.daily-today-main')[0], lifeItems: rects('.life-sig'), creedItems: rects('.so-item'),
+        creedSubtitles: [...root.querySelectorAll('.so-item small')].map(el => ({ text: el.textContent,
+          display: getComputedStyle(el).display, clipped: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
+          ellipsis: getComputedStyle(el).textOverflow === 'ellipsis' })),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         minInput: inputs.length ? Math.min(...inputs.map(el => parseFloat(getComputedStyle(el).fontSize))) : null,
         minButton: buttons.length ? Math.min(...buttons.map(el => el.getBoundingClientRect().height)) : null,
@@ -452,18 +462,20 @@ dailyLayoutChecks.push(async page => {
     try {
     assert(result.regions.length > 0, view + ' must have measured regions');
     assert(result.regions.every(region => region.width > 0 && region.height > 0), view + ' visible measured regions');
-    // 監督者の契約追随(2026-09-12 CHANGELOG 19:05): 詳細の共通枠は 1024px 以上で2列(fixSB1b 09:20・fixSB2c 17:47 と同じ境界。設計06 §7 は 1280=2列・390=1列で 1024 は未規定→既存 .detail-columns の境界に揃える)。今日は 1280 以上で2列。
+    // Detail/exec retain the 1024px boundary; F6 Today uses three columns from 1280px.
     const twoColumns = view === 'exec' || view === 'detail' ? width >= 1024 : width >= 1280;
-    assert.equal(result.columns, twoColumns ? 2 : 1, view + ' column count');
+    assert.equal(result.columns, twoColumns ? (view === 'today' ? 3 : 2) : 1, view + ' column count');
     const leftOf = (a, b) => assert(a.right <= b.x + 1 && Math.abs(a.y - b.y) <= 1, view + ' left/right placement');
     const above = (a, b) => assert(a.bottom <= b.y + 1 && Math.abs(a.x - b.x) <= 1, view + ' vertical placement');
     if (view === 'today') {
       assert.equal(result.regions.length, 8, 'Today required regions');
       const [life, creed, current, plans, records, journal, timer, mit] = result.regions;
-      for (const region of [timer, mit]) assert(region.x >= current.x && region.right <= current.right + 1 && region.y >= current.y && region.bottom <= current.bottom + 1, "current-work child inside region");
-      if (twoColumns) { leftOf(life, creed); leftOf(plans, records); }
-      else { above(life, creed); above(creed, current); above(current, plans); above(plans, records); }
-      assert(journal.y >= records.y && journal.bottom <= records.bottom + 1, 'journal inside records');
+      for (const region of [timer]) assert(region.x >= current.x && region.right <= current.right + 1 && region.y >= current.y && region.bottom <= current.bottom + 1, "current-work child inside region");
+      above(mit, life); above(life, creed); above(creed, current); above(current, plans);
+      if (twoColumns) { leftOf(plans, records); leftOf(records, journal); }
+      else { above(plans, records); above(records, journal); }
+      assert(journal.x >= result.main.x && journal.right <= result.main.right + 1 && journal.y >= result.main.y && journal.bottom <= result.main.bottom + 1,
+        'journal remains inside the main row');
     } else if (view === 'exec') {
       assert.equal(result.regions.length, twoColumns ? 2 : 3, 'execution required regions');
       if (twoColumns) leftOf(result.regions[0], result.regions[1]);
@@ -477,8 +489,21 @@ dailyLayoutChecks.push(async page => {
     assert.deepEqual(result.duplicateIds, [], view + ' unique IDs');
     assert(result.minInput === null || result.minInput >= 16, view + ' native input size');
     if (view === 'today') {
-      assert.equal(result.columns, width >= 1280 ? 2 : 1);
-      if (width >= 1280) assert(Math.abs(result.regions[0].height - result.regions[1].height) < 1, 'equal value panels');
+      assert.equal(result.columns, width >= 1280 ? 3 : 1);
+      const [life, creed] = result.regions;
+      assert(Math.abs(life.width - creed.width) < 1 && Math.abs(life.x - creed.x) < 1, 'full-width stacked value panels');
+      assert.equal(result.lifeItems.length, 4, 'four LIFE BAND values');
+      assert.equal(result.creedItems.length, 3, 'three creed values');
+      for (const [items, parent] of [[result.lifeItems, life], [result.creedItems, creed]]) {
+        for (const item of items) assert(item.width > 0 && item.height > 0 && item.x >= parent.x && item.right <= parent.right + 1 && item.y >= parent.y && item.bottom <= parent.bottom + 1, 'value inside its panel');
+        for (let i = 1; i < items.length; i++) {
+          if (width >= 768 || (items === result.lifeItems && i % 2 === 1)) leftOf(items[i - 1], items[i]);
+          else above(items[i - (items === result.lifeItems ? 2 : 1)], items[i]);
+        }
+      }
+      assert.deepEqual(result.creedSubtitles.map(item => item.text), ['決めた一つを100%やり切る', '実行率より、進んだ量', '朝は集中、夜は充電']);
+      assert(result.creedSubtitles.every(item => width < 768 ? item.display === 'none' : item.display !== 'none'), 'responsive creed subtitle visibility');
+      if (width === 1440) assert(result.creedSubtitles.every(item => !item.clipped && !item.ellipsis), '1440px creed subtitles without clipping');
       assert(result.minButton >= 44, 'Today main actions at least 44px');
     }
     } catch (error) { measurementFailures.push({ view, width, count, zoom, message: error.message }); }

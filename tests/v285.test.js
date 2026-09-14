@@ -30,10 +30,13 @@ check("実行コードに旧DOMセレクタ文字列が無い", !/sec-atis|data-
 check("今日本文は旧表示設定で消さず描画", towerSource.includes('$' + '{renderTowerJournal(today)}')
   && !towerSource.includes("focusVisibility.atis") && !towerSource.includes("focusVisibility.journal ?"));
 const legacyPomoVariable = ["pomodoro", "Right"].join("");
+// fixF6d(監督者決定2、F6-1): MITはNOW LANDING(現在作業)の外の独立見出しへ移動したため、
+// 「MITとタイマーが1本の文字列で隣接」という旧断言は成立しない。同じ性質(旧JOURNAL連動の
+// 右寄せ変数が無い・タイマーがrenderTowerRunway内の固定位置=hudの直後・</section>の直前)を
+// 新配置で検査する。
 check("CABIN TIMERは旧JOURNAL連動右寄せを持たず現在作業内へ固定",
   !towerSource.includes(legacyPomoVariable)
-  && towerSource.includes('${renderTowerMIT(blocks)}${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}')
-  && towerSource.includes("${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}"));
+  && towerSource.includes("${hud}\n    ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}\n  </section>"));
 
 console.log("[2] VIEWはside/journal/lifeだけを正規化・描画・登録する");
 check("既定/正規化stateに旧atisキーを持たない", !/\batis\s*:/.test(todaySource));
@@ -50,9 +53,12 @@ check("予定/実績/ルーティン/本文を常設し健康は今日から分�
   && towerSource.includes('$' + '{renderFlightLog(today, blocks)}')
   && towerSource.includes('$' + '{renderTowerGates(blocks)}')
   && !towerSource.includes('focusVisibility.side ?'));
+// fixF6d(監督者決定2、束F6新配置): モバイル順序の断言文言はMITが独立見出しへ移動した
+// 現行契約(tower-core.test.js [34])に合わせて更新されている。同じ「tripwireが現行スイートに
+// 残っている」性質を新文言で検査する。
 check("tower-coreの負方向・現行モバイル順序を維持", towerTestSource.includes("DEPARTURES要素・旧action・明日便タイトルを描画しない")
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない")
-  && towerTestSource.includes("pxは人生→信条→現在作業→予定→実績→ルーティン→本文"));
+  && towerTestSource.includes("pxはMIT→人生→信条→現在作業→予定→ルーティン→実績→本文"));
 
 (async () => {
   const server = startServer(PORT);
@@ -84,8 +90,11 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     console.log("[4] legacy localStorage/stateを読み捨て・保持しつつtodayを正常描画する");
     check("today DOMに旧パネル/data属性/専用子要素が無い",
       await page.locator('.sec-atis, [data-atis-panel], [data-atis-status], [data-atis-task-candidates], .tower-atis-body').count() === 0);
-    check("右カラムはJOURNALだけ", await page.locator(".daily-today-records > .sec-journal").count() === 1);
-    check("右カラム直下要素はJOURNAL 1個だけ", await page.locator(".daily-today-records > .sec-journal").count() === 1);
+    // fixF6d(監督者決定2、F6-3): 表形式化でJOURNALは記録群(.daily-today-records)から独立し、
+    // 本体(.daily-today-main)の3枠目になった。同じ「JOURNALはそれだけの1枠」という性質を
+    // 新配置(本体直下・記録群には混在しない)で検査する。
+    check("本文の枠はJOURNALだけ", await page.locator(".daily-today-main > .sec-journal").count() === 1);
+    check("記録群にJOURNALは混在しない", await page.locator(".daily-today-records > .sec-journal").count() === 0);
     const focusActions = await page.$$eval(".daily-today-clock nav [data-action]", (nodes) => nodes.map((node) => node.dataset.action));
     check("VIEWバーは本体+side/journal/lifeの4操作だけ", JSON.stringify(focusActions) === JSON.stringify(["today-plans-jump", "today-journal-jump"]), JSON.stringify(focusActions));
     check("FOCUSバーにAIラベルが無い", !(await page.locator(".daily-today-clock nav").textContent()).includes("AI"));
