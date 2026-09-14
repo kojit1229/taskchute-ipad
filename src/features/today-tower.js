@@ -574,9 +574,11 @@ function renderTodayTower() {
     ${renderTowerMIT(blocks)}
     <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
+    <nav class="daily-today-sections" aria-label="今日の表示位置">${[["focus", "◎ FOCUS"], ["records", "運航・体調"], ["journal", "ジャーナル"], ["life", "LIFE BAND"]].map(([section, label]) => `<button type="button" data-action="today-section-jump" data-section="${section}">${label}</button>`).join("")}</nav>
     <div class="daily-today-main">
       <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
-      <div class="daily-today-records">${renderFlightLog(today, blocks)}${renderTowerGates(blocks)}${renderTowerJournal(today)}</div>
+      <div class="daily-today-records">${renderTowerGates(blocks)}${renderTowerBodyMind(today, blocks)}<details><summary>実績の簡易一覧</summary>${renderFlightLog(today, blocks)}</details></div>
+      ${renderTowerJournal(today)}
     </div>
   </div>`;
 }

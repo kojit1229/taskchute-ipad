@@ -131,6 +131,10 @@ function configureToday(deps) {
   registerActions({
     "today-plans-jump": () => focusTodaySection("#dailyTodayPlans"),
     "today-journal-jump": () => focusTodaySection(".tower-journal"),
+    "today-section-jump": ({ target }) => {
+      const selector = { focus: ".tower-runway", records: ".daily-today-records", journal: ".tower-journal", life: ".life-band" }[target.dataset.section];
+      if (selector) document.querySelector('[data-daily-view="today"] ' + selector)?.scrollIntoView({ block: "start" });
+    },
   });
 }
 

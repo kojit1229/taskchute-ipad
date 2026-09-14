@@ -24,7 +24,7 @@ const countText = model => `${model.shownCount} / ${model.totalCount}件 ・ 全
 function resultHTML(model, resultsHTML, escapeHTML) {
   return model.shownCount ? resultsHTML : `<p class="muted work-list-empty">${escapeHTML(model.emptyMessage)}</p>`;
 }
-export function renderSearchFrame(model, { escapeHTML, resultsHTML, clearAction = "daily-search-clear", filterKeys = Object.keys(filterLabels), queryLabel = "名称・メモ・完了条件・Projectを検索", queryId = "" }) {
+export function renderSearchFrame(model, { escapeHTML, resultsHTML, compact = false, clearAction = "daily-search-clear", filterKeys = Object.keys(filterLabels), queryLabel = "名称・メモ・完了条件・Projectを検索", queryId = "" }) {
   validateSearch(model);
   // Keep the existing work-list adapter's alias for the shared clear action.
   if (!DAILY_ACTIONS.includes(clearAction === "work-list-clear" ? "daily-search-clear" : clearAction))
@@ -34,7 +34,7 @@ export function renderSearchFrame(model, { escapeHTML, resultsHTML, clearAction 
   return `<div class="work-list-filters">
     ${model.scope === "exec" ? select("mode", "表示期間", [["today", "今日"], ["upcoming", "これから"]], model.mode) : ""}
     <label class="work-list-query"${queryId ? ` for="${e(queryId)}"` : ""}>検索<input${queryId ? ` id="${e(queryId)}"` : ""} class="input" type="search" data-work-filter="query" value="${e(model.query)}" placeholder="${e(queryLabel)}" aria-label="${e(queryLabel)}"></label>
-    ${filterKeys.map(key => select(key, filterLabels[key], model.options[key], model.filters[key])).join("")}
+    ${compact ? '<details class="daily-table-filters"><summary>絞り込み</summary><div>' : ""}${filterKeys.map(key => select(key, filterLabels[key], model.options[key], model.filters[key])).join("")}${compact ? '</div></details>' : ""}
     <button type="button" class="btn" data-action="${e(clearAction)}">条件を解除</button>
   </div>
   <p class="work-list-count" aria-live="polite">${countText(model)}</p>

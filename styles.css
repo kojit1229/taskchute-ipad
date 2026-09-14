@@ -6078,6 +6078,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-values > * { height: auto; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .life-band { overflow: visible; gap: 8px; padding: 8px 12px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .life-band:has(.life-cycle-details[open]) { position: relative; z-index: 10; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .life-sigs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 0; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .life-sig { padding-inline: 10px; align-content: center; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .life-unset { font-size: 16px; }
@@ -6103,4 +6104,38 @@ details.settings-row > .fold-summary.settings-row-summary {
 }
 @media (max-width: 767px) {
   #app[data-view="today"] .today-tower[data-daily-view="today"] .so-item small { display: none; }
+}
+
+/* F6-3: the table, routine/body records and journal share one desktop row. */
+#app[data-view="today"] .today-tower[data-daily-view="today"] { gap: 8px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections button { padding: 4px; min-width: 0; background: var(--tower-panel); color: var(--tower-cyan); border: 1px solid var(--tower-line); border-radius: 4px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-runway, .daily-today-records, .tower-journal, .life-band) { scroll-margin-top: 160px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-tabs { display: flex; gap: 6px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-tabs button { flex: 1; background: transparent; color: var(--tower-text); border: 1px solid var(--tower-line); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-tabs [aria-selected="true"] { color: var(--tower-cyan); border-bottom: 2px solid var(--tower-cyan); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .work-list-filters { display: flex; flex-wrap: nowrap; align-items: end; gap: 6px; padding: 6px 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .work-list-query { flex: 1; min-width: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .work-list-query input { width: 100%; min-width: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .work-list-filters > button { padding: 4px; font-size: 12px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-filters { position: relative; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-filters summary { display: flex; align-items: center; min-width: 44px; min-height: 44px; cursor: pointer; white-space: nowrap; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-filters > div { position: absolute; right: 0; top: 100%; z-index: 6; width: min(280px, 70vw); padding: 10px; display: grid; gap: 8px; background: var(--tower-panel); border: 1px solid var(--tower-line); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-entry { display: block; padding: 0; border-bottom: 1px solid var(--tower-line); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-row { display: grid; grid-template-columns: 44px minmax(0, 2.3fr) minmax(0, 1fr) 44px 64px; align-items: center; gap: 6px; min-height: 44px; font-size: 13px; cursor: pointer; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-row > * { min-width: 0; overflow-wrap: anywhere; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-head { min-height: 28px; color: var(--tower-cyan); font-size: 12px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-row .work-list-title { display: block; width: 100%; padding: 0; text-align: left; font-size: 14px; background: transparent; border: 0; color: var(--tower-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-detail { padding: 8px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-detail :is(.daily-plan-heading, .daily-plan-meta) { display: block; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-detail .daily-plan-row { display: block; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records > details > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+@media (min-width: 1280px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.4fr); align-items: stretch; gap: 8px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records { align-content: start; gap: 8px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-journal-free { height: 23rem; }
+}
+@media (max-width: 767px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-row { grid-template-columns: 40px minmax(0, 1.5fr) minmax(0, 1fr) 36px 52px; gap: 3px; font-size: 12px; }
 }
