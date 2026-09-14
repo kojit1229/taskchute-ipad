@@ -21,19 +21,25 @@ function check(name, condition, extra = "") {
   else { failures++; console.log(`  ❌ ${name}${extra ? ` ${extra}` : ""}`); }
 }
 
+async function openLifeDetails(page) {
+  const details = page.locator('.life-band .life-cycle-details');
+  if (!(await details.evaluate(el => el.open))) await details.locator('summary').click();
+}
+
 (async () => {
   console.log("[1] 静的契約・200行分割境界・iOS/SWガード");
-  check("topbandはrenderLifeBand/renderStandingOrdersの単一API", topbandSource.includes("export function renderLifeBand()")
+  check("topbandはcompact対応を含む5つの単一API", topbandSource.includes("export function renderLifeBand(compact = false)")
     && topbandSource.includes("export function renderStandingOrders()")
-    && !/export function (?:renderCountdown|renderTopbandPC|creedRotationLine)/.test(topbandSource));
+    && JSON.stringify([...topbandSource.matchAll(/export function (\w+)\(/g)].map(match => match[1]).sort())
+      === JSON.stringify(["configureTopband", "cycleWeekForDate", "renderLifeBand", "renderStandingOrders", "toggleTwyScoreExpanded"]));
   check("today-towerは旧ヘッダ信条・二重上帯を参照しない", !/towerEyebrow|creedRotationLine|renderTopbandPC|renderCountdown/.test(towerSource));
   check("Today ticker登録値は1000ms", /setInterval\(updateTodayTick,\s*1000\)/.test(todaySource));
   check("旧二重DOMクラスは実行コード/CSSから消滅", !/sec-(?:life|creed)(?:-pc)?|tower-topband-pc/.test(`${topbandSource}\n${towerSource}\n${stylesSource}`));
   check("LIFE BANDはGLASS共通クラス・ビーコン・12WY内訳を含む", /tower-glass-panel life-band/.test(topbandSource)
     && /tower-beacon/.test(topbandSource) && /twyScoreHTML\(digest\).*twyCommitBannerHTML\(digest\)/s.test(topbandSource));
-  check("今日の親へ限定した人生/信条・予定/記録の2列と信条の縦3件", stylesSource.includes('.daily-today-main { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }')
-    && stylesSource.includes('[data-daily-view="today"] .so-grid { grid-template-columns: minmax(0, 1fr); }')
-    && towerSource.includes('<div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>'));
+  check("今日の親へ限定したLIFE/SO縦順・主領域3列と信条横3枠", stylesSource.includes('.daily-today-main { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.4fr); align-items: stretch; gap: 8px; }')
+    && stylesSource.includes('[data-daily-view="today"] .so-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
+    && towerSource.includes('<div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>'));
   check("人生の角丸と信条の非切詰め・時計の共通GLASSを維持", stylesSource.includes('[data-daily-view="today"] .so-row { overflow: visible; }')
     && /\.life-band\s*\{[^}]*overflow:\s*hidden/.test(stylesSource)
     && towerSource.includes('class="daily-today-clock tower-glass-panel"'));
@@ -131,13 +137,17 @@ function check(name, condition, extra = "") {
       check(`${width}pxは時計→LIFE→SO→現在作業→予定/記録の縦順・全幅`, mobile.clock.bottom < mobile.life.top && mobile.life.bottom <= mobile.so.top
         && mobile.so.bottom < mobile.mit.top && mobile.mit.bottom < mobile.focus.top
         && [mobile.life.width, mobile.clock.width, mobile.so.width].every((value) => Math.abs(value - mobile.band.width) < 1), JSON.stringify(mobile));
-      check(`${width}pxは横溢れなし・LIFE指標2x2・時計内の情報が枠内`, mobile.scrollWidth <= mobile.innerWidth
-        && mobile.sigRows === 2 && mobile.clockFits, JSON.stringify(mobile));
+      check(`${width}pxは横溢れなし・LIFE指標は390pxで2x2・768px以上は横4枠・時計内の情報が枠内`, mobile.scrollWidth <= mobile.innerWidth
+        && mobile.sigRows === (width < 768 ? 2 : 1) && mobile.clockFits, JSON.stringify(mobile));
     }
     check("4指標+12WYスコア+信条3件を単一DOM表示", mobile.sigs === 4 && mobile.score === 1
       && mobile.soItems === 3 && mobile.duplicateCount === 3, JSON.stringify(mobile));
     check("ヘッダ信条ローテDOMは完全に消滅", mobile.headerCount === 0);
-    check("モバイルのSTANDING ORDERSは縦1列", mobile.soColumns.trim().split(/\s+/).length === 1, mobile.soColumns);
+    for (const width of [390, 768, 1024]) {
+      await page.setViewportSize({ width, height: 844 });
+      const soLayout = await layout();
+      check(`${width}pxの信条は${width < 768 ? "縦1列" : "横3枠"}`, soLayout.soColumns.trim().split(/\s+/).length === (width < 768 ? 1 : 3), JSON.stringify(soLayout));
+    }
     await page.setViewportSize({ width: 390, height: 844 });
     const clockBefore = await page.locator("#towerClock").textContent();
     await page.clock.setFixedTime(new Date(2026, 7, 26, 14, 3, 28));
@@ -160,7 +170,7 @@ function check(name, condition, extra = "") {
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await page.screenshot({ path: path.join(ARTIFACTS, "tower-r2-mobile.png"), fullPage: true });
 
-    console.log("[3] 1280px境界/PC 人生と信条の同高2列・予定と記録の2列");
+    console.log("[3] 1280px境界/PC LIFEと信条の縦順・予定と記録とジャーナルの3列");
     let pc, boundaryPc;
     for (const width of [1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -171,14 +181,14 @@ function check(name, condition, extra = "") {
         && pc.life.bottom <= pc.mit.top && pc.so.bottom <= pc.mit.top
         && Math.abs(pc.so.right - pc.clock.right) < 1 && Math.abs(pc.life.x - pc.mit.x) < 1
         && pc.scrollWidth <= pc.innerWidth, JSON.stringify(pc));
-      check(`${width}pxはSOが人生指標の右隣で同高・同幅`, pc.so.x >= pc.life.right
-        && Math.abs(pc.so.width - pc.life.width) < 1 && Math.abs(pc.so.top - pc.life.top) < 1
-        && Math.abs(pc.so.height - pc.life.height) < 1, JSON.stringify(pc));
+      check(`${width}pxはSOがLIFEの直下で同幅・LIFEは横4枠`, pc.so.top >= pc.life.bottom
+        && Math.abs(pc.so.width - pc.life.width) < 1 && Math.abs(pc.so.x - pc.life.x) < 1
+        && pc.sigRows === 1, JSON.stringify(pc));
     }
-    check("1280px境界の親は縦flex、人生/信条と予定/記録は各2列", boundaryPc.gridAreas === 'none'
+    check("1280px境界の親は縦flex、人生/信条は1列・予定/記録/ジャーナルは3列", boundaryPc.gridAreas === 'none'
       && boundaryPc.rootDisplay === 'flex' && boundaryPc.rootDirection === 'column'
-      && boundaryPc.valueColumns.trim().split(/\s+/).length === 2 && boundaryPc.mainColumns.trim().split(/\s+/).length === 2, JSON.stringify(boundaryPc));
-    check("PCは信条縦3件・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 1
+      && boundaryPc.valueColumns.trim().split(/\s+/).length === 1 && boundaryPc.mainColumns.trim().split(/\s+/).length === 3, JSON.stringify(boundaryPc));
+    check("PCは信条横3件・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 3
       && pc.sigs === 4 && pc.soItems === 3 && pc.duplicateCount === 3, JSON.stringify(pc));
     const soType = await page.locator(".so-item").first().evaluate((item) => {
       const num = item.querySelector(".so-num"), em = item.querySelector("em"), small = item.querySelector("small");
@@ -191,28 +201,30 @@ function check(name, condition, extra = "") {
       && soType.smallFont === "12px" && !/mono|consolas/i.test(soType.smallFamily), JSON.stringify(soType));
     await page.screenshot({ path: path.join(ARTIFACTS, "tower-r2-pc.png"), fullPage: true });
     const geometry = (selectors) => page.evaluate((items) => {
-      const life = document.querySelector(".life-band").getBoundingClientRect(), so = document.querySelector(".so-row").getBoundingClientRect();
+      const life = document.querySelector(".life-band").getBoundingClientRect(), popover = document.querySelector(".life-cycle-popover").getBoundingClientRect(), so = document.querySelector(".so-row").getBoundingClientRect();
       const boxes = items.map((selector) => { const el = document.querySelector(selector), box = el?.getBoundingClientRect();
         return { selector, present: Boolean(el), left: box?.left, right: box?.right, bottom: box?.bottom,
           internalFit: Boolean(el) && el.scrollWidth <= el.clientWidth + 1,
           visualFit: Boolean(el) && [...el.children].every((child) => { const childBox = child.getBoundingClientRect();
             return childBox.left >= box.left - 1 && childBox.right <= box.right + 1 && childBox.bottom <= box.bottom + 1; }) }; });
-      return { life: { left: life.left, right: life.right, bottom: life.bottom },
-        valuesFit: innerWidth < 1280 ? so.top >= life.bottom : so.left >= life.right && Math.abs(so.top-life.top)<1 && Math.abs(so.height-life.height)<1,
+      return { life: { left: popover.left, right: popover.right, bottom: popover.bottom },
+        valuesFit: so.top >= life.bottom && Math.abs(so.left-life.left)<1 && Math.abs(so.width-life.width)<1,
         pageFit: document.scrollingElement.scrollWidth <= innerWidth, boxes };
     }, selectors);
 
     console.log("[4] 12WY TRACKS/長文/未確定バナーの390/1280px幾何");
     await seed({ tracks: true });
+    await openLifeDetails(page);
     if (await page.locator('[data-action="twy-score-toggle"]').getAttribute("aria-expanded") === "false") {
       await page.locator('[data-action="twy-score-toggle"]').click();
+      await openLifeDetails(page);
     }
     let trackNameClippedAt390 = false;
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       const expanded = await geometry([".twy-score-detail", ".twy-tracks-foot", ".twy-track-line"]);
       if (width === 390) trackNameClippedAt390 = await page.locator(".twy-track-line .t-name").first().evaluate((el) => el.scrollWidth > el.clientWidth);
-      check(`${width}px TRACKS展開はLIFE内・幅別SO配置・横溢れなし`, expanded.pageFit && expanded.valuesFit
+      check(`${width}px TRACKS展開はLIFEの12WYポップオーバー内・幅別SO配置・横溢れなし`, expanded.pageFit && expanded.valuesFit
         && expanded.boxes.every((box) => box.present && box.left >= expanded.life.left - 1 && box.right <= expanded.life.right + 1
           && box.bottom <= expanded.life.bottom + 1 && box.visualFit), JSON.stringify(expanded));
     }
@@ -227,15 +239,17 @@ function check(name, condition, extra = "") {
 
     console.log("[5] 負例: birthDate未設定・hasMeta=false・blur縮退");
     await seed({ birthDate: "", hasMeta: false, candidate: true });
-    check("空のbirthDateはnormalize後も未設定・12週と今年を維持", await page.locator(".life-band .life-sig").count() === 3
+    await openLifeDetails(page);
+    check("空のbirthDateはnormalize後も未設定・12週と今年を維持", await page.locator(".life-band .life-sig").count() === 4
       && (await page.locator(".life-band").textContent()).includes("未設定")
-      && (await page.locator(".life-band").textContent()).includes("設定画面で生年月日を入力してください。"));
-    check("birthDate未設定・hasMeta=false候補ありは12WYセル内バナーを維持", await page.locator('.life-sig.wy > .twy-commit-banner [data-action="twy-open-commit"]').count() === 1
+      && await page.locator(".life-band .life-unset").count() === 2
+      && (await page.locator(".life-band").textContent()).includes("今年"));
+    check("birthDate未設定・hasMeta=false候補ありは12WYセル内バナーを維持", await page.locator('.life-cycle-popover > .twy-commit-banner [data-action="twy-open-commit"]').count() === 1
       && await page.locator(".life-band > .twy-commit-banner").count() === 0);
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      const banner = await geometry([".life-sig.wy > .twy-commit-banner", '.twy-commit-banner [data-action="twy-open-commit"]']);
-      check(`${width}px未確定バナーはLIFE内・幅別SO配置・横溢れなし`, banner.pageFit && banner.valuesFit
+      const banner = await geometry([".life-cycle-popover > .twy-commit-banner", '.twy-commit-banner [data-action="twy-open-commit"]']);
+      check(`${width}px未確定バナーはLIFEの12WYポップオーバー内・幅別SO配置・横溢れなし`, banner.pageFit && banner.valuesFit
         && banner.boxes.every((box) => box.present && box.left >= banner.life.left - 1 && box.right <= banner.life.right + 1
           && box.bottom <= banner.life.bottom + 1 && box.internalFit), JSON.stringify(banner));
     }

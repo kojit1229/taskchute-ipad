@@ -71,6 +71,7 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       assert.equal(await rows.locator('.work-list-empty').textContent(), '条件に一致する項目はありません。');
       await root.locator('[data-action="work-list-clear"]').click();
       assert(await query.evaluate(el => el === window.__searchInput));
+      if (scope === 'today') await root.locator('.daily-table-filters > summary').click();
       await root.locator('[data-work-filter="status"]').selectOption('completed');
       assert.equal(await rows.locator('[data-work-key]').count(), 1);
       assert.equal(await page.evaluate(key => localStorage.getItem(key), STATE_KEY), stored,

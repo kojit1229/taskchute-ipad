@@ -73,7 +73,10 @@ try {
       s.settings.lastOpenedDate = day; s.settings.autoSync = false; s.settings.github.autoSave = false;
       localStorage.setItem(key, JSON.stringify(s));
     }, { key: STATE_KEY, data: fixture(), day: DAY, prev: PREV });
-    await page.reload(); await page.locator('#towerFlightLog').waitFor();
+    // fixF6v(載せ替え追随 2026-09-14): F6-3 で FLIGHT LOG(実績の簡易一覧)は記録列の折りたたみの中に入った
+    // (fixF6c と同じ性質)。開いてから読む(検査の内容は同じ)。
+    await page.reload(); await page.locator('.daily-today-records > details > summary').click();
+    await page.locator('#towerFlightLog').waitFor();
     const today = await page.locator('#towerFlightLog .tower-log-row').evaluateAll(rows => rows.map(r => ({
       id: r.dataset.id, time: r.querySelector('time').textContent, duration: r.querySelector('.tower-log-dur').textContent })));
     assert.deepEqual(today.map(r => r.id), expected);

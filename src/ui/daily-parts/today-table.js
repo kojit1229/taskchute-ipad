@@ -9,7 +9,7 @@ export function renderTodayTableRow(row, { escapeHTML: e, estimate, detailsHTML 
   return `<details class="work-list-row daily-table-entry" data-work-key="${e(row.key)}">
     <summary class="daily-table-row" role="row" aria-label="${e(row.title)}の内訳">
       <span role="cell">${e(clock)}</span>
-      <span role="cell"><button type="button" class="work-list-title" data-action="edit-${row.kind}" data-id="${e(row.id)}">${row.item.isMIT === true ? "★ " : ""}${e(row.title || "（名称なし）")}</button></span>
+      <span role="cell"><button type="button" class="work-list-title" data-action="edit-${row.kind}" data-id="${e(row.id)}">${row.item.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span>' : ""}${e(row.title || "（名称なし）")}</button></span>
       <span role="cell">${e(row.project?.title || "—")}</span><span role="cell">${e(estimate == null ? "—" : `${estimate}分`)}</span>
       <span role="cell">${e(status)} ▾</span>
     </summary>

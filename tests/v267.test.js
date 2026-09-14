@@ -33,6 +33,19 @@ function configureSync(syncMod) {
   });
 }
 
+// fixF6e: Open the F6-2 LIFE details before interaction and after rendering.
+async function openLifeDetails(page) {
+  const details = page.locator('.life-band .life-cycle-details');
+  if (await details.count() && !(await details.evaluate(el => el.open))) {
+    await details.locator('summary').click();
+  }
+}
+async function toggleLifeScore(page) {
+  await openLifeDetails(page);
+  await page.locator('.life-band [data-action="twy-score-toggle"]').click();
+  await openLifeDetails(page);
+}
+
 (async () => {
   const storeMod = await import(pathToFileURL(path.join(ROOT, "src", "state", "store.js")).href);
   const syncMod = await import(pathToFileURL(path.join(ROOT, "src", "sync", "github.js")).href);
@@ -80,7 +93,8 @@ function configureSync(syncMod) {
   };
   const openScoreDetail = async () => {
     const score = page.locator('.life-band [data-action="twy-score-toggle"]');
-    if (await score.getAttribute("aria-expanded") !== "true") await score.click();
+    if (await score.getAttribute("aria-expanded") !== "true") await toggleLifeScore(page);
+    await openLifeDetails(page);
     await page.waitForSelector(".life-band .twy-score-detail");
     return score;
   };

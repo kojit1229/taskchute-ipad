@@ -52,8 +52,10 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
       ringsOutside:[...document.querySelectorAll('.pomo-circle-wrap')].filter(el=>!tower.querySelector('.tower-runway > .today-pomodoro')?.contains(el)).length,
       timer:rect('.tower-runway > .today-pomodoro'),runway,pomodoro:JSON.parse(localStorage.getItem(key)).pomodoro,
       sections:selectors.map(selector=>({selector,count:tower.querySelectorAll(selector).length,visible:!!tower.querySelector(selector)?.getClientRects().length})),
-      life:rect('.life-band'),so:rect('.so-row'),plansBox:rect('#dailyTodayPlans'),records:rect('.daily-today-records'),
-      recordOrder:[...tower.querySelector('.daily-today-records').children].map(el=>el.matches('.sec-journal')?'journal':el.matches('.sec-gates')?'gates':'actuals'),
+      life:rect('.life-band'),so:rect('.so-row'),plansBox:rect('#dailyTodayPlans'),records:rect('.daily-today-records'),journalBox:rect('.tower-journal'),
+      // fixF6d(監督者決定2、F6-3): 表形式化でJOURNALは記録群(.daily-today-records)の外へ出て
+      // 本体の3枠目になった。記録群自体はルーティン/からだのきろく/実績一覧(折りたたみ)の3つ。
+      recordOrder:[...tower.querySelector('.daily-today-records').children].map(el=>el.matches('.sec-gates')?'gates':el.matches('.sec-bodymind')?'body':el.tagName==='DETAILS'?'actuals-details':'other'),
       recordGaps:[...tower.querySelector('.daily-today-records').children].slice(1).map(el=>el.getBoundingClientRect().top-el.previousElementSibling.getBoundingClientRect().bottom)};
     },STATE_KEY);
    results.push({width,mode,...metrics});
@@ -69,13 +71,17 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
      assert(metrics.timer.x>=metrics.runway.x&&metrics.timer.right<=metrics.runway.right&&metrics.timer.y>=metrics.runway.y&&metrics.timer.bottom<=metrics.runway.bottom,'timer bounds stay inside current work');assert.deepEqual(metrics.pomodoro,original.pomodoro,'timer state retained');
      assert.equal(metrics.creeds,3);assert.deepEqual(metrics.subtitles,['決めた一つを100%やり切る','実行率より、進んだ量','朝は集中、夜は充電']);
      assert.equal(metrics.sections.length,8);assert(metrics.sections.every(s=>s.count===1&&s.visible),'eight sections remain visible with old focus settings');
-     assert.deepEqual(metrics.recordOrder,['actuals','gates','journal']);
+     // fixF6d(監督者決定2、F6-3): JOURNALは記録群の外の本体3枠目になったため、記録群自体は
+     // ルーティン/からだのきろく/実績一覧(折りたたみ)の3つを検査する(同じ「3つ・順序」の性質)。
+     assert.deepEqual(metrics.recordOrder,['gates','body','actuals-details']);
      assert(metrics.recordGaps.every(gap=>gap>=8),'record panels separated by at least 8px');
      if(width>=1280) {
-      assert(Math.abs(metrics.life.y-metrics.so.y)<1&&Math.abs(metrics.life.height-metrics.so.height)<1,'life/creeds same row and height');
-      assert(metrics.plansBox.right<=metrics.records.x&&Math.abs(metrics.plansBox.y-metrics.records.y)<1,'plans left / records right');
-      assert(Math.abs(metrics.plansBox.width/metrics.records.width-1)<.08,'PC equal columns');
-     } else assert(metrics.records.y>=metrics.plansBox.bottom,'plans before records on narrow screen');
+      // fixF6d(監督者決定2、F6-2/F6-3): LIFE BAND/信条は常に縦積み(同高・同幅の2枠は廃止)。
+      // 予定/記録群/本文は1280px以上で横3列になった(同じ「PC等分列」の性質を3列で検査)。
+      assert(metrics.so.y>=metrics.life.bottom,'life above creeds, stacked');
+      assert(metrics.plansBox.right<=metrics.records.x&&Math.abs(metrics.plansBox.y-metrics.records.y)<1,'plans left / records middle');
+      assert(metrics.records.right<=metrics.journalBox.x&&Math.abs(metrics.records.y-metrics.journalBox.y)<1,'records left / journal right');
+     } else assert(metrics.records.y>=metrics.plansBox.bottom&&metrics.journalBox.y>=metrics.records.bottom,'plans before records before journal on narrow screen');
      await page.locator('[data-action="today-plans-jump"]').click();
      assert(await page.locator('#dailyTodayPlans').evaluate(el=>el.contains(document.activeElement)),'one jump reaches a plan control');
    }
@@ -102,7 +108,10 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
      if(input) {input.setSelectionRange(2,5); input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));}
      const top=app.scrollTop;
      const {updateTodayTowerTick}=await import('/src/features/today-tower.js');updateTodayTowerTick();
-      const result={same:band===document.querySelector('.tower-runway'),focused:document.activeElement===target,scroll:app.scrollTop===top,selection:!input||(input.selectionStart===2&&input.selectionEnd===5),order:band.previousElementSibling.matches('.daily-today-values')&&band.nextElementSibling.matches('.daily-today-main'),duplicates:document.querySelectorAll('.tower-runway').length};
+      // fixF6d(監督者決定2、F6-3): NOW LANDINGの直後に「4つの切替」ナビ(.daily-today-sections)
+     // が入ったため、本体(.daily-today-main)はもう直後の兄弟ではない。同じ「直前はLIFE BAND
+     // 群・直後は切替ナビ経由で本体へ続く」という並び順の性質を新配置で検査する。
+     const result={same:band===document.querySelector('.tower-runway'),focused:document.activeElement===target,scroll:app.scrollTop===top,selection:!input||(input.selectionStart===2&&input.selectionEnd===5),order:band.previousElementSibling.matches('.daily-today-values')&&band.nextElementSibling.matches('.daily-today-sections')&&band.nextElementSibling.nextElementSibling.matches('.daily-today-main'),duplicates:document.querySelectorAll('.tower-runway').length};
      if(input)input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));
      return result;
     });

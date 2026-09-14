@@ -146,9 +146,17 @@ function scoreRecords(done, total) {
     for (const fixture of scoreCases) {
       await seed({ score: scoreRecords(fixture.done, fixture.total) });
       const stateBefore = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
+      // fixF6d(監督者決定2、F6-2): 細い横一列化でLIFE BANDの12WY週サマリは
+      // `.life-cycle-details`(<details>)の折りたたみの中に入った。製品の折りたたみは
+      // 変えず、テスト側で開いてから押す(同じ「トグルを押して詳細を開く」性質を維持)。
+      await page.locator('.life-band .life-cycle-details summary').click();
       const signal = page.locator('.life-band [data-action="twy-score-toggle"]');
       const text = await signal.textContent();
       await signal.click();
+      // twy-score-toggleはrender()で今日タブ全体を再描画するため、素のHTML<details>の
+      // open状態は保持されない(製品の折りたたみ自体は変えない、テスト側の追随)。
+      // 再描画後の折りたたみを開き直してから、展開済み詳細の表示を待つ。
+      await page.locator('.life-band .life-cycle-details summary').click();
       await page.waitForSelector(".twy-score-detail");
       scoreStyles.push(await page.evaluate(() => ({
         signal: getComputedStyle(document.querySelector(".twy-score-signal")).color,
@@ -173,14 +181,16 @@ function scoreRecords(done, total) {
       const parent = parentElement.getBoundingClientRect(), style = getComputedStyle(parentElement);
       return { parent: { left: parent.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft), right: parent.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight) }, life: { top: life.top, bottom: life.bottom, left: life.left, right: life.right, width: life.width, height: life.height }, standing: { top: standing.top, bottom: standing.bottom, left: standing.left, right: standing.right, width: standing.width, height: standing.height } };
     });
-    check("1280pxでは人生/信条が同じ段・同高・同幅で親幅を満たす", desktop.life.width > 0 && desktop.life.height > 0
+    // fixF6d(監督者決定2、F6-2): LIFE BANDは細い横一列(高さ約70px)になり、信条(STANDING
+    // ORDERS)は常に別行(1280pxでも同じ段の2枠ではない)。同じ「親幅を満たす・重ならない」
+    // 性質を新配置(縦積み)で検査する。
+    check("1280pxでは人生/信条が親幅いっぱいの別行(縦積み)", desktop.life.width > 0 && desktop.life.height > 0
       && desktop.standing.width > 0 && desktop.standing.height > 0
-      && Math.abs(desktop.life.top - desktop.standing.top) < 1
-      && Math.abs(desktop.life.height - desktop.standing.height) < 1
+      && desktop.standing.top >= desktop.life.bottom
       && Math.abs(desktop.life.width - desktop.standing.width) < 1
       && Math.abs(desktop.life.left - desktop.parent.left) < 1
       && Math.abs(desktop.standing.right - desktop.parent.right) < 1
-      && desktop.life.right < desktop.standing.left, JSON.stringify(desktop));
+      && Math.abs(desktop.life.right - desktop.parent.right) < 1, JSON.stringify(desktop));
     await page.setViewportSize({ width: 390, height: 844 });
     const mobile = await page.evaluate(() => {
       const life = document.querySelector(".daily-today-values > .life-band").getBoundingClientRect();

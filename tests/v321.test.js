@@ -95,23 +95,30 @@ function block(id, title, start, end, extra = {}) {
       block("mit-next", "次の予定", "11:00", "11:30")
     ];
     await seed(mitTwo);
+    // fixF6d(監督者決定2): F6-1でMITは上部帯の直下・LIFE BAND/NOW LANDINGより前の大見出しへ
+    // 移動した(.tower-runwayへの内包は前提でなくなった)。同じ性質(存在・表示順・行数・★件数)を
+    // 新配置で検査する: #dailyTodayPlansとNOW LANDING(.tower-runway)の両方より前に出ること。
     const mitLayout = await page.locator(".tower-mit").evaluate((mit) => {
       const band = document.querySelector("#dailyTodayPlans");
+      const runway = document.querySelector(".tower-runway");
       const style = getComputedStyle(mit);
       const rowStyle = getComputedStyle(mit.querySelector(".tower-mit-row"));
       return {
-        beforeBand: !!mit.closest(".tower-runway") && Boolean(mit.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
+        beforeBand: Boolean(mit.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
+        beforeRunway: Boolean(runway && (mit.compareDocumentPosition(runway) & Node.DOCUMENT_POSITION_FOLLOWING)),
         borderColor: style.borderColor, rowHeight: parseFloat(rowStyle.minHeight), fontSize: parseFloat(rowStyle.fontSize)
       };
     });
-    check(".tower-mitは現在作業内・予定より前に2行・各行★付き", mitLayout.beforeBand
+    check("MIT見出しはNOW LANDING・予定より前に1行・各行★付き", mitLayout.beforeBand && mitLayout.beforeRunway
       && await page.locator(".tower-mit-row").count() === 1
       && await page.locator(".tower-mit-row .mit-star").count() === 1, JSON.stringify(mitLayout));
     check("MIT行は44px・11px以上でアンバー枠", mitLayout.rowHeight >= 44 && mitLayout.fontSize >= 11
       && mitLayout.borderColor !== "rgba(0, 0, 0, 0)", JSON.stringify(mitLayout));
     await seed([block("plain", "通常予定", "11:00", "11:30")]);
+    // fixF6d(監督者決定2): F6-1でMIT未設定の空状態文言は「MIT を決める」の1行案内に変わった
+    // (旧文言はNOW LANDING横の小枠時代のもの。新見出しの下に出る点・1行である点は維持)。
     check("MIT 0件は指定の空文言1行", await page.locator(".tower-mit-row").count() === 0
-      && (await page.locator(".tower-mit-empty").textContent()).trim() === "MITは未設定(実行タブの「これから」で行をタップ→☆)");
+      && (await page.locator(".tower-mit-empty").textContent()).trim() === "MIT を決める 実行の予定詳細で ☆ を選択");
     const mitPopulation = [
       block("mit-fourth", "当日4", "13:00", "13:30", { isMIT: true }),
       block("mit-other-day", "別日", "08:00", "08:30", { isMIT: true, date: "2026-09-02" }),

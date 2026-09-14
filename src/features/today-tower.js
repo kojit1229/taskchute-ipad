@@ -165,7 +165,7 @@ function renderTowerMIT(blocks) {
     const start = timeFromDateTime(block.plannedStartAt) || "--:--";
     const end = timeFromDateTime(block.plannedEndAt) || "--:--";
     const status = block.completed || block.actualEndAt ? "完了" : block.actualStartAt ? "進行中" : "未着手";
-    return `<div class="tower-mit-row"><strong class="tower-mit-title">${escapeHTML(block.title)}</strong><span class="tower-mit-meta">${start}–${end}・見積 ${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
+    return `<div class="tower-mit-row">${mitStarHTML(block)}<strong class="tower-mit-title">${escapeHTML(block.title)}</strong><span class="tower-mit-meta">${start}–${end}・見積 ${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
   }).join("");
   return `<section class="tower-mit sec-mit${rows ? "" : " is-empty"}" aria-label="本日のMIT"><h2>★ MIT <span>― 本日の一つ</span></h2>
     ${rows || '<div class="tower-mit-empty">MIT を決める <span>実行の予定詳細で ☆ を選択</span></div>'}

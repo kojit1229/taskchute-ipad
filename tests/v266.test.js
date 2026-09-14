@@ -47,6 +47,19 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+// fixF6e: Open the F6-2 LIFE details before interaction and after rendering.
+async function openLifeDetails(page) {
+  const details = page.locator('.life-band .life-cycle-details');
+  if (await details.count() && !(await details.evaluate(el => el.open))) {
+    await details.locator('summary').click();
+  }
+}
+async function toggleLifeScore(page) {
+  await openLifeDetails(page);
+  await page.locator('.life-band [data-action="twy-score-toggle"]').click();
+  await openLifeDetails(page);
+}
+
 (async () => {
   console.log("[1] 静的契約・import実測・iOS/SW/CSSガード");
   check("weeklyScore importは既存1件だけで、selectTrackFooterを1件追加", importedNames.filter(name => name === "weeklyScore").length === 1
@@ -63,7 +76,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
   // 検証意図(ATIS CSSの状態が意図どおりであること)は削除済みの確認へ反転して継承する。
   check("ATIS専用CSSはv289(R3-1)で削除済み(v266時点のR3送りが実施された)", !/\.tower-atis-/.test(stylesSource)
     && !/\.atis-(?:divider|chip|btn)\b/.test(stylesSource) && !/\.sec-atis\b/.test(stylesSource));
-  check("TOWER赤トークンと40pxタップ標的を正本で定義", /\.today-tower, \.tower-skin\s*\{[^}]*--tower-red:\s*#ff6d7f;/.test(stylesSource)
+  check("TOWER赤トークンと40pxタップ標的を正本で定義", /\.today-tower, \.tower-skin\s*\{[^}]*--tower-red:\s*#f76687;/.test(stylesSource)
     && /\.twy-score-signal\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*min-height:\s*40px;/.test(stylesSource));
   check("TRACKS pace/meta CSSは行内へスコープ", !/^\.t-(?:pace|meta)\b/m.test(stylesSource)
     && countMatches(stylesSource, /^\.twy-track-line \.t-(?:pace|meta)\b/gm) === 3);
@@ -165,6 +178,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     }, { key: STATE_KEY, fixture, today: TODAY });
     await page.reload();
     await page.waitForSelector(".life-band");
+    await openLifeDetails(page);
     await resetCounters();
   }
 
@@ -204,6 +218,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     await resetCounters();
     await page.locator('.nav-button[data-view="settings"]').click();
     await page.locator('.nav-button[data-view="today"]').click();
+    await openLifeDetails(page);
     await page.waitForSelector('.life-band [data-action="twy-score-toggle"]');
     let probe = await counters();
     check("初期・折りたたみの無関係renderはsave/report 0回", probe.save === 0 && probe.report === 0
@@ -222,7 +237,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     check("B-6 #7 50%も遅延語・達成classなしの中立表示", (await signalText()).includes("1/2・実行率 50%")
       && !(await signalText()).includes("遅延") && lowColor === highColor
       && await signal().evaluate((el) => !el.matches(".is-good,.is-mid,.is-low")));
-    await signal().click();
+    await toggleLifeScore(page);
     const lowStyles = await signal().evaluate((el) => ({
       color: getComputedStyle(el).color,
       textColor: (() => {
@@ -266,19 +281,19 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
     console.log("[3] B-6 #11〜#19: 展開機械・TRACKS・二重描画・#12結線");
     await seed({ weeklyCommitments: scoredCommitments(4, 5) });
-    await signal().click();
+    await toggleLifeScore(page);
     check("B-6 #11 タップ展開でdetail/barを表示し、目安線は撤去", await mobile().locator(".twy-score-detail .twy-score-bar").count() === 1
       && await mobile().locator(".twy-score-target, .twy-score-bar > i").count() === 0
       && await signal().getAttribute("aria-expanded") === "true" && (await signal().textContent()).includes("▾"));
     probe = await counters();
     check("展開トグルはsave/report 0回・render 1回", probe.save === 0 && probe.report === 0 && probe.render === 1, JSON.stringify(probe));
     await resetCounters();
-    await signal().click();
+    await toggleLifeScore(page);
     check("B-6 #12 再タップでdetail消滅・aria false・caret復帰", await mobile().locator(".twy-score-detail").count() === 0
       && await signal().getAttribute("aria-expanded") === "false" && (await signal().textContent()).includes("▸"));
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1) });
-    await signal().click();
+    await toggleLifeScore(page);
     check("B-6 #13 track 0件は展開してもフッタ要素なし", await mobile().locator(".twy-tracks-foot").count() === 0);
 
     const aheadProjects = [project("p-ahead"), project("p-ontrack")];
@@ -286,7 +301,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     const aheadMeasurements = [measurement("ahead", 60), measurement("ontrack", 22)];
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: aheadProjects, tracks: aheadTracks,
       trackMeasurements: aheadMeasurements });
-    await signal().click();
+    await toggleLifeScore(page);
     check("B-6 #14 ahead/ontrackだけなら先頭1件", await mobile().locator(".twy-track-line").count() === 1);
 
     const mixedProjects = [project("p-overdue"), project("p-warn"), project("p-stale"), project("p-done")];
@@ -299,7 +314,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       measurement("stale", 22, "2026-08-15T09:00:00"), measurement("done", 10)];
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: mixedProjects, tracks: mixedTracks,
       trackMeasurements: mixedMeasurements });
-    await signal().click();
+    await toggleLifeScore(page);
     const mixedRows = await mobile().locator(".twy-track-line").allTextContents();
     check("B-6 #15 severity選定後は期限超過だけを事実ラベルとして残す", mixedRows.length === 2
       && mixedRows[0].includes("期限超過") && !mixedRows[1].includes("要注意")
@@ -315,13 +330,14 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1) });
     await page.setViewportSize({ width: 390, height: 844 });
-    await signal().click();
+    await toggleLifeScore(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     check("B-6 #17 mobile展開後にPC幅でも同じ単一DOMが展開", await page.locator(".life-band .twy-score-detail").count() === 1
       && await page.locator('.life-band [aria-expanded="true"]').count() === 1);
     await page.locator('.nav-button[data-view="settings"]').click();
     await page.waitForSelector('[data-setting-scoretarget]', { state: "attached" });
     await page.locator('.nav-button[data-view="today"]').click();
+    await openLifeDetails(page);
     await page.waitForSelector(".life-band .twy-score-detail");
     check("B-6 #18 無関係renderを跨いでも展開状態を保持", await mobile().locator(".twy-score-detail").count() === 1);
 
@@ -342,7 +358,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
       numericTrack("deleted", "p-deleted", { deleted: true })];
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: boundaryProjects, tracks: boundaryTracks,
       trackMeasurements: [] });
-    await signal().click();
+    await toggleLifeScore(page);
     const boundaryText = await mobile().locator(".twy-tracks-foot").textContent();
     check("+83日内/+84日外・closed/deleted除外", boundaryText.includes(xss) && !boundaryText.includes("outside")
       && !boundaryText.includes("closed") && !boundaryText.includes("deleted"));
@@ -351,7 +367,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-baseline")],
       tracks: [numericTrack("baseline-only", "p-baseline")], trackMeasurements: [] });
-    await signal().click();
+    await toggleLifeScore(page);
     const baselineText = await mobile().locator(".twy-track-line").textContent();
     check("measurement 0件で8日以上なら具体paceを出さず未更新表示", baselineText.includes("未更新")
       && baselineText.includes("不明") && !baselineText.includes("-22章")
@@ -361,7 +377,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-tolerance")],
       tracks: [numericTrack("within-tolerance", "p-tolerance")], trackMeasurements: [measurement("within-tolerance", 20)] });
-    await signal().click();
+    await toggleLifeScore(page);
     check("tolerance内でも状態語を省略しpaceを中立色で表示", await mobile().locator(".twy-track-line .t-state").count() === 0
       && await mobile().locator(".twy-track-line .t-pace.pos").count() === 1
       && await mobile().locator(".twy-track-line .t-pace").evaluate((el) => getComputedStyle(el).color
@@ -375,7 +391,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     check("土曜と平日で同じweekStartのスコアを読む", saturdayText.includes("1/1") && (await signalText()).includes("1/1"));
     const beforeDisplay = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     await resetCounters();
-    await signal().click();
+    await toggleLifeScore(page);
     const afterDisplay = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     probe = await counters();
     check("build/render/toggleは保存state不変・save/report 0回", beforeDisplay === afterDisplay && probe.save === 0 && probe.report === 0);
@@ -445,9 +461,9 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
     } }, aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
     await page.locator('.nav-button[data-view="today"]').click();
     // fixV392 / 設計06 §4/§7: 記録列の常設ジャーナルと本文入力は各1個。
-    await page.waitForSelector(".daily-today-records > .sec-journal");
-    check("記録列のJOURNALは1個だけ", await page.locator(".daily-today-records > .sec-journal").count() === 1);
-    check("記録列の本文入力も1個だけ", await page.locator(".daily-today-records > .sec-journal #towerJournalFree").count() === 1);
+    await page.waitForSelector(".daily-today-main > .sec-journal");
+    check("記録列のJOURNALは1個だけ", await page.locator(".daily-today-main > .sec-journal").count() === 1);
+    check("記録列の本文入力も1個だけ", await page.locator(".daily-today-main > .sec-journal #towerJournalFree").count() === 1);
     check("v299削除済み朝プラン・再プランactionがソースに存在しない",
       !appSource.includes('"ai-morning-plan"') && !appSource.includes('"today-replan"'));
     check("維持対象の下書き操作と廃止済み候補・鮮度UIをtodayへ重複描画しない",
@@ -455,7 +471,7 @@ function contrastRatio(foreground, background, underlay = "rgb(0, 0, 0)") {
 
     await seed({ weeklyCommitments: scoredCommitments(1, 1), projects: [project("p-wbs")],
       tracks: [numericTrack("same-status", "p-wbs")], trackMeasurements: [measurement("same-status", 0)] });
-    await signal().click();
+    await toggleLifeScore(page);
     const countdownStatusCount = await mobile().locator(".twy-track-line .t-state").count();
     await page.locator('.nav-button[data-view="wbs"]').click();
     await page.waitForSelector('.twy-row[data-twy-track-id="same-status"]');

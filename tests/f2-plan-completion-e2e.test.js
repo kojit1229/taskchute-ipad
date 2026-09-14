@@ -29,6 +29,8 @@ const { chromium, launchOptions, defaultContextOptions, startServer, randomPort,
     await actualButton.waitFor();
     // fixV404g: 起動直後の再描画で locator の要素が差し替わると boundingBox() が null を返す(不安定)。
     // evaluate は都度引き直すので同じ寸法を安定して測れる(断言は同じ)。
+    // 起動直後は実レイアウト(幅>0)を持つ前に測ると 0 が返ることがある(v308 と同じ待ち方で確定を待つ)。
+    await page.waitForFunction(() => (document.querySelector('.exec-row [data-action="complete-block-with-actual"][data-id="actual"]')?.getBoundingClientRect().width ?? 0) > 0);
     const size = await actualButton.evaluate(el => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height }; });
     assert(size.width >= 44 && size.height >= 44, "実績付きボタンは44px以上");
     assert.equal(await actualButton.textContent(), "実績付きで完了");

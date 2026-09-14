@@ -188,8 +188,22 @@ async function productState(page, day, observer) {
     localStorage.setItem(key, JSON.stringify(s));
   }, { key: STATE_KEY, day });
   await observer.settled(); await page.reload();
-  await page.locator('[data-daily-key="block:mock-product-block"]').waitFor();
+  // fixF6v(載せ替え追随 2026-09-14): F6-3 で共通の予定行は今日の表の行内の内訳(details)に入った(fixF6c と同じ性質)。
+  // 行の内訳を開いてから共通行を読む(計測の内容は同じ)。
+  await revealSharedRow(page);
   await observer.settled();
+}
+
+// 製品側は今日の表の行(details)を開かないと共通行が見えない。再描画で閉じ直ることがあるため最大3回試す
+// (v323 の追随と同じ)。モック側(details なし)では何もしない。
+async function revealSharedRow(page) {
+  const entry = page.locator('.daily-table-entry[data-work-key="block:mock-product-block"]');
+  if (!(await entry.count())) return;
+  const shared = page.locator('[data-daily-key="block:mock-product-block"]');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await entry.evaluate(el => { el.open = true; });
+    try { await shared.waitFor({ timeout: 5000 }); return; } catch (error) { if (attempt === 2) throw error; }
+  }
 }
 
 async function measure(page, label, inputSelector) {
@@ -198,6 +212,7 @@ async function measure(page, label, inputSelector) {
   for (const zoom of [1, 2]) for (const width of [390, 768, 1024, 1280]) {
     await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
     await setViewportAndWaitForStableLayout(page, { width, height: 900 }, inputSelector);
+    await revealSharedRow(page);
     const sample = await page.evaluate(({ label, zoom, inputSelector }) => {
       const controls = [...document.querySelectorAll('input,select,textarea')].filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
       const shared = document.querySelector('.daily-plan-row');
@@ -320,6 +335,7 @@ async function run() {
       fs.writeFileSync(rowFile, source.replace('予定未完了', '共有変更の検出用'), 'utf8');
       await collectMockAudit();
       await productPage.reload(); await mockPage.reload();
+      await revealSharedRow(productPage);
       await productPage.locator('.daily-plan-row').first().waitFor(); await mockPage.locator('.daily-plan-row').waitFor();
       await productObserver.settled(); await mockObserver.settled();
       sharing.changed = [await rowSample(productPage), await rowSample(mockPage)];
@@ -330,6 +346,7 @@ async function run() {
     } finally { fs.writeFileSync(rowFile, source, 'utf8'); }
     await collectMockAudit();
     await productPage.reload(); await mockPage.reload();
+    await revealSharedRow(productPage);
     await productPage.locator('.daily-plan-row').first().waitFor(); await mockPage.locator('.daily-plan-row').waitFor();
     await productObserver.settled(); await mockObserver.settled();
     sharing.restored = [await rowSample(productPage), await rowSample(mockPage)]; report.sharing = sharing;
