@@ -201,6 +201,30 @@ async function f5ReasonsSetup(page, mode = 'dailyClose') {
   }, mode);
 }
 
+test('F5-6 WIP shows one count line by default and disclosure never saves display state', async () => {
+  await f5Browser(async page => {
+    await page.evaluate(() => {
+      const api = window.__f5, s = api.getState();
+      s.projects = Array.from({ length: 24 }, (_, i) => ({ id: `p${i}`, title: `進行中案件${i}`, kind: 'normal', status: 'active' }));
+      s.tasks = s.projects.map(p => ({ id: `t${p.id}`, projectId: p.id, title: '未完了作業', status: 'todo' }));
+      s.currentView = 'wbs'; api.render(); window.__f5Save.writes = 0;
+    });
+    const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
+    const details = page.locator('details.wip-banner'), summary = details.locator('summary');
+    assert.equal(await details.getAttribute('open'), null);
+    assert.match(await summary.innerText(), /進行中 24件\(目安 3件まで\)/);
+    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), false);
+    assert.ok((await summary.boundingBox()).height >= 44);
+    await summary.click();
+    assert.equal(await details.locator('.wip-banner-row').count(), 24);
+    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), true);
+    await summary.click();
+    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), false);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+  });
+});
+
 test('F5-5 390px quick action is 44px directly below the clock; desktop hides it and running uses end', async () => {
   await f5Browser(async page => {
     await page.evaluate(() => {

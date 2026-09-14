@@ -5309,8 +5309,8 @@ function renderWipBanner() {
       && !isWbsProjectDone(p));
   if (activeNormal.length < 4) return "";
   return `
-    <div class="wip-banner">
-      <div class="wip-banner-msg">進行中プロジェクトが${activeNormal.length}件。Kの原則は3件まで——1つ潜らせますか?</div>
+    <details class="wip-banner">
+      <summary class="wip-banner-msg" style="min-height:44px;display:flex;align-items:center">進行中 ${activeNormal.length}件(目安 3件まで) ▾</summary>
       <div class="wip-banner-list">
         ${activeNormal.map((p) => `
           <div class="wip-banner-row">
@@ -5319,7 +5319,7 @@ function renderWipBanner() {
           </div>
         `).join("")}
       </div>
-    </div>
+    </details>
   `;
 }
 
