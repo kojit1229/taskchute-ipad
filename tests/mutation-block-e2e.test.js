@@ -15,6 +15,77 @@ const functions = names => names.map(name => {
 }).join('\n');
 const clone = value => JSON.parse(JSON.stringify(value));
 
+// F5: real delegated buttons and the real local candidate-save boundary.
+async function f5Browser(run) {
+  const { chromium, launchOptions, defaultContextOptions, startServer, randomPort, blockGithubApiByDefault, STATE_KEY } = require('./helpers');
+  const port = randomPort(), server = startServer(port);
+  let browser;
+  try {
+    browser = await chromium.launch(launchOptions());
+    const context = await browser.newContext({ ...defaultContextOptions(), serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.clock.install({ time: new Date(Date.UTC(2026, 8, 10, 1)) });
+    await blockGithubApiByDefault(page);
+    await page.route('**/app.js', route => route.fulfill({ contentType: 'text/javascript', body: source +
+      '\nwindow.__f5 = { getState: () => state, makeBlock, render, openIncompleteReasonModal, openBodyScanModal };' }));
+    await page.goto(`http://localhost:${port}`);
+    await page.waitForFunction(() => Boolean(window.__f5));
+    await page.evaluate(key => {
+      const s = window.__f5.getState();
+      Object.assign(s, { blocks: [], tasks: [], projects: [], recurrences: [], bodyScans: [], declarations: [],
+        modal: null, currentView: 'today', selectedDate: '2026-09-10' });
+      s.settings.autoSyncEnabled = false;
+      s.settings.github = { token: 'fake-f5-token', dataOwner: 'fixture', dataRepo: 'fixture' };
+      window.__f5.render();
+      const original = Storage.prototype.setItem;
+      window.__f5Save = { fail: false, writes: 0 };
+      Storage.prototype.setItem = function(name, value) {
+        if (name === key) {
+          window.__f5Save.writes++;
+          if (window.__f5Save.fail) throw new DOMException('F5 injected quota', 'QuotaExceededError');
+        }
+        return original.call(this, name, value);
+      };
+    }, STATE_KEY);
+    try { await run(page, STATE_KEY); }
+    catch (error) { console.error('F5 screen at failure:', await page.locator('body').innerText()); throw error; }
+  } finally {
+    await browser?.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
+test('F5-1 today interruption and actual-only entries use the new Block sheet and save once', async () => {
+  await f5Browser(async (page, key) => {
+    for (const interruption of [true, false]) {
+      await page.locator(`[data-action="today-add-${interruption ? 'interruption' : 'actual'}"]`).click();
+      const field = name => page.locator(`[data-modal-field="${name}"]`);
+      assert.equal(await field('date').inputValue(), DATE);
+      assert.equal(await field('plannedStartAt').inputValue(), '');
+      assert.equal(await field('plannedEndAt').inputValue(), '');
+      assert.equal(await field('actualStartAt').inputValue(), interruption ? DATE + 'T10:00' : '');
+      assert.equal(await field('actualEndAt').inputValue(), '');
+      assert.ok(await field('actualStartAt').isVisible());
+      assert.equal(await field('actualStartAt').getAttribute('step'), '300');
+      await field('title').fill(interruption ? '割り込み作業' : '後追い実績');
+      if (!interruption) {
+        await field('actualStartAt').fill(DATE + 'T08:00');
+        await field('actualEndAt').fill(DATE + 'T08:30');
+      }
+      const before = await page.evaluate(() => window.__f5Save.writes);
+      await page.locator('[data-action="modal-save"]').click();
+      await page.waitForFunction(() => !window.__f5.getState().modal);
+      assert.equal(await page.evaluate(() => window.__f5Save.writes), before + 1);
+      const saved = await page.evaluate(k => JSON.parse(localStorage.getItem(k)).blocks.at(-1), key);
+      assert.equal(saved.plannedStartAt, '');
+      assert.equal(saved.plannedEndAt, '');
+      assert.equal(saved.actualStartAt, DATE + (interruption ? 'T10:00:00' : 'T08:00:00'));
+      assert.equal(saved.actualEndAt, interruption ? '' : DATE + 'T08:30:00');
+      assert.equal(saved.completed, false);
+    }
+  });
+});
+
 async function deletionFixture() {
   const f = await fixture(['deleteBlock', 'carryOverBlock', 'resolveMigrationRitual', 'bodyScanRecord', 'closeBodyScanFlow']);
   Object.assign(f.ctx, {

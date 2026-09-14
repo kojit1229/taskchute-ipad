@@ -104,6 +104,7 @@ function check(name, cond, extra = "") {
 // v367: 「この画面で編集」(vision-edit-open/vision-edit-cancel/vision-edit-save)を
 //       意図的に追加(222→225)。
 const GOLDEN_CLICK_ACTIONS = [
+  "today-add-interruption", "today-add-actual",
   // v382(束B3 20b、監督者の契約追随 2026-09-10): 日常操作の登録表(DAILY_ACTIONS→runDailyOperation)への配線が
   // click dispatcher の先頭に入り、"modal-save" の分岐(保存ボタンの二重発火防止)はその配線の内側へ移った。
   // if連鎖の字句順は先頭になるため、順序込みの一致検査に合わせてここへ移す(集合・件数は不変)。
@@ -355,6 +356,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "task-today",
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」+実行ヘッダ「＋Block」から開く。
   //     旧time-comb-fillを統合・置換) ---
+  "today-add-interruption", "today-add-actual",
   "fill-gap-open", "fill-gap-place", "fill-gap-create", "fill-gap-prefill",  // v357: ルーティン雛形プリフィル
   "daily-gap-choose",  // v388 契約追随(監督者決定 2026-09-11、束B8 41b): 空き選択シート(daily-gap-sheet.js)の候補選択を app.js が直接登録(215→216、和集合 272→273)。design/CHANGELOG.md
   // --- v180: Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87でUI導線を

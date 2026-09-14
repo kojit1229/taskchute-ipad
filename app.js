@@ -1176,6 +1176,8 @@ registerActions({
 // (v174方式)へ移行した。ロジック無改変。
 registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
+  "today-add-interruption": () => openTodayActualBlock(true),
+  "today-add-actual": () => openTodayActualBlock(false),
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
@@ -13866,6 +13868,12 @@ function openTaskEditor(id) {
   if (!task) return;
   state.modal = { type: "task", id };
   renderModal(buildTaskModal(task));
+}
+
+function openTodayActualBlock(interruption) {
+  const block = { ...makeBlock({ date: todayISO(), actualStartAt: interruption ? nowDateTime() : "" }), _isNew: true };
+  state.modal = { type: "block", id: block.id };
+  renderModal(buildBlockModal(block));
 }
 
 function openBlockEditor(id) {
