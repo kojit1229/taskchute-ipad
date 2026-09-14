@@ -402,6 +402,8 @@ async function verifyTaskBadges(browser) {
     check("mobileNavは4項目・id・ラベル", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
 
     await page.locator('.exec-row [data-action="now-start"][data-id="valid-start-block"]').click();
+    // v406(F5-3 M-26): 別の Block が実行中なら重なりの選択シート→「並行して開始」を選んでから declare へ
+    { const overlap = page.locator('[data-action="start-overlap-choice"][data-choice="parallel"]'); await page.waitForTimeout(150); if (await overlap.count() > 0) await overlap.click(); }
     await page.locator('[data-action="declare-skip"]').click();
     await page.waitForFunction(() => document.querySelector('#bottomNav [data-view="exec"] .nav-badge')?.textContent === "1");
     check("開始操作でサイドバー・下部ナビとも即時1減", await badgeText(page, "#sidebar", "exec") === "1"

@@ -175,7 +175,7 @@
 | v108.test.js | e2e | full | sync-storage, planning-execution | 21 | 6 | 1800 |
 | v109.test.js | e2e | full | planning-execution, ui-responsive | 24 | 12 | 3900 |
 | v110.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 2 | 1000 |
-| v111.test.js | e2e | full | ui-responsive | 24 | 18 | 6550 |
+| v111.test.js | e2e | full | ui-responsive | 24 | 19 | 6700 |
 | v112.test.js | e2e | full | planning-execution, ui-responsive | 30 | 1 | 400 |
 | v113.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 15 | 8 | 3200 |
 | v116.test.js | e2e | full | planning-execution | 7 | 4 | 1300 |
@@ -255,7 +255,7 @@
 | v284.test.js | e2e | full | sync-storage, journal-health, planning-execution, ui-responsive | 29 | 0 | 0 |
 | v285.test.js | e2e | full | content-ai, sync-storage, planning-execution, ui-responsive | 26 | 0 | 0 |
 | v286.test.js | e2e | full | content-ai, ui-responsive | 27 | 0 | 0 |
-| v287.test.js | e2e | full | content-ai, planning-execution, ui-responsive | 43 | 0 | 0 |
+| v287.test.js | e2e | full | content-ai, planning-execution, ui-responsive | 43 | 1 | 150 |
 | v288.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 32 | 0 | 0 |
 | v293.test.js | e2e | full | planning-execution, ui-responsive | 38 | 0 | 0 |
 | v294.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 42 | 0 | 0 |
