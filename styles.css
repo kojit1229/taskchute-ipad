@@ -129,30 +129,30 @@
    このスコープ外では一切上書きしないため、既存light/darkの見た目には影響しない。 */
 :root[data-theme="cockpit"] {
   color-scheme: dark;
-  --bg: #050a14;
-  --panel: #0a1120;
-  --panel-soft: #0d1526;
-  --line: #17233a;
-  --line-soft: #121d30;
-  --text: #cfdcf0;
-  --muted: #7e92b0;
-  --faint: #465874;
-  --accent: #3fd0ff;
-  --accent-text: #3fd0ff;
-  --accent-soft: rgba(63, 208, 255, 0.1);
-  --green: #4ade9a;
-  --green-text: #4ade9a;
-  --green-soft: rgba(74, 222, 154, 0.1);
-  --red: #ff6d7f;
-  --red-soft: rgba(255, 109, 127, 0.1);
-  --orange: #ffb648;
-  --orange-text: #ffb648;
-  --orange-soft: rgba(255, 182, 72, 0.1);
+  --bg: #01132a;
+  --panel: #081c37;
+  --panel-soft: #0c2348;
+  --line: #0f2a4d;
+  --line-soft: #0f2a4d;
+  --text: #ffffff;
+  --muted: #9fb3c8;
+  --faint: #9fb3c8;
+  --accent: #4ec6c0;
+  --accent-text: #4ec6c0;
+  --accent-soft: rgba(78, 198, 192, 0.1);
+  --green: #289983;
+  --green-text: #4ec6c0;
+  --green-soft: rgba(40, 153, 131, 0.1);
+  --red: #f76687;
+  --red-soft: rgba(247, 102, 135, 0.1);
+  --orange: #f4c156;
+  --orange-text: #f4c156;
+  --orange-soft: rgba(244, 193, 86, 0.1);
   --purple: #b48cff;
   --purple-soft: rgba(180, 140, 255, 0.08);
-  --teal: #4ade9a;
-  --teal-text: #4ade9a;
-  --teal-soft: rgba(74, 222, 154, 0.1);
+  --teal: #289983;
+  --teal-text: #289983;
+  --teal-soft: rgba(40, 153, 131, 0.1);
   --tt-koji: #ff8fb3;
   --tt-koji-soft: rgba(255, 143, 179, 0.14);
   --tt-plan: #c9a3ff;
@@ -160,26 +160,29 @@
   --tt-date: #ffad7a;
   --radius: 4px;
   --shadow: none;
-  --chrome-bg: rgba(5, 10, 20, 0.86);
-  --chrome-edge: 0 -1px 0 #17233a;
-  --chrome-edge-down: 0 1px 0 #17233a;
-  --panel-2: #0d1526;
-  --panel-edge: #17233a;
+  --chrome-bg: rgba(1, 19, 42, 0.86);
+  --chrome-edge: 0 -1px 0 #0f2a4d;
+  --chrome-edge-down: 0 1px 0 #0f2a4d;
+  --panel-2: #0c2348;
+  --panel-edge: #0f2a4d;
   --grid-line: rgba(70, 110, 170, 0.06);
-  --go: #3fd0ff;
-  --go-dim: rgba(63, 208, 255, 0.1);
-  --go-glow: rgba(63, 208, 255, 0.45);
+  --go: #4ec6c0;
+  --go-dim: rgba(78, 198, 192, 0.1);
+  --go-glow: rgba(78, 198, 192, 0.45);
   --book: #ffd76a;
   --book-dim: rgba(255, 215, 106, 0.07);
   --mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", "Consolas", monospace;
   --timeline-now-line: var(--red);
-  --cockpit-panel-2: #0d1526;
+  --cockpit-panel-2: #0c2348;
   --cockpit-grid-line: rgba(70, 110, 170, 0.06);
-  --cockpit-go: #3fd0ff;
-  --cockpit-go-glow: rgba(63, 208, 255, 0.45);
-  --cockpit-go-dim: rgba(63, 208, 255, 0.1);
-  --cockpit-track: #131e34;
+  --cockpit-go: #4ec6c0;
+  --cockpit-go-glow: rgba(78, 198, 192, 0.45);
+  --cockpit-go-dim: rgba(78, 198, 192, 0.1);
+  --cockpit-track: #0c2348;
   --cockpit-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", "Consolas", monospace;
+  --nav-bg: #021329;
+  --nav-active: #103a7d;
+  --nav-line: #2366a2;
 }
 
 /* v151: 「ライト」を明示選択した場合(OS側がダークでも)ネイティブ入力の見た目をライトへ固定。
@@ -3501,14 +3504,20 @@ details.settings-row > .fold-summary.settings-row-summary {
 /* v224: 第3弾(TOWER意匠の全タブ統一)先行分。--tower-*トークンを.tower-skin(各タブの
    TOWER化ラッパ)にも共有する。トークン定義の正本はここ1箇所のみ(タブ側での再定義禁止)。 */
 .today-tower, .tower-skin {
-  --tower-bg: #050a14;
-  --tower-panel: #0a1422;
-  --tower-line: #25384d;
-  --tower-text: #d9e7f2;
-  --tower-amber: #f2b84b;
-  --tower-green: #52d68a;
-  --tower-cyan: #55d9e8;
-  --tower-red: #ff6d7f;
+  --tower-bg: #01132a;
+  --tower-panel: #081c37;
+  --tower-panel-soft: #0c2348;
+  --tower-line: #0f2a4d;
+  --tower-text: #ffffff;
+  --tower-muted: #9fb3c8;
+  --tower-amber: #f4c156;
+  --tower-gold-text: #ffe46d;
+  --tower-green: #289983;
+  --tower-cyan: #4ec6c0;
+  --tower-red: #f76687;
+  --tower-blue: #0678fe;
+  --tower-blue-soft: #80a9f7;
+  --tower-selected-line: #2366a2;
   --tower-purple: #a78bfa;
   min-height: 100%;
   max-width: 760px;
@@ -5314,14 +5323,6 @@ details.settings-row > .fold-summary.settings-row-summary {
 /* v356: 12WYタブ(R1a)へS2 GLASSを拡張(design.md §2.1裁定5)。使うルールだけ拡張対象にする。 */
 #app[data-view="today"] .today-tower,
 #app[data-view="twelveweek"] .today-tower {
-  --tower-bg: #0b0d1c;
-  --tower-panel: rgba(255, 255, 255, .07);
-  --tower-line: rgba(255, 255, 255, .14);
-  --tower-text: #eef0ff;
-  --tower-amber: #f0c674;
-  --tower-green: #6ee7c8;
-  --tower-cyan: #8ab6ff;
-  --tower-purple: #c4b5fd;
   --tower-glass-blur: blur(16px);
   position: relative;
   isolation: isolate;
@@ -5330,15 +5331,12 @@ details.settings-row > .fold-summary.settings-row-summary {
   font-variant-numeric: tabular-nums;
 }
 
-#app[data-view="today"] .today-tower,
-#app[data-view="today"] .today-tower *,
-#app[data-view="today"] .today-tower button,
-#app[data-view="today"] .today-tower input,
-#app[data-view="today"] .today-tower select,
-#app[data-view="today"] .today-tower textarea {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
+#app[data-view="today"] .today-tower {
+  font-family: system-ui, "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
 }
+#app[data-view="today"] .today-tower * { font-family: inherit; }
 
 #app[data-view="today"] .today-tower::before,
 #app[data-view="twelveweek"] .today-tower::before {
@@ -5383,13 +5381,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower[data-glass-blur="off"] { --tower-glass-blur: none; }
 
 /* 既存の夜間低色温度契約はGLASS配色内で維持する。 */
-#app[data-view="today"] .today-tower[data-night="1"] {
-  --tower-text: #d9dbec;
-  --tower-amber: #d8b668;
-  --tower-green: #63cfb4;
-  --tower-cyan: #7ca4e6;
-  --tower-purple: #b0a2e3;
-}
+/* F6-5: night mode also uses the shared, readable TOWER palette. */
 
 /* v310: 上帯2へNOW LANDING(70%)+CABIN TIMER(30%)を固定配置する。 */
 #app[data-view="today"] .today-tower .tower-band2 { align-items: stretch; }
@@ -6139,3 +6131,47 @@ details.settings-row > .fold-summary.settings-row-summary {
   #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-row { grid-template-columns: 40px minmax(0, 1.5fr) minmax(0, 1fr) 36px 52px; gap: 3px; font-size: 12px; }
 }
+
+/* F6-5: Today uses the measured reference colors and readable type. */
+:root[data-theme="cockpit"] .sidebar { background: var(--nav-bg); }
+:root[data-theme="cockpit"] .nav-button.active { background: var(--nav-active); border-color: var(--nav-line); color: var(--text); box-shadow: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] {
+  --panel: var(--tower-panel); --panel-soft: var(--tower-panel-soft); --text: var(--tower-text);
+  --muted: var(--tower-muted); --faint: var(--tower-muted); --line: var(--tower-line);
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"]::before { content: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-glass-panel, .tower-mit, .tower-panel-box, .tower-runway, .tower-gates, .today-panel, #dailyTodayPlans) {
+  background: var(--tower-panel); border-color: var(--tower-line); box-shadow: none;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .now-hero::before { content: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(h2, .today-panel-title) { font-size: 16px; line-height: 1.45; letter-spacing: .04em; text-shadow: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] > .tower-mit h2 { font-size: 16px; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-mit-empty, .tower-gate strong, .tower-gate-edit-row > strong, .bm-health, .bm-item, .bm-net, .daily-table-row, .tower-journal-save) { font-size: 14px; line-height: 1.45; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.life-title, .life-sig > span, .daily-table-head, .tower-journal-label, .bm-label, .bm-val, .bm-health-src, .bm-toggle span, .tower-gate span) { font-size: 12px; line-height: 1.45; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.so-item small, .tower-mit-empty span, .today-panel-title span, .today-pomodoro-info > span, .tower-runway h2 span, .bm-toggle span, .bm-health-src, .bm-label, .bm-item-time, .bm-weekly-title) { color: var(--tower-muted); opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.bm-item, .bm-net) { opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock time { color: var(--tower-cyan); font-size: 32px; line-height: 1.4; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-clock #towerDayLeft { color: var(--tower-gold-text); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .life-sig > strong { color: var(--tower-gold-text); opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .life-sig > strong em { opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .life-sig.wy .life-bar i { background: var(--tower-cyan); opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-now-title { color: var(--tower-text); font-size: 18px; line-height: 1.45; text-shadow: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] #towerNowRemain { color: var(--tower-cyan); text-shadow: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-nowhud[data-status="long"] #towerNowRemain { color: var(--tower-gold-text); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway-strip { box-shadow: none; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-now-pct, .tower-rwy-mark) { color: var(--tower-muted); opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .btn { color: var(--tower-text); background: var(--tower-panel-soft); border-color: var(--tower-selected-line); font-size: 14px; line-height: 1.45; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .btn.green { background: var(--tower-green); color: var(--tower-bg); font-weight: 700; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .btn.primary { background: var(--tower-blue); color: var(--tower-bg); font-weight: 700; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-journal-save, .tower-gate-showdone, #towerGateCount, .today-panel-title b) { color: var(--tower-cyan); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections button { color: var(--tower-muted); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections [data-section="focus"] { color: var(--tower-gold-text); border-color: var(--tower-selected-line); background: var(--tower-bg); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-tabs [aria-selected="true"] { border-color: var(--tower-selected-line); background: var(--tower-panel-soft); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.bm-fill.rec, .bm-sbar.rec) { background: var(--tower-blue-soft); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .bm-item-tag.rec { color: var(--tower-blue-soft); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro .pomo-progress-circle { stroke: var(--tower-blue) !important; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(input, select, textarea) { line-height: 1.45; }
+
+#app[data-view="today"] .today-tower[data-daily-view="today"] ::placeholder { color: var(--tower-muted); opacity: 1; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] #towerGateStrip { grid-auto-rows: minmax(64px, auto); }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-lock { font-size: 12px !important; line-height: 1.4; opacity: 1; }
