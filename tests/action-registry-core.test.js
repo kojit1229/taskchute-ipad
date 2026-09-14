@@ -144,7 +144,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "start-pomodoro", "open-pomodoro-link", "pomodoro-link-select", "pause-pomodoro", "resume-pomodoro",
   "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
-  "incomplete-reason-chip", "incomplete-reason-skip",
+  "incomplete-reason-chip", "incomplete-reason-skip", "incomplete-reason-save",
   // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
   "km-gate-do-it", "km-gate-skip",
   "guided-access-dismiss",
@@ -380,7 +380,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "start-pomodoro", "open-pomodoro-link", "pomodoro-link-select", "pause-pomodoro", "resume-pomodoro",
   "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
-  "incomplete-reason-chip", "incomplete-reason-skip",
+  "incomplete-reason-chip", "incomplete-reason-skip", "incomplete-reason-save",
   // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
   "km-gate-do-it", "km-gate-skip",
   "guided-access-dismiss",

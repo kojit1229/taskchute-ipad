@@ -1254,7 +1254,8 @@ registerActions({
     finishReport(target.dataset.outcome || "", note);
   },
   "report-skip": () => finishReport("", ""),
-  "incomplete-reason-chip": ({ target }) => recordIncompleteReasonChip(target.dataset.chip || ""),
+  "incomplete-reason-chip": ({ target }) => recordIncompleteReasonChip(target.dataset.chip || "", target),
+  "incomplete-reason-save": () => saveDailyCloseReasons(),
   "incomplete-reason-skip": () => skipIncompleteReasonModal(),
   // v296(R1b): 書く瞑想dailyCloseゲート(「やる」=パネルへ/「スキップして生成」=生成続行)。
   "km-gate-do-it": () => writeMeditationGateDoIt(),
@@ -12235,6 +12236,11 @@ function openIncompleteReasonModal(blockIds, mode) {
     return;
   }
   _pendingIncompleteReasonCtx = { queue, mode };
+  if (mode === "dailyClose") {
+    state.modal = { type: "incompleteReason", id: queue[0] };
+    renderModal(buildDailyCloseReasons(queue));
+    return;
+  }
   const first = blockById(queue[0]);
   state.modal = { type: "incompleteReason", id: queue[0] };
   renderModal(buildIncompleteReasonModal(first, queue.length));
@@ -12302,6 +12308,37 @@ function writeMeditationGateSkip() {
   generateReport();
 }
 
+function buildDailyCloseReasons(queue) {
+  return `${modalHeaderHTML("未完了の理由(任意)")}
+      ${queue.map(id => `<section data-reason-block="${escapeHTML(id)}" style="margin-bottom:16px">
+        <strong>${escapeHTML(blockById(id).title)}</strong>
+        <div class="row" style="flex-wrap:wrap;gap:4px">${INCOMPLETE_REASON_CHIPS.map(chip => `<button class="btn ghost" style="min-height:44px" data-action="incomplete-reason-chip" data-chip="${escapeHTML(chip)}" aria-pressed="false">${escapeHTML(chip)}</button>`).join("")}</div>
+        <input class="input" style="font-size:16px;min-height:44px" data-incomplete-reason-note aria-label="${escapeHTML(blockById(id).title)}の短い理由" placeholder="一言(任意)">
+      </section>`).join("")}
+    </div><div class="modal-footer" style="flex-wrap:wrap">
+      <button class="btn primary" style="min-height:44px" data-action="incomplete-reason-save">記録して日報へ</button>
+      <button class="btn ghost" style="min-height:44px" data-action="incomplete-reason-skip">理由なしで日報へ</button>
+    </div></div>`;
+}
+
+function finishDailyCloseReasons() {
+  for (const id of _pendingIncompleteReasonCtx.queue) _dailyCloseReasonSkipped.add(id);
+  _pendingIncompleteReasonCtx = null;
+  closeModal();
+  maybeGateWriteMeditationThenGenerateReport();
+}
+
+function saveDailyCloseReasons() {
+  if (_pendingIncompleteReasonCtx?.mode !== "dailyClose") return;
+  const reasons = new Map(), at = nowDateTime();
+  for (const row of modalRoot.querySelectorAll("[data-reason-block]")) {
+    const chip = row.querySelector('[data-chip][aria-pressed="true"]')?.dataset.chip;
+    if (chip) reasons.set(row.dataset.reasonBlock, { chip, note: row.querySelector("[data-incomplete-reason-note]").value.trim(), at });
+  }
+  return commitBlockChanges(state.blocks.map(b => reasons.has(b.id) && !b.deleted
+    ? { ...b, incompleteReason: reasons.get(b.id) } : b), finishDailyCloseReasons);
+}
+
 function buildIncompleteReasonModal(block, remaining) {
   const counter = remaining > 1 ? `<div class="muted" style="font-size:11px; margin-bottom:6px">残り${remaining}件</div>` : "";
   return `
@@ -12328,7 +12365,19 @@ function buildIncompleteReasonModal(block, remaining) {
 }
 
 // チップ1タップで確定(ノートは任意入力済みのものをそのまま使う)→ 次のキューへ
-function recordIncompleteReasonChip(chip) {
+function recordIncompleteReasonChip(chip, target) {
+  if (_pendingIncompleteReasonCtx?.mode === "dailyClose") {
+    const row = target?.closest("[data-reason-block]");
+    if (!row) return;
+    const selected = target.getAttribute("aria-pressed") !== "true";
+    for (const button of row.querySelectorAll("[data-chip]")) {
+      const active = button === target && selected;
+      button.setAttribute("aria-pressed", String(active));
+      button.classList.toggle("primary", active);
+      button.classList.toggle("ghost", !active);
+    }
+    return;
+  }
   if (!_pendingIncompleteReasonCtx || !chip) { skipIncompleteReasonModal(); return; }
   const blockId = _pendingIncompleteReasonCtx.queue[0];
   const note = (modalRoot.querySelector("[data-incomplete-reason-note]")?.value || "").trim();
@@ -12341,6 +12390,7 @@ function recordIncompleteReasonChip(chip) {
 // v162 2系統レビュー対応(推奨4): スキップしたBlock idを_dailyCloseReasonSkippedへ積み、
 // 同じセッション内で「日報を生成」を再度押しても再質問しないようにする。
 function skipIncompleteReasonModal() {
+  if (_pendingIncompleteReasonCtx?.mode === "dailyClose") { finishDailyCloseReasons(); return; }
   const blockId = _pendingIncompleteReasonCtx?.queue?.[0];
   if (blockId) _dailyCloseReasonSkipped.add(blockId);
   advanceIncompleteReasonQueue();

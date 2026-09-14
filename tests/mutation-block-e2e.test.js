@@ -192,6 +192,70 @@ async function f5OverlapSetup(page, timer = false) {
   }, timer);
 }
 
+async function f5ReasonsSetup(page, mode = 'dailyClose') {
+  await page.evaluate(mode => {
+    const api = window.__f5, s = api.getState();
+    s.blocks = Array.from({ length: 3 }, (_, i) => api.makeBlock({ date: '2026-09-10', title: `未完了${i + 1}` }));
+    api.openIncompleteReasonModal(s.blocks.map(b => b.id), mode);
+    window.__f5Save.writes = 0;
+  }, mode);
+}
+
+test('F5-4 daily close lists all Blocks, saves selected rows once and leaves triage sequential', async () => {
+  await f5Browser(async page => {
+    await f5ReasonsSetup(page);
+    const rows = page.locator('[data-reason-block]');
+    assert.equal(await rows.count(), 3);
+    assert.equal(await rows.first().locator('[data-chip]').count(), 6);
+    for (const i of [0, 1]) {
+      await rows.nth(i).locator('[data-chip]').first().click();
+      await rows.nth(i).locator('input').fill(`理由${i}`);
+    }
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+    await page.locator('[data-action="incomplete-reason-save"]').click();
+    const result = await page.evaluate(() => ({ blocks: window.__f5.getState().blocks,
+      writes: window.__f5Save.writes, modal: window.__f5.getState().modal }));
+    assert.equal(result.writes, 1);
+    assert.equal(result.blocks[0].incompleteReason.note, '理由0');
+    assert.equal(result.blocks[1].incompleteReason.note, '理由1');
+    assert.equal(result.blocks[0].incompleteReason.at, NOW);
+    assert.ok(!result.blocks[2].incompleteReason?.chip);
+    assert.equal(result.modal.type, 'writeMeditationGate');
+    await f5ReasonsSetup(page);
+    await page.locator('[data-action="incomplete-reason-skip"]').click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+    assert.equal(await page.evaluate(() => window.__f5.getState().modal.type), 'writeMeditationGate');
+    await f5ReasonsSetup(page, 'triage');
+    assert.equal(await page.locator('[data-incomplete-reason-note]').count(), 1);
+    await page.locator('[data-action="incomplete-reason-chip"]').first().click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 1);
+    assert.match(await page.locator('#modalRoot').innerText(), /未完了2/);
+  });
+});
+
+test('F5-4 failed reason bundle restores all Blocks and keeps every typed note and chip for retry', async () => {
+  await f5Browser(async page => {
+    await f5ReasonsSetup(page);
+    const rows = page.locator('[data-reason-block]');
+    for (const i of [0, 1]) {
+      await rows.nth(i).locator('[data-chip]').first().click();
+      await rows.nth(i).locator('input').fill(`保持${i}`);
+    }
+    const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
+    await page.evaluate(() => { window.__f5Save.fail = true; });
+    await page.locator('[data-action="incomplete-reason-save"]').click();
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 1);
+    for (const i of [0, 1]) {
+      assert.equal(await rows.nth(i).locator('input').inputValue(), `保持${i}`);
+      assert.equal(await rows.nth(i).locator('[aria-pressed="true"]').count(), 1);
+    }
+    await page.evaluate(() => { window.__f5Save.fail = false; });
+    await page.locator('[data-action="incomplete-reason-save"]').click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 2);
+  });
+});
+
 test('F5-3 overlap offers end, parallel and cancel; linked timer uses the same choice', async () => {
   await f5Browser(async page => {
     for (const choice of ['end', 'parallel', 'cancel', 'timer']) {
