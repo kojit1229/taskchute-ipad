@@ -6014,10 +6014,9 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro-info { min-width: 0; flex: 1; gap: 0; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-pomodoro .today-panel-title { margin: 0; padding: 0; }
 @media (min-width: 1280px) {
-  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 4px 8px; padding: 6px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 4px 12px; padding: 10px; }
   #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > :is(h2, .tower-runway-strip, .tower-nowhud) { grid-column: 1; margin: 0; }
-  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .tower-mit { grid-column: 2; grid-row: 1 / 4; }
-  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .today-pomodoro { grid-column: 3; grid-row: 1 / 4; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-runway > .today-pomodoro { grid-column: 2; grid-row: 1 / 4; }
 }
 
 /* F2-1: 予定完了と実績登録を隣接した44pxの操作に分ける。 */
@@ -6030,3 +6029,47 @@ details.settings-row > .fold-summary.settings-row-summary {
   .exec-completion-actions { flex-direction: column; align-items: stretch; width: 44px; }
   .exec-completion-actions .exec-actual-complete { width: 44px; min-width: 44px; padding: 2px 1px; font-size: 11px; line-height: 1.15; }
 }
+/* F6-1: MIT is the first content panel beneath the unchanged clock. */
+#app[data-view="today"] .today-tower[data-daily-view="today"] > .tower-mit {
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] > .tower-mit h2 {
+  padding: 0 0 6px;
+  border: 0;
+  font-size: 14px;
+  letter-spacing: .04em;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-mit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px 0;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-mit-title {
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.35;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-mit-meta {
+  margin: 0;
+  font-size: 14px;
+  white-space: normal;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] > .tower-mit.is-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding-block: 6px;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] > .tower-mit.is-empty h2 { padding: 0; }
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-mit-empty {
+  min-height: 0;
+  padding: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--tower-text);
+  font-size: 13px;
+}
+#app[data-view="today"] .today-tower[data-daily-view="today"] .tower-mit-empty span { opacity: .65; }

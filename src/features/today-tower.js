@@ -165,10 +165,10 @@ function renderTowerMIT(blocks) {
     const start = timeFromDateTime(block.plannedStartAt) || "--:--";
     const end = timeFromDateTime(block.plannedEndAt) || "--:--";
     const status = block.completed || block.actualEndAt ? "完了" : block.actualStartAt ? "進行中" : "未着手";
-    return `<div class="tower-mit-row">${mitStarHTML(block)}<span class="tower-mit-title">${escapeHTML(block.title)}</span><span class="tower-mit-meta">/ ${start}–${end}・${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
+    return `<div class="tower-mit-row"><strong class="tower-mit-title">${escapeHTML(block.title)}</strong><span class="tower-mit-meta">${start}–${end}・見積 ${escapeHTML(resolveEstimateMin(block))}分・${status}</span></div>`;
   }).join("");
-  return `<section class="tower-mit sec-mit"><h2>★ MIT <span>本日の一つ</span></h2>
-    ${rows || '<div class="tower-mit-empty">MITは未設定(実行タブの「これから」で行をタップ→☆)</div>'}
+  return `<section class="tower-mit sec-mit${rows ? "" : " is-empty"}" aria-label="本日のMIT"><h2>★ MIT <span>― 本日の一つ</span></h2>
+    ${rows || '<div class="tower-mit-empty">MIT を決める <span>実行の予定詳細で ☆ を選択</span></div>'}
   </section>`;
 }
 
@@ -275,7 +275,7 @@ function renderTowerRunway(now, blocks, flights) {
       <span class="tower-rwy-mark end">${escapeHTML(metrics.landing)} 着陸予定</span>` : ""}
     </div>
     ${hud}
-    ${renderTowerMIT(blocks)}${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
+    ${renderTodayPomodoro(blocks, queueBlocksOf(blocks))}
   </section>`;
 }
 
@@ -571,6 +571,7 @@ function renderTodayTower() {
       <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
       <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
+    ${renderTowerMIT(blocks)}
     <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
     <div class="daily-today-main">
