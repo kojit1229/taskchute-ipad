@@ -757,6 +757,12 @@ registerActions({
   },
   "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
   "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
+  "wbs-detail-mode": ({ target }) => {
+    const mode = target.dataset.mode;
+    if (!["project", "all"].includes(mode) || mode === _wbsDetailMode) return;
+    _wbsDetailMode = mode;
+    render();
+  },
   "wbs-select-project": ({ id }) => {
     if (id !== "" && !state.projects.some(project => !project.deleted && project.id === id)) return;
     _wbsSelectedProjectId = id; render();
@@ -1518,6 +1524,7 @@ let _twyExcuseOpenItemId = null;
 let _twyAddPanelOpen = false;
 // v330: PC WBSの選択Project。表示専用でstate/localStorageへは保存しない。
 let _wbsSelectedProjectId = null;
+let _wbsDetailMode = "project";  // F4-1: 表示だけの切替。state/localStorageへ保存しない。
 // v331: 実行タブ「これから」行の展開状態(1行だけ開く)。表示専用でstate/localStorageへは保存しない。
 let _execExpandedBlockId = "";
 let _execExpandedTaskId = "";  // v332: 「タスク」行の展開状態(1行だけ開く。非永続)
@@ -4898,6 +4905,7 @@ function jumpToWbsSearchResult(kind, id) {
     state.settings.wbsHideDoneProjects = false;
   }
   _wbsSelectedProjectId = project.id;  // v330: PCでは対象Projectの右ペインを先に選ぶ(非永続)
+  _wbsDetailMode = "project";
   saveAndRender();
   setTimeout(() => document.querySelector(`[data-wbs-row-id="${CSS.escape(id)}"]`)
     ?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
@@ -6260,13 +6268,18 @@ function wbsSearchRows(model, scope) {
 }
 
 function renderWbsProjectDetail(project) {
+  const modeSwitch = `<div class="segmented" role="group" aria-label="作業一覧の表示範囲">
+    ${[["project", "選択プロジェクト"], ["all", "全タスク"]].map(([mode, label]) =>
+      `<button type="button" style="min-height:44px" class="${_wbsDetailMode === mode ? "active" : ""}" data-action="wbs-detail-mode" data-mode="${mode}" aria-pressed="${_wbsDetailMode === mode}">${label}</button>`).join("")}
+  </div>`;
+  if (_wbsDetailMode === "all") return `<div class="wbs-project-detail">${modeSwitch}${renderWorkList("wbs")}</div>`;
   const model = wbsProjectTaskModel(project), is12WY = Boolean(project.twelveWeekStartDate);
   const hideOldProgress = is12WY && project.status === "active" && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate);
   const overdue = model.allTasksOfProject.filter((task) => {
     const due = effectiveDueDate(task);
     return task.status !== "completed" && due && due < todayISO();
   }).length;
-  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
+  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}">${modeSwitch}<header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
     <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button>${project.id ? `<button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}` : ""}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
     ${renderTwyTrackBlock(project)}${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
     ${renderWorkList("wbs-tasks-" + encodeURIComponent(project.id))}</div>`;
