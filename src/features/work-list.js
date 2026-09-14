@@ -56,7 +56,7 @@ function listRow(row, scope) {
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
 }
-function rowsHTML(model, scope) { return scope.startsWith("wbs-") ? screenDeps.wbsSearchRows(model, scope) : scope === "wbs" ? model.shown.map(row => listRow(row, scope)).join("") : renderScreenGroups(model.shown, row => listRow(row, scope)); }
+function rowsHTML(model, scope) { return scope.startsWith("wbs-") ? screenDeps.wbsSearchRows(model, scope) : scope === "wbs" ? model.shown.map(row => listRow(row, scope)).join("") : renderScreenGroups(model.shown, row => listRow(row, scope), scope === "exec" && view(scope).mode === "upcoming"); }
 function searchModel(scope, model, composing = false) {
   const ui = view(scope);
   const projects = state.projects.filter(project => !project.deleted).map(project => [String(project.id ?? ""), String(project.title ?? "")]);

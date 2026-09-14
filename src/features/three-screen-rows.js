@@ -30,8 +30,19 @@ export function buildThreeScreenRows(state, { scope, today, conditions }, deps) 
   return { date, rows, shown: filterWorkList(rows, filters, date) };
 }
 
-export function renderScreenGroups(rows, renderRow) {
+export function renderScreenGroups(rows, renderRow, chronological = false) {
   const labels = { plans: "予定", untimed: "時刻未定の予定枠", unlinked: "その他の予定枠", actuals: "やったこと", routines: "ルーティン", candidates: "未完了Task" };
+  if (chronological) {
+    const ordered = [...rows].sort((a, b) => a.date.localeCompare(b.date)
+      || (a.time || "99").localeCompare(b.time || "99") || a.key.localeCompare(b.key));
+    const groups = [];
+    for (const row of ordered) {
+      const key = screenRowGroup(row), previous = groups[groups.length - 1];
+      if (previous?.key === key && previous.date === row.date) previous.rows.push(row);
+      else groups.push({ key, date: row.date, rows: [row] });
+    }
+    return groups.map(({ key, rows: group }) => `<section data-screen-group="${key}"><h3>${labels[key]}</h3>${group.map(renderRow).join("")}</section>`).join("");
+  }
   return Object.entries(labels).map(([key, label]) => {
     const group = rows.filter(row => screenRowGroup(row) === key);
     return group.length ? `<section data-screen-group="${key}"><h3>${label}</h3>${group.map(renderRow).join("")}</section>` : "";

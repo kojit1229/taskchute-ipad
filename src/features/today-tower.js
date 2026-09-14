@@ -110,7 +110,7 @@ function boardFlights(blocks, nowMin, tasks = [], schedules = []) {
   const byId = new Map(candidates.map((block) => [String(block.id), block]));
   const blockFlights = towerFlights(candidates, nowMin).map((flight) => ({
     ...flight, estimateMin: resolveEstimateMin(byId.get(String(flight.id))),
-    isMIT: byId.get(String(flight.id))?.isMIT === true
+    isMIT: byId.get(String(flight.id))?.id === blocks.find(b => !b.deleted && b.isMIT)?.id
   }));
   const taskFlights = tasks.map((task) => ({
     id: `task:${task.id}`, taskId: task.id, kind: "task-plan", title: task.title,
@@ -155,11 +155,12 @@ function flightTime(minute) {
 }
 
 function mitStarHTML(block) {
-  return block?.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span>' : "";
+  return block?.isMIT === true && state.blocks.find(b => !b.deleted && b.date === block.date && b.isMIT)?.id === block.id
+    ? '<span class="mit-star" aria-label="MIT">★</span>' : "";
 }
 
 function renderTowerMIT(blocks) {
-  const mitBlocks = blocks.filter((block) => block.isMIT === true && !block.deleted).slice(0, 3);
+  const mitBlocks = blocks.filter((block) => block.isMIT === true && !block.deleted).slice(0, 1);
   const rows = mitBlocks.map((block) => {
     const start = timeFromDateTime(block.plannedStartAt) || "--:--";
     const end = timeFromDateTime(block.plannedEndAt) || "--:--";

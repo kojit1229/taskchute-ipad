@@ -4618,9 +4618,9 @@ function confirmScheduleDraft() {
     // v65: AIプランのtitle先頭「[資産]」検出分は確定時にleverageType=assetを引き継ぐ
     if (it.leverageType) block.leverageType = it.leverageType;
     if (it.forceMIT) {
-      // v61: マイグレーション儀式で「今日やる」を選んだ項目はMIT化(既存の最大3個ルールは尊重する)
+      // 同日にMITがある場合は自動追加しない。
       const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === date && b.isMIT);
-      if (sameDayMITs.length < 3) block.isMIT = true;
+      if (sameDayMITs.length < 1) block.isMIT = true;
     }
     if (it.carryFromId) {
       const src = blockById(it.carryFromId);
@@ -5024,10 +5024,10 @@ function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessag
   block.carryCount = (src.carryCount || 0) + 1;  // v61: 繰り越し回数を1つ積み上げる
   // v61由来のforceMIT(儀式「今日やる」)に加え、単位9(1-H3)で元Blockが既にMITだった場合も
   // 「今日の主役」を引き継ぐ(実績系のcompleted/charge等とは異なり計画上の重要度は繰越で消えないべき)。
-  // 既存の最大3個ルールはどちらの経路でも尊重する。
+  // 同日にMITがある場合は自動追加しない。
   if (forceMIT || src.isMIT) {
     const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === toDate && b.isMIT);
-    if (sameDayMITs.length < 3) block.isMIT = true;
+    if (sameDayMITs.length < 1) block.isMIT = true;
   }
   // 旧ブロックを「繰り越し済み」に(未完了リストから外れ、再提案されない)
   return commitBlockChanges([...state.blocks.map((b) => b.id === src.id ? { ...b, migratedTo: block.id } : b), block],
@@ -10620,18 +10620,12 @@ function toggleTaskCompleteFromBlock(blockId) {
 function toggleMIT(blockId) {
   if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleMIT(blockId), { kinds: ["tasks", "blocks"] }).ok;
   const block = state.blocks.find((b) => b.id === blockId);
-  if (!block) return;
-  if (!block.isMIT) {
-    // MIT に追加する場合、同日内の MIT 件数を確認
-    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.date === block.date && b.isMIT);
-    if (sameDayMITs.length >= 3) {
-      return showToast("今日の主役は最大3個まで。先に他を外してください");
-    }
-  }
+  if (!block || block.deleted) return;
+  const wasMIT = state.blocks.find(b => !b.deleted && b.date === block.date && b.isMIT)?.id === blockId;
   state.blocks = state.blocks.map((b) => b.id === blockId
-    ? { ...b, isMIT: !b.isMIT }
-    : b);
-  saveAndRender(block.isMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
+    ? { ...b, isMIT: !wasMIT }
+    : !wasMIT && !b.deleted && b.date === block.date && b.isMIT ? { ...b, isMIT: false } : b);
+  saveAndRender(wasMIT ? "今日の主役から外しました" : "✦ 今日の主役に設定しました");
 }
 
 // v17: 完了時の演出(花火 + ランダム祝福メッセージ)
@@ -15007,27 +15001,15 @@ function saveBlockFromModal(id, fields) {
     createdAt: existing?.createdAt || nowDateTime(),
     deleted: false
   };
-  // v359: MIT(今日の主役)はBlock編集シート内の★トグルから、保存時にまとめて反映する
-  // (即時state書込のtoggleMIT()とは別経路。1日3件までの上限は同じルールを踏襲する)。
-  // レビュー反映(A-M1/B-M5): 上限超過時は既存toggleMIT()と同様に保存自体を中断する
-  // (トーストだけ出してreturnし、モーダルは開いたまま・他フィールドも書き込まない)。
-  const requestedMIT = Boolean(fields.isMIT);
-  if (!requestedMIT || existing?.isMIT) {
-    updated.isMIT = requestedMIT;
-  } else {
-    const sameDayMITs = state.blocks.filter((b) => !b.deleted && b.id !== id && b.date === updated.date && b.isMIT);
-    if (sameDayMITs.length >= 3) {
-      showToast("今日の主役は最大3個まで。先に他を外してください");
-      return;
-    }
-    updated.isMIT = true;
-  }
+  updated.isMIT = Boolean(fields.isMIT);
   let lifecycle;
   try { lifecycle = buildBlockDetailDraft(state, existing, updated, fields, dailyOperationDeps); }
   catch (error) { showToast(error.message); return; }
   Object.assign(updated, lifecycle.block);
   const trackSavedBlockTransitions = () => {
     lifecycle.apply(state);
+    if (updated.isMIT) state.blocks = state.blocks.map(b => !b.deleted && b.id !== id && b.date === updated.date && b.isMIT
+      ? { ...b, isMIT: false } : b);
     lifecycle.effects.forEach(effect => draftSaveTransaction.defer(effect, { post: true }));
     const savedBlock = state.blocks.find((block) => block.id === id);
     saveState();
@@ -15440,9 +15422,11 @@ setSelectedDate = function(date) {
 function completeBlockWithActual(blockId) {
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return;
-  // 予定をデフォルトに、なければ現在時刻
-  const defaultStart = block.actualStartAt || (block.actualEndAt ? "" : block.plannedStartAt || nowDateTime());
-  const defaultEnd = block.actualEndAt || block.plannedEndAt || nowDateTime();
+  // 未記録の終了は予定終了と現在時刻の早い方、開始は終了を超えない値にする。
+  const now = nowDateTime();
+  const defaultEnd = block.actualEndAt || (block.plannedEndAt && block.plannedEndAt < now ? block.plannedEndAt : now);
+  const start = block.actualStartAt || (block.actualEndAt ? "" : block.plannedStartAt || now);
+  const defaultStart = start > defaultEnd ? defaultEnd : start;
   state.modal = { type: "actualEntry", id: blockId };
   renderModal(buildActualEntryModal(block, defaultStart, defaultEnd));
 }

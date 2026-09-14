@@ -28,6 +28,16 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
 (async () => {
   const { buildDailyViewModel: build, renderDailyBlockDetails: render } = await import(pathToFileURL(path.join(root, "src/features/daily-view-model.js")).href);
   const { DAILY_ACTIONS, validateDailyContract } = await import(pathToFileURL(path.join(root, "src/ui/daily-parts/contract.js")).href);
+  check("F1-1 saved Task completed status is reflected in both common rows independently of Block completion", () => {
+    for (const completed of [false, true]) for (const status of ["completed", "todo", "done"]) {
+      const b = block({ completed }), before = JSON.stringify(b);
+      const m = build(b, { ...deps, getTask: () => ({ ...task, status }) });
+      assert.equal(m.plan.taskCompleted, status === "completed");
+      assert.equal(m.actual.taskCompleted, status === "completed");
+      assert.equal(m.plan.planCompleted, completed);
+      assert.equal(JSON.stringify(b), before);
+    }
+  });
   check("saved Block fields map to the common contract, without state mutation", () => {
     const b = Object.freeze(block()); const before = JSON.stringify(b);
     const model = build(b, deps);
