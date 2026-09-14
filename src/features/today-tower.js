@@ -572,7 +572,7 @@ function renderTodayTower() {
       <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
     ${renderTowerMIT(blocks)}
-    <div class="daily-today-values">${renderLifeBand()}${renderStandingOrders()}</div>
+    <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}
     <div class="daily-today-main">
       <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>

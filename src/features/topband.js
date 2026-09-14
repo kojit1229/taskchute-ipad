@@ -204,7 +204,7 @@ function twyCommitBannerHTML(digest) {
     <button type="button" data-action="twy-open-commit">今週を確定</button></div>`;
 }
 
-export function renderLifeBand() {
+export function renderLifeBand(compact = false) {
   const today = todayISO();
   const settings = (typeof getSettings === "function" ? getSettings() : {}) || {};
   const digest = typeof getTrackDigest === "function" ? getTrackDigest() : null;
@@ -219,7 +219,7 @@ export function renderLifeBand() {
   const year = dateSpanMetric(today, yearStart, yearEnd);
 
   const cells = [
-    lifeCellHTML({ label: "12WY WEEK", pctLabel: `Week ${weekNum}/12`, remaining: weekNum, progress: cycle.progress, isCycle: true,
+    compact ? compactCycleHTML(weekNum, digest) : lifeCellHTML({ label: "12WY WEEK", pctLabel: `Week ${weekNum}/12`, remaining: weekNum, progress: cycle.progress, isCycle: true,
       extraHTML: digest ? `${twyScoreHTML(digest)}${twyCommitBannerHTML(digest)}` : "" }),
     lifeCellHTML({ label: "今年", pctLabel: `${clampLocal(year.progress, 0, 100)}%経過`, remaining: year.remaining, progress: year.progress, isCycle: false })
   ];
@@ -230,10 +230,21 @@ export function renderLifeBand() {
     cells.push(lifeCellHTML({ label: "45歳まで", pctLabel: "—", remaining: age45.remaining, progress: age45.progress, isCycle: false }));
     cells.push(lifeCellHTML({ label: "80歳まで", pctLabel: "—", remaining: age80.remaining, progress: age80.progress, isCycle: false }));
   } else {
-    cells.push(`<div class="life-sig"><span>未設定</span><p>設定画面で生年月日を入力してください。</p></div>`);
+    cells.push(...(compact ? ["45歳まで", "80歳まで"].map(label => `<div class="life-sig"><span>${label}</span><strong class="life-unset">未設定</strong></div>`)
+      : ['<div class="life-sig"><span>未設定</span><p>設定画面で生年月日を入力してください。</p></div>']));
   }
 
   return `
     <section class="tower-glass-panel life-band"><span class="tower-beacon" aria-hidden="true"><i></i></span><span class="life-title">LIFE BAND</span><div class="life-sigs">${cells.join("")}</div>
     </section>`;
+}
+
+function compactCycleHTML(weekNum, digest) {
+  const score = !digest?.hasMeta ? "未確定" : digest.score.status === "scored" ? `${digest.score.pct}%`
+    : digest.score.status === "na" ? "N/A・免除" : "確定0・対象0";
+  return `<div class="life-sig wy"><details class="life-cycle-details">
+    <summary><strong>第${weekNum}週 /12</strong><span>行動スコア ${escapeHTML(score)}</span></summary>
+    <div class="life-cycle-popover">${digest ? twyScoreHTML(digest) + twyCommitBannerHTML(digest) : ""}
+      <button type="button" data-action="nav" data-view="twelveweek">12週の進捗を見る</button></div>
+  </details></div>`;
 }
