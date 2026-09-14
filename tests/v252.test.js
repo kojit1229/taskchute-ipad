@@ -190,7 +190,8 @@ function check(name, cond, extra = "") {
     // v293追随: 直前のtoggleBlockは新規完了(justCompleted)のため身体スキャンモーダルが
     // 開いたままになっている。実績モード切替ボタンがこれに遮られるため先に片付ける。
     await dismissBodyScanIfOpen(page);
-    await page.locator('[data-action="timeline-mode"][data-mode="actual"]').click();
+    // fixV404f(監督者追随 2026-09-14): v404(F2/M-06)で✓は実績なしの予定完了になり、実績の時間軸には
+    // 出ない。完了取消は予定側の編集シートから行う(検査の性質=ログの対称削除は同じ)。
     await page.waitForSelector('[data-action="edit-block"][data-id="habit-block"]');
     await page.locator('[data-action="edit-block"][data-id="habit-block"]').evaluate((element) => element.click());
     await openBlockDetails();

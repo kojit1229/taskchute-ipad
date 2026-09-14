@@ -180,8 +180,11 @@ function check(name, cond, extra = "") {
       return s.blocks.find((b) => b.id === "v81-tc-block")?.completed;
     }, KEY);
     check("(regression) .tl-complete-btnへの直接クリックで完了トグルが機能する(::afterに邪魔されていない)", tcBlockAfterClick === true, String(tcBlockAfterClick));
-    check("完了直後のトーストに「実績を編集」ボタンが出る",
-      await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="v81-tc-block"]').count() === 1);
+    // fixV404f(監督者追随 2026-09-14): v404(F2/M-06)で✓は「実績なしの予定完了」。実績は作らないので
+    // 完了直後のトーストは「予定を完了しました」で、「実績を編集」導線は出さない(実績付き完了は行の別ボタン)。
+    check("完了直後のトーストは「予定を完了しました」で実績編集の導線なし",
+      (await page.locator('#toast').textContent()).includes("予定を完了しました")
+      && await page.locator('.toast-action[data-action="complete-block-with-actual"][data-id="v81-tc-block"]').count() === 0);
 
     // ============================================================
     // [A3-2] Wish完了チェック(.wish-check)
