@@ -757,6 +757,12 @@ registerActions({
   },
   "wbs-search-input": () => {},  // inputイベント側で差分更新。click時は意図的no-op
   "wbs-search-jump": ({ target }) => jumpToWbsSearchResult(target.dataset.kind, target.dataset.id),
+  "wbs-detail-mode": ({ target }) => {
+    const mode = target.dataset.mode;
+    if (!["project", "all"].includes(mode) || mode === _wbsDetailMode) return;
+    _wbsDetailMode = mode;
+    render();
+  },
   "wbs-select-project": ({ id }) => {
     if (id !== "" && !state.projects.some(project => !project.deleted && project.id === id)) return;
     _wbsSelectedProjectId = id; render();
@@ -1170,6 +1176,11 @@ registerActions({
 // (v174方式)へ移行した。ロジック無改変。
 registerActions({
   // --- Block作成(WBSからの「今日へ追加」) ---
+  "today-add-interruption": () => openTodayActualBlock(true),
+  "today-add-actual": () => openTodayActualBlock(false),
+  "remaining-shift": () => adjustRemainingBlocks(false),
+  "remaining-tomorrow": () => adjustRemainingBlocks(true),
+  "start-overlap-choice": ({ target }) => chooseStartOverlap(target.dataset.choice),
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
@@ -1242,7 +1253,8 @@ registerActions({
     finishReport(target.dataset.outcome || "", note);
   },
   "report-skip": () => finishReport("", ""),
-  "incomplete-reason-chip": ({ target }) => recordIncompleteReasonChip(target.dataset.chip || ""),
+  "incomplete-reason-chip": ({ target }) => recordIncompleteReasonChip(target.dataset.chip || "", target),
+  "incomplete-reason-save": () => saveDailyCloseReasons(),
   "incomplete-reason-skip": () => skipIncompleteReasonModal(),
   // v296(R1b): 書く瞑想dailyCloseゲート(「やる」=パネルへ/「スキップして生成」=生成続行)。
   "km-gate-do-it": () => writeMeditationGateDoIt(),
@@ -1518,6 +1530,7 @@ let _twyExcuseOpenItemId = null;
 let _twyAddPanelOpen = false;
 // v330: PC WBSの選択Project。表示専用でstate/localStorageへは保存しない。
 let _wbsSelectedProjectId = null;
+let _wbsDetailMode = "project";  // F4-1: 表示だけの切替。state/localStorageへ保存しない。
 // v331: 実行タブ「これから」行の展開状態(1行だけ開く)。表示専用でstate/localStorageへは保存しない。
 let _execExpandedBlockId = "";
 let _execExpandedTaskId = "";  // v332: 「タスク」行の展開状態(1行だけ開く。非永続)
@@ -1529,6 +1542,7 @@ let _pendingInterruptBlockId = null;
 // v87: 宣言/終了報告モーダルが解決するまでの一時コンテキスト。非永続。
 // { blockId, phase: "declare"|"report", kind: "pomodoro"|"block" }
 let _pendingLifecycleCtx = null;
+let _pendingStartChoice = null; // 表示中の開始候補だけ。stateには保存しない。
 // v108: Block保存モーダルの二重送信ガード(iOS Safariでの保存ボタン二重発火対策)。非永続。
 //       saveBlockFromModal の実行中だけ true になり、完了/失敗いずれも finally で必ず解除する。
 let _blockSaveInFlight = false;
@@ -4898,6 +4912,7 @@ function jumpToWbsSearchResult(kind, id) {
     state.settings.wbsHideDoneProjects = false;
   }
   _wbsSelectedProjectId = project.id;  // v330: PCでは対象Projectの右ペインを先に選ぶ(非永続)
+  _wbsDetailMode = "project";
   saveAndRender();
   setTimeout(() => document.querySelector(`[data-wbs-row-id="${CSS.escape(id)}"]`)
     ?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
@@ -5007,6 +5022,45 @@ function requestCarryOver(id) {
     return;
   }
   carryOverBlock(id);
+}
+
+function remainingBlocks() {
+  const now = nowDateTime();
+  return state.blocks.filter(b => !b.deleted && !b.migratedTo && b.date === todayISO()
+    && !b.completed && !b.actualStartAt && b.plannedStartAt && b.plannedStartAt <= now)
+    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt));
+}
+
+function renderRemainingActions() {
+  if (state.selectedDate !== todayISO()) return "";
+  const disabled = remainingBlocks().length ? "" : "disabled";
+  return `<div class="row" style="flex-wrap:wrap"><button class="btn" style="min-height:44px" data-action="remaining-shift" ${disabled}>残りを後ろへ</button><button class="btn" style="min-height:44px" data-action="remaining-tomorrow" ${disabled}>残りを明日へ</button></div>`;
+}
+
+function adjustRemainingBlocks(tomorrow) {
+  if (state.selectedDate !== todayISO()) return;
+  const targets = remainingBlocks();
+  if (!targets.length || !window.confirm(`${targets.length}件の残りの予定を${tomorrow ? "明日へ送ります" : "後ろへずらします"}か？`)) return;
+  const nowMin = Math.min(1435, Math.round(minutesOf(nowDateTime()) / 5) * 5);
+  const delta = Math.max(0, nowMin - minutesOf(targets[0].plannedStartAt));
+  const toDate = addDays(todayISO(), 1), replacements = new Map(), additions = [];
+  for (const src of targets) {
+    if (tomorrow) {
+      const shift = dt => dt ? `${toDate}${dt.slice(10)}` : "";
+      const block = makeBlock({ taskId: src.taskId, date: toDate, title: src.title, category: src.category,
+        plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt), estimateMin: src.estimateMin,
+        comment: src.comment, leverageType: src.leverageType, expectedCharge: src.expectedCharge, expectedDischarge: src.expectedDischarge });
+      Object.assign(block, { source: src.source || "", carryCount: (src.carryCount || 0) + 1, isMIT: false });
+      additions.push(block);
+      replacements.set(src.id, { ...src, migratedTo: block.id });
+    } else {
+      const shift = dt => !dt ? "" : `${src.date}T${minToHHMM(Math.min(1435,
+        (dt.slice(0, 10) > src.date ? 1440 : 0) + minutesOf(dt) + delta))}:00`;
+      replacements.set(src.id, { ...src, plannedStartAt: shift(src.plannedStartAt), plannedEndAt: shift(src.plannedEndAt) });
+    }
+  }
+  return commitBlockChanges([...state.blocks.map(b => replacements.get(b.id) || b), ...additions],
+    () => { render(); showToast(`${targets.length}件の予定を${tomorrow ? "明日へ送りました" : "後ろへずらしました"}`); });
 }
 
 function carryOverBlock(id, { forceMIT = false, toDate = todayISO(), toastMessage = "今日へ繰り越しました" } = {}) {
@@ -5255,8 +5309,8 @@ function renderWipBanner() {
       && !isWbsProjectDone(p));
   if (activeNormal.length < 4) return "";
   return `
-    <div class="wip-banner">
-      <div class="wip-banner-msg">進行中プロジェクトが${activeNormal.length}件。Kの原則は3件まで——1つ潜らせますか?</div>
+    <details class="wip-banner">
+      <summary class="wip-banner-msg" style="min-height:44px;display:flex;align-items:center">進行中 ${activeNormal.length}件(目安 3件まで) ▾</summary>
       <div class="wip-banner-list">
         ${activeNormal.map((p) => `
           <div class="wip-banner-row">
@@ -5265,7 +5319,7 @@ function renderWipBanner() {
           </div>
         `).join("")}
       </div>
-    </div>
+    </details>
   `;
 }
 
@@ -6260,13 +6314,18 @@ function wbsSearchRows(model, scope) {
 }
 
 function renderWbsProjectDetail(project) {
+  const modeSwitch = `<div class="segmented" role="group" aria-label="作業一覧の表示範囲">
+    ${[["project", "選択プロジェクト"], ["all", "全タスク"]].map(([mode, label]) =>
+      `<button type="button" style="min-height:44px" class="${_wbsDetailMode === mode ? "active" : ""}" data-action="wbs-detail-mode" data-mode="${mode}" aria-pressed="${_wbsDetailMode === mode}">${label}</button>`).join("")}
+  </div>`;
+  if (_wbsDetailMode === "all") return `<div class="wbs-project-detail">${modeSwitch}${renderWorkList("wbs")}</div>`;
   const model = wbsProjectTaskModel(project), is12WY = Boolean(project.twelveWeekStartDate);
   const hideOldProgress = is12WY && project.status === "active" && isProjectInCurrentCycle(project, state.settings.twelveWeekStartDate);
   const overdue = model.allTasksOfProject.filter((task) => {
     const due = effectiveDueDate(task);
     return task.status !== "completed" && due && due < todayISO();
   }).length;
-  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}"><header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
+  return `<div class="wbs-project-detail" data-wbs-detail-id="${escapeHTML(project.id)}">${modeSwitch}<header><h2>${escapeHTML(project.title)} <span>${is12WY ? `12週計画 第${cycleWeekForDate(todayISO())}週 ・ ` : ""}進捗 ${model.agg.num}/${model.agg.den}(${model.agg.pct}%)・ 期限超過 ${overdue}</span></h2></header>
     <div class="wbs-detail-actions"><button data-action="add-task-to-project" data-id="${escapeHTML(project.id)}">＋ タスク</button>${project.id ? `<button data-action="edit-project" data-id="${escapeHTML(project.id)}">編集</button>${isProjectSuspended(project) ? `<button data-action="resume-project" data-id="${escapeHTML(project.id)}">再開</button>` : `<button data-action="suspend-project" data-id="${escapeHTML(project.id)}">中断</button>`}` : ""}${is12WY ? `<button data-action="twy-open-commit">来週分を確定</button>` : ""}</div>
     ${renderTwyTrackBlock(project)}${project.showProgress && !hideOldProgress ? renderProjectProgressAgg(model.liveTasks) : ""}
     ${renderWorkList("wbs-tasks-" + encodeURIComponent(project.id))}</div>`;
@@ -6586,7 +6645,7 @@ function renderExecView() {
 function renderTasks(opts = {}) {
   const embedded = opts.embedded === true;
   return `${embedded ? "" : execHeaderHTML() + renderDateBar()}
-    ${carryOverPanel()}${renderWorkList("exec")}${renderWorkList("exec-candidates")}
+    ${carryOverPanel()}${renderRemainingActions()}${renderWorkList("exec")}${renderWorkList("exec-candidates")}
     ${embedded ? `<div class="exec-switch-footer"><button class="btn ghost" data-action="daily-gap-choose">計画の空きへ配置</button><button class="btn ghost" data-action="exec-mode-toggle" data-mode="actual">実績を見る ›</button></div>` : ""}`;
 }
 // v331修正: 「いま」行(実行中Block1件)。常時要素は☐(toggle-block)・タイトル+meta・
@@ -12050,6 +12109,9 @@ function buildBodyScanModal() {
   const ctx = _pendingBodyScanCtx;
   if (!ctx) return "";
   const showParts = ctx.fatigue >= 3;
+  const previous = (state.bodyScans || []).filter(scan => !scan.deleted && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(scan.dateTime || "")
+    && scan.dateTime.slice(0, 10) < todayISO()).sort((a, b) => b.dateTime.localeCompare(a.dateTime))[0];
+  const previousHTML = previous ? `<p class="body-scan-previous" style="font-size:12px;white-space:nowrap;overflow-x:auto">前回 ${Number(previous.dateTime.slice(5, 7))}/${Number(previous.dateTime.slice(8, 10))} ${escapeHTML(previous.dateTime.slice(11, 16))}: 疲労${escapeHTML(previous.fatigue ?? "—")} 回復${escapeHTML(previous.recovery ?? "—")} 部位: ${escapeHTML((previous.parts || []).join("・") || "なし")}</p>` : "";
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -12057,6 +12119,7 @@ function buildBodyScanModal() {
         <button class="modal-close" data-action="body-scan-discard" aria-label="閉じる">×</button>
       </div>
       <div class="modal-body">
+        ${previousHTML}
         <div class="field">
           <label class="field-label" style="color:var(--red)">🏋️ 身体の疲労</label>
           ${bodyScanScaleRow("body-scan-fatigue", ctx.fatigue, ["0=疲労なし", "5=かなり疲れた"])}
@@ -12177,6 +12240,11 @@ function openIncompleteReasonModal(blockIds, mode) {
     return;
   }
   _pendingIncompleteReasonCtx = { queue, mode };
+  if (mode === "dailyClose") {
+    state.modal = { type: "incompleteReason", id: queue[0] };
+    renderModal(buildDailyCloseReasons(queue));
+    return;
+  }
   const first = blockById(queue[0]);
   state.modal = { type: "incompleteReason", id: queue[0] };
   renderModal(buildIncompleteReasonModal(first, queue.length));
@@ -12244,6 +12312,37 @@ function writeMeditationGateSkip() {
   generateReport();
 }
 
+function buildDailyCloseReasons(queue) {
+  return `${modalHeaderHTML("未完了の理由(任意)")}
+      ${queue.map(id => `<section data-reason-block="${escapeHTML(id)}" style="margin-bottom:16px">
+        <strong>${escapeHTML(blockById(id).title)}</strong>
+        <div class="row" style="flex-wrap:wrap;gap:4px">${INCOMPLETE_REASON_CHIPS.map(chip => `<button class="btn ghost" style="min-height:44px" data-action="incomplete-reason-chip" data-chip="${escapeHTML(chip)}" aria-pressed="false">${escapeHTML(chip)}</button>`).join("")}</div>
+        <input class="input" style="font-size:16px;min-height:44px" data-incomplete-reason-note aria-label="${escapeHTML(blockById(id).title)}の短い理由" placeholder="一言(任意)">
+      </section>`).join("")}
+    </div><div class="modal-footer" style="flex-wrap:wrap">
+      <button class="btn primary" style="min-height:44px" data-action="incomplete-reason-save">記録して日報へ</button>
+      <button class="btn ghost" style="min-height:44px" data-action="incomplete-reason-skip">理由なしで日報へ</button>
+    </div></div>`;
+}
+
+function finishDailyCloseReasons() {
+  for (const id of _pendingIncompleteReasonCtx.queue) _dailyCloseReasonSkipped.add(id);
+  _pendingIncompleteReasonCtx = null;
+  closeModal();
+  maybeGateWriteMeditationThenGenerateReport();
+}
+
+function saveDailyCloseReasons() {
+  if (_pendingIncompleteReasonCtx?.mode !== "dailyClose") return;
+  const reasons = new Map(), at = nowDateTime();
+  for (const row of modalRoot.querySelectorAll("[data-reason-block]")) {
+    const chip = row.querySelector('[data-chip][aria-pressed="true"]')?.dataset.chip;
+    if (chip) reasons.set(row.dataset.reasonBlock, { chip, note: row.querySelector("[data-incomplete-reason-note]").value.trim(), at });
+  }
+  return commitBlockChanges(state.blocks.map(b => reasons.has(b.id) && !b.deleted
+    ? { ...b, incompleteReason: reasons.get(b.id) } : b), finishDailyCloseReasons);
+}
+
 function buildIncompleteReasonModal(block, remaining) {
   const counter = remaining > 1 ? `<div class="muted" style="font-size:11px; margin-bottom:6px">残り${remaining}件</div>` : "";
   return `
@@ -12270,7 +12369,19 @@ function buildIncompleteReasonModal(block, remaining) {
 }
 
 // チップ1タップで確定(ノートは任意入力済みのものをそのまま使う)→ 次のキューへ
-function recordIncompleteReasonChip(chip) {
+function recordIncompleteReasonChip(chip, target) {
+  if (_pendingIncompleteReasonCtx?.mode === "dailyClose") {
+    const row = target?.closest("[data-reason-block]");
+    if (!row) return;
+    const selected = target.getAttribute("aria-pressed") !== "true";
+    for (const button of row.querySelectorAll("[data-chip]")) {
+      const active = button === target && selected;
+      button.setAttribute("aria-pressed", String(active));
+      button.classList.toggle("primary", active);
+      button.classList.toggle("ghost", !active);
+    }
+    return;
+  }
   if (!_pendingIncompleteReasonCtx || !chip) { skipIncompleteReasonModal(); return; }
   const blockId = _pendingIncompleteReasonCtx.queue[0];
   const note = (modalRoot.querySelector("[data-incomplete-reason-note]")?.value || "").trim();
@@ -12283,6 +12394,7 @@ function recordIncompleteReasonChip(chip) {
 // v162 2系統レビュー対応(推奨4): スキップしたBlock idを_dailyCloseReasonSkippedへ積み、
 // 同じセッション内で「日報を生成」を再度押しても再質問しないようにする。
 function skipIncompleteReasonModal() {
+  if (_pendingIncompleteReasonCtx?.mode === "dailyClose") { finishDailyCloseReasons(); return; }
   const blockId = _pendingIncompleteReasonCtx?.queue?.[0];
   if (blockId) _dailyCloseReasonSkipped.add(blockId);
   advanceIncompleteReasonQueue();
@@ -12364,7 +12476,41 @@ function buildDeclareFeedback(entry) {
 
 // ---------- 宣言モーダル ----------
 
-function openDeclareModal(blockId, kind) {
+function offerStartOverlap(ctx, declareNext = false) {
+  if (ctx.parallel || !blockById(ctx.blockId) || blockById(ctx.blockId).actualStartAt) return false;
+  const previous = state.blocks.filter(b => b.id !== ctx.blockId && !b.deleted && b.actualStartAt && !b.actualEndAt)
+    .sort((a, b) => b.actualStartAt.localeCompare(a.actualStartAt))[0];
+  if (!previous) return false;
+  _pendingStartChoice = { ctx, previousId: previous.id, declareNext };
+  state.modal = { type: "startOverlap", id: ctx.blockId };
+  renderModal(`${modalHeaderHTML("前の予定が実行中です")}
+      <div class="field"><button class="btn primary" style="min-height:44px;width:100%" data-action="start-overlap-choice" data-choice="end">「${escapeHTML(previous.title)}」の実績を今の時刻で終える(おすすめ)</button></div>
+      <div class="field"><button class="btn" style="min-height:44px;width:100%" data-action="start-overlap-choice" data-choice="parallel">そのまま並行で始める</button></div>
+      <button class="btn ghost" style="min-height:44px" data-action="start-overlap-choice" data-choice="cancel">やめる</button>
+    </div></div>`);
+  return true;
+}
+
+function chooseStartOverlap(choice) {
+  const pending = _pendingStartChoice;
+  if (!pending || state.modal?.type !== "startOverlap") return;
+  if (choice === "cancel") { _pendingStartChoice = null; _pendingLifecycleCtx = null; closeModal(); return; }
+  if (choice !== "end" && choice !== "parallel") return;
+  if (choice === "end") {
+    const previous = blockById(pending.previousId);
+    if (previous && !previous.deleted && previous.actualStartAt && !previous.actualEndAt) {
+      const ended = runDailyOperation("daily-block-end", { kind: "block", id: previous.id,
+        values: { actualEndAt: nowDateTime(), completed: false } }, dailyOperationDeps);
+      if (!ended.ok) { showToast("前の予定の終了を保存できませんでした。開始していません"); return; }
+    }
+  }
+  _pendingStartChoice = null;
+  if (pending.declareNext) { openDeclareModal(pending.ctx.blockId, pending.ctx.kind, true); return; }
+  if (resumeLifecycleStart({ ...pending.ctx, parallel: true })?.ok) { _pendingLifecycleCtx = null; closeModal(); }
+}
+
+function openDeclareModal(blockId, kind, parallel = false) {
+  if (offerStartOverlap({ blockId, kind, parallel }, true)) return;
   const block = state.blocks.find((b) => b.id === blockId && !b.deleted);
   if (!block) {
     // Blockが見つからない(空id等)場合は宣言をスキップし従来どおり即実行
@@ -12372,7 +12518,7 @@ function openDeclareModal(blockId, kind) {
     return;
   }
   if (block.actualStartAt) return resumeLifecycleStart({ blockId, kind });
-  _pendingLifecycleCtx = { blockId, phase: "declare", kind };
+  _pendingLifecycleCtx = { blockId, phase: "declare", kind, parallel };
   state.modal = { type: "declare", id: blockId };
   renderModal(buildDeclareModal(block, estimateMinutesForBlock(block, kind)));
 }
@@ -12396,6 +12542,7 @@ function buildDeclareModal(block, estimateMin) {
 }
 
 function resumeLifecycleStart(ctx) {
+  if (offerStartOverlap(ctx)) return { ok: false, pending: true };
   if (!ctx.blockId && ctx.kind === "pomodoro") {
     startPomodoro(ctx.blockId);
     return { ok: true };
@@ -12413,7 +12560,7 @@ function confirmDeclare() {
   const note = modalRoot.querySelector("[data-declare-note]")?.value || "";
   const block = state.blocks.find((b) => b.id === ctx.blockId);
   const estimateMin = estimateMinutesForBlock(block, ctx.kind);
-  const result = logDeclaration(ctx.blockId, note, estimateMin, ctx.kind);
+  const result = resumeLifecycleStart({ ...ctx, declare: true, note, estimateMin });
   if (!result?.ok) return;
   _pendingLifecycleCtx = null;
   closeModal();
@@ -13853,6 +14000,12 @@ function openTaskEditor(id) {
   if (!task) return;
   state.modal = { type: "task", id };
   renderModal(buildTaskModal(task));
+}
+
+function openTodayActualBlock(interruption) {
+  const block = { ...makeBlock({ date: todayISO(), actualStartAt: interruption ? nowDateTime() : "" }), _isNew: true };
+  state.modal = { type: "block", id: block.id };
+  renderModal(buildBlockModal(block));
 }
 
 function openBlockEditor(id) {

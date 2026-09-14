@@ -43,9 +43,13 @@ export function buildDailyViewModel(block, deps, actual = false) {
   if (estimate != null && (!Number.isFinite(estimate) || estimate < 0)) invalid();
   const plannedStartText = time(block.plannedStartAt), plannedEndText = time(block.plannedEndAt);
   const startDate = text(block.plannedStartAt).slice(0, 10), endDate = text(block.plannedEndAt).slice(0, 10);
+  const progressNum = Number(linkedTask?.progressNum || 0), progressDen = Number(linkedTask?.progressDen || 0);
   const plan = {
     plannedStartText, plannedEndText, endNextDay: Boolean(plannedStartText && plannedEndText && endDate > startDate),
     estimateText: estimate ? `見積${estimate}分` : "", overlapLabel: "",
+    progressText: progressDen > 0 && Number.isFinite(progressDen) && Number.isFinite(progressNum)
+      ? `進捗 ${progressNum}/${progressDen}` : "",
+    doneCriteriaText: text(linkedTask?.doneCriteria), firstStepText: text(linkedTask?.firstStep),
     planCompleted, taskCompleted, running, canStart: !running && !planCompleted && !block.actualEndAt,
     canEnd: running, canDuplicate: false, highlighted: block.isMIT === true,
     saving: false, undoAvailable: false, draftId: null, draft: null

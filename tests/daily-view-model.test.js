@@ -20,7 +20,8 @@ const NEXT = new Date(Date.UTC(2026, 8, 10)).toISOString().slice(0, 10);
 const block = (extra = {}) => ({ id: "fake-b", date: DAY, title: "架空の作業", category: "仕事", taskId: "fake-t",
   plannedStartAt: `${DAY}T09:00:00`, plannedEndAt: `${DAY}T09:30:00`, actualStartAt: "", actualEndAt: "",
   completed: false, estimateMin: 30, charge: 0, discharge: 2, comment: "架空メモ", ...extra });
-const task = { id: "fake-t", projectId: "fake-p", title: "架空Task", status: "done" };
+const task = { id: "fake-t", projectId: "fake-p", title: "架空Task", status: "done",
+  progressNum: 3, progressDen: 10, doneCriteria: "3 < 5 を確認", firstStep: "資料を開く & 確認" };
 const deps = { ...helpers, getTask: id => id === task.id ? task : null, projectName: () => "架空Project", canEdit: true };
 let checks = 0;
 function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
@@ -187,6 +188,30 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
     await page.reload(); await page.locator('[data-work-list="exec"]').waitFor();
     const read = () => page.evaluate(key => localStorage.getItem(key), STATE_KEY);
     const before = await read();
+    // F4-2: 同じ契約で空欄・削除Task・進捗0を扱い、実行の2種類の展開内訳へ届く。
+    for (const linked of [null, { ...task, deleted: true }, {}, { progressNum: 3, progressDen: 0 }, task]) {
+      const b = block(), snapshot = JSON.stringify({ b, linked });
+      const model = build(b, { ...deps, getTask: () => linked });
+      assert.deepEqual([model.plan.progressText, model.plan.doneCriteriaText, model.plan.firstStepText],
+        linked === task ? ["進捗 3/10", task.doneCriteria, task.firstStep] : ["", "", ""]);
+      assert.equal(JSON.stringify({ b, linked }), snapshot, "Task and Block remain unchanged");
+    }
+    assert.equal(build(block(), { ...deps, getTask: () => ({ ...task, progressNum: 0 }) }).plan.progressText, "進捗 0/10");
+    for (const [id, selector, toggle] of [["up", ".exec-row-upcoming", ".exec-row-copy"],
+      ["running", ".exec-row-now", ".exec-row-meta"]]) {
+      const row = page.locator(`${selector}:has([data-id="${id}"])`);
+      const height = await row.evaluate(el => el.getBoundingClientRect().height);
+      assert.equal(await row.locator('.daily-plan-task').count(), 0, "collapsed row has no Task detail");
+      await row.locator(toggle).click();
+      const detail = row.locator('.daily-plan-task'); await detail.waitFor();
+      assert.equal(await detail.innerText(), `🎯 ${task.doneCriteria} / ▶ ${task.firstStep} / 進捗 3/10`);
+      assert.equal(await detail.locator('*').count(), 0, "Task values stay text");
+      await row.locator(toggle).click();
+      assert.equal(await row.evaluate(el => el.getBoundingClientRect().height), height, "collapsed row height is unchanged");
+    }
+    const afterTaskDetails = await read();
+    check("F4-2 Task projection and upcoming/running details preserve saved data and collapsed height",
+      () => assert.equal(afterTaskDetails, before));
     await page.locator('.exec-row-upcoming:has([data-id="up"]) .exec-row-copy').click();
     await page.locator('[data-daily-key="block:up"]').waitFor();
     assert.match(await page.locator('[data-daily-key="block:up"]').innerText(), /開始 11:00/);

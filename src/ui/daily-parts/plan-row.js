@@ -11,6 +11,8 @@ export function renderPlanRow(display, plan, escapeHTML) {
     id: display.id, draftId: null, requestId: null, baseFingerprint: null, values: plan }).valid) invalid();
   for (const key of ["plannedStartText", "plannedEndText", "estimateText", "overlapLabel"])
     if (typeof plan[key] !== "string") invalid();
+  for (const key of ["progressText", "doneCriteriaText", "firstStepText"])
+    if (Object.hasOwn(plan, key) && typeof plan[key] !== "string") invalid();
   for (const key of ["endNextDay", "planCompleted", "taskCompleted", "running", "canDuplicate",
     "canStart", "canEnd", "highlighted", "saving", "undoAvailable"])
     if (typeof plan[key] !== "boolean") invalid();
@@ -34,6 +36,8 @@ export function renderPlanRow(display, plan, escapeHTML) {
   const input = (field, label) => `<label>${label}<input type="time" step="300"
     data-daily-field="${field}" ${identity} value="${e(draft[field])}"${disabled}></label>`;
   const errors = [display.error, ...(draft ? draft.errors : [])].filter(Boolean);
+  const taskDetails = [plan.doneCriteriaText ? `🎯 ${plan.doneCriteriaText}` : "",
+    plan.firstStepText ? `▶ ${plan.firstStepText}` : "", plan.progressText].filter(Boolean);
   return `<article class="daily-plan-row${plan.planCompleted ? " is-plan-completed" : ""}${plan.highlighted ? " is-highlighted" : ""}"
     data-daily-key="${e(display.key)}" ${identity} aria-busy="${busy}">
     <div class="daily-plan-heading"><strong class="daily-plan-title">${e(display.title)}</strong>
@@ -42,6 +46,7 @@ export function renderPlanRow(display, plan, escapeHTML) {
     <div class="daily-plan-times"><span>開始 ${e(plan.plannedStartText || "未定")}</span>
       <span>終了 ${plan.endNextDay ? "翌日 " : ""}${e(plan.plannedEndText || "未定")}</span>
       <span>${e(plan.estimateText)}</span><span>${e(plan.overlapLabel)}</span></div>
+    ${taskDetails.length ? `<div class="daily-plan-task">${taskDetails.map(value => e(value)).join(" / ")}</div>` : ""}
     <div class="daily-plan-status"><span data-daily-status="plan">${plan.planCompleted ? "予定完了" : "予定未完了"}</span>
       ${block ? `<span data-daily-status="running">${plan.running ? "実行中" : "停止中"}</span>
       <span data-daily-status="task">${plan.taskCompleted ? "Task完了" : "Task未完了"}</span>` : ""}

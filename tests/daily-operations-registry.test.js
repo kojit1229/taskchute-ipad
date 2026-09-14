@@ -176,7 +176,7 @@ const visit = node => {
   }
 };
 const lifecycleNames = ['confirmDeclare', 'estimateMinutesForBlock', 'logDeclaration',
-  'resumeLifecycleStart', 'finishReport', 'reportForBlock'];
+  'resumeLifecycleStart', 'offerStartOverlap', 'finishReport', 'reportForBlock'];
 vm.runInNewContext(ast.body.filter(n => n.type === 'FunctionDeclaration' && lifecycleNames.includes(n.id.name))
   .map(n => source.slice(n.start, n.end)).join('\n'), unwiredContext);
 Object.assign(unwiredContext, {

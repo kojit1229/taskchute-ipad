@@ -98,6 +98,9 @@ function check(name, cond, extra = "") {
   async function startBlockSkippingDeclare(page, blockId) {
     await page.click(`.timeline-card [data-action="now-start"][data-id="${blockId}"]`);
     await page.waitForTimeout(150);
+    // v406(F5-3 M-26): 別の Block が実行中なら開始前に重なりの選択シートが出る。「並行して開始」を選ぶ(前の実績は終えない)
+    const overlap = page.locator('[data-action="start-overlap-choice"][data-choice="parallel"]');
+    if (await overlap.count() > 0) { await overlap.click(); await page.waitForTimeout(150); }
     const declareSkip = page.locator('[data-action="declare-skip"]');
     if (await declareSkip.count() > 0) await declareSkip.click();
   }

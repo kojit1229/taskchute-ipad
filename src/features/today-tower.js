@@ -554,6 +554,14 @@ function toggleTowerBodyMindWeekly() {
   _bmWeeklyOpen = !_bmWeeklyOpen;
 }
 
+function renderTodayQuickAction(blocks) {
+  const available = blocks.filter(b => !b.deleted && !b.migratedTo);
+  const running = available.find(b => b.actualStartAt && !b.actualEndAt);
+  const next = running || available.filter(b => !b.completed && !b.actualStartAt && b.plannedStartAt)
+    .sort((a, b) => a.plannedStartAt.localeCompare(b.plannedStartAt))[0];
+  return next ? `<button type="button" class="daily-today-quick" data-action="${running ? "now-end" : "now-start"}" data-id="${escapeHTML(next.id)}"><span>${running ? "いま" : "次"}: ${escapeHTML(next.title)}</span><b>${running ? "■ 終了" : "▶ 開始"}</b></button>` : "";
+}
+
 function renderTodayTower() {
   const now = new Date();
   const today = todayISO();
@@ -571,6 +579,7 @@ function renderTodayTower() {
       <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
       <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
     </header>
+    ${renderTodayQuickAction(blocks)}
     ${renderTowerMIT(blocks)}
     <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>
     ${renderTowerRunway(now, blocks, flights)}

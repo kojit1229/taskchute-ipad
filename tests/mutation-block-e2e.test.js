@@ -15,6 +15,77 @@ const functions = names => names.map(name => {
 }).join('\n');
 const clone = value => JSON.parse(JSON.stringify(value));
 
+// F5: real delegated buttons and the real local candidate-save boundary.
+async function f5Browser(run) {
+  const { chromium, launchOptions, defaultContextOptions, startServer, randomPort, blockGithubApiByDefault, STATE_KEY } = require('./helpers');
+  const port = randomPort(), server = startServer(port);
+  let browser;
+  try {
+    browser = await chromium.launch(launchOptions());
+    const context = await browser.newContext({ ...defaultContextOptions(), serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 10, 1)));
+    await blockGithubApiByDefault(page);
+    await page.route('**/app.js', route => route.fulfill({ contentType: 'text/javascript', body: source +
+      '\nwindow.__f5 = { getState: () => state, makeBlock, render, openDeclareModal, startPomodoro, openIncompleteReasonModal, openBodyScanModal };' }));
+    await page.goto(`http://localhost:${port}`);
+    await page.waitForFunction(() => Boolean(window.__f5));
+    await page.evaluate(key => {
+      const s = window.__f5.getState();
+      Object.assign(s, { blocks: [], tasks: [], projects: [], recurrences: [], bodyScans: [], declarations: [],
+        modal: null, currentView: 'today', selectedDate: '2026-09-10' });
+      s.settings.autoSyncEnabled = false;
+      s.settings.github = { token: 'fake-f5-token', dataOwner: 'fixture', dataRepo: 'fixture' };
+      window.__f5.render();
+      const original = Storage.prototype.setItem;
+      window.__f5Save = { fail: false, writes: 0 };
+      Storage.prototype.setItem = function(name, value) {
+        if (name === key) {
+          window.__f5Save.writes++;
+          if (window.__f5Save.fail) throw new DOMException('F5 injected quota', 'QuotaExceededError');
+        }
+        return original.call(this, name, value);
+      };
+    }, STATE_KEY);
+    try { await run(page, STATE_KEY); }
+    catch (error) { console.error('F5 screen at failure:', await page.locator('body').innerText()); throw error; }
+  } finally {
+    await browser?.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
+test('F5-1 today interruption and actual-only entries use the new Block sheet and save once', async () => {
+  await f5Browser(async (page, key) => {
+    for (const interruption of [true, false]) {
+      await page.locator(`[data-action="today-add-${interruption ? 'interruption' : 'actual'}"]`).click();
+      const field = name => page.locator(`[data-modal-field="${name}"]`);
+      assert.equal(await field('date').inputValue(), DATE);
+      assert.equal(await field('plannedStartAt').inputValue(), '');
+      assert.equal(await field('plannedEndAt').inputValue(), '');
+      assert.equal(await field('actualStartAt').inputValue(), interruption ? DATE + 'T10:00' : '');
+      assert.equal(await field('actualEndAt').inputValue(), '');
+      assert.ok(await field('actualStartAt').isVisible());
+      assert.equal(await field('actualStartAt').getAttribute('step'), '300');
+      await field('title').fill(interruption ? '割り込み作業' : '後追い実績');
+      if (!interruption) {
+        await field('actualStartAt').fill(DATE + 'T08:00');
+        await field('actualEndAt').fill(DATE + 'T08:30');
+      }
+      const before = await page.evaluate(() => window.__f5Save.writes);
+      await page.locator('[data-action="modal-save"]').click();
+      await page.waitForFunction(() => !window.__f5.getState().modal);
+      assert.equal(await page.evaluate(() => window.__f5Save.writes), before + 1);
+      const saved = await page.evaluate(k => JSON.parse(localStorage.getItem(k)).blocks.at(-1), key);
+      assert.equal(saved.plannedStartAt, '');
+      assert.equal(saved.plannedEndAt, '');
+      assert.equal(saved.actualStartAt, DATE + (interruption ? 'T10:00:00' : 'T08:00:00'));
+      assert.equal(saved.actualEndAt, interruption ? '' : DATE + 'T08:30:00');
+      assert.equal(saved.completed, false);
+    }
+  });
+});
+
 async function deletionFixture() {
   const f = await fixture(['deleteBlock', 'carryOverBlock', 'resolveMigrationRitual', 'bodyScanRecord', 'closeBodyScanFlow']);
   Object.assign(f.ctx, {
@@ -94,6 +165,255 @@ test('15c repeated deletion and unchanged scan do not stamp Blocks again', async
   expectRestored(block, clone(f.ctx.state.blocks[0]));
 });
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00', DATE = NOW.slice(0, 10);
+
+async function f5RemainingFixture() {
+  const f = await fixture(['remainingBlocks', 'adjustRemainingBlocks', 'renderRemainingActions']);
+  Object.assign(f.ctx, { minutesOf: dt => Number(dt.slice(11, 13)) * 60 + Number(dt.slice(14, 16)),
+    nowDateTime: () => NOW, addDays: () => '2026-09-11', window: { confirm: text => { f.confirmation = text; return true; } } });
+  f.ctx.state.blocks = [
+    { id: 'a', plannedStartAt: DATE + 'T08:00:00', plannedEndAt: DATE + 'T08:30:00', isMIT: true, comment: 'keep plan' },
+    { id: 'b', plannedStartAt: DATE + 'T09:00:00', plannedEndAt: DATE + 'T23:50:00' },
+    { id: 'running', actualStartAt: DATE + 'T09:00:00', plannedStartAt: DATE + 'T09:00:00' },
+    { id: 'future', plannedStartAt: DATE + 'T11:00:00' },
+    { id: 'done', completed: true, plannedStartAt: DATE + 'T09:00:00' },
+    { id: 'moved', migratedTo: 'old-copy', plannedStartAt: DATE + 'T09:00:00' }
+  ].map(b => ({ ...f.ctx.makeBlock({ date: DATE, title: b.id }), ...b }));
+  return f;
+}
+
+async function f5OverlapSetup(page, timer = false) {
+  await page.evaluate(timer => {
+    const api = window.__f5, s = api.getState();
+    s.blocks = [api.makeBlock({ date: '2026-09-10', title: '前の予定', actualStartAt: '2026-09-10T09:00:00' }),
+      api.makeBlock({ date: '2026-09-10', title: '次の予定', plannedStartAt: '2026-09-10T10:00:00' })];
+    s.declarations = []; s.pomodoro.running = false;
+    window.__f5Save.writes = 0;
+    if (timer) api.startPomodoro(s.blocks[1].id); else api.openDeclareModal(s.blocks[1].id, 'block');
+  }, timer);
+}
+
+async function f5ReasonsSetup(page, mode = 'dailyClose') {
+  await page.evaluate(mode => {
+    const api = window.__f5, s = api.getState();
+    s.blocks = Array.from({ length: 3 }, (_, i) => api.makeBlock({ date: '2026-09-10', title: `未完了${i + 1}` }));
+    api.openIncompleteReasonModal(s.blocks.map(b => b.id), mode);
+    window.__f5Save.writes = 0;
+  }, mode);
+}
+
+test('F5-7 body scan displays the latest earlier-day record without changing inputs or saved scans', async () => {
+  await f5Browser(async page => {
+    const before = await page.evaluate(() => {
+      const api = window.__f5, s = api.getState();
+      s.bodyScans = [
+        { id: 'old', dateTime: '2026-09-08T22:00:00', fatigue: 1, recovery: 1, parts: [] },
+        { id: 'today', dateTime: '2026-09-10T09:00:00', fatigue: 5, recovery: 5, parts: ['頭'] },
+        { id: 'latest', dateTime: '2026-09-09T21:10:00', fatigue: 3, recovery: 2, parts: ['肩', '目'] },
+        { id: 'early', dateTime: '2026-09-09T20:00:00', fatigue: 2, recovery: 1, parts: [] },
+        { id: 'deleted', dateTime: '2026-09-09T23:00:00', deleted: true, fatigue: 5, recovery: 5, parts: [] }
+      ];
+      api.openBodyScanModal(); return JSON.stringify(s.bodyScans);
+    });
+    assert.equal(await page.locator('.body-scan-previous').innerText(), '前回 9/9 21:10: 疲労3 回復2 部位: 肩・目');
+    assert.equal(await page.locator('.body-scan-previous input').count(), 0);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState().bodyScans)), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+    await page.locator('[data-action="body-scan-fatigue"]').first().click();
+    assert.ok(await page.locator('.body-scan-previous').isVisible());
+    await page.evaluate(() => {
+      const api = window.__f5; api.getState().bodyScans = api.getState().bodyScans.filter(s => s.id === 'today');
+      api.openBodyScanModal();
+    });
+    assert.equal(await page.locator('.body-scan-previous').count(), 0);
+  });
+});
+
+test('F5-6 WIP shows one count line by default and disclosure never saves display state', async () => {
+  await f5Browser(async page => {
+    await page.evaluate(() => {
+      const api = window.__f5, s = api.getState();
+      s.projects = Array.from({ length: 24 }, (_, i) => ({ id: `p${i}`, title: `進行中案件${i}`, kind: 'normal', status: 'active' }));
+      s.tasks = s.projects.map(p => ({ id: `t${p.id}`, projectId: p.id, title: '未完了作業', status: 'todo' }));
+      s.currentView = 'wbs'; api.render(); window.__f5Save.writes = 0;
+    });
+    const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
+    const details = page.locator('details.wip-banner'), summary = details.locator('summary');
+    assert.equal(await details.getAttribute('open'), null);
+    assert.match(await summary.innerText(), /進行中 24件\(目安 3件まで\)/);
+    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), false);
+    assert.ok((await summary.boundingBox()).height >= 44);
+    await summary.click();
+    assert.equal(await details.locator('.wip-banner-row').count(), 24);
+    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), true);
+    await summary.click();
+    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), false);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+  });
+});
+
+test('F5-5 390px quick action is 44px directly below the clock; desktop hides it and running uses end', async () => {
+  await f5Browser(async page => {
+    await page.evaluate(() => {
+      const api = window.__f5, s = api.getState();
+      s.blocks = [api.makeBlock({ date: '2026-09-10', title: '遅い予定', plannedStartAt: '2026-09-10T11:00:00' }),
+        api.makeBlock({ date: '2026-09-10', title: '先の予定', plannedStartAt: '2026-09-10T09:00:00' })];
+      api.render();
+    });
+    const button = page.locator('.daily-today-quick');
+    assert.match(await button.textContent(), /次: 先の予定.*▶ 開始/);
+    const box = await button.boundingBox(), clock = await page.locator('.daily-today-clock').boundingBox();
+    assert.equal(box.height, 44);
+    assert.ok(box.y >= clock.y + clock.height && box.y + box.height < 844);
+    assert.equal(await button.evaluate(el => el.previousElementSibling.classList.contains('daily-today-clock')), true);
+    await button.click();
+    assert.ok(await page.locator('[data-action="declare-skip"]').isVisible());
+    await page.locator('[data-action="declare-skip"]').click();
+    assert.match(await button.textContent(), /いま: 先の予定.*■ 終了/);
+    await button.click();
+    assert.ok(await page.locator('[data-action="report-skip"]').isVisible());
+    await page.setViewportSize({ width: 768, height: 844 });
+    assert.equal(await button.isVisible(), false);
+    await page.evaluate(() => { const api = window.__f5; api.getState().blocks = []; api.render(); });
+    assert.equal(await button.count(), 0);
+  });
+});
+
+test('F5-4 daily close lists all Blocks, saves selected rows once and leaves triage sequential', async () => {
+  await f5Browser(async page => {
+    await f5ReasonsSetup(page);
+    const rows = page.locator('[data-reason-block]');
+    assert.equal(await rows.count(), 3);
+    assert.equal(await rows.first().locator('[data-chip]').count(), 6);
+    for (const i of [0, 1]) {
+      await rows.nth(i).locator('[data-chip]').first().click();
+      await rows.nth(i).locator('input').fill(`理由${i}`);
+    }
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+    await page.locator('[data-action="incomplete-reason-save"]').click();
+    const result = await page.evaluate(() => ({ blocks: window.__f5.getState().blocks,
+      writes: window.__f5Save.writes, modal: window.__f5.getState().modal }));
+    assert.equal(result.writes, 1);
+    assert.equal(result.blocks[0].incompleteReason.note, '理由0');
+    assert.equal(result.blocks[1].incompleteReason.note, '理由1');
+    assert.equal(result.blocks[0].incompleteReason.at, NOW);
+    assert.ok(!result.blocks[2].incompleteReason?.chip);
+    assert.equal(result.modal.type, 'writeMeditationGate');
+    await f5ReasonsSetup(page);
+    await page.locator('[data-action="incomplete-reason-skip"]').click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+    assert.equal(await page.evaluate(() => window.__f5.getState().modal.type), 'writeMeditationGate');
+    await f5ReasonsSetup(page, 'triage');
+    assert.equal(await page.locator('[data-incomplete-reason-note]').count(), 1);
+    await page.locator('[data-action="incomplete-reason-chip"]').first().click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 1);
+    assert.match(await page.locator('#modalRoot').innerText(), /未完了2/);
+  });
+});
+
+test('F5-4 failed reason bundle restores all Blocks and keeps every typed note and chip for retry', async () => {
+  await f5Browser(async page => {
+    await f5ReasonsSetup(page);
+    const rows = page.locator('[data-reason-block]');
+    for (const i of [0, 1]) {
+      await rows.nth(i).locator('[data-chip]').first().click();
+      await rows.nth(i).locator('input').fill(`保持${i}`);
+    }
+    const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
+    await page.evaluate(() => { window.__f5Save.fail = true; });
+    await page.locator('[data-action="incomplete-reason-save"]').click();
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 1);
+    for (const i of [0, 1]) {
+      assert.equal(await rows.nth(i).locator('input').inputValue(), `保持${i}`);
+      assert.equal(await rows.nth(i).locator('[aria-pressed="true"]').count(), 1);
+    }
+    await page.evaluate(() => { window.__f5Save.fail = false; });
+    await page.locator('[data-action="incomplete-reason-save"]').click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 2);
+  });
+});
+
+test('F5-3 overlap offers end, parallel and cancel; linked timer uses the same choice', async () => {
+  await f5Browser(async page => {
+    for (const choice of ['end', 'parallel', 'cancel', 'timer']) {
+      await f5OverlapSetup(page, choice === 'timer');
+      assert.match(await page.locator('#modalRoot').innerText(), /前の予定/);
+      assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+      await page.locator(`[data-action="start-overlap-choice"][data-choice="${choice === 'timer' ? 'end' : choice}"]`).click();
+      if (choice === 'end' || choice === 'parallel') {
+        await page.locator('[data-declare-note]').fill('宣言は保持');
+        await page.locator('[data-action="declare-confirm"]').click();
+      }
+      const result = await page.evaluate(() => ({ blocks: window.__f5.getState().blocks,
+        declarations: window.__f5.getState().declarations, writes: window.__f5Save.writes, timer: window.__f5.getState().pomodoro }));
+      assert.equal(result.blocks[0].completed, false);
+      assert.equal(result.blocks[0].actualEndAt, ['end', 'timer'].includes(choice) ? NOW : '');
+      assert.equal(result.blocks[1].actualStartAt, choice === 'cancel' ? '' : NOW);
+      assert.equal(result.writes, choice === 'cancel' ? 0 : choice === 'parallel' ? 1 : 2);
+      if (choice === 'end' || choice === 'parallel') assert.equal(result.declarations[0].note, '宣言は保持');
+      if (choice === 'timer') assert.equal(result.timer.blockId, result.blocks[1].id);
+    }
+  });
+});
+
+test('F5-3 failed previous end restores both Blocks and does not start the next timer', async () => {
+  await f5Browser(async page => {
+    await f5OverlapSetup(page, true);
+    const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
+    await page.evaluate(() => { window.__f5Save.fail = true; });
+    await page.locator('[data-action="start-overlap-choice"][data-choice="end"]').click();
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 1);
+    assert.equal(await page.locator('[data-action="start-overlap-choice"][data-choice="end"]').count(), 1);
+    await page.evaluate(() => { window.__f5Save.fail = false; });
+    await page.locator('[data-action="start-overlap-choice"][data-choice="end"]').click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 3);
+    assert.equal(await page.evaluate(() => window.__f5.getState().blocks[1].actualStartAt), NOW);
+  });
+});
+
+test('F5-2 remaining plans shift together or carry together, excluding running, done and future Blocks', async () => {
+  for (const tomorrow of [false, true]) {
+    const f = await f5RemainingFixture(), before = clone(f.ctx.state.blocks);
+    assert.equal(f.ctx.adjustRemainingBlocks(tomorrow), true);
+    assert.match(f.confirmation, /2件/);
+    assert.equal(f.counts.writes, 1);
+    assert.deepEqual(clone(f.ctx.state.blocks.slice(2, 6)), before.slice(2));
+    if (tomorrow) {
+      const copies = f.ctx.state.blocks.slice(6);
+      assert.equal(copies.length, 2);
+      assert.equal(copies[0].date, '2026-09-11');
+      assert.equal(copies[0].plannedStartAt, '2026-09-11T08:00:00');
+      assert.equal(copies[0].comment, 'keep plan');
+      assert.equal(copies[0].isMIT, false);
+      assert.equal(copies[0].carryCount, 1);
+      assert.equal(f.ctx.state.blocks[0].migratedTo, copies[0].id);
+      assert.match(f.ctx.renderRemainingActions(), /disabled/);
+    } else {
+      assert.equal(f.ctx.state.blocks[0].plannedStartAt, DATE + 'T10:00:00');
+      assert.equal(f.ctx.state.blocks[0].plannedEndAt, DATE + 'T10:30:00');
+      assert.equal(f.ctx.state.blocks[1].plannedStartAt, DATE + 'T11:00:00');
+      assert.equal(f.ctx.state.blocks[1].plannedEndAt, DATE + 'T23:55:00');
+    }
+    f.ctx.state.selectedDate = '2026-09-11';
+    assert.equal(f.ctx.renderRemainingActions(), '');
+  }
+});
+
+test('F5-2 failed batch restores every Block and creates no carry copy or success effect', async () => {
+  for (const tomorrow of [false, true]) {
+    const f = await f5RemainingFixture(), before = clone(f.ctx.state);
+    await withLocalSaveFailure(async fail => {
+      f.fail(fail);
+      assert.equal(f.ctx.adjustRemainingBlocks(tomorrow), false);
+      expectRestored(before, clone(f.ctx.state));
+      assert.equal(f.counts.writes, 1);
+      assert.equal(f.counts.render + f.counts.autoSync, 0);
+      assert.ok(f.ctx.lastToast);
+    });
+  }
+});
 
 test('F1-2 MIT replacement commits both Blocks once; failed save restores both, including modal entry', async () => {
   for (const entry of ['toggle', 'modal']) {
@@ -443,7 +763,7 @@ test('factories keep unsaved timeline input out of state; persistence owns the s
 });
 
 async function lifecycleFixture() {
-  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'toggleBlock', 'autoCloseStaleRoutineRuns',
+  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'offerStartOverlap', 'chooseStartOverlap', 'toggleBlock', 'autoCloseStaleRoutineRuns',
     'weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock', 'parseDate', 'addDays',
     'dateToISO', 'dateToLocalDateTime', 'localDateTimeToMs',
     'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned',
@@ -452,6 +772,8 @@ async function lifecycleFixture() {
     runDailyOperation: (await import('../src/features/daily-operations.js')).runDailyOperation,
     mergeWeeklyCommitments: (await import('../src/core/merge.js')).mergeWeeklyCommitments,
     ...await import('../src/core/track.js'),
+    modalHeaderHTML: title => title, escapeHTML: value => value,
+    _pendingStartChoice: null, _pendingLifecycleCtx: null,
     queueMicrotask: callback => callback(),
     maybeShowGuidedAccessHint: () => { f.counts.guidedAccess = (f.counts.guidedAccess || 0) + 1; },
     _quickCompleteSnapshots: {}, requestDraftLeave: () => false,
@@ -471,20 +793,32 @@ async function lifecycleFixture() {
   f.counts.startEffect = 0;
   f.ctx.observeStartEffect = result => {
     f.counts.startEffect++;
-    assert.equal(f.persisted.length, 1, 'startEffect runs after the successful candidate save');
-    assert.deepEqual(f.persisted[0].pomodoro, clone(f.ctx.state.pomodoro));
+    assert.equal(f.persisted.length, f.expectedStartSaves || 1, 'startEffect runs after all required candidate saves');
+    assert.deepEqual(f.persisted.at(-1).pomodoro, clone(f.ctx.state.pomodoro));
     assert.equal(result.block.id, 'b');
   };
   vm.runInContext(`const originalStartEffect = dailyOperationDeps.startEffect;
     dailyOperationDeps.startEffect = result => { observeStartEffect(result); originalStartEffect(result); };`, f.ctx);
   return f;
 }
+// F5-3: open the real choice sheet before injecting persistence failures.
+function prepareOverlapStart(f) {
+  f.ctx.setBlockTime('b', 'actualStartAt');
+  assert.equal(f.ctx.state.modal?.type, 'startOverlap');
+  assert.match(f.ctx.displayedBlock, /data-choice="end"/);
+  assert.equal(f.counts.writes, 0, 'opening the choice sheet does not save');
+  f.expectedStartSaves = 2;
+  return () => {
+    f.ctx.chooseStartOverlap('end');
+    return Boolean(f.ctx.state.blocks[0].actualStartAt);
+  };
+}
 const lifecycle = [
   ['start and close stale routine', f => {
     f.ctx.state.settings.focusTimerAuto = true;
     f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[0]), id: 'stale', date: '2026-09-09',
       category: 'ルーティン', actualStartAt: '2026-09-09T23:10:00', actualEndAt: '' });
-    return () => f.ctx.setBlockTime('b', 'actualStartAt');
+    return prepareOverlapStart(f);
   }],
   ['end', f => () => f.ctx.setBlockTime('b', 'actualEndAt')],
   ['complete', f => () => f.ctx.toggleBlock('b')],
@@ -555,10 +889,11 @@ for (const mode of ['candidate-exception', 'invalid-clock']) {
       assert.equal(f.counts.close + f.counts.render + f.counts.autoSync + f.counts.autoSave + f.counts.timer + f.counts.tracking + f.counts.startEffect + (f.counts.guidedAccess || 0), 0);
       injecting = false;
       execute();
-      assert.equal(f.counts.writes, 1); assert.equal(f.persisted.length, 1);
-      assert.equal(f.counts.autoSync, 1); assert.equal(f.counts.autoSave, 1);
+      const saves = name === 'start and close stale routine' ? 2 : 1;
+      assert.equal(f.counts.writes, saves); assert.equal(f.persisted.length, saves);
+      assert.equal(f.counts.autoSync, saves); assert.equal(f.counts.autoSave, saves);
       assert.notDeepEqual(clone(f.ctx.state.blocks), before.blocks);
-      assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+      assert.deepEqual(f.persisted.at(-1).blocks, clone(f.ctx.state.blocks));
       assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
     });
   }
@@ -587,21 +922,25 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
     const changed = f.ctx.state.blocks[0];
     assert.equal(changed.updatedAt, '2026-09-10T10:05:01');
     assert.equal(changed.createdAt, before.blocks[0].createdAt);
-    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(f.persisted.at(-1).blocks, clone(f.ctx.state.blocks));
     assert.deepEqual(clone(f.ctx.state.blocks[1]), before.blocks[1]);
-    assert.equal(f.persisted.filter((image, i) => !i || image.blocks[0].updatedAt !== f.persisted[i - 1].blocks[0].updatedAt).length, 1);
+    assert.equal(f.persisted.filter((image, i) => image.blocks[0].updatedAt !== (i ? f.persisted[i - 1].blocks[0].updatedAt : before.blocks[0].updatedAt)).length, 1);
     if (name === 'start and close stale routine') {
       assert.equal(changed.actualStartAt, NOW);
-      assert.equal(f.ctx.state.blocks[2].actualEndAt, '2026-09-09T23:59:00');
+      assert.equal(f.ctx.state.blocks[2].actualEndAt, NOW);
+      assert.equal(f.ctx.state.blocks[2].completed, false);
+      assert.equal(f.persisted.length, 2);
+      assert.equal(f.persisted[0].blocks[0].actualStartAt, '');
+      assert.equal(f.persisted[0].blocks[2].actualEndAt, NOW);
       assert.equal(f.ctx.state.blocks[2].updatedAt, '2026-09-10T10:05:01');
       // B5 の契約追随(監督者決定 2026-09-10)
       assert.equal(f.counts.timer, 0, 'legacy timer functions are not called directly');
       assert.equal(f.counts.startEffect, 1);
-      assert.deepEqual(f.persisted[0].pomodoro, {
+      assert.deepEqual(f.persisted[1].pomodoro, {
         running: true, blockId: 'b', startedAt: NOW, endsAt: `${DATE}T10:25:00`,
         mode: 'focus', paused: false, pausedRemainMs: 0
       });
-      assert.deepEqual(clone(f.ctx.state.pomodoro), f.persisted[0].pomodoro);
+      assert.deepEqual(clone(f.ctx.state.pomodoro), f.persisted[1].pomodoro);
     }
     if (name === 'end') assert.equal(changed.actualEndAt, NOW);
     if (name === 'actual modal') {
@@ -641,24 +980,28 @@ test('stale timer reset is persisted in the Block candidate without stamping Blo
   f.ctx.state.blocks.push({ ...clone(f.ctx.state.blocks[0]), id: 'stale', category: 'ルーティン',
     actualStartAt: `${DATE}T09:00:00`, actualEndAt: '' });
   f.ctx.state.pomodoro = { running: true, blockId: 'stale', startedAt: `${DATE}T09:00:00` };
-  const before = clone(f.ctx.state);
+  const execute = prepareOverlapStart(f), before = clone(f.ctx.state);
   await withLocalSaveFailure(async fail => {
     f.fail(fail);
-    assert.equal(f.ctx.setBlockTime('b', 'actualStartAt'), false);
+    assert.equal(execute(), false);
     expectRestored(before, clone(f.ctx.state));
     f.fail(null);
-    f.ctx.setBlockTime('b', 'actualStartAt');
+    execute();
+    // F5-3: recommended end is saved before the new start.
     // B5 の契約追随(監督者決定 2026-09-10)
-    assert.equal(f.counts.writes, 2); // failed candidate write, successful Block + timer candidate write
+    assert.equal(f.counts.writes, 3); // failed end, successful end, successful start
     const saved = JSON.parse(f.raw());
     assert.equal(saved.pomodoro.running, false);
     assert.equal(saved.pomodoro.blockId, '');
     assert.equal(saved.blocks[0].actualStartAt, NOW);
-    assert.equal(f.persisted.length, 1, 'Block and timer share one successful save');
-    assert.deepEqual(f.persisted[0].blocks, clone(f.ctx.state.blocks));
-    assert.deepEqual(f.persisted[0].pomodoro, clone(f.ctx.state.pomodoro));
-    assert.deepEqual(f.persisted[0].blocks, saved.blocks);
-    assert.deepEqual(f.persisted[0].pomodoro, saved.pomodoro);
+    assert.equal(f.persisted.length, 2, 'recommended end and start each save their Block and timer together');
+    assert.equal(f.persisted[0].blocks[0].actualStartAt, '');
+    assert.equal(f.persisted[0].blocks[2].actualEndAt, NOW);
+    assert.equal(f.persisted[0].pomodoro.running, false);
+    assert.deepEqual(f.persisted.at(-1).blocks, clone(f.ctx.state.blocks));
+    assert.deepEqual(f.persisted[1].pomodoro, clone(f.ctx.state.pomodoro));
+    assert.deepEqual(f.persisted[1].blocks, saved.blocks);
+    assert.deepEqual(f.persisted[1].pomodoro, saved.pomodoro);
     assert.equal(saved.blocks[0].updatedAt, '2026-09-10T10:05:01');
   });
 });

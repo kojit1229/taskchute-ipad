@@ -104,6 +104,9 @@ function check(name, cond, extra = "") {
 // v367: 「この画面で編集」(vision-edit-open/vision-edit-cancel/vision-edit-save)を
 //       意図的に追加(222→225)。
 const GOLDEN_CLICK_ACTIONS = [
+  "start-overlap-choice",
+  "remaining-shift", "remaining-tomorrow",
+  "today-add-interruption", "today-add-actual",
   // v382(束B3 20b、監督者の契約追随 2026-09-10): 日常操作の登録表(DAILY_ACTIONS→runDailyOperation)への配線が
   // click dispatcher の先頭に入り、"modal-save" の分岐(保存ボタンの二重発火防止)はその配線の内側へ移った。
   // if連鎖の字句順は先頭になるため、順序込みの一致検査に合わせてここへ移す(集合・件数は不変)。
@@ -120,7 +123,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "add-project", "delete-project", "add-task", "toggle-task", "toggle-criteria-request",
   "task-today", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
-  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump", "wbs-select-project",
+  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump", "wbs-detail-mode", "wbs-select-project",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
   "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
@@ -141,7 +144,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "start-pomodoro", "open-pomodoro-link", "pomodoro-link-select", "pause-pomodoro", "resume-pomodoro",
   "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
-  "incomplete-reason-chip", "incomplete-reason-skip",
+  "incomplete-reason-chip", "incomplete-reason-skip", "incomplete-reason-save",
   // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
   "km-gate-do-it", "km-gate-skip",
   "guided-access-dismiss",
@@ -312,7 +315,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v178: WBS/Project/Task CRUD(17。delete-blockの重複登録はv291孤児掃除で削除) ---
   "add-project", "delete-project", "add-task", "toggle-task", "delete-task",
   "toggle-project-collapse", "toggle-task-collapse",
-  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump", "wbs-select-project",
+  "wbs-view-menu-toggle", "wbs-row-menu-toggle", "wbs-search-input", "wbs-search-jump", "wbs-detail-mode", "wbs-select-project",
   "suspend-project", "resume-project", "suspend-task", "resume-task",
   "add-task-to-project", "add-subtask",
   "toggle-plan-owner", "move-plan-step", "add-plan-step-below",  // v195: 実行計画UI
@@ -355,6 +358,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "task-today",
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」+実行ヘッダ「＋Block」から開く。
   //     旧time-comb-fillを統合・置換) ---
+  "today-add-interruption", "today-add-actual", "remaining-shift", "remaining-tomorrow", "start-overlap-choice",
   "fill-gap-open", "fill-gap-place", "fill-gap-create", "fill-gap-prefill",  // v357: ルーティン雛形プリフィル
   "daily-gap-choose",  // v388 契約追随(監督者決定 2026-09-11、束B8 41b): 空き選択シート(daily-gap-sheet.js)の候補選択を app.js が直接登録(215→216、和集合 272→273)。design/CHANGELOG.md
   // --- v180: Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87でUI導線を
@@ -376,7 +380,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   "start-pomodoro", "open-pomodoro-link", "pomodoro-link-select", "pause-pomodoro", "resume-pomodoro",
   "stop-pomodoro", "interrupt-reason", "interrupt-reason-cancel",
   "complete-pomodoro", "declare-confirm", "declare-skip", "report-outcome", "report-skip",
-  "incomplete-reason-chip", "incomplete-reason-skip",
+  "incomplete-reason-chip", "incomplete-reason-skip", "incomplete-reason-save",
   // v296: 書く瞑想dailyCloseゲート(充放電ログ改善R1b、K裁定2026-08-29=案A)。
   "km-gate-do-it", "km-gate-skip",
   "guided-access-dismiss",

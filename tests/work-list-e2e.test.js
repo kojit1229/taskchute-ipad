@@ -137,6 +137,55 @@ const checked={workflows:0,layouts:0};
     checked.layouts++;
    }
   }
+  // F4-1: 横断検索は別Projectへ届き、IMEと既存の絞り込みを維持する。
+  const crossFixtureExtras=await page.evaluate(async()=>{
+   const s=(await import('/src/state/store.js')).state;
+   const extras=s.tasks.filter(t=>!/^task-\d+$/.test(t.id)).map(t=>({id:t.id,title:t.title,kind:t.kind}));
+   s.tasks=s.tasks.filter(t=>/^task-\d+$/.test(t.id));
+   s.projects.push({id:'cross-project',title:'横断Project',kind:'project',status:'active',category:'生活',deleted:false});
+   s.tasks.push({id:'cross-task',title:'横断対象Task',projectId:'cross-project',status:'active',kind:'task',deleted:false,dueDate:s.selectedDate,selfDueOff:true,order:0});
+   return extras;
+  });
+  console.log('F4-1 isolated cross-search fixture; preceding workflows added '+JSON.stringify(crossFixtureExtras));
+  await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').evaluate(el=>el.click());
+  const switchMode=mode=>page.locator(`[data-action="wbs-detail-mode"][data-mode="${mode}"]`);
+  assert.equal(await switchMode('project').getAttribute('aria-pressed'),'true','selected Project is the default');
+  const savedBefore=await page.evaluate(key=>localStorage.getItem(key),STATE_KEY);
+  const stateBefore=await page.evaluate(async()=>JSON.stringify((await import('/src/state/store.js')).state));
+  await switchMode('all').click();
+  const allList=page.locator('[data-work-list="wbs"]'),allQuery=allList.locator('[data-work-filter="query"]');
+  assert.equal(await allList.locator('[data-work-key^="task:"]').count(),301,'all Tasks span both Projects');
+  await allQuery.fill('対象');
+  await allQuery.evaluate(el=>{window.__crossInput=el;el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));el.value='横断対象';el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true}));});
+  assert.equal(await allList.locator('[data-work-key^="task:"]').count(),301,'cross search defers IME');
+  await allQuery.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));
+  assert.equal(await allList.locator('[data-work-key]').count(),1);
+  assert(await allQuery.evaluate(el=>el===window.__crossInput&&el===document.activeElement),'cross search preserves input and focus');
+  for(const [key,value] of [['status','open'],['project','cross-project'],['category','生活'],['due','today']]) {
+   await allList.locator(`[data-work-filter="${key}"]`).selectOption(value);
+   assert.equal(await allList.locator('[data-work-key="task:cross-task"]').count(),1,key+' filters cross-Project Task');
+  }
+  assert.equal(await page.evaluate(key=>localStorage.getItem(key),STATE_KEY),savedBefore,'switch/search never persist');
+  assert.equal(await page.evaluate(async()=>JSON.stringify((await import('/src/state/store.js')).state)),stateBefore,'switch/search never change state');
+  await allList.locator('[data-action="wbs-search-jump"][data-id="cross-task"]').click();
+  assert.equal(await switchMode('project').getAttribute('aria-pressed'),'true','jump restores selected mode');
+  await page.locator('[data-wbs-detail-id="cross-project"] [data-work-key="task:cross-task"]').waitFor();
+  console.log('PASS F4-1 cross-Project search, filters, IME, no persistence and tree jump');
+  // F4-1: 1列・2列とも44pxの切替があり、再読込で選択Project表示へ戻る。
+  for(const width of [390,768,1024,1280]) {
+   await page.setViewportSize({width,height:844});
+   for(const mode of ['all','project']) {
+    await switchMode(mode).click();
+    assert.equal(await switchMode(mode).getAttribute('aria-pressed'),'true');
+    for(const choice of ['all','project']) assert(await switchMode(choice).evaluate(el=>el.getBoundingClientRect().height>=44),'44px '+width);
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'WBS mode has no overflow '+width);
+   }
+  }
+  await switchMode('all').click();await page.reload();
+  await switchMode('project').waitFor();
+  assert.equal(await switchMode('project').getAttribute('aria-pressed'),'true','mode resets after reload');
+  assert.equal(await page.locator('[data-work-list="wbs"]').count(),0);
+  console.log('PASS F4-1 responsive 44px switch and transient default');
   assert.deepEqual(errors,[],'no pageerror');
   console.log(`PASS work-list E2E: ${checked.workflows} workflows, ${checked.layouts} layout screens; desktop emulation only`);
  } finally {
