@@ -39,6 +39,7 @@ import { dailyActuals, actualDurationMinutes } from "./src/core/daily-actuals.js
 import { DAILY_OPERATIONS, runDailyOperation, prepareDailyEnd, dailyFingerprint } from "./src/features/daily-operations.js";
 import { createDraftLeaveGuard } from "./src/features/draft-leave.js";
 import { createDailyDraftStore } from "./src/features/daily-draft.js";
+let _pendingStartChoice = null; // 表示中の開始候補だけ。stateには保存しない。
 import { buildBlockDetailDraft } from "./src/features/block-detail.js";
 import { createTowerJournal } from "./src/features/tower-journal.js";
 import { createDailyReading } from "./src/features/daily-reading.js";
@@ -1180,6 +1181,7 @@ registerActions({
   "today-add-actual": () => openTodayActualBlock(false),
   "remaining-shift": () => adjustRemainingBlocks(false),
   "remaining-tomorrow": () => adjustRemainingBlocks(true),
+  "start-overlap-choice": ({ target }) => chooseStartOverlap(target.dataset.choice),
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
@@ -12420,7 +12422,41 @@ function buildDeclareFeedback(entry) {
 
 // ---------- 宣言モーダル ----------
 
-function openDeclareModal(blockId, kind) {
+function offerStartOverlap(ctx, declareNext = false) {
+  if (ctx.parallel || !blockById(ctx.blockId) || blockById(ctx.blockId).actualStartAt) return false;
+  const previous = state.blocks.filter(b => b.id !== ctx.blockId && !b.deleted && b.actualStartAt && !b.actualEndAt)
+    .sort((a, b) => b.actualStartAt.localeCompare(a.actualStartAt))[0];
+  if (!previous) return false;
+  _pendingStartChoice = { ctx, previousId: previous.id, declareNext };
+  state.modal = { type: "startOverlap", id: ctx.blockId };
+  renderModal(`${modalHeaderHTML("前の予定が実行中です")}
+      <div class="field"><button class="btn primary" style="min-height:44px;width:100%" data-action="start-overlap-choice" data-choice="end">「${escapeHTML(previous.title)}」の実績を今の時刻で終える(おすすめ)</button></div>
+      <div class="field"><button class="btn" style="min-height:44px;width:100%" data-action="start-overlap-choice" data-choice="parallel">そのまま並行で始める</button></div>
+      <button class="btn ghost" style="min-height:44px" data-action="start-overlap-choice" data-choice="cancel">やめる</button>
+    </div></div>`);
+  return true;
+}
+
+function chooseStartOverlap(choice) {
+  const pending = _pendingStartChoice;
+  if (!pending || state.modal?.type !== "startOverlap") return;
+  if (choice === "cancel") { _pendingStartChoice = null; _pendingLifecycleCtx = null; closeModal(); return; }
+  if (choice !== "end" && choice !== "parallel") return;
+  if (choice === "end") {
+    const previous = blockById(pending.previousId);
+    if (previous && !previous.deleted && previous.actualStartAt && !previous.actualEndAt) {
+      const ended = runDailyOperation("daily-block-end", { kind: "block", id: previous.id,
+        values: { actualEndAt: nowDateTime(), completed: false } }, dailyOperationDeps);
+      if (!ended.ok) { showToast("前の予定の終了を保存できませんでした。開始していません"); return; }
+    }
+  }
+  _pendingStartChoice = null;
+  if (pending.declareNext) { openDeclareModal(pending.ctx.blockId, pending.ctx.kind, true); return; }
+  if (resumeLifecycleStart({ ...pending.ctx, parallel: true })?.ok) { _pendingLifecycleCtx = null; closeModal(); }
+}
+
+function openDeclareModal(blockId, kind, parallel = false) {
+  if (offerStartOverlap({ blockId, kind, parallel }, true)) return;
   const block = state.blocks.find((b) => b.id === blockId && !b.deleted);
   if (!block) {
     // Blockが見つからない(空id等)場合は宣言をスキップし従来どおり即実行
@@ -12428,7 +12464,7 @@ function openDeclareModal(blockId, kind) {
     return;
   }
   if (block.actualStartAt) return resumeLifecycleStart({ blockId, kind });
-  _pendingLifecycleCtx = { blockId, phase: "declare", kind };
+  _pendingLifecycleCtx = { blockId, phase: "declare", kind, parallel };
   state.modal = { type: "declare", id: blockId };
   renderModal(buildDeclareModal(block, estimateMinutesForBlock(block, kind)));
 }
@@ -12452,6 +12488,7 @@ function buildDeclareModal(block, estimateMin) {
 }
 
 function resumeLifecycleStart(ctx) {
+  if (offerStartOverlap(ctx)) return { ok: false, pending: true };
   if (!ctx.blockId && ctx.kind === "pomodoro") {
     startPomodoro(ctx.blockId);
     return { ok: true };
@@ -12469,7 +12506,7 @@ function confirmDeclare() {
   const note = modalRoot.querySelector("[data-declare-note]")?.value || "";
   const block = state.blocks.find((b) => b.id === ctx.blockId);
   const estimateMin = estimateMinutesForBlock(block, ctx.kind);
-  const result = logDeclaration(ctx.blockId, note, estimateMin, ctx.kind);
+  const result = resumeLifecycleStart({ ...ctx, declare: true, note, estimateMin });
   if (!result?.ok) return;
   _pendingLifecycleCtx = null;
   closeModal();

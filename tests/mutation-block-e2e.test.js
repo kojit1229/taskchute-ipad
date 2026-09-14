@@ -24,10 +24,10 @@ async function f5Browser(run) {
     browser = await chromium.launch(launchOptions());
     const context = await browser.newContext({ ...defaultContextOptions(), serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
-    await page.clock.install({ time: new Date(Date.UTC(2026, 8, 10, 1)) });
+    await page.clock.setFixedTime(new Date(Date.UTC(2026, 8, 10, 1)));
     await blockGithubApiByDefault(page);
     await page.route('**/app.js', route => route.fulfill({ contentType: 'text/javascript', body: source +
-      '\nwindow.__f5 = { getState: () => state, makeBlock, render, openIncompleteReasonModal, openBodyScanModal };' }));
+      '\nwindow.__f5 = { getState: () => state, makeBlock, render, openDeclareModal, startPomodoro, openIncompleteReasonModal, openBodyScanModal };' }));
     await page.goto(`http://localhost:${port}`);
     await page.waitForFunction(() => Boolean(window.__f5));
     await page.evaluate(key => {
@@ -180,6 +180,56 @@ async function f5RemainingFixture() {
   ].map(b => ({ ...f.ctx.makeBlock({ date: DATE, title: b.id }), ...b }));
   return f;
 }
+
+async function f5OverlapSetup(page, timer = false) {
+  await page.evaluate(timer => {
+    const api = window.__f5, s = api.getState();
+    s.blocks = [api.makeBlock({ date: '2026-09-10', title: '前の予定', actualStartAt: '2026-09-10T09:00:00' }),
+      api.makeBlock({ date: '2026-09-10', title: '次の予定', plannedStartAt: '2026-09-10T10:00:00' })];
+    s.declarations = []; s.pomodoro.running = false;
+    window.__f5Save.writes = 0;
+    if (timer) api.startPomodoro(s.blocks[1].id); else api.openDeclareModal(s.blocks[1].id, 'block');
+  }, timer);
+}
+
+test('F5-3 overlap offers end, parallel and cancel; linked timer uses the same choice', async () => {
+  await f5Browser(async page => {
+    for (const choice of ['end', 'parallel', 'cancel', 'timer']) {
+      await f5OverlapSetup(page, choice === 'timer');
+      assert.match(await page.locator('#modalRoot').innerText(), /前の予定/);
+      assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+      await page.locator(`[data-action="start-overlap-choice"][data-choice="${choice === 'timer' ? 'end' : choice}"]`).click();
+      if (choice === 'end' || choice === 'parallel') {
+        await page.locator('[data-declare-note]').fill('宣言は保持');
+        await page.locator('[data-action="declare-confirm"]').click();
+      }
+      const result = await page.evaluate(() => ({ blocks: window.__f5.getState().blocks,
+        declarations: window.__f5.getState().declarations, writes: window.__f5Save.writes, timer: window.__f5.getState().pomodoro }));
+      assert.equal(result.blocks[0].completed, false);
+      assert.equal(result.blocks[0].actualEndAt, ['end', 'timer'].includes(choice) ? NOW : '');
+      assert.equal(result.blocks[1].actualStartAt, choice === 'cancel' ? '' : NOW);
+      assert.equal(result.writes, choice === 'cancel' ? 0 : choice === 'parallel' ? 1 : 2);
+      if (choice === 'end' || choice === 'parallel') assert.equal(result.declarations[0].note, '宣言は保持');
+      if (choice === 'timer') assert.equal(result.timer.blockId, result.blocks[1].id);
+    }
+  });
+});
+
+test('F5-3 failed previous end restores both Blocks and does not start the next timer', async () => {
+  await f5Browser(async page => {
+    await f5OverlapSetup(page, true);
+    const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
+    await page.evaluate(() => { window.__f5Save.fail = true; });
+    await page.locator('[data-action="start-overlap-choice"][data-choice="end"]').click();
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 1);
+    assert.equal(await page.locator('[data-action="start-overlap-choice"][data-choice="end"]').count(), 1);
+    await page.evaluate(() => { window.__f5Save.fail = false; });
+    await page.locator('[data-action="start-overlap-choice"][data-choice="end"]').click();
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 3);
+    assert.equal(await page.evaluate(() => window.__f5.getState().blocks[1].actualStartAt), NOW);
+  });
+});
 
 test('F5-2 remaining plans shift together or carry together, excluding running, done and future Blocks', async () => {
   for (const tomorrow of [false, true]) {
@@ -571,7 +621,7 @@ test('factories keep unsaved timeline input out of state; persistence owns the s
 });
 
 async function lifecycleFixture() {
-  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'toggleBlock', 'autoCloseStaleRoutineRuns',
+  const f = await fixture(['setBlockTime', 'resumeLifecycleStart', 'offerStartOverlap', 'toggleBlock', 'autoCloseStaleRoutineRuns',
     'weekRange', 'candidateBlocksForWeek', 'commitmentItemForBlock', 'parseDate', 'addDays',
     'dateToISO', 'dateToLocalDateTime', 'localDateTimeToMs',
     'saveActualEntryFromModal', 'toggleTaskCompleteFromBlock', 'bulkApproveAsPlanned',
