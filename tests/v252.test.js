@@ -224,7 +224,10 @@ function check(name, cond, extra = "") {
     await seed(habitRule(), [block("pomodoro-block", "habit", "ポモドーロ完了")], {}, {
       pomodoro: {
         running: true, blockId: "pomodoro-block", startedAt: `${TODAY}T09:00:00`,
-        endsAt: `${TODAY}T09:50:00`, mode: "focus"
+        // fixV404g(監督者追随 2026-09-14): v404(F2-2/M-07)で満了した focus は tick が実績終了を入れて休憩へ移る
+        // (blockId が外れる)。固定時計 10:00 より前に満了する seed だと complete-pomodoro の前に休憩へ移ることが
+        // あり結果が揺れるため、進行中(10:25 満了)の seed にする(検査の性質=完了で当日ログ、は同じ)。
+        endsAt: `${TODAY}T10:25:00`, mode: "focus"
       }
     });
     await clickSyntheticAction("complete-pomodoro");

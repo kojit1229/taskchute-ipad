@@ -27,7 +27,9 @@ const { chromium, launchOptions, defaultContextOptions, startServer, randomPort,
     await page.reload();
     const actualButton = page.locator('.exec-row [data-action="complete-block-with-actual"][data-id="actual"]');
     await actualButton.waitFor();
-    const size = await actualButton.boundingBox();
+    // fixV404g: 起動直後の再描画で locator の要素が差し替わると boundingBox() が null を返す(不安定)。
+    // evaluate は都度引き直すので同じ寸法を安定して測れる(断言は同じ)。
+    const size = await actualButton.evaluate(el => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height }; });
     assert(size.width >= 44 && size.height >= 44, "実績付きボタンは44px以上");
     assert.equal(await actualButton.textContent(), "実績付きで完了");
     assert(await actualButton.evaluate(el => el.previousElementSibling.dataset.action === "toggle-block"));
