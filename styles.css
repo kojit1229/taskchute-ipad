@@ -6089,6 +6089,11 @@ details.settings-row > .fold-summary.settings-row-summary {
 }
 
 /* F6-3: the table, routine/body records and journal share one desktop row. */
+@media (max-width: 1279px) {
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { grid-template-columns: minmax(0, 1fr); }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-edit-row { grid-template-columns: 24px minmax(0, 1fr) 44px 44px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-gate-edit-row > strong { grid-column: 2 / -1; }
+}
 #app[data-view="today"] .today-tower[data-daily-view="today"] { gap: 8px; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-sections button { padding: 4px; min-width: 0; background: var(--tower-panel); color: var(--tower-cyan); border: 1px solid var(--tower-line); border-radius: 4px; }
@@ -6113,7 +6118,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-detail .daily-plan-row { display: block; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records > details > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 @media (min-width: 1280px) {
-  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.4fr); align-items: stretch; gap: 8px; }
+  #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-main { grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr) minmax(0, 1.4fr); align-items: stretch; gap: 8px; }
   #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-today-records { align-content: start; gap: 8px; }
   #app[data-view="today"] .today-tower[data-daily-view="today"] .tower-journal-free { height: 23rem; }
 }
@@ -6130,7 +6135,7 @@ details.settings-row > .fold-summary.settings-row-summary {
   --muted: var(--tower-muted); --faint: var(--tower-muted); --line: var(--tower-line);
 }
 #app[data-view="today"] .today-tower[data-daily-view="today"]::before { content: none; }
-#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-glass-panel, .tower-mit, .tower-panel-box, .tower-runway, .tower-gates, .today-panel, #dailyTodayPlans) {
+#app[data-view="today"] .today-tower[data-daily-view="today"] :is(.tower-glass-panel, .tower-mit, .tower-panel-box, .tower-runway, .tower-gates, .tower-arrivals, .today-panel, #dailyTodayPlans) {
   background: var(--tower-panel); border-color: var(--tower-line); box-shadow: none;
 }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .now-hero::before { content: none; }

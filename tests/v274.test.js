@@ -11,6 +11,17 @@ const BLUR_KEY = "taskchute-journal-glass-blur-off";
 const stylesSource = fs.readFileSync(path.join(ROOT, "styles.css"), "utf8");
 const towerSource = fs.readFileSync(path.join(ROOT, "src", "features", "today-tower.js"), "utf8");
 const swSource = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+async function tokenColor(page, selector, token) {
+  return page.locator(selector).first().evaluate((root, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(root).getPropertyValue(name).trim();
+    root.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 let failures = 0;
 
 function check(name, condition, extra = "") {
@@ -32,15 +43,19 @@ function check(name, condition, extra = "") {
   };
   const glassRoot = exactRule(['#app[data-view="today"] .today-tower', '#app[data-view="twelveweek"] .today-tower']);
   const expectedTokens = {
-    "--tower-bg": "#0b0d1c", "--tower-panel": "rgba(255, 255, 255, .07)",
-    "--tower-line": "rgba(255, 255, 255, .14)", "--tower-text": "#eef0ff",
-    "--tower-amber": "#f0c674", "--tower-green": "#6ee7c8",
-    "--tower-cyan": "#8ab6ff", "--tower-purple": "#c4b5fd"
+    "--tower-bg": "#01132a", "--tower-panel": "#081c37",
+    "--tower-line": "#0f2a4d", "--tower-text": "#ffffff",
+    "--tower-amber": "#f4c156", "--tower-green": "#289983",
+    "--tower-cyan": "#4ec6c0", "--tower-purple": "#a78bfa"
   };
-  check("Today専用GLASSトークン8件は正本値", Object.entries(expectedTokens)
-    .every(([name, value]) => glassRoot.includes(`${name}: ${value};`)), glassRoot);
-  check("GLASS上書きに--tower-redを追加せず既存#ff6d7fを1件だけ維持",
-    !glassRoot.includes("--tower-red") && (stylesSource.match(/--tower-red:\s*#ff6d7f;/g) || []).length === 1);
+  const canonicalRoot = exactRule([".today-tower", ".tower-skin"]);
+  check("GLASSは共通8トークンを再定義せず正本1箇所を参照", Object.entries(expectedTokens)
+    .every(([name, value]) => !glassRoot.includes(`${name}:`)
+      && canonicalRoot.includes(`${name}: ${value};`)
+      && cssRules.filter((rule) => rule.selectors.some((selector) => [".today-tower", ".tower-skin"].includes(selector))
+        && rule.body.includes(`${name}:`)).length === 1), canonicalRoot);
+  check("GLASS上書きに--tower-redを追加せず既存#f76687を1件だけ維持",
+    !glassRoot.includes("--tower-red") && (stylesSource.match(/--tower-red:\s*#f76687;/g) || []).length === 1);
   check("オーロラはToday本体内・全面・非操作で3灯", /\.today-tower::before\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*0;[^}]*inset:\s*0;[\s\S]*pointer-events:\s*none;/.test(stylesSource)
     && ((stylesSource.match(/radial-gradient\(/g) || []).length >= 3));
   const todayPanelNames = ["tower-glass-panel", "tower-mit", "tower-condition", "today-focus-bar",
@@ -143,18 +158,18 @@ function check(name, condition, extra = "") {
       legacyArrivals.remove();
       return result;
     });
+    const panelColor = await tokenColor(page, ".today-tower", "--tower-panel");
+    const lineColor = await tokenColor(page, ".today-tower", "--tower-line");
     const panelsOk = visual.panels.every((panel) => panel.radius === "18px"
-      && panel.background === "rgba(255, 255, 255, 0.07)"
+      && panel.background === panelColor
       && panel.blur === "blur(16px)" && (!visual.webkitBlurSupported || panel.webkitBlur === "blur(16px)")
-      && /rgba\(255,\s*255,\s*255,\s*(?:0?\.14)\)/.test(panel.line)
+      && panel.line === expectedTokens["--tower-line"]
       && panel.borderWidth === "1px" && panel.borderStyle === "solid"
-      && panel.borderColor === "rgba(255, 255, 255, 0.14)"
-      && panel.boxShadow.includes("rgba(0, 0, 0, 0.35)")
-      && panel.boxShadow.includes("rgba(255, 255, 255, 0.12)")
-      && panel.boxShadow.includes("inset") && panel.zIndex === "1");
+      && panel.borderColor === lineColor
+      && panel.boxShadow === "none" && panel.zIndex === "1");
     check("未設定は旧8種CSSと新一覧実DOMの9種にGLASS実効値・両blur・枠・影・z-order", visual.blurAttr === null
-      && visual.tokens.join("|") === "#0b0d1c|rgba(255, 255, 255, .07)|rgba(255, 255, 255, .14)|#eef0ff|#f0c674|#6ee7c8|#8ab6ff|#c4b5fd"
-      && visual.font.includes("Segoe UI") && visual.isolation === "isolate" && visual.panels.length === 9 && panelsOk,
+      && visual.tokens.join("|") === Object.values(expectedTokens).join("|")
+      && visual.font.includes("system-ui") && visual.isolation === "isolate" && visual.panels.length === 9 && panelsOk,
       JSON.stringify(visual));
     check("オーロラはToday本体の包含矩形に閉じサイドバーへ流出しない", visual.rootPosition === "relative"
       && visual.auroraPosition === "absolute" && visual.auroraZ === "0" && visual.auroraInset === "0px"
@@ -189,8 +204,8 @@ function check(name, condition, extra = "") {
       webkitBlur: getComputedStyle(panel).webkitBackdropFilter,
       background: getComputedStyle(panel).backgroundColor
     }));
-    check("フラグ1はぼかしだけnoneへ縮退し半透明背景を維持", off.blur === "none"
-      && (!off.webkitBlur || off.webkitBlur === "none") && off.background === "rgba(255, 255, 255, 0.07)", JSON.stringify(off));
+    check("フラグ1はぼかしだけnoneへ縮退し不透明パネル背景を維持", off.blur === "none"
+      && (!off.webkitBlur || off.webkitBlur === "none") && off.background === await tokenColor(page, ".tower-runway", "--tower-panel"), JSON.stringify(off));
     const offStorage = await page.evaluate((blurKey) => {
       const events = window.__v274StorageEvents;
       const blurRead = events.findIndex((event) => event.operation === "get" && event.key === blurKey);
@@ -227,7 +242,7 @@ function check(name, condition, extra = "") {
       }));
     }
     check("計器盤再利用系と全.tower-skin系代表へGLASSを波及させない", scopeResults.every((result) =>
-      result.bg === "#050a14" && result.before === "none" && result.blurAttr === null && result.panelFound
+      result.bg === expectedTokens["--tower-bg"] && result.before === "none" && result.blurAttr === null && result.panelFound
       && result.blur !== "blur(16px)" && result.webkitBlur !== "blur(16px)"
       && result.panelBackground !== "rgba(255, 255, 255, 0.07)"), JSON.stringify(scopeResults));
   } catch (error) {

@@ -73,13 +73,17 @@ function check(name, condition, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, cycle: CYCLE, track, observedAt, value, scoredState: scored });
     await page.reload();
-    await page.waitForSelector('.life-band [data-action="twy-score-toggle"]');
+    await page.waitForSelector('.life-band [data-action="twy-score-toggle"]', { state: "attached" });
+    await page.locator('.life-cycle-details summary').click();
     await page.evaluate(() => { window.__v268SaveCalls = 0; });
   }
 
   async function readBoth(track) {
     const signal = page.locator('.life-band [data-action="twy-score-toggle"]');
     await signal.click();
+    if (!await page.locator(".life-cycle-details").evaluate((details) => details.open)) {
+      await page.locator(".life-cycle-details summary").click();
+    }
     const countdown = page.locator(".life-band .twy-track-line");
     await countdown.waitFor();
     check(`${track.id}: COUNTDOWNの実トラックは1行で判定語を表示しない`,

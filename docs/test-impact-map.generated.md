@@ -499,7 +499,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v264.test.js | 151 |
 | missing-timezone | 1 | tests/v266.test.js | 104 |
 | fixed-date | 5 | tests/v267.test.js | 111, 114, 118, 281, 285 |
-| missing-timezone | 1 | tests/v274.test.js | 66 |
+| missing-timezone | 1 | tests/v274.test.js | 81 |
 | missing-timezone | 1 | tests/v275.test.js | 64 |
 | fixed-date | 3 | tests/v276.test.js | 77, 201, 276 |
 | missing-timezone | 1 | tests/v277.test.js | 18 |
@@ -529,7 +529,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v307.test.js | 191 |
 | missing-timezone | 2 | tests/v308.test.js | 46, 163 |
 | missing-timezone | 1 | tests/v309.test.js | 60 |
-| missing-timezone | 1 | tests/v310.test.js | 30 |
+| missing-timezone | 1 | tests/v310.test.js | 41 |
 | missing-timezone | 1 | tests/v311.test.js | 33 |
 | missing-timezone | 1 | tests/v312.test.js | 32 |
 | missing-timezone | 1 | tests/v313.test.js | 17 |

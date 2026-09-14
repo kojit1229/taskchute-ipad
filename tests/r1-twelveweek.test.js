@@ -252,7 +252,9 @@ async function seed(page, values) {
         panelBlur: panelCs ? (panelCs.backdropFilter || panelCs.webkitBackdropFilter || "") : ""
       };
     });
-    check("--tower-bgがS2 GLASSの値(#0b0d1c)になっている", glassVars.towerBg === "#0b0d1c", glassVars.towerBg);
+    const canonicalBg = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8")
+      .match(/\.today-tower,\s*\.tower-skin\s*\{[^}]*--tower-bg:\s*([^;]+);/)[1].trim();
+    check("--tower-bgが共通TOWER正本値と一致", glassVars.towerBg === canonicalBg, glassVars.towerBg);
     check("VISIONパネルにGLASSの角丸(18px)が効いている", glassVars.panelRadius === "18px", glassVars.panelRadius);
     check("VISIONパネルにbackdrop-filter(blur)が効いている", /blur/.test(glassVars.panelBlur), glassVars.panelBlur);
 

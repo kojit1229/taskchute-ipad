@@ -7,6 +7,17 @@ const {
 const PORT = randomPort();
 const TODAY = "2026-09-02";
 const FIXED_NOW = new Date(2026, 8, 2, 10, 0, 0, 0);
+async function tokenColor(page, selector, token) {
+  return page.locator(selector).first().evaluate((root, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(root).getPropertyValue(name).trim();
+    root.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 let failures = 0;
 function check(name, condition, extra = "") {
   if (condition) console.log(`  ✅ ${name}`);
@@ -77,8 +88,9 @@ function task(id, projectId, title, extra = {}) {
     check("完了行は取消線と完了表示で今日へ無し", await doneRow.locator(".wbs-task-title").evaluate((el) => getComputedStyle(el).textDecorationLine.includes("line-through"))
       && await doneRow.locator(":scope > div > .wbs-task-done").textContent() === "完了"
       && await doneRow.locator('[data-action="task-today"]').count() === 0);
-    check("期限超過はアンバーで赤系class無し", await activeRow.locator(".wbs-overdue").evaluate((el) => getComputedStyle(el).color === "rgb(242, 184, 75)"
-      && !/red|danger|error/i.test(el.className)));
+    const amberColor = await tokenColor(page, ".wbs-tower", "--tower-amber");
+    check("期限超過はアンバーで赤系class無し", await activeRow.locator(".wbs-overdue").evaluate((el, amber) => getComputedStyle(el).color === amber
+      && !/red|danger|error/i.test(el.className), amberColor));
     check("状態badge(active/done/未着手)を描画しない", await page.locator(".wbs-status-badge").count() === 0);
     await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
     const lowOpacityText = await row("t-suspended").evaluate((root) => [...root.querySelectorAll("*")]

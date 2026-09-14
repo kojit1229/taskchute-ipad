@@ -153,10 +153,12 @@ configureRecurrence({ parseDate: s => { const [y, m, d] = s.split('-').map(Numbe
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     assert.equal(await page.locator('.tower-gate-edit-row[data-rule-id="affirm"]').count(), 1);
     assert.equal(await page.locator('.tower-gate-edit-row[data-rule-id="board"]').count(), 1);
+    await page.locator('[data-action="today-list-tab"][data-tab="actuals"]').click();
     await page.locator('[data-action="edit-block"][data-id="rec_affirm_2026-09-12"]').first().click();
     await page.locator('[data-modal-field="comment"]').fill('Fixture explicit comment');
     await page.locator('[data-action="modal-save"]').click();
     await page.waitForFunction(async () => (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'rec_affirm_2026-09-12')?.source === 'daily-reading-manual');
+    await page.locator('[data-action="today-list-tab"][data-tab="actuals"]').click();
     await page.locator('[data-action="edit-block"][data-id="rec_affirm_2026-09-12"]').first().click();
     await page.locator('[data-action="modal-delete"]').click();
     await page.waitForFunction(async () => (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'rec_affirm_2026-09-12')?.deleted);

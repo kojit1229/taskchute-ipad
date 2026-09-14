@@ -7,6 +7,17 @@ const {
 const PORT = randomPort();
 const TODAY = "2026-09-02";
 const FIXED_NOW = new Date(2026, 8, 2, 10, 0, 0, 0);
+async function tokenColor(page, selector, token) {
+  return page.locator(selector).first().evaluate((root, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(root).getPropertyValue(name).trim();
+    root.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
 let failures = 0;
 function check(name, condition, extra = "") {
   if (condition) console.log(`  ✅ ${name}`);
@@ -135,8 +146,8 @@ function task(id, projectId, title, extra = {}) {
       return { bg: getComputedStyle(root).backgroundColor, noOverflow: doc.scrollWidth <= innerWidth + 1, buttons };
     });
     const overdueColor = await page.locator(".wbs-projects .wbs-overdue").first().evaluate((el) => getComputedStyle(el).color);
-    check("390pxでTOWER背景・アンバー期限超過・横スクロールなし", mobile.bg === "rgb(5, 10, 20)"
-      && overdueColor === "rgb(242, 184, 75)" && mobile.noOverflow);
+    check("390pxでTOWER背景・アンバー期限超過・横スクロールなし", mobile.bg === await tokenColor(page, ".wbs-tower", "--tower-bg")
+      && overdueColor === await tokenColor(page, ".wbs-tower", "--tower-amber") && mobile.noOverflow);
     check("常時ボタンは44px以上", mobile.buttons.every((height) => height >= 44), JSON.stringify(mobile.buttons));
     const accessibilityViolations = await page.locator(".wbs-tower").evaluate((root) => {
       const visibleTextElements = [root, ...root.querySelectorAll("*")].filter((element) => {
@@ -166,8 +177,8 @@ function task(id, projectId, title, extra = {}) {
       track: getComputedStyle(document.querySelector(".twy-row")).backgroundColor
     }));
     check("選択Project・条件ボタン・12WYトラックはTOWERトークン配色",
-      towerTokens.criteria === "rgb(85, 217, 232)" && towerTokens.searchKind === "rgb(242, 184, 75)"
-        && towerTokens.track === "rgb(5, 10, 20)", JSON.stringify(towerTokens));
+      towerTokens.criteria === await tokenColor(page, ".wbs-tower", "--tower-cyan") && towerTokens.searchKind === await tokenColor(page, ".wbs-tower", "--tower-amber")
+        && towerTokens.track === await tokenColor(page, ".wbs-tower", "--tower-bg"), JSON.stringify(towerTokens));
     check("週の確定操作は選択12WY Project詳細内", await page.locator('[data-wbs-detail-id="p-cycle"] [data-action="twy-open-commit"]').count() === 1
       && await page.locator(".wbs-toolbar [data-action='twy-open-commit']").count() === 0);
 
