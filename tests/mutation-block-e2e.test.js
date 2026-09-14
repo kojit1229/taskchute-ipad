@@ -201,6 +201,33 @@ async function f5ReasonsSetup(page, mode = 'dailyClose') {
   }, mode);
 }
 
+test('F5-5 390px quick action is 44px directly below the clock; desktop hides it and running uses end', async () => {
+  await f5Browser(async page => {
+    await page.evaluate(() => {
+      const api = window.__f5, s = api.getState();
+      s.blocks = [api.makeBlock({ date: '2026-09-10', title: '遅い予定', plannedStartAt: '2026-09-10T11:00:00' }),
+        api.makeBlock({ date: '2026-09-10', title: '先の予定', plannedStartAt: '2026-09-10T09:00:00' })];
+      api.render();
+    });
+    const button = page.locator('.daily-today-quick');
+    assert.match(await button.textContent(), /次: 先の予定.*▶ 開始/);
+    const box = await button.boundingBox(), clock = await page.locator('.daily-today-clock').boundingBox();
+    assert.equal(box.height, 44);
+    assert.ok(box.y >= clock.y + clock.height && box.y + box.height < 844);
+    assert.equal(await button.evaluate(el => el.previousElementSibling.classList.contains('daily-today-clock')), true);
+    await button.click();
+    assert.ok(await page.locator('[data-action="declare-skip"]').isVisible());
+    await page.locator('[data-action="declare-skip"]').click();
+    assert.match(await button.textContent(), /いま: 先の予定.*■ 終了/);
+    await button.click();
+    assert.ok(await page.locator('[data-action="report-skip"]').isVisible());
+    await page.setViewportSize({ width: 768, height: 844 });
+    assert.equal(await button.isVisible(), false);
+    await page.evaluate(() => { const api = window.__f5; api.getState().blocks = []; api.render(); });
+    assert.equal(await button.count(), 0);
+  });
+});
+
 test('F5-4 daily close lists all Blocks, saves selected rows once and leaves triage sequential', async () => {
   await f5Browser(async page => {
     await f5ReasonsSetup(page);

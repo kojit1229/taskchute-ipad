@@ -6182,6 +6182,12 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-view="today"] .today-tower[data-daily-view="today"] .daily-table-row > [role="cell"]:nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* F2-1: 予定完了と実績登録を隣接した44pxの操作に分ける。 */
+.daily-today-quick { display: none; }
+@media (max-width: 767px) {
+  .daily-today-quick { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: 44px; min-height: 44px; padding: 0 12px; border: 1px solid var(--tower-selected-line); background: var(--tower-panel); color: var(--tower-text); }
+  .daily-today-quick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .daily-today-quick b { flex-shrink: 0; }
+}
 .exec-row-now, .exec-row-upcoming { grid-template-columns: auto minmax(0, 1fr) auto; }
 .exec-completion-actions { display: flex; align-items: center; gap: 4px; }
 .exec-completion-actions .exec-actual-complete { min-width: 44px; min-height: 44px; white-space: normal; }
