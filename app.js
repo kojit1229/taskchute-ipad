@@ -12109,6 +12109,9 @@ function buildBodyScanModal() {
   const ctx = _pendingBodyScanCtx;
   if (!ctx) return "";
   const showParts = ctx.fatigue >= 3;
+  const previous = (state.bodyScans || []).filter(scan => !scan.deleted && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(scan.dateTime || "")
+    && scan.dateTime.slice(0, 10) < todayISO()).sort((a, b) => b.dateTime.localeCompare(a.dateTime))[0];
+  const previousHTML = previous ? `<p class="body-scan-previous" style="font-size:12px;white-space:nowrap;overflow-x:auto">前回 ${Number(previous.dateTime.slice(5, 7))}/${Number(previous.dateTime.slice(8, 10))} ${escapeHTML(previous.dateTime.slice(11, 16))}: 疲労${escapeHTML(previous.fatigue ?? "—")} 回復${escapeHTML(previous.recovery ?? "—")} 部位: ${escapeHTML((previous.parts || []).join("・") || "なし")}</p>` : "";
   return `
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -12116,6 +12119,7 @@ function buildBodyScanModal() {
         <button class="modal-close" data-action="body-scan-discard" aria-label="閉じる">×</button>
       </div>
       <div class="modal-body">
+        ${previousHTML}
         <div class="field">
           <label class="field-label" style="color:var(--red)">🏋️ 身体の疲労</label>
           ${bodyScanScaleRow("body-scan-fatigue", ctx.fatigue, ["0=疲労なし", "5=かなり疲れた"])}

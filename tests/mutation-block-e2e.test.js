@@ -201,6 +201,33 @@ async function f5ReasonsSetup(page, mode = 'dailyClose') {
   }, mode);
 }
 
+test('F5-7 body scan displays the latest earlier-day record without changing inputs or saved scans', async () => {
+  await f5Browser(async page => {
+    const before = await page.evaluate(() => {
+      const api = window.__f5, s = api.getState();
+      s.bodyScans = [
+        { id: 'old', dateTime: '2026-09-08T22:00:00', fatigue: 1, recovery: 1, parts: [] },
+        { id: 'today', dateTime: '2026-09-10T09:00:00', fatigue: 5, recovery: 5, parts: ['頭'] },
+        { id: 'latest', dateTime: '2026-09-09T21:10:00', fatigue: 3, recovery: 2, parts: ['肩', '目'] },
+        { id: 'early', dateTime: '2026-09-09T20:00:00', fatigue: 2, recovery: 1, parts: [] },
+        { id: 'deleted', dateTime: '2026-09-09T23:00:00', deleted: true, fatigue: 5, recovery: 5, parts: [] }
+      ];
+      api.openBodyScanModal(); return JSON.stringify(s.bodyScans);
+    });
+    assert.equal(await page.locator('.body-scan-previous').innerText(), '前回 9/9 21:10: 疲労3 回復2 部位: 肩・目');
+    assert.equal(await page.locator('.body-scan-previous input').count(), 0);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState().bodyScans)), before);
+    assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
+    await page.locator('[data-action="body-scan-fatigue"]').first().click();
+    assert.ok(await page.locator('.body-scan-previous').isVisible());
+    await page.evaluate(() => {
+      const api = window.__f5; api.getState().bodyScans = api.getState().bodyScans.filter(s => s.id === 'today');
+      api.openBodyScanModal();
+    });
+    assert.equal(await page.locator('.body-scan-previous').count(), 0);
+  });
+});
+
 test('F5-6 WIP shows one count line by default and disclosure never saves display state', async () => {
   await f5Browser(async page => {
     await page.evaluate(() => {
