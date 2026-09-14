@@ -2144,14 +2144,16 @@ function saveGlobalInput(target, kind, date) {
       if (kind === "journal") { feedbackUiController?.inputChanged(date); feedbackReportController?.inputChanged(date); }
     });
   }, { kinds: kind === "condition" ? ["condition"] : kind === "vision" ? ["settings"] : ["journals", "journalMeta"] });
-  if (!result.ok) { target.value = ["condition", "vision"].includes(kind) ? beforeValue : input.value; target.setSelectionRange(input.start, input.end); }
+  if (!result.ok) { target.value = input.value; target.setSelectionRange(input.start, input.end); }
   return result.ok;
 }
 
 function restoreGlobalInputs() {
   try { globalInputDrafts = { ...JSON.parse(sessionStorage.getItem("taskchute-global-inputs") || "{}"), ...globalInputDrafts }; } catch { /* Retain memory on storage failure. */ }
-  for (const target of document.querySelectorAll("[data-journal-date], [data-ideal-date]")) {
-    const kind = target.dataset.journalDate ? "journal" : "ideal", date = target.dataset.journalDate || target.dataset.idealDate;
+  for (const target of document.querySelectorAll("[data-journal-date], [data-ideal-date], [data-condition-note-date], [data-vision-field]")) {
+    const kind = target.dataset.journalDate ? "journal" : target.dataset.idealDate ? "ideal"
+      : target.dataset.conditionNoteDate ? "condition" : "vision";
+    const date = target.dataset.journalDate || target.dataset.idealDate || target.dataset.conditionNoteDate || target.dataset.visionField;
     const input = globalInputDrafts[`${kind}:${date}`];
     if (!input || typeof input.value !== "string") continue;
     target.value = input.value;
