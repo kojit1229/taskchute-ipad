@@ -227,7 +227,7 @@ function trackDefinitionChanged(existing, kind, fields = {}) {
 
 export {
   PACE_TOLERANCE_DAYS, STALE_DAYS, dateParts, daysBetween, isProjectInCurrentCycle, numericGoalReached,
-  weeklyScore, weeklyCommittedItems, latestMeasurement,
+  dedupeById, weeklyScore, weeklyCommittedItems, latestMeasurement,
   paceNumeric, paceMilestone, normalizeMilestoneProgress, milestoneProgressRatio,
   trackStatus, forwardTracksForWeek, selectTrackFooter, activeTrackForProject,
   validateTrackDraft, trackDefinitionChanged

@@ -196,5 +196,5 @@ function cycleWeeksSummary(weeklyCommitments, settings, cycleStartDate, todayISO
 }
 
 export {
-  normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary, weekStartOfISO
+  normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary, weekStartOfISO, addDaysISO
 };
