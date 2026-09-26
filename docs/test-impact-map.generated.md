@@ -114,7 +114,7 @@
 | r1-twelveweek.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 82 | 0 | 0 |
 | r2-twelveweek-plan.test.js | e2e | full | planning-execution, ui-responsive | 79 | 0 | 0 |
 | r3-delivery-e2e.test.js | e2e | full | ui-responsive, security-offline | 6 | 0 | 0 |
-| r3-twelveweek-week.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 65 | 0 | 0 |
+| r3-twelveweek-week.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 66 | 0 | 0 |
 | recurrence-core.test.js | node | full | sync-storage, planning-execution | 87 | 0 | 0 |
 | release-gate.test.js | node | full | legacy-crosscutting | 31 | 0 | 0 |
 | release-record.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |

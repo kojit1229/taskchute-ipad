@@ -47,9 +47,10 @@
   ],
   "verification": [
     "束 W: Claude 独立検証 32 PASS(受入 1〜10、9スイート・code:index・manifest 0、画面実測 19 項目)。版不一致は監督者裁定で解消(reviews/32-supervisor-decision.md)",
-    "fixW2(low 5件+info 1件、21行): 監督者実走 7〜10 スイート 0。2周目の差分確認は orders/34-recheck-W.md(Claude fresh)",
+    "fixW2(low 5件+info 1件、21行): 2周目 Claude 34 = FAIL(med 1件: 帯の小文字行が nowrap を継承し「免1 落1」で はみ出す)→ fixW3(styles.css 1行: small を折り返し可に。r3 に同日「免1 落1」の fixture と small のはみ出し検査を追加。監督者)→ 検証者の実測スクリプト measure-W2.cjs 再実行 全項目 OK",
     "release-gate --final は監督者が実走(reports/W/release/)",
-    "release-gate --final 1回目(07:1x): remaining-screen-labels の旧期待(準備中2件)だけ失敗 → 期待を新契約へ更新(監督者、テストのみ)→ 2回目を実走"
+    "release-gate --final 1回目(07:1x): remaining-screen-labels の旧期待(準備中2件)だけ失敗 → 期待を新契約へ更新(監督者、テストのみ)→ 2回目を実走",
+    "release-gate --final 3回目(fixW3 後): (記入待ち)"
   ],
   "knownLimitations": [
     "「振り返り」チップは準備中のまま(v409 予定)",
