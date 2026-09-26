@@ -1,23 +1,24 @@
 // src/features/twelve-week.js — 12WYタブ R1a: タブ骨格+CYCLE面のVISION帯/GOALS(design.md §2.1・order-r1-cycle.md)。
 // fund.js/topband.jsと同じ依存注入型feature(app.js側の未export関数はconfigureTwelveWeek(deps)で受け取る)。
 import { state } from "../state/store.js";
-import { activeTrackForProject, dateParts, daysBetween } from "../core/track.js";
+import { activeTrackForProject, dateParts, daysBetween, dedupeById } from "../core/track.js";
 import { taskWeekTriple, cycleWeeksSummary, taskPlanGrid, remainingTarget, normalizeTwyPlan, weekStartOfISO } from "../core/plan.js";
 import { registerActions } from "../ui/actions.js";
+import { weekOutlook, weekDayStrip, todayTwyBlocks, missedTwyItems, projectWeekScore, taskDayChips } from "../core/week.js";
 
-let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render;
+let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek;
 
 function configureTwelveWeek(deps) {
-  ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render } = deps);
+  ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek } = deps);
 }
 
-// 上部チップ(CYCLE|PLAN|WEEK|REVIEW)。R2でPLANを有効化(design §2.1b)。WEEK/REVIEWは準備中のまま。
+// 上部チップ(CYCLE|PLAN|WEEK|REVIEW)。今週面まで有効化。振り返りは準備中。
 // 面切替はstateへ保存しない非永続の表示状態(design §A。_wbsSelectedProjectIdと同じ方式)。
 const TWY_FACES = [
   { id: "cycle", label: "サイクル", note: "俯瞰" }, { id: "plan", label: "計画", note: "計画" },
-  { id: "week", label: "今週", note: "準備中" }, { id: "review", label: "振り返り", note: "準備中" }
+  { id: "week", label: "今週", note: "毎朝" }, { id: "review", label: "振り返り", note: "準備中" }
 ];
-const TWY_ENABLED_FACES = new Set(["cycle", "plan"]);
+const TWY_ENABLED_FACES = new Set(["cycle", "plan", "week"]);
 let _twyActiveFace = "cycle";
 
 function twyFaceChipsHTML(activeFace) {
@@ -99,11 +100,14 @@ function twyCommitLinkHTML() {
   return `<button type="button" class="btn ghost twy-commit-open" data-action="twy-open-commit">今週を確定 ›</button>`;
 }
 
+function twyGoalWarningHTML(count) {
+  return count > 3 ? `<p class="twy-goal-warn">3件を超えています(全${count}件中3件を表示)</p>` : "";
+}
+
 function twyGoalsPanelHTML(cycleStart, weekStart, inReview) {
   const eligible = twyGoalCandidates(cycleStart);
   const shown = eligible.slice(0, 3);
-  const warn = eligible.length > 3
-    ? `<p class="twy-goal-warn">3件を超えています(全${eligible.length}件中3件を表示)</p>` : "";
+  const warn = twyGoalWarningHTML(eligible.length);
   const body = shown.length
     ? shown.map((project, index) => twyGoalCardHTML(project, index, weekStart)).join("")
     : `<p class="twy-goal-empty">対象の12週のプロジェクトがありません</p>`;
@@ -194,7 +198,7 @@ function renderTwelveWeek() {
   const face = TWY_ENABLED_FACES.has(_twyActiveFace) ? _twyActiveFace : "cycle";
   const bodyHTML = face === "plan"
     ? twyPlanFaceHTML(cycleStart, summary)
-    : twyCycleFaceHTML(cycleStart, weekStart, inReview, summary);
+    : face === "week" ? twyWeekFaceHTML(cycleStart, weekStart) : twyCycleFaceHTML(cycleStart, weekStart, inReview, summary);
   return `<div class="today-tower twy-tower" data-twy-face="${face}">
     ${renderHeader(headline, "12週計画")}
     ${twyFaceChipsHTML(face)}
@@ -314,6 +318,94 @@ function twyPlanFaceHTML(cycleStart, summary) {
       : `<p class="twy-plan-guide">対象の12週のプロジェクトがありません</p>`}
     </section>
     ${projects.length ? twyPlanNoneListHTML(projects) : ""}`;
+}
+
+// W2: stateを書き換えず、既存の確定シート・開始・作業一覧へつなぐ。
+function twyWeekProjectTag(projectId) {
+  const project = (state.projects || []).find((entry) => entry.id === projectId);
+  return `<span class="twy-proj-tag">${escapeHTML(project?.title || "")}</span>`;
+}
+
+function twyWeekScoreHTML(weekStart, today, records, target) {
+  const score = weekOutlook(records, weekStart, today, target);
+  const meta = dedupeById(records).find((record) => record.recordType === "week" && record.weekStart === weekStart && !record.deleted);
+  const strip = weekDayStrip(records, weekStart, today).map((day) => `<span data-today="${day.isToday ? "1" : "0"}" data-missed="${day.missed ? "1" : "0"}">
+    ${day.label}${day.isToday ? " 今日" : ""}<small>${day.done}/${day.total}${day.excused ? ` 免${day.excused}` : ""}${day.missed ? ` 落${day.missed}` : ""}</small></span>`).join("");
+  const outlook = [
+    score.todayPlanned === 0 || score.pctIfTodayDone === null ? "" : `<p>今日の${score.todayPlanned}コマを終えると <b>${score.pctIfTodayDone}%</b></p>`,
+    score.needTodayForTarget === null ? "" : score.needTodayForTarget === 0 ? `<p>目標 ${target}% に到達済み</p>` : `<p>目標${target}%には今日 <b>あと${score.needTodayForTarget}コマ</b> でとどく</p>`,
+    score.missed === 0 || score.pctIfRecovered === null ? "" : `<p>落ちた${score.missed}コマを取り戻せば <b>${score.pctIfRecovered}%</b></p>`
+  ].join("");
+  const body = meta ? `<div class="twy-week-score-big" data-under="${score.pct !== null && score.pct < target ? "1" : "0"}">${score.pct === null ? "—" : `${score.pct}<small>%</small>`}</div>
+    <div class="twy-week-score-meta">今週決めたコマ <b>${score.committed}</b>(免除 ${score.excused} は数えない → 点数の対象 <b>${score.total}</b>)<br>
+      完了 ${score.done} · 今日の予定 ${score.todayPlanned} · 落ちた ${score.missed} · 目標 ${target}%</div>
+    <div class="twy-week-strip">${strip}</div><div class="twy-week-outlook">${outlook}</div>
+    <div class="twy-week-commit">確定済み ${escapeHTML(String(meta.committedAt || "").replace("T", " ").slice(0, 16))}
+      <button type="button" class="btn ghost" data-action="twy-open-commit">確定シートを開く</button></div>`
+    : `<div class="twy-week-commit"><span>今週はまだ確定していません · 候補 <b>${candidateBlocksForWeek(state, weekStart).length}</b>コマ</span>
+      <button type="button" class="btn primary" data-action="twy-open-commit">今週を確定する</button></div>`;
+  return `<section class="panel tower-panel-box twy-week-score"><h2>今週のスコア</h2>${body}
+    <div class="twy-week-legend"><span data-kind="done">緑=済み</span> / <span data-kind="today">琥珀=今日</span> / <span data-kind="missed">赤枠=落ちた</span> / <span data-kind="excused">取り消し線=免除</span> / 枠だけ=予定 / ★=要となる行動</div></section>`;
+}
+
+function twyWeekTodayHTML(weekStart, today, records) {
+  const items = todayTwyBlocks(records, state.blocks || [], weekStart, today);
+  const rows = items.map((item) => `<div class="twy-week-today-row"><time>${escapeHTML(item.time || "—")}</time>
+    <span class="twy-week-item-title">${escapeHTML(item.title)}${twyWeekProjectTag(item.projectId)}</span>
+    <span>${item.estimateMin === null ? "—" : `${escapeHTML(String(item.estimateMin))}分`}</span>
+    ${item.done ? `<span class="twy-week-done">済</span>` : `<button type="button" class="btn ghost" data-action="now-start" data-id="${escapeHTML(item.blockId)}">▶開始</button>`}</div>`).join("");
+  const minutes = items.reduce((sum, item) => sum + (Number(item.estimateMin) || 0), 0);
+  return `<section class="panel tower-panel-box twy-week-today"><h2>今日のコマ</h2>
+    <div class="twy-today-list">${rows || `<p>今日の12週のコマはありません</p>`}</div>
+    <div class="twy-week-sum">合計 ${items.length}コマ · ${minutes}分 · 完了 ${items.filter((item) => item.done).length}</div></section>`;
+}
+
+function twyWeekMissedHTML(weekStart, today, records) {
+  const items = missedTwyItems(records, weekStart, today);
+  if (!items.length) return "";
+  const labels = new Map(weekDayStrip(records, weekStart, today).map((day) => [day.dateISO, day.label]));
+  return `<section class="panel tower-panel-box twy-week-missed"><h2>落ちたコマ</h2>${items.map((item) => `<div class="twy-week-missed-row">
+    <span class="twy-week-item-title">${escapeHTML(item.title || "")}${twyWeekProjectTag(item.projectId)}</span>
+    <span>${escapeHTML(labels.get(item.plannedDate) || "")} ${escapeHTML(item.plannedDate.slice(5).replace("-", "/"))} · 未実施</span>
+    <button type="button" class="btn ghost" data-action="twy-open-commit">確定シートで免除にする</button>
+    <button type="button" class="btn ghost" data-action="nav" data-view="wbs">作業一覧で予定を足す</button></div>`).join("")}</section>`;
+}
+
+function twyWeekThemeCardHTML(project, index, weekStart, today, records) {
+  const score = projectWeekScore(records, weekStart, project.id);
+  const track = activeTrackForProject(state.tracks || [], project.id);
+  const tasks = twyPlanTaskList(project.id).map((task) => {
+    const plan = normalizeTwyPlan(task.twyPlan), triple = taskWeekTriple(records, task.id, weekStart);
+    const committed = triple.confirmed + triple.excused;
+    if (!plan.perWeek && !committed) return "";
+    const short = Math.max(0, plan.perWeek - committed);
+    const chips = taskDayChips(records, state.blocks || [], weekStart, task.id, today)
+      .map((chip) => `<span class="twy-day-chip" data-state="${chip.state}">${escapeHTML(chip.label)}<small>${escapeHTML(chip.time)}</small></span>`).join("");
+    return `<div class="twy-week-task" data-task-id="${escapeHTML(task.id)}">
+      <div>${plan.keystone ? "★ " : ""}${escapeHTML(task.title || "")}</div>
+      <div>目安 ${plan.perWeek} · 今週決めた ${committed} · 完了 ${triple.done}${short ? ` <span class="twy-week-short">(${short} コマ不足)</span>` : ""}</div>
+      <div class="twy-week-days">${chips}</div></div>`;
+  }).join("");
+  return `<article class="panel tower-panel-box twy-week-theme">
+    <header class="twy-week-theme-head"><span class="twy-goal-num">${index + 1}</span><h2>${escapeHTML(project.title || "")}</h2>
+      <span class="twy-week-theme-score">${score.pct === null ? "—" : `${score.pct}%`} (${score.done}/${score.total})</span>
+      <span class="twy-proj-tag">${track ? "成果あり" : "成果の指標なし"}</span></header>
+    <div class="twy-week-cols"><div><h3>やること</h3>${tasks || `<p>今週のやることはありません</p>`}</div>
+      <div><h3>成果</h3>${track ? renderTwyTrackReadOnly(track) : `<p class="twy-goal-no-track">成果の指標なし</p>`}</div></div></article>`;
+}
+
+function twyWeekThemesHTML(cycleStart, weekStart, today, records) {
+  const projects = twyGoalCandidates(cycleStart);
+  if (!projects.length) return `<section class="panel tower-panel-box"><p class="twy-goal-empty">対象の12週のプロジェクトがありません</p></section>`;
+  return projects.slice(0, 3).map((project, index) => twyWeekThemeCardHTML(project, index, weekStart, today, records)).join("")
+    + twyGoalWarningHTML(projects.length);
+}
+
+function twyWeekFaceHTML(cycleStart, weekStart) {
+  if (!cycleStart) return `<section class="panel tower-panel-box"><p>12週のサイクルが未設定です(設定 › サイクル開始日)</p></section>`;
+  const records = state.weeklyCommitments || [], today = todayISO();
+  const rawTarget = Number(state.settings?.twelveWeekScoreTarget), target = Number.isFinite(rawTarget) ? rawTarget : 85;
+  return `${twyWeekScoreHTML(weekStart, today, records, target)}${twyWeekTodayHTML(weekStart, today, records)}${twyWeekMissedHTML(weekStart, today, records)}${twyWeekThemesHTML(cycleStart, weekStart, today, records)}`;
 }
 
 function buildTwyVisionModalHTML(settings) {
