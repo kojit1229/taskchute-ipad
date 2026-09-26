@@ -1,0 +1,71 @@
+{
+  "version": 408,
+  "date": "2026-09-27",
+  "title": "12週計画タブ「今週」面(束 W): 今週のスコア・週の帯・見通し、今日のコマ、落ちたコマ、テーマ別カード(表示のみ)",
+  "summary": "いま「準備中」だった「今週」チップを有効化。K 採用のモック m02(projects/_mocks/twy-week-review/versions/m02)の今週面を、既存の採点母集団(weeklyCommittedItems)だけを使って表示する。保存・同期・新しい data-action は無し。「振り返り」は次版(束 R)。",
+  "changedFiles": [
+    "CHANGES_v408.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v408.json",
+    "src/core/plan.js",
+    "src/core/track.js",
+    "src/core/week.js",
+    "src/features/twelve-week.js",
+    "styles.css",
+    "sw.js",
+    "tests/impact-regression-map.json",
+    "tests/r1-twelveweek.test.js",
+    "tests/r3-twelveweek-week.test.js",
+    "tests/remaining-screen-labels.test.js",
+    "tests/suite-manifest.json",
+    "tests/week-core.test.js"
+  ],
+  "intent": [
+    "案件 2026-09-04-12wy-tab-mock 束 W(orders/30・31・33)。K 採用 2026-09-26(モック m02)、裁定 2026-09-27(免除理由は任意・警告は1日5コマ超・生活コマは出さない)"
+  ],
+  "changes": [
+    "src/core/week.js(新規): weekOutlook / weekDayStrip / todayTwyBlocks / missedTwyItems / projectWeekScore / taskDayChips。母集団は track.js の weeklyCommittedItems(採点分母と一致、免除は分母外)",
+    "src/features/twelve-week.js: 「今週」チップを有効化(TWY_ENABLED_FACES)。twyWeekFaceHTML=今週のスコア(大数字・土〜金の帯・見通し3行・確定済み/未確定の導線)+今日のコマ(▶開始=既存 now-start)+落ちたコマ(確定シートを開く/作業一覧へ)+テーマ別カード(実行率・やることの3数・曜日チップ・成果の読み取り表示)",
+    "app.js: configureTwelveWeek の注入に candidateBlocksForWeek を追加(1行)",
+    "src/core/plan.js: addDaysISO を export(週の7日を plan.js と同じ関数で作る)",
+    "styles.css: .twy-week-*(12週計画タブの節に追加。既存の --tower-* 変数のみ使用)",
+    "tests: week-core(新規・node 単体)、r3-twelveweek-week(新規・Playwright 1280/390)、r1 の期待1件(disabled は振り返りだけ)、remaining-screen-labels の期待3件(準備中は振り返りだけ・面切替3件・disabled 1件)",
+    "sw.js: APP_SHELL に ./src/core/week.js、CACHE_NAME v408",
+    "tests/impact-regression-map.json: 新モジュール src/core/week.js の担当スイート(week-core / r3-twelveweek-week)を登録(release-gate の runtime path 未分類を解消)"
+  ],
+  "uncertainties": [
+    "実機(iPhone/iPad)は未確認(spec 段階5)",
+    "「今週の狙い」欄は束 R(weeklyReviews)で追加"
+  ],
+  "reviewFocus": [
+    "母集団が weeklyCommittedItems を通っていること(手動確定週の selectedBlockIds 絞り込みを含む)",
+    "state への書き込みが無いこと(表示専用)",
+    "1280px でタブが縦1列のまま(remaining-twelveweek-layout)"
+  ],
+  "verification": [
+    "束 W: Claude 独立検証 32 PASS(受入 1〜10、9スイート・code:index・manifest 0、画面実測 19 項目)。版不一致は監督者裁定で解消(reviews/32-supervisor-decision.md)",
+    "fixW2(low 5件+info 1件、21行): 監督者実走 7〜10 スイート 0。2周目の差分確認は orders/34-recheck-W.md(Claude fresh)",
+    "release-gate --final は監督者が実走(reports/W/release/)",
+    "release-gate --final 1回目(07:1x): remaining-screen-labels の旧期待(準備中2件)だけ失敗 → 期待を新契約へ更新(監督者、テストのみ)→ 2回目を実走"
+  ],
+  "knownLimitations": [
+    "「振り返り」チップは準備中のまま(v409 予定)",
+    "今日のコマは12週のプロジェクト配下だけ(生活コマは出さない=K 裁定)"
+  ],
+  "relatedSuites": [
+    "week-core",
+    "plan-core",
+    "r0-twyplan",
+    "r1-twelveweek",
+    "r2-twelveweek-plan",
+    "r3-twelveweek-week",
+    "remaining-twelveweek-layout",
+    "action-registry-core",
+    "mutation-twelve-week-e2e",
+    "track-core",
+    "v355"
+  ]
+}
