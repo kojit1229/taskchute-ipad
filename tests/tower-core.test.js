@@ -2,7 +2,7 @@
 // today-core.test.jsと同じく、localStorage seed + 既存nav + Playwright clockで検証する。
 const fs = require("fs");
 const path = require("path");
-const { browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen } = require("./helpers");
+const { browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY, dismissBodyScanIfOpen, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = STATE_KEY;
@@ -107,7 +107,7 @@ function check(name, cond, extra = "") {
     await page.reload();
     await page.waitForSelector('#app[data-view="settings"]');
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
-    await page.waitForSelector(".sec-journal");
+    await page.waitForSelector('.daily-today-clock [data-view="journal"]');
     check("削除済み朝プランactionがソースに存在しない", !appSource.includes('"ai-morning-plan"'));
     check("todayに維持対象の下書きスケジュールボタンを重複描画しない",
       await page.locator('[data-action="ai-schedule"]').count() === 0);
@@ -221,7 +221,7 @@ function check(name, cond, extra = "") {
     check("復元描画の最新完了行はフラッシュしない", await completedLog.evaluate((el) => !el.classList.contains("is-flip"))
       && await page.locator('.sec-log .tower-touchdown').count() === 0);
 
-    console.log("[7-b] JOURNALは既存単一文字列を自由記述として読み、本文だけをsaveAndRender保存する");
+    console.log("[7-b] 今日の日報導線から既存本文を読み、日報タブで保存する");
     await page.evaluate(({ KEY, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       s.journals[today] = "既存の自由記述";
@@ -229,21 +229,23 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, today });
     await page.reload();
-    await page.waitForSelector("#towerJournalFree");
-    check("既存文字列はFREE NOTEへ表示されAI依頼欄はDOMにない", await page.locator("#towerJournalFree").inputValue() === "既存の自由記述"
+    await page.locator('.daily-today-clock [data-view="journal"]').click();
+    await page.waitForSelector('#app[data-view="journal"]');
+    if (!await page.locator('#journalFreeText').isVisible()) await page.locator('[data-journal-section="journal"] > summary').click();
+    check("既存文字列は日報の自由記述へ表示され旧AI依頼欄はDOMにない", await page.locator("#journalFreeText").inputValue() === "既存の自由記述"
       && await page.locator("#towerJournalAi, .tower-journal-ai-fold").count() === 0);
     // v229: locator解決後の再描画detachでcomputed styleがnullになる競合の恒久対策(v123と同型)。
     // 評価時点でquerySelectorし直し、数値の成立自体を待ってから同じassertを行う。
     const journalStyle = await page.waitForFunction(() => {
-      const el = document.querySelector("#towerJournalFree");
+      const el = document.querySelector("#journalFreeText");
       if (!el) return false;
       const cs = getComputedStyle(el);
       const v = { minHeight: parseFloat(cs.minHeight), fontSize: parseFloat(cs.fontSize) };
       return Number.isFinite(v.minHeight) && Number.isFinite(v.fontSize) ? v : false;
     }, null, { timeout: 10000 }).then((h) => h.jsonValue());
     check("JOURNAL textareaは130px以上・16px以上", journalStyle.minHeight >= 130 && journalStyle.fontSize >= 16, JSON.stringify(journalStyle));
-    await page.locator("#towerJournalFree").fill("更新した自由記述");
-    await page.locator('[data-action="save-tower-journal"]').click();
+    await page.locator("#journalFreeText").fill("更新した自由記述");
+    await page.locator("#journalFreeText").blur();
     await page.waitForFunction(({ KEY, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.journals[today] === "更新した自由記述" && s.journalMeta[today]?.aiRequest === "既存依頼";
@@ -252,8 +254,9 @@ function check(name, cond, extra = "") {
       const s = JSON.parse(localStorage.getItem(KEY));
       return { free: s.journals[today], ai: s.journalMeta[today].aiRequest, updatedAt: s.journalMeta[today].textUpdatedAt };
     }, { KEY, today });
-    check("SAVEで本文と更新時刻だけを変更しaiRequestを保持", savedJournal.free === "更新した自由記述"
+    check("日報入力で本文と更新時刻だけを変更しaiRequestを保持", savedJournal.free === "更新した自由記述"
       && savedJournal.ai === "既存依頼" && !!savedJournal.updatedAt, JSON.stringify(savedJournal));
+    await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
 
     console.log("[8] 今日一覧のタスク名タップは同IDの既存Blockモーダルを開く");
     await todayRow('arr-4').locator('[data-action="edit-block"]').click();
@@ -329,8 +332,8 @@ function check(name, cond, extra = "") {
       await page.locator('.tower-departures, [data-action="departures-open-tomorrow"], [data-work-list="today"] :text("明日8時半")').count() === 0);
     const sectionOrder = await page.locator('[data-daily-view="today"] .life-band, [data-daily-view="today"] .so-row, [data-daily-view="today"] .sec-rwy, [data-daily-view="today"] .sec-arrivals, [data-daily-view="today"] .sec-log, [data-daily-view="today"] .sec-gates, [data-daily-view="today"] .sec-journal').evaluateAll(sections =>
       sections.map(section => [...section.classList].find(name => name.startsWith('sec-')) || (section.classList.contains('life-band') ? 'life' : 'creeds')));
-    check("人生の時間→信条→いまの作業→予定→ルーティン→やったこと→ジャーナル、記録群2つ・からだなし",
-      JSON.stringify(sectionOrder) === JSON.stringify(['life', 'creeds', 'sec-rwy', 'sec-arrivals', 'sec-gates', 'sec-log', 'sec-journal'])
+    check("カード→人生の時間→信条→予定→ルーティン→やったこと、記録群2つ・ジャーナルなし",
+      JSON.stringify(sectionOrder) === JSON.stringify(['sec-rwy', 'life', 'creeds', 'sec-arrivals', 'sec-gates', 'sec-log'])
       && await page.locator('[data-daily-view="today"] .sec-condition').count() === 0 && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 0
       && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']),
       JSON.stringify(sectionOrder));
@@ -410,12 +413,12 @@ function check(name, cond, extra = "") {
       actualStartAt: atMinute(today, 11 * 60 + 30), estimateMin: 60
     });
     await seedBoard([landing]);
-    check(".tower-runwayと#towerPlaneが存在", await page.locator(".tower-runway #towerPlane").count() === 1);
-    check("滑走路パネル名はNOW LANDING", ((await page.locator(".tower-runway > h2").textContent()) || "").includes("NOW LANDING"));
-    const landingX = await page.locator("#towerPlane").evaluate((el) => parseFloat(el.style.getPropertyValue("--tower-plane-x")));
+    check(".tower-runwayと#todayNowProgressが存在", await page.locator(".tower-runway #todayNowProgress").count() === 1);
+    check("カードの見出しは実行中", ((await page.locator(".tower-runway > h2").textContent()) || "").includes("実行中"));
+    const landingX = await page.locator("#todayNowProgress").evaluate((el) => el.value);
     check("11:30開始・60分見積の12:00位置は約50%", Math.abs(landingX - 50) < 0.1, String(landingX));
-    check("実開始11:30と開始+見積の着陸予定12:30を表示", (await page.locator(".tower-rwy-mark.start").textContent()) === "11:30 開始"
-      && (await page.locator(".tower-rwy-mark.end").textContent()) === "12:30 着陸予定");
+    check("実開始11:30と開始+見積の着陸予定12:30を表示", (await page.locator(".today-now-card > h2").textContent()).includes("11:30 から")
+      && (await page.locator("#todayNowDetails").textContent()).includes("着陸予定 12:30"));
     check("経過/見積の進捗50%を表示", (await page.locator("#towerNowPct").textContent()) === "進捗 50%");
     check("残り30分を表示", (await page.locator("#towerNowRemain").textContent()) === "残り 30分");
     const pctHandle = await page.locator("#towerNowPct").elementHandle();
@@ -434,9 +437,9 @@ function check(name, cond, extra = "") {
     await page.waitForSelector(".modal-card", { state: "detached" });
 
     console.log("[13] NOW LANDINGの完了導線は既存実績モーダルを開く");
-    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.locator('.tower-now-actions [data-action="now-end"]').click();
     await page.waitForSelector(".modal-card", { state: "attached" });
-    check("■ 完了で既存実績モーダルが開く", await page.locator('.modal-title:has-text("実績を登録")').count() === 1);
+    check("終了して報告で既存報告モーダルが開く", await page.locator('[data-action="report-skip"]').count() === 1);
     await page.locator('.modal-card [data-action="modal-close"]').first().click();
     await page.waitForSelector(".modal-card", { state: "detached" });
 
@@ -603,18 +606,13 @@ function check(name, cond, extra = "") {
     await page.locator('.tower-nowhud [data-action="now-start"][data-id="rwy-ready"]').click();
     await page.waitForSelector('[data-action="declare-skip"]', { state: "attached" });
     await page.locator('[data-action="declare-skip"]').click();
-    await page.waitForSelector('.tower-nowhud[data-status="landing"] #towerNowRemain', { state: "attached" });
-    check("開始後は実行中の機体と残り表示へ遷移", await page.locator("#towerPlane").count() === 1
+    await page.waitForSelector('.today-now-card[data-now-mode="running"] #towerNowRemain', { state: "attached" });
+    check("開始後は実行中の機体と残り表示へ遷移", await page.locator("#todayNowProgress").count() === 1
       && await page.locator('.tower-now-title[data-id="rwy-ready"]').count() === 1);
     // fixed clock下ではanimationendが発火しない=要素が残るので、クラス存在+computed animationNameで接地フラッシュを固定する。
-    check("開始遷移で接地フラッシュが1要素出る", await page.locator(".tower-touchdown").count() === 1
-      && await page.locator(".tower-touchdown").evaluate((el) => getComputedStyle(el).animationName === "tower-touchdown"));
+    check("開始遷移でも滑走路・機体・接地フラッシュを出さない", await page.locator(".tower-runway-strip, #towerPlane, .tower-touchdown").count() === 0);
     // レビューM1再発防止: フラッシュはCSS変数を継承できない兄弟要素のため、機体と同じ位置を自身のinline styleに持つ。
-    check("接地フラッシュは機体位置と同じ--tower-plane-xを持つ", await page.evaluate(() => {
-      const plane = document.getElementById("towerPlane");
-      const flash = document.querySelector(".tower-touchdown");
-      return !!plane && !!flash && flash.style.getPropertyValue("--tower-plane-x") === plane.style.getPropertyValue("--tower-plane-x");
-    }));
+    check("開始直後は進み0%で実行中カードに統合される", await page.locator('.today-now-card[data-now-mode="running"] #todayNowProgress').evaluate(el => el.value === 0));
 
     console.log("[15] 見積超過は琥珀のロングフライト表示になりtickでも遷移する");
     const long = block("rwy-long", "ロング検証", today, 9 * 60 + 30, {
@@ -635,7 +633,7 @@ function check(name, cond, extra = "") {
     check("境界前はlanding", await page.locator('.tower-nowhud[data-status="landing"]').count() === 1);
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, 1, 0));
     await page.waitForFunction(() => document.querySelector(".tower-nowhud")?.dataset.status === "long");
-    const crossedX = await page.locator("#towerPlane").evaluate((el) => el.style.getPropertyValue("--tower-plane-x"));
+    const crossedX = await page.locator("#todayNowProgress").evaluate((el) => el.value);
     check("tickでlandingからlongへ遷移", (await page.locator("#towerNowRemain").textContent()) === "ロングフライト +1分");
     check("境界通過後の機体は100%で停止", parseFloat(crossedX) === 100, crossedX);
 
@@ -658,7 +656,7 @@ function check(name, cond, extra = "") {
       actualStartAt: atMinute(today, 11 * 60 + 30), estimateMin: 0
     });
     await seedT5([noEstimate]);
-    check("estimateMin:0の機体は0%固定", parseFloat(await page.locator("#towerPlane").evaluate((el) => el.style.getPropertyValue("--tower-plane-x"))) === 0);
+    check("estimateMin:0の機体は0%固定", parseFloat(await page.locator("#todayNowProgress").evaluate((el) => el.value)) === 0);
     check("estimateMin:0は見積なし", (await page.locator("#towerNowRemain").textContent()) === "見積なし");
     await seedT5([]);
     // v310: spec-freeze.md §3のNOW LANDING強調仕様により空表示文言を更新。
@@ -679,8 +677,9 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, actualPath, today });
     await page.reload();
-    await page.waitForSelector('.tower-now-actions [data-action="complete-block-with-actual"]');
-    await page.locator('.tower-now-actions [data-action="complete-block-with-actual"]').click();
+    await page.waitForSelector('.today-now-card[data-now-mode="running"]');
+    // カードの主導線はnow-endへ変更。既存実績action自体の回帰範囲は維持する。
+    await dispatchRegisteredAction(page, 'complete-block-with-actual', { id: actualPath.id });
     await page.locator('[data-modal-field="actualStartAt"]').fill(atMinute(today, 11 * 60).slice(0, 16));
     await page.locator('[data-modal-field="actualEndAt"]').fill(atMinute(today, 11 * 60 + 40).slice(0, 16));
     await page.locator('.modal-card [data-action="modal-save"]').click();
@@ -702,8 +701,9 @@ function check(name, cond, extra = "") {
       localStorage.setItem(KEY, JSON.stringify(s));
     }, { KEY, pomodoroPath, today });
     await page.reload();
-    await page.waitForSelector('.tower-now-actions [data-action="now-conveyor-complete"]');
-    await page.locator('.tower-now-actions [data-action="now-conveyor-complete"]').click();
+    await page.waitForSelector('.today-now-card[data-now-mode="running"] .today-pomodoro');
+    // 廃止した「次へ」ボタンのactionは他の導線で使用されるため回帰を残す。
+    await dispatchRegisteredAction(page, 'now-conveyor-complete', { id: pomodoroPath.id });
     await page.waitForFunction(({ KEY, today }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return s.blocks[0]?.completed && s.reports[today] !== "STALE_POMODORO";
@@ -916,8 +916,8 @@ function check(name, cond, extra = "") {
         return { x: box.x, top: box.top, bottom: box.bottom, right: box.right, width: box.width, height: box.height };
       };
       return { columns: getComputedStyle(root.querySelector('.daily-today-main')).gridTemplateColumns,
-        life: rect('.life-band'), so: rect('.so-row'), runway: rect('.tower-runway'), timer: rect('.today-pomodoro'), mit: rect('.tower-mit'), board: rect('#dailyTodayPlans'),
-        log: rect('.sec-log'), gates: rect('.sec-gates'), journal: rect('.sec-journal'), input: rect('.sec-journal textarea'),
+         life: rect('.life-band'), so: rect('.so-row'), runway: rect('.tower-runway'), timer: root.querySelector('.today-pomodoro') ? rect('.today-pomodoro') : null, board: rect('#dailyTodayPlans'),
+         log: rect('.sec-log'), gates: rect('.sec-gates'), journalLink: rect('.daily-today-clock [data-view="journal"]'), removed: root.querySelectorAll('.tower-mit, .sec-journal, .daily-today-sections, .daily-today-quick').length,
         rows: [...root.querySelectorAll('[data-work-list="today"] [data-work-key]')].map(el => {
           const r = el.getBoundingClientRect(); return { x: r.x, top: r.top, right: r.right, bottom: r.bottom, height: r.height };
         }), scrollWidth: document.documentElement.scrollWidth, innerWidth, innerHeight };
@@ -927,31 +927,30 @@ function check(name, cond, extra = "") {
       await page.evaluate(() => window.scrollTo(0, 0));
       const m = await measureLayout();
       console.log('SL2A_MEASURE ' + JSON.stringify({ width, ...m }));
-      check(width + 'pxはタイマーを現在作業内、MITを人生の時間より上に表示', [m.timer].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom) && m.mit.width > 0 && m.mit.height > 0 && m.mit.bottom <= m.life.top, JSON.stringify(m));
+       check(width + 'pxは未着手ではタイマーなし、カードを人生の時間より上に表示', m.timer === null && m.runway.bottom <= m.life.top && m.removed === 0, JSON.stringify(m));
       const columns = m.columns.split(/\s+/).map(Number.parseFloat);
-      check(width + 'pxは正幅3列', columns.length === 3 && columns.every(value => value > 0), m.columns);
+       check(width + 'pxは正幅2列', columns.length === 2 && columns.every(value => value > 0), m.columns);
       check(width + 'pxは人生・信条を上下に配置', m.life.width > 0 && m.life.height > 0
         && Math.abs(m.so.x - m.life.x) < 1 && m.so.top >= m.life.bottom && m.so.height > 0, JSON.stringify(m));
-      check(width + 'pxは現在作業の下に予定・運航記録・本文の3列', m.runway.top >= Math.max(m.life.bottom, m.so.bottom)
-        && m.board.top >= m.runway.bottom && Math.abs(m.board.top - m.gates.top) < 1 && m.gates.x >= m.board.right
-        && Math.abs(m.log.x - m.gates.x) < 1 && m.journal.x >= m.gates.right
-        && m.log.top >= m.gates.bottom && Math.abs(m.journal.top - m.board.top) < 1, JSON.stringify(m));
+       check(width + 'pxはカード・人生・信条の下に予定と記録の2列', m.runway.bottom <= m.life.top
+         && m.board.top >= m.so.bottom && Math.abs(m.board.top - m.gates.top) < 1 && m.gates.x >= m.board.right
+         && Math.abs(m.log.x - m.gates.x) < 1 && m.log.top >= m.gates.bottom, JSON.stringify(m));
       check(width + 'pxでも人生・信条は各1マークアップ、信条3件', await page.locator('.life-band').count() === 1
         && await page.locator('.so-row').count() === 1 && await page.locator('.so-item').count() === 3);
       if (width === 1440) {
         const visible = r => r.height > 0 && r.top >= 0 && r.bottom <= m.innerHeight && r.x >= 0 && r.right <= m.innerWidth;
-        check('1440×1000で予定4件と本文入力欄が全て見える', m.rows.length === 4 && m.rows.every(visible) && visible(m.input), JSON.stringify(m));
+         check('1440×1000で予定4件と日報への導線が全て見える', m.rows.length === 4 && m.rows.every(visible) && visible(m.journalLink), JSON.stringify(m));
       }
     }
     console.log("[34] 390/768/1024pxは新契約順の1列、横はみ出しなし");
     for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
       await page.setViewportSize(viewport);
       const m = await measureLayout();
-      const panels = [m.mit, m.life, m.so, m.runway, m.board, m.gates, m.log, m.journal];
-      check(viewport.width + 'pxはタイマーを現在作業内、MITを人生の時間より上に表示', [m.timer].every(r => r.width > 0 && r.height > 0 && r.x >= m.runway.x && r.right <= m.runway.right && r.top >= m.runway.top && r.bottom <= m.runway.bottom) && m.mit.width > 0 && m.mit.height > 0 && m.mit.bottom <= m.life.top, JSON.stringify(m));
+       const panels = [m.runway, m.life, m.so, m.board, m.gates, m.log];
+       check(viewport.width + 'pxは未着手ではタイマーなし、カードを人生の時間より上に表示', m.timer === null && m.runway.bottom <= m.life.top && m.removed === 0, JSON.stringify(m));
       check(viewport.width + 'pxはboard/runwayが縦積み', Math.abs(m.board.x - m.runway.x) < 1, JSON.stringify(m));
       check(viewport.width + 'pxは横はみ出しなし', m.scrollWidth <= m.innerWidth, JSON.stringify(m));
-      check(viewport.width + 'pxはMIT→人生→信条→現在作業→予定→ルーティン→実績→本文',
+       check(viewport.width + 'pxはカード→人生→信条→予定→ルーティン→実績',
         m.columns.split(/\s+/).length === 1 && panels.every((r, i) => r.height > 0 && (!i || r.top >= panels[i - 1].bottom)), JSON.stringify(m));
       check(viewport.width + 'pxは各パネルの左端が揃う', panels.every(r => Math.abs(r.x - m.runway.x) < 1), JSON.stringify(m));
     }
@@ -961,18 +960,18 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(fixedTime(0));
     await seedT6([]);
     const reducedTransitions = await page.evaluate(() => ({
-      plane: getComputedStyle(document.querySelector("#towerPlane")).transitionProperty,
+      plane: document.querySelectorAll("#towerPlane, .tower-runway-strip").length,
       beacon: getComputedStyle(document.querySelector(".tower-beacon i")).animationName,
       // 接地フラッシュはanimationend削除に依存するため、animationが止まる環境では出さない契約(2系統レビューM1)。
       touchdown: (() => {
-        const strip = document.querySelector(".tower-runway-strip");
+        const strip = document.querySelector(".today-now-card");
         strip.insertAdjacentHTML("beforeend", '<i class="tower-touchdown"></i>');
         const display = getComputedStyle(strip.querySelector(".tower-touchdown")).display;
         strip.querySelector(".tower-touchdown").remove();
         return display;
       })()
     }));
-    check("reduced-motionでplaneのtransitionがnone", reducedTransitions.plane === "none",
+    check("reduced-motionでも滑走路の絵を出さない", reducedTransitions.plane === 0,
       JSON.stringify(reducedTransitions));
     check("reduced-motionでビーコンが止まり接地フラッシュは出ない", reducedTransitions.beacon === "none" && reducedTransitions.touchdown === "none",
       JSON.stringify(reducedTransitions));
@@ -1050,7 +1049,7 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('.today-tower[data-motion="off"]');
     check("offはstate保存されビーコンanimation-nameがnone", await page.locator(".tower-beacon i").evaluate((el) => getComputedStyle(el).animationName) === "none");
     const offExtras = await page.evaluate(() => {
-      const strip = document.querySelector(".tower-runway-strip");
+      const strip = document.querySelector(".today-now-card");
       strip.insertAdjacentHTML("beforeend", '<i class="tower-touchdown"></i>');
       const touchdown = getComputedStyle(strip.querySelector(".tower-touchdown")).display;
       strip.querySelector(".tower-touchdown").remove();

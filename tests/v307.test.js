@@ -69,6 +69,10 @@ function blocksForDate(date) {
     }));
   }
   blocks.push(planBlock({ id: `${date}-target`, date, startMin: 20 * 60, completed: false }));
+  // T1c: 今日の「次の予定」は終了済みを省くため、未着手も16件用意してスクロール前提を保つ。
+  for (let i = 0; i < 15; i++) {
+    blocks.push(planBlock({ id: `${date}-next${i}`, date, startMin: 20 * 60 + (i + 1) * 10, completed: false }));
+  }
   return blocks;
 }
 
@@ -209,6 +213,7 @@ async function runScenario(browser, { width, height, navContainer, viewA, viewB 
     await setScrollPos(page, 400);
     before = await scrollPos(page);
     check(`${width}px: ${viewB}側でも切替前にpageスクロールが動く`, before.page > 100, JSON.stringify(before));
+    console.log("  v307 reverse scroll observation", JSON.stringify({ width, view: viewB, ...before }));
 
     after = await clickAndReadImmediately(page, `${navContainer} [data-action="nav"][data-view="${viewA}"]`);
     check(`${width}px: ${viewB}→${viewA}切替直後にpageスクロールが0にリセットされる(逆方向)`,

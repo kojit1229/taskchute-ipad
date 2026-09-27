@@ -37,7 +37,7 @@ function check(name, cond, extra = "") {
     }, { KEY, PREV });
     await page.reload();
     await page.waitForTimeout(700);
-    check("todayのTOWERとJOURNALを描画する", await page.locator(".today-tower .sec-journal").count() === 1);
+    check("todayのTOWERに日報導線がありJOURNAL入力欄はない", await page.locator('.today-tower .daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1 && await page.locator(".today-tower .sec-journal").count() === 0);
     const savedFeedback = await page.evaluate(({ KEY, PREV }) => JSON.parse(localStorage.getItem(KEY)).feedback?.[PREV] || "", { KEY, PREV });
     check("旧state.feedback本文を正規化後も保持する", savedFeedback.includes("v143回帰確認用マーカー"), savedFeedback);
 

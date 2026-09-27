@@ -1,6 +1,7 @@
 import { scheduleDisplay, scheduleWarning, renderSchedule } from "./single-schedule-view.js";
 import { state } from "../state/store.js";
 import { READING_LABELS } from "./daily-reading.js";
+import { twyMemoLine } from "../core/plan.js";
 import { dailyActuals, actualDurationMinutes } from "../core/daily-actuals.js";
 import { karadaImportHTML } from "./karada-import.js";
 import { ARCHIVED_READONLY_MESSAGE } from "./archive-date-protection.js";
@@ -229,6 +230,43 @@ function towerArrivalOptions(selection) {
 
 function towerArrivalSelectionKey(selection) {
   return `${encodeURIComponent(String(selection.selected?.id || ""))}|${flightSetKey(selection.candidates)}`;
+}
+
+function todayNowDetails(block, now, running = false) {
+  const planned = timeFromDateTime(block.plannedStartAt) || "--:--";
+  const delay = block.plannedStartAt ? Math.floor(((running ? localDateTimeToMs(block.actualStartAt) : now.getTime()) - localDateTimeToMs(block.plannedStartAt)) / 60000) : 0;
+  const late = delay >= 1 ? `${Math.floor(delay / 60)}時間${delay % 60}分遅れ` : "";
+  const task = state.tasks.find(item => item.id === block.taskId);
+  const project = state.projects.find(item => item.id === (task?.projectId || block.projectId));
+  const memo = task && project?.twelveWeekStartDate ? twyMemoLine(task) : "";
+  const metrics = running ? runwayMetrics(block, now.getTime()) : null;
+  return `${running ? `<span>${Math.max(0, Math.floor((now.getTime() - localDateTimeToMs(block.actualStartAt)) / 60000))}分 経過</span><span>着陸予定 ${metrics.landing}</span><span>元の予定 ${planned}${late ? `(${late}で開始)` : ""}</span>`
+    : `<span>${planned}–${timeFromDateTime(block.plannedEndAt) || "--:--"} の予定</span>${late ? `<span class="today-now-late">${late}</span>` : ""}<span>見積 ${escapeHTML(resolveEstimateMin(block))}分</span><span>${escapeHTML(project?.title || "")}</span>`}
+    ${memo ? `<div class="today-now-memo">今週の内容: ${escapeHTML(memo)}</div>` : ""}`;
+}
+
+function renderTodayNowCard(now, blocks, flights) {
+  const running = runningBlockOf(blocks);
+  const selection = running ? null : runwayArrivalSelection(blocks, flights);
+  const candidate = selection?.selected;
+  const block = running || blocks.find(item => String(item.id) === String(candidate?.id)) || candidate;
+  const metrics = running ? runwayMetrics(running, now.getTime()) : null;
+  const id = escapeHTML(block?.id || "");
+  const options = selection ? towerArrivalOptions(selection) : "";
+  const ironLink = running && typeof linkedGymBlock === "function" && linkedGymBlock(blocks, now.getHours() * 60 + now.getMinutes())
+    ? '<button class="tower-ironlog-link" data-action="open-iron-log">▶ IRON LOG</button>' : "";
+  return `<section class="tower-runway sec-rwy today-now-card" data-now-mode="${running ? "running" : block ? "ready" : "empty"}">
+    <h2>${running ? "実行中" : "次にやること"}<span>${running ? `${metrics.start} から · <strong id="towerNowRemain">${metrics.remain}</strong>` : "★=今日の一つ"}</span></h2>
+    <div class="tower-nowhud" data-status="${running ? metrics.over ? "long" : "landing" : block ? "ready" : "empty"}">
+      ${block ? `<button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${mitStarHTML(block)}${escapeHTML(block.title)}</button>
+        ${running ? `<progress class="today-now-progress" id="todayNowProgress" max="100" value="${metrics.pct}" aria-label="作業の進み"></progress><span id="towerNowPct">進捗 ${metrics.pct}%</span>` : ""}
+        <div class="today-now-details" id="todayNowDetails">${todayNowDetails(block, now, !!running)}</div>
+        ${options ? `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(towerArrivalSelectionKey(selection))}" aria-label="開始するARRIVALS便">${options}</select>` : ""}
+        <div class="tower-now-actions">${ironLink}<button type="button" class="btn primary" data-action="${running ? "now-end" : "now-start"}" data-id="${id}">${running ? "■ 終了して報告" : "▶ 開始"}</button>
+          ${running ? `<button type="button" class="btn" data-action="edit-block" data-id="${id}">時刻を直す</button>` : '<span class="today-now-help">開始後、実行中カードのポモドーロで計れます</span><button type="button" class="btn" data-action="remaining-shift">遅れた分を後ろへずらす</button>'}
+        </div>` : '本日の予定はありません ─ タイムラインで追加できます <button type="button" class="btn" data-action="nav" data-view="exec">実行で予定を追加</button>'}
+    </div>${running ? renderTodayPomodoro(blocks, queueBlocksOf(blocks), true) : ""}
+  </section>`;
 }
 
 function renderTowerRunway(now, blocks, flights) {
@@ -570,38 +608,39 @@ function renderTodayTower() {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const flights = boardFlights(blocks, nowMin, scheduledTasksForDate(today, blocks));
   const weekday = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-  // 今日の必須8項目は旧フォーカス設定にかかわらず常設する。
+  // 今日のカード、LIFE BAND・信条、予定と記録の順に表示する。
   return `<div class="today-tower" data-daily-view="today" data-motion="${escapeHTML(towerMotionSetting())}" data-night="${isNightHour(now.getHours()) ? 1 : 0}" data-paused="${document.hidden ? 1 : 0}"${glassBlurOff() ? ' data-glass-blur="off"' : ""}>
     ${syncAlertBanner()}
     <header class="daily-today-clock tower-glass-panel" aria-label="今日の時計">
       <span id="towerDate">${date} (${weekday})</span><time id="towerClock">${clockText(now)}</time>
       <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
       <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
-      <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
+      <nav aria-label="今日の移動"><button type="button" data-action="nav" data-view="journal">日報を書く ›</button></nav>
     </header>
-    ${renderTodayQuickAction(blocks)}
-    ${renderTowerMIT(blocks)}
+    ${renderTodayNowCard(now, blocks, flights)}
     <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>
-    ${renderTowerRunway(now, blocks, flights)}
-    <nav class="daily-today-sections" aria-label="今日の表示位置">${[["focus", "◎ FOCUS"], ["records", "運航・体調"], ["journal", "ジャーナル"], ["life", "LIFE BAND"]].map(([section, label]) => `<button type="button" data-action="today-section-jump" data-section="${section}">${label}</button>`).join("")}</nav>
     <div class="daily-today-main">
       <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
       <div class="daily-today-records">${renderTowerGates(blocks)}<details><summary>実績の簡易一覧</summary>${renderFlightLog(today, blocks)}</details></div>
-      ${renderTowerJournal(today)}
     </div>
   </div>`;
 }
 
 function updateTowerRunway(now, blocks) {
   const running = runningBlockOf(blocks);
-  const plane = document.getElementById("towerPlane");
   const hud = document.querySelector(".tower-nowhud");
+  const id = hud?.querySelector("button[data-id]")?.dataset.id;
+  const block = blocks.find(item => String(item.id) === id);
+  if (!block || (running && String(running.id) !== id)) return;
+  const details = document.getElementById("todayNowDetails");
+  const html = todayNowDetails(block, now, !!running);
+  if (details && details.innerHTML !== html) details.innerHTML = html;
+  const progress = document.getElementById("todayNowProgress");
   const pct = document.getElementById("towerNowPct");
   const remain = document.getElementById("towerNowRemain");
-  const hudId = hud?.querySelector("button[data-id]")?.dataset.id;
-  if (!running || !plane || !hud || !pct || !remain || hudId !== String(running.id)) return;
+  if (!running || !progress || !pct || !remain) return;
   const metrics = runwayMetrics(running, now.getTime());
-  plane.style.setProperty("--tower-plane-x", `${metrics.x}%`);
+  progress.value = metrics.pct;
   pct.textContent = `進捗 ${metrics.pct}%`;
   remain.textContent = metrics.remain;
   if (metrics.over && hud.dataset.status === "landing") hud.dataset.status = "long";
@@ -628,12 +667,15 @@ function updateTowerArrivalSelection(blocks, flights, userSelection = false) {
   const select = hud.querySelector("[data-tower-arrival-select]");
   if (select === document.activeElement && !userSelection) return;
   const selection = runwayArrivalSelection(blocks, flights);
-  const next = selection.selected;
+  const next = blocks.find(item => String(item.id) === String(selection.selected?.id)) || selection.selected;
   if (!next) return;
   const title = hud.querySelector(".tower-now-title");
   const start = hud.querySelector('[data-action="now-start"]');
   if (title) { title.dataset.id = String(next.id); title.innerHTML = `${mitStarHTML(next)}${escapeHTML(next.title)}`; }
   if (start) start.dataset.id = String(next.id);
+  const details = document.getElementById("todayNowDetails");
+  const html = todayNowDetails(next, new Date());
+  if (details && details.innerHTML !== html) details.innerHTML = html;
   if (select === document.activeElement) return;
   const options = towerArrivalOptions(selection);
   if (!options) { select?.remove(); return; }
