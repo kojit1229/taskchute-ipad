@@ -42,12 +42,13 @@
   "verification": [
     "Codex 発注 02(作業一覧)+03(タイムライン): plan-core・影響マップ選定の関係スイート・索引・manifest すべて 0",
     "監督者: plan-core v329 v70 v50 v59 exec-layout-media 全通過(reports/supervisor-tests.log)、375px 実測(reports/03/measure-375.cjs)",
-    "独立検証(1系統、表示のみ): orders/04-verify-v409.md を K が別セッションで起動(記入待ち)",
+    "独立検証(1系統、表示のみ): Claude 01 PASS(2026-09-27。指紋 7a05381c… 一致、7スイート・code:index・test:manifest 0、375px 実測 0)。low 4件は修正必須でなく v410 以降へ(圧縮表示でのメモ非表示・短いカードでの非表示・完了タスクの薄色・行頭空白の運用メモ)",
     "release-gate --final PASS(2026-09-27 11:0x、reports/gate-final.log)。workspace verify.sh は別記録"
   ],
   "knownLimitations": [
     "作業一覧で表示されるのは選択中プロジェクトのタスク行だけ(既存仕様)",
-    "「今週の内容:」がメモの1行目に無いタスクには何も出ない"
+    "「今週の内容:」がメモの1行目に無いタスクには何も出ない",
+    "圧縮表示(is-compact)の 12WY タスクはメモで2行になる / 短いカード(is-short)にも小さなメモが付く / 完了タスクのメモは薄色にならない(いずれも low、v410 以降で調整)"
   ],
   "relatedSuites": [
     "plan-core",
