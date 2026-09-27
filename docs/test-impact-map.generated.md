@@ -107,7 +107,7 @@
 | normalize-null-defense.test.js | e2e | full | sync-storage | 20 | 0 | 0 |
 | placement-core.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 30 | 0 | 0 |
 | placement-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 41 | 0 | 0 |
-| plan-core.test.js | node | full | planning-execution, journal-health | 103 | 0 | 0 |
+| plan-core.test.js | node | full | planning-execution, journal-health | 106 | 0 | 0 |
 | planned-occupancy-core.test.js | node | full | legacy-crosscutting | 28 | 0 | 0 |
 | primary-settings-conflict.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | r0-twyplan.test.js | e2e | full | sync-storage, planning-execution, journal-health | 37 | 1 | 1100 |
@@ -293,7 +293,7 @@
 | v326.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
 | v327.test.js | e2e | full | ui-responsive | 23 | 0 | 0 |
 | v328.test.js | e2e | full | planning-execution, ui-responsive | 22 | 0 | 0 |
-| v329.test.js | e2e | full | planning-execution | 27 | 0 | 0 |
+| v329.test.js | e2e | full | planning-execution | 28 | 0 | 0 |
 | v330.test.js | e2e | full | planning-execution | 23 | 1 | 50 |
 | v331.test.js | e2e | full | planning-execution, ui-responsive | 21 | 1 | 50 |
 | v332.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 56 | 1 | 50 |
@@ -326,7 +326,7 @@
 | v65.test.js | e2e | full | planning-execution | 34 | 16 | 4150 |
 | v67.test.js | e2e | smoke | planning-execution, content-ai | 17 | 1 | 150 |
 | v68.test.js | e2e | full | sync-storage, journal-health, content-ai | 44 | 18 | 5500 |
-| v70.test.js | e2e | smoke | planning-execution | 42 | 16 | 4850 |
+| v70.test.js | e2e | smoke | planning-execution | 44 | 16 | 4850 |
 | v71.test.js | e2e | full | content-ai, ui-responsive | 21 | 2 | 1000 |
 | v72.test.js | e2e | smoke | sync-storage | 19 | 10 | 4500 |
 | v73.test.js | e2e | full | journal-health | 26 | 12 | 3650 |
@@ -411,7 +411,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | fixed-date | 1 | tests/legacy-restoration.test.js | 11 |
 | missing-timezone | 1 | tests/mutation-global-e2e.test.js | 615 |
 | missing-timezone | 1 | tests/normalize-null-defense.test.js | 44 |
-| fixed-date | 1 | tests/plan-core.test.js | 359 |
+| fixed-date | 1 | tests/plan-core.test.js | 367 |
 | missing-timezone | 2 | tests/r0-twyplan.test.js | 29, 287 |
 | fixed-date | 3 | tests/remaining-screen-labels.test.js | 128, 137, 145 |
 | missing-timezone | 2 | tests/state-container-recovery-e2e.test.js | 7, 19 |
