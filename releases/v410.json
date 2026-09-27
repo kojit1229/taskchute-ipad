@@ -46,7 +46,9 @@
   "verification": [
     "Codex bundleT1(T1a/T1b)+T1c: 影響マップ選定+指定6スイート 0、code:index/manifest 0。監督者実走: v307 today-core tower-core f6-today-layout ui-a-layout remaining-screen-labels v143 daily-start-end-e2e exec-layout-media action-registry-core 全通過(reports/T1/supervisor-tests.log)",
     "独立検証(1系統・表示のみ): orders/03-verify-T1.md(記入待ち)",
-    "release-gate --final 1回目: v266 だけ失敗(旧契約=ジャーナル欄の存在を待つ)→ 期待を新契約へ更新 → 2回目: (記入待ち)"
+    "release-gate --final 1回目: v266 だけ失敗(旧契約=ジャーナル欄の存在を待つ)→ 期待を新契約へ更新 → 2回目: 回帰は通過、core の v67 が失敗(同じ旧契約)。PR #146 の CI で旧契約のまま残っていた既存テスト 26 本を洗い出し(reports/T1/ci-146-summary.md)",
+    "旧テスト 26 本の読み直しで製品側の抜け 3 件が判明 → 監督者裁定 A(上の帯の 予定へ/記録へ を残す)・B(実行中カードに 完了(実績を記入))・C(ポモドーロは pomodoro.running でも表示)、続いて E(▶ 次へ)・F(残り時間 16px)・G(複数 MIT の旧データは ★ を記録側に)。裁定 D: 今日タブのジャーナル欄の検査は日報タブの約束(入力時保存・変換中は再描画保留・アーカイブ日は読み取り専用)で書き直し、旧部品固有の断言 3 件(手動保存ボタンの無効・保存状態の文字)は廃止機能として削除(reports/T1/result.md fixT1-all 節に列挙)。Codex fixT1-all / fixT1c: 対象 29 本通過、today-core 単独通過。three-screen-flow-e2e は T1 前のコード(43b70f8)でも手元で落ちる(環境依存。CI で判定)",
+    "release-gate --final 3回目: (記入待ち)"
   ],
   "knownLimitations": [
     "一覧(今日の予定・実績)の3列化・遅れ印・「これを次に」・ルーティンのチップ化は束 T2",
