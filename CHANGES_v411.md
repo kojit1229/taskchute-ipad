@@ -17,6 +17,7 @@ iPhone の保存上限(約262万文字)を再び超えないようにする根�
 - sw.js
 - tests/archive-snapshot-safety.test.js
 - tests/archive-tombstone-sync.test.js
+- tests/daily-block-merge.test.js
 - tests/suite-manifest.json
 - tests/v53.test.js
 
@@ -27,6 +28,7 @@ iPhone の保存上限(約262万文字)を再び超えないようにする根�
 - src/sync/github.js computeSyncMerge: 境目は両側の大きい方。changedVsLocal/changedVsRemote と adoptSyncResult の変更検知、applySyncMergeToLocal/Remote の適用に追加。mergeBlockLists: リモートのみ・未削除・date < 境目・updatedAt < 境目 の Block は合流させない(裁定 B18-4: 境目以後に編集された物は合流させ、受け側の runArchive が退避する)
 - tests: archive-tombstone-sync に B18 の Node 特性テスト(境目の導出・GC・5キー化・同期の max と変更検知・合流除外・ユーザー削除の墓標は残る・不正日付は残る・runArchive 後の境目)。archive-snapshot-safety / v53 は保持日数 180→90 の定数追随(断言の削除・skip なし)
 - sw.js: CACHE_NAME v411
+- tests/daily-block-merge.test.js: mergeBlockLists の呼び出し引数の固定検査に第3引数 archivedBlocksBefore を追加(端末=local の固定は不変。PR #147 CI で検出。影響マップは daily-block-merge を選ばなかったため relatedSuites に明記)
 
 ## 変更意図
 
@@ -37,7 +39,7 @@ iPhone の保存上限(約262万文字)を再び超えないようにする根�
 - Codex bundleB18 / fixB18 / fixB18b: 影響マップ選定 112 本+指定 8 本 0(v334 のみ 1 = B-18 前の 43b70f8 でも失敗する環境の揺れ、reports/B18/v334-base-43b70f8.log)、test:core 0、manifest/index 0。受入6 の計測 reports/B18/measure-b18.json(旧正規化→新正規化: 未削除 1821 不変・墓標 534→67・2,526,866→2,383,495 文字)
 - Codex レビュー(39): 差し戻し 高2・中1 → 裁定 B18-3/4/5 で全件反映(fixB18b)
 - 独立検証(Claude fresh、Node 実測込み): orders/40-verify-B18.md → reviews/40-verify-B18.md(記入待ち)
-- release-gate --final: (記入待ち)
+- release-gate --final: 1回目 feedback-lifecycle-e2e(負荷の揺れ、単独は worktree/43b70f8 とも 0)/ 2・3回目 v334(環境の揺れ、43b70f8 でも単独失敗)のみ失敗。CI(PR #147)1回目: daily-block-merge(本修正)+ feedback-recovery-e2e(既知の揺れ)
 
 ## 既知の制約・保留
 
