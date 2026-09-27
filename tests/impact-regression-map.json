@@ -508,7 +508,8 @@
         "weeklyScore|paceNumeric|paceMilestone|milestoneProgressRatio|normalizeMilestoneProgress|trackStatus|forwardTracksForWeek|selectTrackFooter|activeTrackForProject|latestMeasurement"
       ],
       "suites": [
-        "track-core"
+        "track-core",
+        "week-core"
       ]
     },
     "habit-streak-core": {
@@ -610,7 +611,9 @@
         "plan-core",
         "r0-twyplan",
         "r1-twelveweek",
-        "r2-twelveweek-plan"
+        "r2-twelveweek-plan",
+        "week-core",
+        "r3-twelveweek-week"
       ]
     },
     "twelve-week-feature": {
@@ -621,7 +624,17 @@
         "r1-twelveweek",
         "r2-twelveweek-plan",
         "remaining-twelveweek-layout",
-        "remaining-screen-labels"
+        "remaining-screen-labels",
+        "r3-twelveweek-week"
+      ]
+    },
+    "twelve-week-week-core": {
+      "paths": [
+        "^src/core/week\\.js$"
+      ],
+      "suites": [
+        "week-core",
+        "r3-twelveweek-week"
       ]
     },
     "remaining-integrated-features": {

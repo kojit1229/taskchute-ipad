@@ -397,7 +397,7 @@ configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDa
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
-  escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly,
+  escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek,
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
   render  // v360(R2): PLAN面切替(非永続)の再描画用
 });

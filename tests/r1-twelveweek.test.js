@@ -233,9 +233,9 @@ async function seed(page, values) {
     await seed(page, { currentView: "twelveweek" });
 
     // LOW-1(R1)+R2でPLANを有効化: 初期表示はCYCLEだけactive・PLANは有効(disabledでない)・
-    // WEEK/REVIEWの2つがdisabledのまま(design §A・§2.1b)。
+    // WEEKは束Wで有効化、REVIEWだけdisabledのまま(spec受入1)。
     check("面チップ: activeは1件(CYCLE)", await page.locator(".twy-face-segmented button.active").count() === 1);
-    check("面チップ: disabledは2件(WEEK/REVIEW。PLANはR2で有効化)", await page.locator(".twy-face-segmented button:disabled").count() === 2);
+    check("面チップ: disabledは1件(REVIEWだけ。WEEKは束Wで有効化)", await page.locator(".twy-face-segmented button:disabled").count() === 1);
 
     // ============================================================
     // [2] S2 GLASSがcomputedで効く
