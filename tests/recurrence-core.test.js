@@ -401,7 +401,7 @@ function legacyFixture() {
   });
   vm.runInContext(legacyCode, context);
   currentState = state;
-  configureRecurrence({ RECURRENCE_KEEP_PAST_DAYS: 7, RECURRENCE_FUTURE_DAYS: 31,
+  configureRecurrence({ RECURRENCE_KEEP_PAST_DAYS: 7, RECURRENCE_FUTURE_DAYS: 14,
     isTouchedBlock: context.isTouchedBlock, getState: () => currentState,
     todayISO: () => TODAY, addDays: addDaysISO, parseDate: parseDateISO,
     minutesOf: minutesOfDT, pad2, nowDateTime: () => NOW_DT, showToast: fakeShowToast });
@@ -409,15 +409,15 @@ function legacyFixture() {
   maintainRecurrences();
   return context;
 }
-test("R2-01: production window is past 7 / future 31, inclusive and idempotent", () => {
+test("R2-01: production window is past 7 / future 14, inclusive and idempotent", () => {
   const c = legacyFixture();
   assert.equal(vm.runInContext("RECURRENCE_KEEP_PAST_DAYS", c), 7);
-  assert.equal(vm.runInContext("RECURRENCE_FUTURE_DAYS", c), 31);
-  assert.equal(c.state.blocks.length, 39);
+  assert.equal(vm.runInContext("RECURRENCE_FUTURE_DAYS", c), 14);
+  assert.equal(c.state.blocks.length, 22);
   assert.equal(c.state.blocks[0].date, "2026-08-13");
-  assert.equal(c.state.blocks.at(-1).date, "2026-09-20");
+  assert.equal(c.state.blocks.at(-1).date, "2026-09-03");
   maintainRecurrences();
-  assert.equal(c.state.blocks.length, 39);
+  assert.equal(c.state.blocks.length, 22);
 });
 test("R2-01: modal single edit moves the occurrence and excludes its original day", () => {
   const c = legacyFixture(), before = structuredClone(c.state.recurrences);
@@ -463,7 +463,7 @@ test("R2-01: sync excludes remote-only untouched instances outside production wi
   const c = legacyFixture();
   const row = (id, date, extra = {}) => ({ id, date, title: "朝の読書", recurrenceGroupId: "baseline", ...extra });
   const merged = c.mergeBlockLists([], [row("old", "2026-08-12"), row("start", "2026-08-13"),
-    row("end", "2026-09-20"), row("future", "2026-09-21"), row("edited", "2026-09-21", { comment: "保持" })]);
+    row("end", "2026-09-03"), row("future", "2026-09-04"), row("edited", "2026-09-04", { comment: "保持" })]);
   assert.deepEqual(Array.from(merged, b => b.id), ["start", "end", "edited"]);
 });
 test("R2-01: recurrence sync unions ids, resolves timestamps and retains tombstones", () => {
@@ -479,6 +479,50 @@ test("R2-01: recurrence sync unions ids, resolves timestamps and retains tombsto
 });
 
 // ---- 結果出力 ----
+// B19: use the production touched predicate, generator, purge and merge together.
+test("B19: default energy is untouched; explicit edits and orphan energy survive", () => {
+  const c = legacyFixture();
+  const rule = c.state.recurrences[0];
+  Object.assign(rule, { category: "ルーティン", expectedCharge: "3", expectedDischarge: "2" });
+  const b = makeRecurrenceInstance(rule, "2026-09-04");
+  assert.equal(c.isTouchedBlock(b), false);
+  assert.equal(c.isTouchedBlock({ ...b, charge: "3", discharge: "2" }), false);
+  for (const edit of [{ charge: 0 }, { charge: 4 }, { discharge: 0 }, { discharge: 3 },
+    { completed: true }, { actualStartAt: "2026-09-04T09:00" }, { actualEndAt: "2026-09-04T09:30" },
+    { comment: "記録" }, { isMIT: true }, { title: "改名" }, { pomodoroCount: 1 },
+    { deleted: true }, { source: "daily-reading-manual" }]) {
+    assert.equal(c.isTouchedBlock({ ...b, ...edit }), true, JSON.stringify(edit));
+  }
+  for (const recurrenceGroupId of ["", "missing-rule"]) {
+    assert.equal(c.isTouchedBlock({ ...b, recurrenceGroupId }), true);
+    assert.equal(c.isTouchedBlock({ ...b, recurrenceGroupId, charge: 0, discharge: 0 }), false);
+  }
+  rule.category = "仕事";
+  const regular = makeRecurrenceInstance(rule, "2026-09-04");
+  assert.equal(c.isTouchedBlock(regular), false);
+  assert.equal(c.isTouchedBlock({ ...regular, charge: 1 }), true);
+  rule.category = "ルーティン";
+  rule.expectedCharge = ""; rule.expectedDischarge = undefined;
+  assert.equal(c.isTouchedBlock(makeRecurrenceInstance(rule, "2026-09-04")), false);
+});
+test("B19: purge and remote merge share the inclusive 14-day energy boundary", () => {
+  const c = legacyFixture();
+  const rule = c.state.recurrences[0];
+  Object.assign(rule, { category: "ルーティン", expectedCharge: 3, expectedDischarge: 2 });
+  const row = (id, date, extra = {}) => ({ ...makeRecurrenceInstance(rule, date), id, ...extra });
+  const rows = [row("inside", "2026-09-03"), row("outside", "2026-09-04"),
+    row("done", "2026-09-04", { completed: true }),
+    row("actual", "2026-09-04", { actualStartAt: "2026-09-04T09:00" }),
+    row("charge-edit", "2026-09-04", { charge: 0 }),
+    row("discharge-edit", "2026-09-04", { discharge: 0 })];
+  const expected = rows.filter(b => b.id !== "outside");
+  assert.deepEqual(Array.from(c.mergeBlockLists([], rows)), expected);
+  c.state.blocks = structuredClone(rows);
+  maintainRecurrences({ purge: true });
+  assert.deepEqual(c.state.blocks.filter(b => rows.some(r => r.id === b.id)), expected);
+  assert.ok(c.state.blocks.every(b => b.date <= "2026-09-03" || c.isTouchedBlock(b)));
+});
+
 const failed = results.filter((r) => !r.ok);
 for (const r of results) {
   console.log(`${r.ok ? "PASS" : "FAIL"} - ${r.name}`);

@@ -206,7 +206,7 @@ const JOURNAL_REQUEST_SECTION = [
 
 // v23: 繰り返し Block を実体化する期間(今日を基準)
 const RECURRENCE_KEEP_PAST_DAYS = 7;    // 過去はこの日数だけ実体を保持
-const RECURRENCE_FUTURE_DAYS = 31;      // 未来はこの日数先まで実体化
+const RECURRENCE_FUTURE_DAYS = 14;      // 未来はこの日数先まで実体化
 
 // v152で追加された仕分け履歴データの同期上限。UI削除後も既存データ互換のため保持する。
 // v166: configureGithubSync()(このすぐ下の起動処理)がこの定数を参照するため、元の宣言位置
@@ -13323,10 +13323,15 @@ function isTouchedBlock(b) {
     ? (state.recurrences || []).find((r) => r.id === b.recurrenceGroupId)
     : null;
   const renamed = rule ? b.title !== rule.title : false;
+  const defaultCharge = rule?.category === "ルーティン" ? (Number(rule.expectedCharge) || 0) : 0;
+  const defaultDischarge = rule?.category === "ルーティン" ? (Number(rule.expectedDischarge) || 0) : 0;
+  const energyChanged = rule
+    ? Number(b.charge || 0) !== defaultCharge || Number(b.discharge || 0) !== defaultDischarge
+    : Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0;
   return Boolean(
     b.deleted || b.source === "daily-reading-manual" || b.completed || b.actualStartAt || b.actualEndAt ||
     Number(b.pomodoroCount || 0) > 0 || (b.comment || "").trim() ||
-    b.isMIT || Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0 ||
+    b.isMIT || energyChanged ||
     renamed
   );
 }
