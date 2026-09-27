@@ -13323,8 +13323,8 @@ function isTouchedBlock(b) {
     ? (state.recurrences || []).find((r) => r.id === b.recurrenceGroupId)
     : null;
   const renamed = rule ? b.title !== rule.title : false;
-  const defaultCharge = rule?.category === "ルーティン" ? (Number(rule.expectedCharge) || 0) : 0;
-  const defaultDischarge = rule?.category === "ルーティン" ? (Number(rule.expectedDischarge) || 0) : 0;
+  const defaultCharge = rule?.category === "ルーティン" ? (Number(b.expectedCharge) || 0) : 0;
+  const defaultDischarge = rule?.category === "ルーティン" ? (Number(b.expectedDischarge) || 0) : 0;
   const energyChanged = rule
     ? Number(b.charge || 0) !== defaultCharge || Number(b.discharge || 0) !== defaultDischarge
     : Number(b.charge || 0) > 0 || Number(b.discharge || 0) > 0;

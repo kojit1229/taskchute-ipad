@@ -505,6 +505,23 @@ test("B19: default energy is untouched; explicit edits and orphan energy survive
   rule.expectedCharge = ""; rule.expectedDischarge = undefined;
   assert.equal(c.isTouchedBlock(makeRecurrenceInstance(rule, "2026-09-04")), false);
 });
+test("B19: later rule defaults preserve edited and untouched energy classifications", () => {
+  for (const [energy, expectedEnergy] of [["charge", "expectedCharge"], ["discharge", "expectedDischarge"]]) {
+    const c = legacyFixture();
+    const rule = c.state.recurrences[0];
+    Object.assign(rule, { category: "ルーティン", expectedCharge: 0, expectedDischarge: 0, [expectedEnergy]: 5 });
+    const untouched = makeRecurrenceInstance(rule, "2026-09-04");
+    const edited = { ...untouched, [energy]: 3 };
+    assert.equal(c.isTouchedBlock(edited), true);
+    assert.equal(c.isTouchedBlock(untouched), false);
+    rule[expectedEnergy] = 3;
+    assert.equal(c.isTouchedBlock(edited), true);
+    assert.equal(c.isTouchedBlock(untouched), false);
+    rule[expectedEnergy] = 7;
+    assert.equal(c.isTouchedBlock(edited), true);
+    assert.equal(c.isTouchedBlock(untouched), false);
+  }
+});
 test("B19: purge and remote merge share the inclusive 14-day energy boundary", () => {
   const c = legacyFixture();
   const rule = c.state.recurrences[0];
