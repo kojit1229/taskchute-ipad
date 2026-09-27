@@ -22,6 +22,7 @@ K 採用のモック m11(C5)の形に今日タブを作り直す第1弾。実行
 - tests/tower-core.test.js
 - tests/ui-a-layout.test.js
 - tests/v143.test.js
+- tests/v266.test.js
 - tests/v307.test.js
 
 ## 変更内容
@@ -29,7 +30,7 @@ K 採用のモック m11(C5)の形に今日タブを作り直す第1弾。実行
 - src/features/today-tower.js: renderTodayNowCard / todayNowDetails を新設し renderTodayTower の構成を「上の帯 → カード → LIFE BAND・信条 → 予定 | 右列」に変更。renderTodayQuickAction / renderTowerMIT / renderTowerRunway / renderTowerJournal は呼ばない(掃除は T3)。updateTowerRunway は進みバー・残り・遅れを1分ごとに差分更新
 - src/features/today.js: renderTodayPomodoro に embedded 引数(カード内では主ボタン扱いにしない)
 - styles.css: .today-now-card(C5: 左線 #c9b58a・見出し #e8d9b5・遅れ #ffb4ad・実行中は琥珀の枠と面・ポモドーロは点線枠)、上の帯の時刻とリンクを砂色系、main を 1.8fr/1fr
-- tests: today-core に新契約の断言 9 件(排他カード・主ボタン1つ・遅れの tick・ポモドーロ内包・ジャーナル欄なし・C5 実色・44px・横はみ出しなし)。f6-today-layout / ui-a-layout / tower-core / v143 の旧契約(NOW LANDING・MIT枠・切替帯・ジャーナル欄・近道)を新契約へ更新(緩和・skip なし)。v307 は fixture の当日 Block を増やして前提(ページ高さ)を満たす(断言は不変)
+- tests: today-core に新契約の断言 9 件(排他カード・主ボタン1つ・遅れの tick・ポモドーロ内包・ジャーナル欄なし・C5 実色・44px・横はみ出しなし)。f6-today-layout / ui-a-layout / tower-core / v143 の旧契約(NOW LANDING・MIT枠・切替帯・ジャーナル欄・近道)を新契約へ更新(緩和・skip なし)。v307 は fixture の当日 Block を増やして前提(ページ高さ)を満たす(断言は不変)。v266 のジャーナル欄「各1個」は「0個+日報タブへの入口1個」へ(関門1回目で検出)
 - sw.js: CACHE_NAME v410
 
 ## 変更意図
@@ -40,7 +41,7 @@ K 採用のモック m11(C5)の形に今日タブを作り直す第1弾。実行
 
 - Codex bundleT1(T1a/T1b)+T1c: 影響マップ選定+指定6スイート 0、code:index/manifest 0。監督者実走: v307 today-core tower-core f6-today-layout ui-a-layout remaining-screen-labels v143 daily-start-end-e2e exec-layout-media action-registry-core 全通過(reports/T1/supervisor-tests.log)
 - 独立検証(1系統・表示のみ): orders/03-verify-T1.md(記入待ち)
-- release-gate --final: (記入待ち)
+- release-gate --final 1回目: v266 だけ失敗(旧契約=ジャーナル欄の存在を待つ)→ 期待を新契約へ更新 → 2回目: (記入待ち)
 
 ## 既知の制約・保留
 
