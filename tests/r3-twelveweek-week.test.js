@@ -116,7 +116,7 @@ async function snapshot(page) {
     assert.match(scoreText, /確定済み 2026-07-25 08:00/);
     assert.equal(await page.locator('.twy-week-score [data-action="twy-open-commit"]').count(), 1);
     assert.equal(await page.locator('.twy-week-strip > span').count(), 7);
-    assert.match(await page.locator('.twy-week-strip [data-today="1"]').innerText(), /金 今日\s*0\/2/);
+    assert.match(await page.locator('.twy-week-strip [data-today="1"]').innerText(), /金\s*今日\s*0\/2/);
     assert.match(await page.locator('.twy-week-strip [data-missed="1"]').innerText(), /火\s*0\/1 免1 落1/);
     assert.equal(await page.locator('.twy-week-strip').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length), 7);
     assert.deepEqual(await page.locator('.twy-week-outlook p').allTextContents(), [
@@ -158,7 +158,8 @@ async function snapshot(page) {
       if (width === 390) {
         const cells = await page.locator('.twy-week-strip > span').evaluateAll((els) => els.map((el) => {
           const range = document.createRange();
-          range.selectNodeContents(el);
+          // 「今日」の札(absolute)は行の高さに数えない: 先頭の文字だけを測る
+          range.selectNodeContents(el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild : el);
           return { height: el.getBoundingClientRect().height, contentHeight: range.getBoundingClientRect().height,
             scrollWidth: el.scrollWidth, clientWidth: el.clientWidth,
             smallOverflow: (() => { const sm = el.querySelector("small"); return sm ? sm.scrollWidth - sm.clientWidth : 0; })() };

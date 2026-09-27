@@ -330,7 +330,7 @@ function twyWeekScoreHTML(weekStart, today, records, target) {
   const score = weekOutlook(records, weekStart, today, target);
   const meta = dedupeById(records).find((record) => record.recordType === "week" && record.weekStart === weekStart && !record.deleted);
   const strip = weekDayStrip(records, weekStart, today).map((day) => `<span data-today="${day.isToday ? "1" : "0"}" data-missed="${day.missed ? "1" : "0"}">
-    ${day.label}${day.isToday ? " 今日" : ""}<small>${day.done}/${day.total}${day.excused ? ` 免${day.excused}` : ""}${day.missed ? ` 落${day.missed}` : ""}</small></span>`).join("");
+    ${day.label}${day.isToday ? ` <b class="twy-week-today">今日</b>` : ""}<small>${day.done}/${day.total}${day.excused ? ` 免${day.excused}` : ""}${day.missed ? ` 落${day.missed}` : ""}</small></span>`).join("");
   const outlook = [
     score.todayPlanned === 0 || score.pctIfTodayDone === null ? "" : `<p>今日の${score.todayPlanned}コマを終えると <b>${score.pctIfTodayDone}%</b></p>`,
     score.needTodayForTarget === null ? "" : score.needTodayForTarget === 0 ? `<p>目標 ${target}% に到達済み</p>` : `<p>目標${target}%には今日 <b>あと${score.needTodayForTarget}コマ</b> でとどく</p>`,

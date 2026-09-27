@@ -5622,8 +5622,11 @@ details.settings-row > .fold-summary.settings-row-summary {
 .twy-tower .twy-week-score-big small { font-size: 24px; }
 .twy-tower .twy-week-score-big[data-under="1"] { color: var(--tower-amber); }
 .twy-tower .twy-week-score-meta { margin-top: 8px; line-height: 1.8; overflow-wrap: anywhere; }
-.twy-tower .twy-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
-.twy-tower .twy-week-strip > span { white-space: nowrap; min-width: 0; padding: 6px 2px; border: 1px solid var(--tower-line); border-radius: 6px; text-align: center; font-size: 12px; }
+.twy-tower .twy-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 16px; }
+.twy-tower .twy-week-strip > span { position: relative; white-space: nowrap; min-width: 0; padding: 6px 2px; border: 1px solid var(--tower-line); border-radius: 6px; text-align: center; font-size: 12px; }
+/* CI(Linux の字体)で「金 今日」が 390px の1マス(約41px)をはみ出したため、「今日」はマスの上に載る小さな札にする(文字幅に依存しない)。 */
+.twy-tower .twy-week-strip .twy-week-today { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 999px; font-size: 9px; font-weight: 700; line-height: 14px; color: #0b0d1c; background: var(--tower-amber); }
+@media (max-width: 420px) { .twy-tower .twy-week-strip > span { font-size: 11px; padding: 6px 1px; } }
 .twy-tower .twy-week-strip small { display: block; font-size: 10px; white-space: normal; overflow-wrap: anywhere; } /* 検証34 med: 親の nowrap を小文字行に継承させない(「免1 落1」がマスをはみ出す) */
 .twy-tower .twy-week-strip [data-today="1"] { color: var(--tower-amber); border-color: var(--tower-amber); }
 .twy-tower .twy-week-strip [data-missed="1"] { color: var(--twy-miss); border-color: var(--twy-miss); }

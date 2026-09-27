@@ -48,6 +48,7 @@
 - release-gate --final は監督者が実走(reports/W/release/)
 - release-gate --final 1回目(07:1x): remaining-screen-labels の旧期待(準備中2件)だけ失敗 → 期待を新契約へ更新(監督者、テストのみ)→ 2回目を実走
 - release-gate --final 3回目(fixW3 後、08:5x): PASS。workspace verify.sh 76検査通過(08:2x)。4コミットに分割(W1 79行 / W2+W3 161行 / fixW3 / release)、commit-size PASS
+- PR #144 CI 1回目: r3-twelveweek-week が e2e shard 4/4 で失敗(Linux の字体で「金 今日」が 390px の1マスをはみ出す。Windows では通る)→ fixW4: 「今日」をマス上の小さな札(absolute)にして文字幅に依存しない形へ。v303 の失敗は他の run でも繰り返す既知の環境起因(ローカル 0)
 
 ## 既知の制約・保留
 
