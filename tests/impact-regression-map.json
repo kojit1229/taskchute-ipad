@@ -494,7 +494,7 @@
         "^src/core/recurrence"
       ],
       "patterns": [
-        "maintainRecurrences|createRecurrenceRule|triggerAnchorPlacements|recurrenceMatchesDate|makeRecurrenceInstance|anchorCandidateOptions|routineRate"
+        "isTouchedBlock|RECURRENCE_FUTURE_DAYS|maintainRecurrences|createRecurrenceRule|triggerAnchorPlacements|recurrenceMatchesDate|makeRecurrenceInstance|anchorCandidateOptions|routineRate"
       ],
       "suites": [
         "recurrence-core"
