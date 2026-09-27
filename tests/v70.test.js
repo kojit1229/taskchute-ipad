@@ -132,6 +132,48 @@ function check(name, cond, extra = "") {
     // 既存スイートの前提(設定済みstate)を保つためテスト用トークンを注入する(tests/helpers.js参照)
     await passGithubGate(page);
 
+    await page.setViewportSize({ width: 375, height: 844 });
+    const memoCard = await page.evaluate(async () => {
+      const { state } = await import('/src/state/store.js');
+      const { renderTimelineCard } = await import('/src/features/timeline.js');
+      const previous = { tasks: state.tasks, projects: state.projects };
+      const host = document.createElement('div');
+      try {
+        state.tasks = [{ id: 'memo-task', projectId: 'memo-project', description: '今週の内容: <b>' + '今週の作業'.repeat(15) }];
+        state.projects = [{ id: 'memo-project', twelveWeekStartDate: '2026-09-01' }];
+        const position = { block: { id: 'memo-block', taskId: 'memo-task', title: '長いタイトル'.repeat(10) },
+          top: 0, height: 60, lane: 0, laneCount: 1, isShort: false };
+        const withMemo = renderTimelineCard(position);
+        state.projects[0].twelveWeekStartDate = '';
+        const withoutCycle = renderTimelineCard(position);
+        state.projects[0].twelveWeekStartDate = '2026-09-01';
+        state.tasks[0].description = '';
+        const withoutMemo = renderTimelineCard(position);
+        host.style.cssText = 'position:fixed;top:0;left:0;width:320px;height:60px';
+        host.innerHTML = withMemo;
+        document.body.append(host);
+        const card = host.querySelector('.timeline-card'), small = card.querySelector('small');
+        const memo = card.querySelector('.block-twy-memo'), title = card.querySelector('strong');
+        const box = card.getBoundingClientRect(), css = getComputedStyle(memo);
+        const fits = [small, title].every(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.left >= box.left && rect.right <= box.right && rect.top >= box.top && rect.bottom <= box.bottom;
+        });
+        return { text: memo.textContent, safe: !memo.querySelector('b'),
+          prefix: small.textContent.startsWith('予定枠 · '), unchanged: withoutCycle === withoutMemo,
+          absent: !withoutCycle.includes('block-twy-memo'), fits: fits && box.right <= innerWidth,
+          clipped: memo.scrollWidth > memo.clientWidth, ellipsis: css.textOverflow === 'ellipsis',
+          singleLine: memo.getBoundingClientRect().height < 20 && css.whiteSpace === 'nowrap',
+          sameStyle: css.color === getComputedStyle(small).color && css.fontSize === getComputedStyle(small).fontSize };
+      } finally { host.remove(); Object.assign(state, previous); }
+    });
+    check('12WY Blockの補助行末尾に安全なメモを表示、非12WY/空メモは同一出力',
+      memoCard.text === ('<b>' + '今週の作業'.repeat(15)).slice(0, 59) + '…'
+      && memoCard.safe && memoCard.prefix && memoCard.unchanged && memoCard.absent, JSON.stringify(memoCard));
+    check('375pxでタイトル+メモ込み補助行がカード内に収まり横にはみ出さない',
+      memoCard.fits && memoCard.clipped && memoCard.ellipsis && memoCard.singleLine && memoCard.sameStyle, JSON.stringify(memoCard));
+    await page.setViewportSize({ width: 1100, height: 900 });
+
     // ============================================================
     // (a) normalizeState 後方互換
     // ============================================================

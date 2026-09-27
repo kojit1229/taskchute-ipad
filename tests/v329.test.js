@@ -54,12 +54,12 @@ function task(id, projectId, title, extra = {}) {
     const other = project("p-other", "その他 Project", { category: "仕事" });
     const wish = project("p-wish", "Wish", { kind: "wish", category: "回復" });
     const active = task("t-active", cycle.id, "期限超過 active", { status: "doing", dueDate: "2026-09-01", progressNum: 4 });
-    const suspended = task("t-suspended", other.id, "中断 Task", { status: "suspended" });
+    const suspended = task("t-suspended", other.id, "中断 Task", { status: "suspended", description: "今週の内容: 非12WYでは表示しない" });
     const planParent = task("t-plan", cycle.id, "未着手 plan", { planTarget: true, dueDate: "2026-09-05" });
     const tasks = [
       task("t-done", cycle.id, "完了 Task", { status: "completed", dueDate: TODAY, progressNum: 10 }),
       active, suspended, planParent,
-      task("t-sub", cycle.id, "サブ Task", { parentTaskId: active.id }),
+      task("t-sub", cycle.id, "サブ Task", { parentTaskId: active.id, description: `今週の内容： <b>${"今週の作業".repeat(15)}\r\n固定の手順` }),
       task("t-step", cycle.id, "12WY Step", { parentTaskId: planParent.id, owner: "k", order: 1000 })
     ];
     await page.evaluate(({ key, projects, tasks, today }) => {
@@ -92,7 +92,22 @@ function task(id, projectId, title, extra = {}) {
     check("期限超過はアンバーで赤系class無し", await activeRow.locator(".wbs-overdue").evaluate((el, amber) => getComputedStyle(el).color === amber
       && !/red|danger|error/i.test(el.className), amberColor));
     check("状態badge(active/done/未着手)を描画しない", await page.locator(".wbs-status-badge").count() === 0);
+    await page.setViewportSize({ width: 375, height: 844 });
+    const memoLayout = await row("t-sub").locator(".task-twy-memo").evaluate((el) => {
+      const css = getComputedStyle(el), box = el.getBoundingClientRect();
+      const title = el.previousElementSibling.getBoundingClientRect();
+      return { text: el.textContent, safe: !el.querySelector("b"), ellipsis: css.textOverflow === "ellipsis",
+        singleLine: css.whiteSpace === "nowrap" && box.height < 20, belowTitle: box.top >= title.bottom,
+        fits: box.right <= innerWidth, clipped: el.scrollWidth > el.clientWidth };
+    });
+    const emptyMemoAbsent = await row("t-active").locator(".task-twy-memo").count() === 0;
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
+    check("12WYメモは375pxでタイトル直下の省略1行・HTML安全、空/非12WYは非表示",
+      memoLayout.text === ("<b>" + "今週の作業".repeat(15)).slice(0, 59) + "…"
+      && memoLayout.safe && memoLayout.ellipsis && memoLayout.singleLine && memoLayout.belowTitle
+      && memoLayout.fits && memoLayout.clipped && emptyMemoAbsent
+      && await row("t-suspended").locator(".task-twy-memo").count() === 0, JSON.stringify(memoLayout));
     const lowOpacityText = await row("t-suspended").evaluate((root) => [...root.querySelectorAll("*")]
       .filter((el) => el.getClientRects().length && [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim()))
       .map((el) => {

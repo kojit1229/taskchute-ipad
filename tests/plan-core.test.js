@@ -35,7 +35,15 @@ function weekMeta(weekStart, extra = {}) {
 
 (async () => {
   const mod = await import(pathToFileURL(MODULE_PATH).href);
-  const { normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary } = mod;
+  const { normalizeTwyPlan, twyMemoLine, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary } = mod;
+
+  console.log("[memo] 今週の内容はメモ1行目だけを表示");
+  check("別の書き出し・2行目の接頭辞は表示しない", ["固定の手順", "手順\n今週の内容: 対象外", " 今週の内容: 対象外"].every((description) => twyMemoLine({ description }) === ""));
+  check("空・未設定・接頭辞だけは表示しない", [{}, { description: "" }, { description: "今週の内容: \r\n手順" }, { description: "今週の内容：　" }].every((task) => twyMemoLine(task) === ""));
+  check("60文字超は59文字と省略記号", twyMemoLine({ description: `今週の内容: ${"あ".repeat(61)}\r\n手順` }) === "あ".repeat(59) + "…"
+    && twyMemoLine({ description: `今週の内容： ${"😀".repeat(61)}` }) === "😀".repeat(59) + "…"
+    && twyMemoLine({ description: `今週の内容: ${"あ".repeat(60)}` }) === "あ".repeat(60)
+    && twyMemoLine({ description: "今週の内容： 本文 \r\n手順" }) === "本文");
 
   console.log("[0] 依存ゼロ契約");
   const source = fs.readFileSync(MODULE_PATH, "utf8");

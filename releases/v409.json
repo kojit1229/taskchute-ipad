@@ -1,0 +1,63 @@
+{
+  "version": 409,
+  "date": "2026-09-27",
+  "title": "12WY 配下タスクの「今週の内容」(メモ1行目)を作業一覧のタスク行と今日のコマに1行表示(表示のみ)",
+  "summary": "12週間計画の運用で毎朝見る「今週の内容」をタスクのメモ1行目に置く決まりにしたため、メモを開かなくても作業一覧のタスク行と今日のコマ(タイムラインのカード)で読めるようにする。純関数 twyMemoLine(task) を src/core/plan.js に置き、12WY プロジェクト(twelveWeekStartDate あり)配下のタスクだけに出す。データ・保存・同期・日付は不変。",
+  "changedFiles": [
+    "CHANGES_v409.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v409.json",
+    "src/core/plan.js",
+    "src/features/timeline.js",
+    "styles.css",
+    "sw.js",
+    "tests/plan-core.test.js",
+    "tests/suite-manifest.json",
+    "tests/v329.test.js",
+    "tests/v70.test.js"
+  ],
+  "intent": [
+    "案件 2026-09-27-12wy-cycle-registration orders/01(K 依頼 2026-09-27)→ Codex 発注 02・03。許可範囲に src/features/timeline.js の表示部分(renderTimelineCard)を監督者が追加"
+  ],
+  "changes": [
+    "src/core/plan.js: twyMemoLine(task)= description の1行目が「今週の内容:」(全角コロン可)で始まれば本文を trim、60文字超は59文字+…。それ以外は空",
+    "app.js renderTaskRow: 12WY プロジェクト配下でメモが非空なら、タイトル直下に .task-twy-memo を1行(補助テキスト色・省略)",
+    "src/features/timeline.js renderTimelineCard: 同条件で補助行(予定枠/実績)の末尾に「 · メモ」を .block-twy-memo として連結(1行省略)",
+    "styles.css: .task-twy-memo / .block-twy-memo と補助行の折返し制御(3行)",
+    "tests: plan-core に twyMemoLine 3ケース、v329(作業一覧)と v70(タイムライン)に表示/非表示の断言",
+    "sw.js: CACHE_NAME v409"
+  ],
+  "uncertainties": [
+    "実機(iPhone)は未確認。375px は Playwright 実測(reports/03/measure-375.json: メモは1行省略、非12WY のカードは無変更)",
+    "タイムラインのカードは 375px で元から scrollWidth が 6px 大きい(メモの有無にかかわらず同じ。今回の変更ではない)"
+  ],
+  "reviewFocus": [
+    "12WY でないプロジェクトのタスク行・Block カードの出力が1文字も変わらないこと",
+    "description に HTML が含まれても escapeHTML されること",
+    "保存・同期・日付処理に触れていないこと(差分は表示関数と純関数のみ)"
+  ],
+  "verification": [
+    "Codex 発注 02(作業一覧)+03(タイムライン): plan-core・影響マップ選定の関係スイート・索引・manifest すべて 0",
+    "監督者: plan-core v329 v70 v50 v59 exec-layout-media 全通過(reports/supervisor-tests.log)、375px 実測(reports/03/measure-375.cjs)",
+    "独立検証(1系統、表示のみ): Claude 01 PASS(2026-09-27。指紋 7a05381c… 一致、7スイート・code:index・test:manifest 0、375px 実測 0)。low 4件は修正必須でなく v410 以降へ(圧縮表示でのメモ非表示・短いカードでの非表示・完了タスクの薄色・行頭空白の運用メモ)",
+    "release-gate --final PASS(2026-09-27 11:0x、reports/gate-final.log)。workspace verify.sh は別記録"
+  ],
+  "knownLimitations": [
+    "作業一覧で表示されるのは選択中プロジェクトのタスク行だけ(既存仕様)",
+    "「今週の内容:」がメモの1行目に無いタスクには何も出ない",
+    "圧縮表示(is-compact)の 12WY タスクはメモで2行になる / 短いカード(is-short)にも小さなメモが付く / 完了タスクのメモは薄色にならない(いずれも low、v410 以降で調整)"
+  ],
+  "relatedSuites": [
+    "plan-core",
+    "v329",
+    "v70",
+    "v50",
+    "v59",
+    "exec-layout-media",
+    "r0-twyplan",
+    "action-registry-core"
+  ]
+}

@@ -19,6 +19,14 @@ function clampWeekNo(value, fallback) {
   return Math.max(1, Math.min(12, Math.round(n)));
 }
 
+function twyMemoLine(task) {
+  const firstLine = (task?.description || "").split("\n", 1)[0].replace(/\r/g, "");
+  const match = /^今週の内容[:：](.*)$/.exec(firstLine);
+  if (!match) return "";
+  const chars = Array.from(match[1].trim());
+  return chars.length > 60 ? chars.slice(0, 59).join("") + "…" : chars.join("");
+}
+
 // v336: task.twyPlanの既定値補完(既存値優先)+clamp。fromWeek>toWeekの逆転はtoWeek=fromWeekへ。
 function normalizeTwyPlan(raw) {
   const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
@@ -196,5 +204,5 @@ function cycleWeeksSummary(weeklyCommitments, settings, cycleStartDate, todayISO
 }
 
 export {
-  normalizeTwyPlan, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary, weekStartOfISO, addDaysISO
+  normalizeTwyPlan, twyMemoLine, planTargetForWeek, taskWeekTriple, taskPlanGrid, remainingTarget, cycleWeeksSummary, weekStartOfISO, addDaysISO
 };

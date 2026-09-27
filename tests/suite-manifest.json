@@ -2511,9 +2511,9 @@
         "planning-execution",
         "journal-health"
       ],
-      "assertionSignals": 103,
-      "assertionHash": "f38727c82ac5b6c4",
-      "sourceHash": "f5ee3141eedfd6b8",
+      "assertionSignals": 106,
+      "assertionHash": "666c91bc255b334b",
+      "sourceHash": "28d869b30341b063",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -6971,9 +6971,9 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 27,
-      "assertionHash": "5d5fd0041a7c1cb0",
-      "sourceHash": "aad3ca5b57cb69f6",
+      "assertionSignals": 28,
+      "assertionHash": "b40dcddafcf1a346",
+      "sourceHash": "641f231a2e2a945b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -7765,9 +7765,9 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 42,
-      "assertionHash": "98d0b4de2442fe09",
-      "sourceHash": "34e618f6a4611d0f",
+      "assertionSignals": 44,
+      "assertionHash": "7653e8be2115d49d",
+      "sourceHash": "ed3b1faed7a34552",
       "waits": {
         "fixedCount": 16,
         "numericMilliseconds": 4850,
