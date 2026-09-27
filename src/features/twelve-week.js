@@ -6,10 +6,33 @@ import { taskWeekTriple, cycleWeeksSummary, taskPlanGrid, remainingTarget, norma
 import { registerActions } from "../ui/actions.js";
 import { weekOutlook, weekDayStrip, todayTwyBlocks, missedTwyItems, projectWeekScore, taskDayChips } from "../core/week.js";
 
-let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek;
+let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek, nowDateTime;
 
 function configureTwelveWeek(deps) {
-  ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek } = deps);
+  ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek, nowDateTime } = deps);
+}
+
+function upsertWeeklyReview(weekStart, projectId, patch) {
+  const id = `wr_${weekStart}_${projectId}`, now = nowDateTime();
+  const reviews = state.twyWeeklyReviews || (state.twyWeeklyReviews = []);
+  const index = reviews.findIndex((entry) => entry.id === id);
+  const previous = reviews[index];
+  const record = {
+    cycleStartDate: "", aim: "", wentWell: "", obstacles: "", reviewedAt: "", deleted: false,
+    ...previous, ...patch, id, weekStart, projectId,
+    createdAt: previous?.createdAt || now, updatedAt: now
+  };
+  if (index < 0) reviews.push(record);
+  else reviews[index] = record;
+  return record;
+}
+
+function deleteWeeklyReview(id) {
+  const record = (state.twyWeeklyReviews || []).find((entry) => entry.id === id);
+  if (!record) return null;
+  record.deleted = true;
+  record.updatedAt = nowDateTime();
+  return record;
 }
 
 // 上部チップ(CYCLE|PLAN|WEEK|REVIEW)。今週面まで有効化。振り返りは準備中。
@@ -446,4 +469,4 @@ registerActions({
   }
 });
 
-export { configureTwelveWeek, renderTwelveWeek };
+export { configureTwelveWeek, renderTwelveWeek, upsertWeeklyReview, deleteWeeklyReview };

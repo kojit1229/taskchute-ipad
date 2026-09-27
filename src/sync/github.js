@@ -110,7 +110,7 @@ export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
   if (remoteNorm && mode !== "pushed") {
     const keys = [...SYNC_CORE_COMPARE_KEYS, "journals", "journalMeta", "feedback", "condition.logs",
       "sleep.logs", "settings.morningEnergyLog", "settings.dailyReadingRoutineIds", "blocks", "dailyDeclarations", "weeklyWishes",
-      "bodyScans", "writeMeditations", "tasks", "projects", "storeVisits", "tracks", "trackMeasurements",
+      "bodyScans", "writeMeditations", "twyWeeklyReviews", "tasks", "projects", "storeVisits", "tracks", "trackMeasurements",
       "weeklyCommitments", "swipeTriageLog", "gardenLog", "coachLog.meals", "aiStepProcessedIds",
       "aiStepDismissedIds", "aiReportReadIds", "aiStepPendingRequests", "archivedDates", "archivedBlocksBefore", "reports",
       "chainRuns", "zeroSecThemeLog", "migrationRitualLog", "feedbackFiles", "feedbackIngestedDates",
@@ -948,6 +948,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // v294: 書く瞑想(充放電ログ改善R1a)もbodyScansと同じmergeById(idキー和集合、updatedAtが
     // 新しい方が勝つ)。1日1レコード(id=`wm_${date}`)のため日単位の編集競合はこれで解決する。
     const writeMeditations = mergeById(state.writeMeditations, remoteNorm.writeMeditations);
+    const twyWeeklyReviews = mergeById(state.twyWeeklyReviews, remoteNorm.twyWeeklyReviews);
     // v135: tasks/projectsもidキー和集合マージ(updatedAtの新しい方)。
     // v136: シングルトン(wish/other Project、other Task)の重複はここでガードする
     // (reconcileSingletonDuplicates)。other Task統合に伴うBlock.taskid付け替えもあるため
@@ -1045,6 +1046,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       // normalizeState未通過のstateでも例外化しないようにする。mergeByIdのロジック自体は
       // bodyScansと完全に同一で、この防御はfail-close側の安全弁にすぎない)。
       !sameArrayByReference(writeMeditations, state.writeMeditations || []) ||
+      !sameArrayByReference(twyWeeklyReviews, state.twyWeeklyReviews || []) ||
       !sameArrayByReference(tasks, state.tasks) ||
       !sameArrayByReference(projects, state.projects) ||
       !sameArrayByReference(storeVisits, state.storeVisits) ||
@@ -1085,6 +1087,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       !sameArrayByReference(blocks, remoteNorm.blocks || []) ||
       !sameArrayByReference(bodyScans, remoteNorm.bodyScans || []) ||
       !sameArrayByReference(writeMeditations, remoteNorm.writeMeditations || []) ||
+      !sameArrayByReference(twyWeeklyReviews, remoteNorm.twyWeeklyReviews || []) ||
       !sameArrayByReference(tasks, remoteNorm.tasks || []) ||
       !sameArrayByReference(projects, remoteNorm.projects || []) ||
       !sameArrayByReference(storeVisits, remoteNorm.storeVisits || []) ||
@@ -1115,7 +1118,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       values: {
         reading,
         singleSchedules: schedules.singleSchedules, scheduleSeries: schedules.scheduleSeries,
-        journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
+        journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, twyWeeklyReviews, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
         archivedDates,  // 単位16
         archivedBlocksBefore,
         // unit14b追加分
@@ -1165,6 +1168,7 @@ function applySyncMergeToLocal(merged) {
   state.weeklyWishes = v.weeklyWishes;  // v121
   state.bodyScans = v.bodyScans;  // v129
   state.writeMeditations = v.writeMeditations;  // v294
+  state.twyWeeklyReviews = v.twyWeeklyReviews;
   state.tasks = v.tasks;  // v135
   state.projects = v.projects;  // v135
   state.storeVisits = v.storeVisits;  // v141
@@ -1224,6 +1228,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.weeklyWishes = v.weeklyWishes;  // v121
   remoteNorm.bodyScans = v.bodyScans;  // v129
   remoteNorm.writeMeditations = v.writeMeditations;  // v294
+  remoteNorm.twyWeeklyReviews = v.twyWeeklyReviews;
   remoteNorm.tasks = v.tasks;  // v135
   remoteNorm.projects = v.projects;  // v135
   remoteNorm.storeVisits = v.storeVisits;  // v141

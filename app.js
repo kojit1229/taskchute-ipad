@@ -397,7 +397,7 @@ configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDa
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
-  escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek,
+  escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek, nowDateTime,
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
   render  // v360(R2): PLAN面切替(非永続)の再描画用
 });
@@ -2910,6 +2910,13 @@ function normalizeState(value) {
       updatedAt: w.updatedAt || ""
     };
   });
+  value.twyWeeklyReviews = compactArr(value.twyWeeklyReviews).map((entry) => ({
+    weekStart: "", projectId: "", cycleStartDate: "", aim: "", wentWell: "", obstacles: "",
+    reviewedAt: "", deleted: false, ...entry,
+    id: entry.id || (entry.weekStart || entry.projectId
+      ? `wr_${entry.weekStart || ""}_${entry.projectId || ""}` : `wr_${crypto.randomUUID()}`),
+    createdAt: entry.createdAt || nowDateTime(), updatedAt: entry.updatedAt || ""
+  }));
   // v141: 「今日行ったお店」ログ(ジャーナルタブから店名/URL/感想を記録、年間一覧で振り返る)。
   // 1日に複数件登録・編集・削除(tombstone)できるため、tasks/projectsと同じ
   // mergeByIdPreferNewer(updatedAt優先マージ)で多端末同期する(computeSyncMerge参照)。
