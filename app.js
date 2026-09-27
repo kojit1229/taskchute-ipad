@@ -2537,7 +2537,7 @@ function normalizeState(value) {
     }
   }
   value.blocks = value.blocks.filter((block) =>
-    !(block.deleted && block.date && block.date < value.archivedBlocksBefore));
+    !(block.deleted && block.archivedAt && blockDate(block.date) && block.date < value.archivedBlocksBefore));
   // v17: 既存 Block に isMIT のデフォルト値を補完(後方互換)
   // v18: 壊れた時刻データを修復(text化で不正形式になった可能性に対応)
   const fixDateTime = (val) => {

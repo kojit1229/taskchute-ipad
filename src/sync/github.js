@@ -834,7 +834,7 @@ function mergeBlockLists(localBlocks, remoteBlocks, archivedBlocksBefore = "") {
   const to = addDays(today, RECURRENCE_FUTURE_DAYS);
   const addable = (remoteBlocks || []).filter((b) => {
     if (!b || !b.id || localIds.has(b.id)) return true;  // 既知idは mergeRecords の新旧判定に任せる
-    if (!b.deleted && b.date && b.date < archivedBlocksBefore) return false;
+    if (!b.deleted && b.date && b.date < archivedBlocksBefore && (b.updatedAt || "") < archivedBlocksBefore) return false;
     // リモートにしか無いblockのうち、maintainRecurrencesのパージ対象(期間外・未編集の
     // 繰り返し実体)は合流させない(パージ→合流→パージの往復と蘇生を防ぐ)
     if (b.recurrenceGroupId && (b.date < from || b.date > to) && !isTouchedBlock(b)) return false;

@@ -101,22 +101,24 @@ async function checkBlockWatermark(storeMod, syncMod) {
   const { normalize, context, source, ast } = await createNormalizer();
   const block = (id, date, extra = {}) => ({ id, date, title: id, ...extra });
   const archived = (id, date) => block(id, date, { deleted: true, archivedAt: "2026-09-27T12:00:00", updatedAt: "2026-09-27T12:00:00" });
-  const baseline = normalize(baseState({ blocks: [block("live", "2025-01-01"), block("user", "2026-03-01", { deleted: true })] }));
+  const baseline = normalize(baseState({ blocks: [block("live", "2025-01-01"), block("user", "2026-03-01", { deleted: true }), block("old-user", "2025-01-01", { deleted: true })] }));
   const input = copy(baseline);
-  input.blocks.push(archived("leap", "2024-02-29"), archived("last", "2025-12-31"), block("old-user", "2025-01-01", { deleted: true }));
+  input.blocks.push(archived("leap", "2024-02-29"), archived("last", "2025-12-31"));
   const result = normalize(input);
   assert.equal(result.archivedBlocksBefore, "2026-01-01");
-  assert.deepEqual(copy(result.blocks), copy(baseline.blocks), "live old block and newer user tombstone remain unchanged");
+  assert.deepEqual(copy(result.blocks), copy(baseline.blocks), "live old block and all user tombstones remain unchanged");
   for (const invalid of [undefined, null, 123, {}, "bad", "2026-1-01"]) {
     assert.equal(normalize({ ...copy(baseline), archivedBlocksBefore: invalid }).archivedBlocksBefore, "");
   }
   const boundary = normalize({ ...copy(baseline), archivedBlocksBefore: "2026-03-01" });
   assert.equal(boundary.archivedBlocksBefore, "2026-03-01");
   assert.deepEqual(copy(boundary.blocks), copy(baseline.blocks), "exclusive cutoff preserves same-day user tombstone");
+  const userDeleted = normalize({ ...copy(baseline), archivedBlocksBefore: "2026-07-01" });
+  assert.deepEqual(copy(userDeleted.blocks), copy(baseline.blocks), "user tombstone before cutoff survives GC unchanged");
   const leap = normalize({ ...copy(baseline), blocks: [archived("leap", "2024-02-29")] });
   assert.equal(leap.archivedBlocksBefore, "2024-03-01");
   assert.equal(leap.blocks.length, 0);
-  for (const date of ["", "2026-6-1"]) {
+  for (const date of ["", "2026-6-1", "2026-01"]) {
     const tombstone = archived("invalid-date", date);
     for (const cutoff of ["", "2026-03-01"]) {
       const invalidDate = normalize(baseState({ archivedBlocksBefore: cutoff, blocks: [tombstone] }));
@@ -154,6 +156,32 @@ async function checkBlockWatermark(storeMod, syncMod) {
     assert.deepEqual(merged.values.blocks.map(b => b.id).sort(), ["deleted", "edge", "known", "local-old", "new"]);
     assert.equal(merged.values.blocks.find(b => b.id === "known").title, "remote edit");
   }
+
+  for (const updatedAt of [undefined, "2026-06-28T23:59:00", "2026-06-29T00:00:00", "2026-09-27T10:00:00"]) {
+    const local = baseState({ archivedBlocksBefore: "2026-06-29" });
+    const remote = baseState({ blocks: [block("remote-only", "2026-06-01", updatedAt ? { updatedAt } : {})] });
+    storeMod.setState(local); await syncMod.prepareArchiveMerge(remote);
+    const merged = syncMod.computeSyncMerge(remote, "local");
+    assert.deepEqual(merged.values.blocks, (updatedAt || "") >= local.archivedBlocksBefore ? remote.blocks : [], "old remote-only block merges only when edited on or after cutoff");
+  }
+  const deviceA = normalize(baseState({ archivedBlocksBefore: "2026-07-01", blocks: [
+    block("x", "2026-06-01", { deleted: true, updatedAt: "2026-06-02T12:00:00" }),
+    archived("gc", "2026-05-01")
+  ] }));
+  const deviceB = normalize(baseState({ blocks: [block("x", "2026-06-01", { updatedAt: "2026-06-01T12:00:00" })] }));
+  assert.deepEqual(deviceA.blocks.map(b => b.id), ["x"], "archive GC retains the unsent user deletion");
+  const directions = [];
+  for (const [local, remote] of [[copy(deviceA), copy(deviceB)], [copy(deviceB), copy(deviceA)]]) {
+    storeMod.setState(local); await syncMod.prepareArchiveMerge(remote);
+    const merged = syncMod.computeSyncMerge(remote, "local");
+    assert.deepEqual(copy(merged.values.blocks), copy(deviceA.blocks), "user deletion reaches both merge directions after GC");
+    syncMod.applySyncMergeToLocal(merged);
+    syncMod.applySyncMergeToRemote(merged, remote);
+    assert.deepEqual(copy(normalize(remote).blocks), copy(deviceA.blocks));
+    assert.deepEqual(copy(normalize(storeMod.state).blocks), copy(deviceA.blocks));
+    directions.push(copy(merged.values.blocks));
+  }
+  assert.deepEqual(directions[0], directions[1], "user deletion converges symmetrically");
 
   // Real runArchive: cutoff advances only after all PUTs succeed, never backwards.
   const vm = require("node:vm");
