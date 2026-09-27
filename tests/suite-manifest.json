@@ -109,9 +109,9 @@
       "domains": [
         "sync-storage"
       ],
-      "assertionSignals": 49,
-      "assertionHash": "f8aa55cf4794ca63",
-      "sourceHash": "f2e365c47a75e54b",
+      "assertionSignals": 51,
+      "assertionHash": "1f30a0cf88deefdc",
+      "sourceHash": "800ccb4d0c9d9703",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -132,9 +132,9 @@
       "domains": [
         "sync-storage"
       ],
-      "assertionSignals": 10,
-      "assertionHash": "c6f3f42e4984fa50",
-      "sourceHash": "7eb289a46b946873",
+      "assertionSignals": 33,
+      "assertionHash": "11971183d060d04a",
+      "sourceHash": "6f78e27a7d8f809f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -7458,8 +7458,8 @@
         "journal-health"
       ],
       "assertionSignals": 19,
-      "assertionHash": "363c96ed9839c527",
-      "sourceHash": "c82900f42c55f109",
+      "assertionHash": "e6749a9e1496af29",
+      "sourceHash": "32dc36ca511a0001",
       "waits": {
         "fixedCount": 14,
         "numericMilliseconds": 7500,

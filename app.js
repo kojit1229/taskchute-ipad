@@ -2528,6 +2528,16 @@ function normalizeState(value) {
     };
   });
   value.blocks = compactArr(value.blocks);  // A3-H1: null/非オブジェクト要素を除外
+  const blockDate = (date) => typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  value.archivedBlocksBefore = blockDate(value.archivedBlocksBefore) ? value.archivedBlocksBefore : "";
+  for (const block of value.blocks) {
+    if (block.deleted && block.archivedAt && blockDate(block.date)) {
+      const before = addDays(block.date, 1);
+      if (before > value.archivedBlocksBefore) value.archivedBlocksBefore = before;
+    }
+  }
+  value.blocks = value.blocks.filter((block) =>
+    !(block.deleted && block.date && block.date < value.archivedBlocksBefore));
   // v17: 既存 Block に isMIT のデフォルト値を補完(後方互換)
   // v18: 壊れた時刻データを修復(text化で不正形式になった可能性に対応)
   const fixDateTime = (val) => {
@@ -2540,7 +2550,10 @@ function normalizeState(value) {
     // 不正形式は空に
     return "";
   };
-  value.blocks = value.blocks.map((block) => ({
+  value.blocks = value.blocks.map((block) => block.deleted && block.archivedAt ? {
+    id: block.id, date: block.date, deleted: block.deleted,
+    archivedAt: block.archivedAt, updatedAt: block.updatedAt
+  } : ({
     copiedFromId: "",
     isMIT: false,
     source: "",
@@ -11611,7 +11624,7 @@ async function restoreBackup(name) {
 // =========================================================
 const ARCHIVE_LAST_DATE_KEY = "taskchute-archive-last-date";  // 端末ローカル(1日1回ガード)
 const ARCHIVE_TEXT_KEEP_DAYS = 90;    // reports / feedback / journals の保持日数
-const ARCHIVE_BLOCK_KEEP_DAYS = 180;  // Block の保持日数(生きている集計の最長84日を安全に超える幅)
+const ARCHIVE_BLOCK_KEEP_DAYS = 90;  // Block の保持日数(生きている集計の最長84日を安全に超える幅)
 
 function gitHubFileURL(cfg, filePath) {
   return `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}`;
@@ -11735,13 +11748,15 @@ async function runArchive({ manual = false } = {}) {
     // Blockは物理削除しない(tombstone化)。既存のdeleted:trueの意味論をそのまま使い、
     // 本文相当のフィールドは落として{id, date, deleted:true, archivedAt, updatedAt}まで縮める
     // (中身はarchive/archive-<年>.jsonへ既に退避済みなのでローカルに残す必要がない)。
-    // 既にtombstone化済み(deleted:true)のBlockは触らない(GCは本単位のスコープ外)。
+    // 既存の墓標はここでは触らず、次のnormalizeStateで境目より前をGCする。
     const archivedAt = nowDateTime();
     state.blocks = state.blocks.map((b) => {
       if (b.deleted || !b.date || !(b.date < blockCut)) return b;
       removed++;
       return { id: b.id, date: b.date, deleted: true, archivedAt, updatedAt: archivedAt };
     });
+    state.archivedBlocksBefore = (state.archivedBlocksBefore || "") > blockCut
+      ? state.archivedBlocksBefore : blockCut;
     state.settings.lastArchivedAt = nowDateTime();
     _archiveCache = null;  // 検索キャッシュは次回読み直し
     saveState();
