@@ -66,7 +66,7 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
       s.blocks.push(mk(`high-${i}`, daysAgoMap[n], "16", true));
     });
     s.settings.morningEnergyLog[TODAY] = 3;  // 今朝の体調
-    // アーカイブ対象: 90日超の日報/フィードバック/ジャーナル、180日超のBlock(前年分も混ぜる)
+    // アーカイブ対象: 90日超の日報/フィードバック/ジャーナル・Block(前年分も混ぜる)
     s.reports[daysAgoMap[100]] = "# 古い日報100";
     s.reports[daysAgoMap.prevYear] = "# 大昔の日報400";
     s.feedback[daysAgoMap[100]] = "古いフィードバック100";
@@ -138,20 +138,21 @@ const b64ToObj = (b64) => JSON.parse(Buffer.from(b64, "base64").toString("utf8")
       reports: Object.values(s.reports || {}),
       journalsOld: Object.values(s.journals || {}).filter((t) => String(t).includes("古いジャーナル100")).length,
       oldBlock,
-      hasMidBlock: !!midBlock && midBlock.deleted !== true,
+      midBlock,
       archivedDates: s.archivedDates || [],
       last: s.settings.lastArchivedAt
     };
   }, { KEY });
   check("古い日報が消え、最近の日報は残る", !after.reports.includes("# 古い日報100") && after.reports.includes("# 最近の日報10"));
   check("古いジャーナルが消える", after.journalsOld === 0);
-  // 単位16: 180日超のBlockは物理削除せず、id/date/deletedだけ残るtombstoneへ縮める
-  // (本文相当のフィールドは落として同期での復活を防ぐ。100日Blockは対象外でそのまま残る)。
-  check("180日超Blockはtombstone化(id/dateは残り本文は消える)",
+  // B18: 90日超のBlockをtombstoneへ縮める。100日Blockも対象になる。
+  check("90日超Blockはtombstone化(id/dateは残り本文は消える)",
     !!after.oldBlock && after.oldBlock.deleted === true
     && after.oldBlock.date && !("title" in after.oldBlock),
     JSON.stringify(after.oldBlock));
-  check("100日Blockはtombstone化されず残る", after.hasMidBlock);
+  check("100日Blockもtombstone化され、アーカイブに本文が残る",
+    !!after.midBlock && after.midBlock.deleted === true && !("title" in after.midBlock)
+    && inAny((a) => (a.blocks || []).some((b) => b.id === "mid-block" && b.title)));
   check("lastArchivedAt が記録される", Boolean(after.last));
   check("archivedDates に退避した日付が記録される",
     after.archivedDates.includes(daysAgo(100)) && after.archivedDates.length > 0,

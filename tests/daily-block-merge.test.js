@@ -122,7 +122,7 @@ function base(blocks) {
     const source = fs.readFileSync(path.join(root, "src/sync/github.js"), "utf8");
     const calls = [...source.matchAll(/(?<!function )\bmergeBlockLists\(([^)]*)\)/g)];
     assert.equal(calls.length, 1);
-    assert.equal(calls[0][1], "state.blocks, remoteNorm.blocks");
+    assert.equal(calls[0][1], "state.blocks, remoteNorm.blocks, archivedBlocksBefore");  // v411: 第3引数は退避の境目(端末=local の固定は不変)
   });
   console.log(`daily-block-merge: ${checks} checks passed`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

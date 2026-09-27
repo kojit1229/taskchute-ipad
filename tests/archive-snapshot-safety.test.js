@@ -25,8 +25,8 @@ function fixture({ data = base(), archive = {}, onGet, onPut, failPut, failGet }
   const remote = copy(archive), puts = [], messages = [];
   let saves = 0, renders = 0, gets = 0;
   const context = vm.createContext({
-    state: data, ARCHIVE_TEXT_KEEP_DAYS: 90, ARCHIVE_BLOCK_KEEP_DAYS: 180, _archiveCache: 'cached',
-    todayISO: () => '2026-09-06', addDays: (_, delta) => delta === -90 ? '2026-06-08' : '2026-03-10',
+    state: data, ARCHIVE_TEXT_KEEP_DAYS: 90, ARCHIVE_BLOCK_KEEP_DAYS: 90, _archiveCache: 'cached',
+    todayISO: () => '2026-09-06', addDays: (_, delta) => { assert.equal(delta, -90); return '2026-06-08'; },
     nowDateTime: () => '2026-09-06T12:00:00', personalDataReady: () => true,
     personalDataConn: x => ({ ...x }), personalDataPath: p => p, gitHubFileURL: (_, p) => p,
     githubHeaders: () => ({}), toBase64: x => Buffer.from(x).toString('base64'),
@@ -76,6 +76,7 @@ function retained(f, expected) {
     assert.equal(f.data.blocks[0].title, undefined);
     assert.deepEqual(f.data.blocks.slice(1), initial.blocks.slice(1));
     assert.deepEqual([...f.data.archivedDates], ['2024-01-01', '2025-01-01']);
+    assert.equal(f.data.archivedBlocksBefore, '2026-06-08');
     assert.equal(f.data.settings.lastArchivedAt, '2026-09-06T12:00:00');
     assert.deepEqual(f.counts(), { saves: 1, renders: 1, gets: 1 });
     assert.equal(f.context._archiveCache, null);
@@ -132,7 +133,7 @@ function retained(f, expected) {
   await test('cutoff day stays local while cutoff-minus-one day is archived', async () => {
     const data = base();
     data.journals['2026-06-08'] = 'boundary'; data.journals['2026-06-07'] = 'older';
-    data.blocks.push({ id: 'boundary', date: '2026-03-10' }, { id: 'older', date: '2026-03-09' });
+    data.blocks.push({ id: 'boundary', date: '2026-06-08' }, { id: 'older', date: '2026-06-07' });
     const f = fixture({ data }); await f.run();
     assert.equal(f.data.journals['2026-06-08'], 'boundary');
     assert.equal(f.data.journals['2026-06-07'], undefined);

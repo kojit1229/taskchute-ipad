@@ -112,7 +112,7 @@ export function adoptSyncResult(before, remoteT, mode, remoteNorm) {
       "sleep.logs", "settings.morningEnergyLog", "settings.dailyReadingRoutineIds", "blocks", "dailyDeclarations", "weeklyWishes",
       "bodyScans", "writeMeditations", "tasks", "projects", "storeVisits", "tracks", "trackMeasurements",
       "weeklyCommitments", "swipeTriageLog", "gardenLog", "coachLog.meals", "aiStepProcessedIds",
-      "aiStepDismissedIds", "aiReportReadIds", "aiStepPendingRequests", "archivedDates", "reports",
+      "aiStepDismissedIds", "aiReportReadIds", "aiStepPendingRequests", "archivedDates", "archivedBlocksBefore", "reports",
       "chainRuns", "zeroSecThemeLog", "migrationRitualLog", "feedbackFiles", "feedbackIngestedDates",
       "aiWorkProcessedIds", "zeroThinking.entries", "zeroThinking.suggestedThemes", "zeroThinking.groups"];
     // Schedule changes are measured as whole records, including their ordering timestamps.
@@ -827,13 +827,14 @@ function aiStepPendingRequestWins(candidate, current) {
   return (candidate.taskId || "") < (current.taskId || "");
 }
 
-function mergeBlockLists(localBlocks, remoteBlocks) {
+function mergeBlockLists(localBlocks, remoteBlocks, archivedBlocksBefore = "") {
   const localIds = new Set((localBlocks || []).map((b) => b && b.id).filter(Boolean));
   const today = todayISO();
   const from = addDays(today, -RECURRENCE_KEEP_PAST_DAYS);
   const to = addDays(today, RECURRENCE_FUTURE_DAYS);
   const addable = (remoteBlocks || []).filter((b) => {
     if (!b || !b.id || localIds.has(b.id)) return true;  // 既知idは mergeRecords の新旧判定に任せる
+    if (!b.deleted && b.date && b.date < archivedBlocksBefore && (b.updatedAt || "") < archivedBlocksBefore) return false;
     // リモートにしか無いblockのうち、maintainRecurrencesのパージ対象(期間外・未編集の
     // 繰り返し実体)は合流させない(パージ→合流→パージの往復と蘇生を防ぐ)
     if (b.recurrenceGroupId && (b.date < from || b.date > to) && !isTouchedBlock(b)) return false;
@@ -915,6 +916,8 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     // 「退避済み日付」の全体像になるため、journals/feedback(reportsを合流させる際も同様)の
     // 日付キーマージより先に計算し、Setとして各mergeDateStringMap呼び出しへ渡す。
     const archivedDates = mergeStringIdSet(state.archivedDates, remoteNorm.archivedDates);
+    const archivedBlocksBefore = (state.archivedBlocksBefore || "") > (remoteNorm.archivedBlocksBefore || "")
+      ? state.archivedBlocksBefore : (remoteNorm.archivedBlocksBefore || "");
     const archivedDateSet = new Set(archivedDates);
     const jt = (side, d) => side === "L"
       ? ((state.journalMeta[d] || {}).textUpdatedAt || "")
@@ -932,7 +935,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const conditionLogs = mergeConditionLogMaps(state.condition.logs, (remoteNorm.condition || {}).logs);
     const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
-    const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks);
+    const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks, archivedBlocksBefore);
     const reading = mergeReadingEvidence(state, remoteNorm, blocksRaw,
       block => normalizeState(JSON.parse(JSON.stringify({ ...state, blocks: [block] }))).blocks[0]);
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
@@ -1058,6 +1061,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, state.zeroThinking) : false) ||
       // 単位16: runArchive由来のarchivedDates(退避済み日付の和集合)
       !sameArrayByReference(archivedDates, state.archivedDates || []) ||
+      archivedBlocksBefore !== (state.archivedBlocksBefore || "") ||
       // unit14b追加分
       reports.changedVsLocal ||
       !sameArrayByReference(chainRuns, state.chainRuns || []) ||
@@ -1097,6 +1101,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
       (zeroThinking ? !zeroThinkingListsEqual(zeroThinking, remoteNorm.zeroThinking) : false) ||
       // 単位16: runArchive由来のarchivedDates(退避済み日付の和集合)
       !sameArrayByReference(archivedDates, remoteNorm.archivedDates || []) ||
+      archivedBlocksBefore !== (remoteNorm.archivedBlocksBefore || "") ||
       // unit14b追加分
       reports.changedVsRemote ||
       !sameArrayByReference(chainRuns, remoteNorm.chainRuns || []) ||
@@ -1112,6 +1117,7 @@ function computeSyncMerge(remoteNorm, tieWinner) {
         singleSchedules: schedules.singleSchedules, scheduleSeries: schedules.scheduleSeries,
         journals: journals.map, journalMeta, feedback: feedback.map, conditionLogs, sleepLogs, morningEnergyLog, blocks, zeroThinking, dailyDeclarations, weeklyWishes, bodyScans, writeMeditations, tasks, projects, storeVisits, tracks, trackMeasurements, weeklyCommitments, swipeTriageLog, gardenLog, coachMeals, aiStepProcessedIds, aiStepDismissedIds, aiReportReadIds, aiStepPendingRequests,
         archivedDates,  // 単位16
+        archivedBlocksBefore,
         // unit14b追加分
         reports: reports.map, chainRuns, zeroSecThemeLog, migrationRitualLog, feedbackFiles, feedbackIngestedDates, aiWorkProcessedIds, zeroThinkingGroups
       },
@@ -1175,6 +1181,7 @@ function applySyncMergeToLocal(merged) {
   state.aiReportReadIds = v.aiReportReadIds;  // v283
   state.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   state.archivedDates = v.archivedDates;  // 単位16
+  state.archivedBlocksBefore = v.archivedBlocksBefore;
   if (v.zeroThinking) {
     state.zeroThinking.themes = v.zeroThinking.themes;
     state.zeroThinking.entries = v.zeroThinking.entries;
@@ -1232,6 +1239,7 @@ function applySyncMergeToRemote(merged, remoteNorm) {
   remoteNorm.aiReportReadIds = v.aiReportReadIds;  // v283
   remoteNorm.aiStepPendingRequests = v.aiStepPendingRequests;  // v197
   remoteNorm.archivedDates = v.archivedDates;  // 単位16
+  remoteNorm.archivedBlocksBefore = v.archivedBlocksBefore;
   if (v.zeroThinking) {
     remoteNorm.zeroThinking.themes = v.zeroThinking.themes;
     remoteNorm.zeroThinking.entries = v.zeroThinking.entries;
