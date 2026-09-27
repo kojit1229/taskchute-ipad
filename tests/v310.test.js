@@ -65,23 +65,26 @@ function runningBlock() {
 
     console.log("[1] 現在作業領域へ主役とタイマーを収める");
     await seed([runningBlock()]);
-    check("現在作業/主役/ポモドーロは各1つ", await page.locator('.tower-runway.now-hero').count() === 1
-      && await page.locator('.tower-runway > .today-pomodoro.pomo').count() === 1 && await page.locator('.today-tower[data-daily-view="today"] > .tower-mit').count() === 1
+    // v410: 単一カード・主操作・2列と、C5カードの枠/影/文字の性質を検査する。
+    check("現在作業/主役/ポモドーロは各1つ", await page.locator('.today-now-card[data-now-mode="running"]').count() === 1
+      && await page.locator('.tower-runway > .today-pomodoro.pomo').count() === 1 && await page.locator('.tower-mit').count() === 0 && await page.locator('.today-now-card .tower-now-actions > .btn.primary').count() === 1
       && await page.locator('.tower-runway .tower-mit').count() === 0);
+    // v410: 単一カード・主操作・2列と、C5カードの枠/影/文字の性質を検査する。
     check("予定は左、実績/ルーティン/本文は記録列、健康は別画面", await page.locator('#dailyTodayPlans > [data-work-list="today"]').count() === 1
       && await page.locator('.daily-today-records > details > .sec-log').count() === 1 && await page.locator('.daily-today-records > .sec-gates').count() === 1
-      && await page.locator('.daily-today-main > .sec-journal').count() === 1 && await page.locator('.sec-bodymind').count() === 0);
+      && await page.locator('.sec-journal, #towerJournalFree').count() === 0 && await page.locator('.sec-bodymind').count() === 0);
     const layout = await page.evaluate(() => {
       const r = s => document.querySelector(s).getBoundingClientRect();
       return { life: r('.life-band').toJSON(), creed: r('.so-row').toJSON(), current: r('.tower-runway').toJSON(), timer: r('.today-pomodoro').toJSON(), plans: r('#dailyTodayPlans').toJSON() };
     });
-    check("現在作業は人生/信条の下、予定の上", layout.current.top >= Math.max(layout.life.bottom, layout.creed.bottom) && layout.plans.top >= layout.current.bottom, JSON.stringify(layout));
+    // v410: 単一カード・主操作・2列と、C5カードの枠/影/文字の性質を検査する。
+    check("現在作業→人生→信条→予定", layout.current.bottom <= layout.life.top && layout.life.bottom <= layout.creed.top && layout.plans.top >= layout.creed.bottom, JSON.stringify(layout));
     check("タイマーは現在作業の内側で正の寸法", layout.timer.width > 0 && layout.timer.height > 0 && layout.timer.left >= layout.current.left && layout.timer.right <= layout.current.right
       && layout.timer.top >= layout.current.top && layout.timer.bottom <= layout.current.bottom, JSON.stringify(layout));
 
     console.log("[2] NOWヒーロー強調とポモドーロ 56px SVGリングを適用する");
     const visual = await page.evaluate(() => {
-      const hero = document.querySelector(".now-hero");
+      const hero = document.querySelector(".today-now-card");
       const title = hero.querySelector(".tower-now-title");
       const remain = hero.querySelector("#towerNowRemain");
       const ring = document.querySelector(".pomo-circle-wrap");
@@ -94,6 +97,10 @@ function runningBlock() {
       probe.style.cssText = "position:absolute; visibility:hidden; color: var(--tower-blue);";
       hero.appendChild(probe);
       const blueColor = getComputedStyle(probe).color;
+      probe.style.color = "color-mix(in srgb, var(--tower-amber) 68%, transparent)";
+      const amberBorder = getComputedStyle(probe).color;
+      probe.style.boxShadow = "0 0 26px rgba(240, 198, 116, .18), 0 8px 24px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .16)";
+      const amberShadow = getComputedStyle(probe).boxShadow;
       probe.remove();
       return {
         heroBorder: getComputedStyle(hero).borderTopColor,
@@ -105,32 +112,34 @@ function runningBlock() {
         ringWidth: ring.getBoundingClientRect().width,
         ringTag: ring.querySelector("svg")?.tagName,
         progressStroke: getComputedStyle(progress).stroke,
-        blueColor
+        blueColor, amberBorder, amberShadow
       };
     });
-    check("共通パネルの枠・影なし・平面背景・上端アクセントラインを持つ",
-      visual.heroBorder === await tokenColor(page, ".now-hero", "--tower-line") && visual.heroShadow === "none"
-      && visual.heroBackground === "none" && visual.accentLine.includes("gradient"), JSON.stringify(visual));
-    check("PCの共通タスク名18px・残り時間26px", visual.titleSize === 18 && visual.remainSize === 26, JSON.stringify(visual));
+    // v410: 単一カード・主操作・2列と、C5カードの枠/影/文字の性質を検査する。
+    check("実行中カードは琥珀の枠・影・背景を持ち旧上端線はない",
+      visual.heroBorder === visual.amberBorder && visual.heroShadow === visual.amberShadow
+      && visual.heroBackground === "linear-gradient(rgba(240, 198, 116, 0.13), rgba(255, 255, 255, 0.07))" && visual.accentLine === "none", JSON.stringify(visual));
+    // v410: 単一カード・主操作・2列と、C5カードの枠/影/文字の性質を検査する。
+    check("PCのカード名22px・見出し内の残り時間16px", visual.titleSize === 22 && visual.remainSize === 16, JSON.stringify(visual));
     check("ポモドーロ見出し・56px SVG円弧・--tower-blueと厳密一致するstrokeを使う",
       (await page.locator(".today-pomodoro .today-panel-title").textContent()).includes("ポモドーロ")
       && Math.abs(visual.ringWidth - 56) < 0.5 && visual.ringTag === "svg"
       && visual.progressStroke === visual.blueColor, JSON.stringify(visual));
 
     console.log('[2b] data-glass-blur="off"でもNOW LANDINGヒーローはGLASS縮退契約の不透明パネル背景を保つ');
-    // v310レビュー(Codex)で発見: .now-heroのbackground-imageだけの検証では、`background`
+    // v310レビュー(Codex)で発見: .today-now-cardのbackground-imageだけの検証では、`background`
     // ショートハンド(v274のGLASS縮退契約=.tower-runwayのbackground-colorを暗黙にtransparent
     // へ上書きする回帰)を検出できない。実際にblur-off状態を再現しbackgroundColorを直接見る。
     const BLUR_KEY = "taskchute-journal-glass-blur-off";
     await page.evaluate((key) => localStorage.setItem(key, "1"), BLUR_KEY);
     await page.reload();
     await page.waitForSelector('.today-tower[data-glass-blur="off"]');
-    const blurOff = await page.locator(".now-hero").evaluate((hero) => ({
+    const blurOff = await page.locator(".today-now-card").evaluate((hero) => ({
       backdropFilter: getComputedStyle(hero).backdropFilter,
       backgroundColor: getComputedStyle(hero).backgroundColor
     }));
     check("blur-off時もNOW LANDINGヒーローはv274の共通パネル背景を維持",
-      blurOff.backdropFilter === "none" && blurOff.backgroundColor === await tokenColor(page, ".now-hero", "--tower-panel"),
+      blurOff.backdropFilter === "none" && blurOff.backgroundColor === await tokenColor(page, ".today-now-card", "--tower-panel"),
       JSON.stringify(blurOff));
     await page.evaluate((key) => localStorage.removeItem(key), BLUR_KEY);
     await page.reload();

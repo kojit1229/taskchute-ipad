@@ -59,9 +59,10 @@ function check(name, condition, extra = "") {
   check("オーロラはToday本体内・全面・非操作で3灯", /\.today-tower::before\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*0;[^}]*inset:\s*0;[\s\S]*pointer-events:\s*none;/.test(stylesSource)
     && ((stylesSource.match(/radial-gradient\(/g) || []).length >= 3));
   const todayPanelNames = ["tower-glass-panel", "tower-mit", "tower-condition", "today-focus-bar",
-    "tower-panel-box", "tower-runway", "tower-gates", "tower-arrivals", "today-panel"];
+    "tower-panel-box", "today-now-card", "tower-gates", "tower-arrivals", "today-panel"];
   const panelRule = exactRule([...todayPanelNames.map((name) => '#app[data-view="today"] .today-tower .' + name),
     '#app[data-view="twelveweek"] .today-tower .tower-panel-box']);
+  // v410: 旧滑走路から単一カードへ移しても共通GLASSの指定を維持する。
   check("現行全パネルと将来用共通クラスを単一GLASSルールへ集約",
     panelRule.split(";").map((value) => value.trim()).includes("border-radius: 18px")
     && panelRule.split(";").map((value) => value.trim()).includes("-webkit-backdrop-filter: var(--tower-glass-blur)")
@@ -105,6 +106,9 @@ function check(name, condition, extra = "") {
     await page.evaluate(({ stateKey, blurKey }) => {
       const state = JSON.parse(localStorage.getItem(stateKey));
       state.currentView = "today";
+      // v410: 埋込ポモの実DOMは実行中カードで検査する。
+      const d = new Date(); const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      state.blocks = [{ id: "v274-running", date, title: "実行中", actualStartAt: date + "T11:30", actualEndAt: "", completed: false, deleted: false }];
       localStorage.setItem(stateKey, JSON.stringify(state));
       localStorage.removeItem(blurKey);
     }, { stateKey: STATE_KEY, blurKey: BLUR_KEY });
@@ -127,10 +131,10 @@ function check(name, condition, extra = "") {
       const rootStyle = getComputedStyle(root);
       const aurora = getComputedStyle(root, "::before");
       const panelStyles = [
-        ["LIFE BAND", ".life-band"], ["clock", ".daily-today-clock"], ["STANDING ORDERS", ".so-row"], ["JOURNAL", ".sec-journal"],
+        ["LIFE BAND", ".life-band"], ["clock", ".daily-today-clock"], ["STANDING ORDERS", ".so-row"], ["CURRENT", ".today-now-card"],
         ["GATE", ".tower-gates"], ["legacy ARRIVALS CSS fixture", '[data-v274-synthetic="arrivals"]'],
         ["今日の予定・実績 実DOM", '[data-work-list="today"].tower-panel-box'],
-        ["CABIN TIMER", ".today-panel"], ["tower-glass-panel", ".tower-glass-panel"]
+        ["CABIN TIMER", ".today-now-card > .today-pomodoro"], ["tower-glass-panel", ".tower-glass-panel"]
       ].map(([name, selector]) => {
         const style = getComputedStyle(document.querySelector(selector));
         return {
@@ -160,7 +164,22 @@ function check(name, condition, extra = "") {
     });
     const panelColor = await tokenColor(page, ".today-tower", "--tower-panel");
     const lineColor = await tokenColor(page, ".today-tower", "--tower-line");
-    const panelsOk = visual.panels.every((panel) => panel.radius === "18px"
+    const cardPaint = await page.locator('.today-now-card').evaluate(card => {
+      const probe = document.createElement('span'); card.appendChild(probe);
+      probe.style.color = 'color-mix(in srgb, var(--tower-amber) 68%, transparent)';
+      const border = getComputedStyle(probe).color;
+      probe.style.color = 'color-mix(in srgb, var(--tower-amber) 55%, transparent)';
+      const timerBorder = getComputedStyle(probe).color;
+      probe.style.boxShadow = '0 0 26px rgba(240, 198, 116, .18), 0 8px 24px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .16)';
+      const shadow = getComputedStyle(probe).boxShadow; probe.remove();
+      return { border, timerBorder, shadow };
+    });
+    // v410: カードと埋込ポモはC5の別意匠。共通パネルのblur・枠・背景は維持する。
+    const panelsOk = visual.panels.every((panel) => panel.name === "CURRENT"
+      ? panel.radius === "18px" && panel.background === panelColor && panel.blur === "blur(16px)" && (!visual.webkitBlurSupported || panel.webkitBlur === "blur(16px)") && panel.line === expectedTokens["--tower-line"] && panel.borderWidth === "1px" && panel.borderStyle === "solid" && panel.borderColor === cardPaint.border && panel.boxShadow === cardPaint.shadow && panel.zIndex === "1"
+      : panel.name === "CABIN TIMER"
+      ? panel.radius === "10px" && panel.background === "rgba(0, 0, 0, 0)" && panel.blur === "none" && (!visual.webkitBlurSupported || panel.webkitBlur === "none") && panel.line === expectedTokens["--tower-line"] && panel.borderWidth === "1px" && panel.borderStyle === "dashed" && panel.borderColor === cardPaint.timerBorder && panel.boxShadow === "none" && panel.zIndex === "1"
+      : panel.radius === "18px"
       && panel.background === panelColor
       && panel.blur === "blur(16px)" && (!visual.webkitBlurSupported || panel.webkitBlur === "blur(16px)")
       && panel.line === expectedTokens["--tower-line"]

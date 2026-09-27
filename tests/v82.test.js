@@ -102,7 +102,10 @@ function check(name, cond, extra = "") {
     check("bottom-navの並びがS-B1の4項目仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
 
     console.log("[1b] ホームからジャーナルへ1タップで遷移できる(朝の体調記録の日課動線)");
-    await page.click('[data-work-list="today"] [data-action="nav"][data-view="journal"]');
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
+    await page.click('.daily-today-clock [data-action="nav"][data-view="journal"]');
     await page.waitForTimeout(300);
     const viewAfterTap = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
     check("1タップでcurrentViewがjournalになる", viewAfterTap === "journal", viewAfterTap);
@@ -133,7 +136,9 @@ function check(name, cond, extra = "") {
       await page.locator('[data-fold-id="zone2"], [data-fold-id="zone2-degraded"], #homezone-1').count() === 0);
     check("縮退モードバナーが無い", await page.locator(".cond-degraded-banner").count() === 0);
     check("現行todayはTOWERを描画する", await page.locator(".today-tower").count() === 1);
-    check("記録列にJOURNALを描画する", await page.locator(".daily-today-main > .sec-journal").count() === 1 && await page.locator(".today-tower .sec-journal").count() === 1);
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
 
     console.log(failures === 0 ? "\n✅ v82 ALL PASS" : `\n❌ v82: ${failures} 件失敗`);
   } finally {

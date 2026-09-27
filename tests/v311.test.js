@@ -52,7 +52,7 @@ const idlePomodoro = () => ({
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, blocksValue: blocks, pomodoroValue: pomodoro, today: TODAY });
     await page.reload();
-    await page.waitForSelector(".today-pomodoro");
+    await page.waitForSelector(".today-now-card");
   }
 
   async function resetWriteCount() {
@@ -71,7 +71,8 @@ const idlePomodoro = () => ({
   const writeCount = () => page.evaluate(() => window.__v311StateWrites || 0);
 
   async function openLinkModal() {
-    await page.click('.today-pomodoro [data-action="open-pomodoro-link"]');
+    // v410: 開始は実行中カードに埋め込まれたポモドーロから行う。
+    await page.click('.today-now-card .today-pomodoro [data-action="open-pomodoro-link"]');
     await page.waitForSelector("#modalRoot.open .link-modal");
   }
 
@@ -141,32 +142,37 @@ const idlePomodoro = () => ({
     // 停止の effects で1回走る=合計3回。旧期待値2は 15d 接続前(停止が Block とポモドーロを1回で保存)の規則。
     check("理由記録+完全停止(Block候補)+ポモドーロ状態の旧保存で計3回保存", await writeCount() === 3, String(await writeCount()));
 
-    console.log("[4] ARRIVALS便と連動なしで開始する");
+    console.log("[4] 実行中便と連動なしで開始する");
     await page.clock.setFixedTime(new Date(2026, 7, 31, 10, 0, 0));
-    await seed([block("arrival-only", "選択するARRIVALS", "10:30")]);
+    // fixT1c: 開始済みの実行中Blockを選び、リンク先と既存開始時刻の保持を検査する。
+    await seed([block("arrival-only", "選択するARRIVALS", "10:30"), nowBlock]);
     await openLinkModal();
-    await page.click('.pomodoro-link-option[data-block-id="arrival-only"]');
+    await page.click('.pomodoro-link-option.now-opt[data-block-id="now-flight"]');
     state = await stateNow();
-    check("ARRIVALS便へリンクしactualStartAtを記録", state.pomodoro.blockId === "arrival-only" && Boolean(state.blocks[0].actualStartAt));
+    // fixT1c: 裁定Eの実行中fixtureでは既存Blockへのリンクと開始時刻の保持を検査する。
+    check("実行中BlockへリンクしactualStartAtを保持", state.pomodoro.blockId === nowBlock.id && state.blocks.find(item => item.id === nowBlock.id).actualStartAt === nowBlock.actualStartAt);
 
     const untouched = [block("none-a", "触らない便A", "10:30"), block("none-b", "触らない便B", "11:00")];
-    await seed(untouched);
+    // v410: 連動なしを選べるのはカード表示中。既存開始時刻を含む全Blockの不変性を検査する。
+    await seed([...untouched, nowBlock]);
+    const beforeNoLink = (await stateNow()).blocks.map(item => [item.id, item.actualStartAt]);
     await resetWriteCount();
     await openLinkModal();
     await page.click('.pomodoro-link-option.no-link[data-block-id=""]');
     state = await stateNow();
     check("連動なしはrunning=true/blockId空", state.pomodoro.running && state.pomodoro.blockId === "", JSON.stringify(state.pomodoro));
-    check("連動なし開始は全BlockのactualStartAtを一切変更しない", state.blocks.every((item) => item.actualStartAt === ""), JSON.stringify(state.blocks));
+    check("連動なし開始は全BlockのactualStartAtを一切変更しない", JSON.stringify(state.blocks.map(item => [item.id, item.actualStartAt])) === JSON.stringify(beforeNoLink), JSON.stringify(state.blocks));
     check("連動なし開始はstateを1回だけ保存", await writeCount() === 1, String(await writeCount()));
     await resetWriteCount();
     await page.click('.today-pomodoro [data-action="stop-pomodoro"]');
     check("連動なしの■終了は理由ピッカーなしで完全停止・1回保存",
       !(await stateNow()).pomodoro.running && await page.locator(".interrupt-reason-picker").count() === 0 && await writeCount() === 1);
 
-    console.log("[5] NOWなし/ARRIVALS 0件でも連動なしを選べる");
-    await seed([]);
+    console.log("[5] 実行中カードからARRIVALS 0件でも連動なしを選べる");
+    // v410: 非実行時の独立開始は廃止。実行中カードで次の予定0件と連動なしを検査する。
+    await seed([nowBlock]);
     await openLinkModal();
-    check("NOW選択肢を出さない", await page.locator(".pomodoro-link-option.now-opt").count() === 0);
+    check("実行中BlockのNOW選択肢は1個", await page.locator('.pomodoro-link-option.now-opt[data-block-id="now-flight"]').count() === 1);
     check("ARRIVALS 0件を表示", (await page.locator(".pomodoro-link-empty").textContent()).includes("未完了便はありません"));
     check("0件でも連動なし選択肢を残す", await page.locator('.pomodoro-link-option.no-link[data-block-id=""]').count() === 1);
     await page.click('.link-modal [data-action="modal-close"]');
@@ -210,7 +216,8 @@ const idlePomodoro = () => ({
 
     await seed([block("paused-direct", "一時停止中の直接完了", "10:00", { actualStartAt: at("10:00") })],
       active("paused-direct", { paused: true, pausedRemainMs: 12 * 60 * 1000 }));
-    await page.click('.tower-runway [data-action="now-conveyor-complete"][data-id="paused-direct"]');
+    // fixT1c: 裁定Eで復元した「▶ 次へ」から既存conveyorの完了とポモ停止を検査する。
+    await page.click('.today-now-card [data-action="now-conveyor-complete"][data-id="paused-direct"]');
     state = await stateNow();
     check("一時停止中もnowConveyorCompleteでBlock完了+着陸", !state.pomodoro.running && state.blocks[0].completed);
 

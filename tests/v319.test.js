@@ -148,14 +148,18 @@ function check(name, condition, extra = "") {
       timer: root.querySelector(".today-pomodoro .today-panel-title")?.textContent.trim() || "",
       all: root.textContent
     }));
-    check("日本語見出し・併記・ジャーナルラベルを描画",
-      todayHeadings.runway.includes("NOW LANDING") && todayHeadings.runway.includes("いま")
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
+    // v410: 未着手カードの日本語見出し、本文と停止ポモの不在を現契約で検査する。
+    check("日本語見出し・併記・日報への導線を描画",
+      todayHeadings.runway.includes("次にやること")
       && todayHeadings.arrivals === `今日の予定・実績 今日 ${TODAY}`
       && todayHeadings.log.includes("やったこと") && todayHeadings.log.includes("本日の終了実績")
       && todayHeadings.gate.includes("ルーティン") && todayHeadings.body === ""
-      && todayHeadings.journal.includes("ジャーナル") && todayHeadings.journal.includes("本日")
-      && todayHeadings.free === "自由記述" && todayHeadings.aiCount === 0
-      && todayHeadings.timer.includes("ポモドーロ"), JSON.stringify(todayHeadings));
+      && todayHeadings.journal === ""
+      && todayHeadings.free === "" && todayHeadings.aiCount === 0
+      && todayHeadings.timer === "", JSON.stringify(todayHeadings));
     check("Today DOMに旧英語見出しが残らない",
       !/ARRIVALS|FLIGHT LOG|GATE ROUTINE|BODY \/ MIND|CABIN TIMER/.test(todayHeadings.all));
 
@@ -173,6 +177,8 @@ function check(name, condition, extra = "") {
       body: root.querySelector(".journal-segment-body > summary")?.textContent.trim() || "",
       all: root.textContent
     }));
+    // v410: 本文ラベルの性質は日報タブの自由記述で維持する。
+    check("日報本文は単一", await page.locator("#journalFreeText").count() === 1);
     check("前日・けさ・よる・自由記述を描画",
       journalHeadings.previous.includes("前日") && journalHeadings.morning.includes("けさ")
       && journalHeadings.evening.includes("よる") && journalHeadings.body.includes("自由記述")

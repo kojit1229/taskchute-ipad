@@ -76,53 +76,34 @@ function check(name, condition, extra = "") {
 
     console.log("[1] Today 390px: 自由記述40vh・AI依頼欄なし");
     await seed("today", "既存のAI依頼");
-    const todayMobile = await page.evaluate(() => ({
-      height: document.querySelector(".tower-journal-free").getBoundingClientRect().height,
-      viewport: innerHeight,
-      placeholder: document.querySelector(".tower-journal-free").placeholder
-    }));
-    await page.locator('.daily-today-clock [data-action="today-journal-jump"]').click();
-    check("今日の本文は常設され記録入口で編集可能", await page.locator('#towerJournalFree').evaluate(el => el === document.activeElement && el.getBoundingClientRect().height > 0));
-    // 広い本文の既存入口はPCサイドバー。開いた後に390pxの表示高を検査する。
-    await page.setViewportSize({ width: 1280, height: 844 });
-    await page.locator('#sidebar [data-action="nav"][data-view="journal"]').click();
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForSelector('.journal-free');
-    check("本文を広く書くジャーナル画面では表示高の38%以上", await page.locator('.journal-free').evaluate(el => el.getBoundingClientRect().height >= innerHeight * .38));
-    await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
-    await page.waitForSelector('#towerJournalFree');
+    // v410: 今日には欄なし+上部入口1個。本文の寸法・案内・保存・旧値保持は日報で維持する。
+    check("今日に本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    const entry = page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]');
+    check("上部の日報入口は1個", await entry.count() === 1);
     check("TodayのAI依頼欄はDOMにない", await page.locator("#towerJournalAi, .tower-journal-ai-fold").count() === 0);
-    check("Today自由記述のplaceholderが### 依頼へ案内", todayMobile.placeholder.includes("『### 依頼』見出しの下"), todayMobile.placeholder);
     const todayFonts = await inputSizes(".today-tower");
     check("Todayのinput/textareaは16px以上", todayFonts.every(({ size }) => size >= 16), JSON.stringify(todayFonts));
-
-    console.log("[2] Today: SAVEで本文だけを保存し、既存AI依頼を保持する");
-    await page.locator("#towerJournalFree").fill("更新した自由記述");
-    await page.locator('[data-action="save-tower-journal"]').click();
+    await entry.click();
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
+    const free = page.locator('#journalFreeText');
+    await free.focus();
+    check("今日の入口から日報本文を編集可能", await free.evaluate(el => el === document.activeElement && el.getBoundingClientRect().height > 0));
+    check("本文を広く書く日報画面では表示高の38%以上", await free.evaluate(el => el.getBoundingClientRect().height >= innerHeight * .38));
+    check("本文placeholderが### 依頼へ案内", (await free.getAttribute('placeholder')).includes("『### 依頼』見出しの下"));
+    await free.fill("更新した自由記述");
     await page.waitForFunction(({ key, today }) => {
       const state = JSON.parse(localStorage.getItem(key));
       return state.journals[today] === "更新した自由記述"
         && state.journalMeta[today]?.aiRequest === "既存のAI依頼"
         && Boolean(state.journalMeta[today]?.textUpdatedAt);
     }, { key: STATE_KEY, today: TODAY });
-
-    console.log("[3] Today 1280px: 右列の過半を自由記述へ割り当てる");
-    await seed("today", "既存のAI依頼");
     await page.setViewportSize({ width: 1280, height: 900 });
-    const todayPc = await page.evaluate(() => ({
-      free: document.querySelector(".tower-journal-free").getBoundingClientRect().height,
-      body: document.querySelector(".tower-journal-body").getBoundingClientRect().height,
-      panel: document.querySelector(".tower-journal").getBoundingClientRect().height,
-      right: document.querySelector(".tower-journal-body").getBoundingClientRect().height,
-      panelFlex: getComputedStyle(document.querySelector(".tower-journal")).flex,
-      bodyFlex: getComputedStyle(document.querySelector(".tower-journal-body")).flex,
-      freeFlex: getComputedStyle(document.querySelector(".tower-journal-free")).flex
-    }));
-    check("PC自由記述は本文領域高の過半", todayPc.free > todayPc.right / 2, JSON.stringify(todayPc));
+    check("PC自由記述は本文領域高の過半", await free.evaluate(el => el.getBoundingClientRect().height > el.parentElement.getBoundingClientRect().height / 2));
 
     console.log("[4] ジャーナル 390px: 本文40vh・AI依頼欄なし・入力時保存");
     await page.setViewportSize({ width: 390, height: 844 });
     await seed("journal", "既存のAI依頼");
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
     const journalMobile = await page.evaluate(() => ({
       height: document.querySelector(".journal-free").getBoundingClientRect().height,
       viewport: innerHeight,

@@ -6255,6 +6255,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 
 /* T1c: C5 cards; legacy runway layout is overridden for the current-work card. */
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-now-card { display: block; padding: 0; border-left: 4px solid #c9b58a; overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .12); }
+.today-now-card h2 #towerNowRemain { font-size: 16px; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-now-card[data-now-mode="running"] { border-left-width: 1px; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-now-card h2 { color: #e8d9b5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
 #app[data-view="today"] .today-tower[data-daily-view="today"] .today-now-card .tower-nowhud { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 12px 12px; }

@@ -48,7 +48,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: KEY, today: TODAY });
     await page.reload();
-    await page.waitForSelector(".today-tower .sec-journal");
+    await page.waitForSelector(".today-tower");
     const normalized = await readState();
     const legacyTask = normalized.tasks.find((task) => task.id === "legacy-task");
     check("旧TaskにaiWork:falseを補完", legacyTask?.aiWork === false, JSON.stringify(legacyTask));
@@ -59,7 +59,9 @@ function check(name, cond, extra = "") {
       && normalized.journalMeta[TODAY]?.aiTaskCandidates?.[0] === "旧候補", JSON.stringify(normalized.journalMeta[TODAY]));
     // fixF6v(載せ替え追随 2026-09-14): F6-3 で JOURNAL は記録列の中でなく3列目(独立の枠)に出る(fixF6c と同じ性質)。
     // 今日の画面に JOURNAL が1つ正常描画されることを検査する(性質は同じ)。
-    check("today画面にJOURNALを正常描画", await page.locator('[data-daily-view="today"] .sec-journal').count() === 1);
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
     check("廃止済みAI集約UIの操作要素を描画しない",
       await page.locator('[data-action="ai-work-approve"], [data-action="ai-work-question"], [data-action="ai-task-adopt"], [data-action="ai-task-dismiss"], .ai-freshness-line').count() === 0);
 

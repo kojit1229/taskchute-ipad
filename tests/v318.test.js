@@ -117,10 +117,13 @@ const HEALTH_FIXTURE = {
       sleep: { logs: {} },
       condition: { logs: { [TODAY]: { gym: [{ id: "set-v318", exercise: "ベンチプレス", weight: 60, reps: 10, at: `${TODAY}T09:00` }] } } }
     });
-    await page.waitForSelector(".tower-journal-save");
-    const baseBtn = await rect(page.locator(".tower-journal-save"));
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
+    await page.waitForSelector(".daily-today-clock");
+    const baseBtn = await rect(page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]'));
     const editTarget = await rect(page.locator(".tower-gate-edit"));
-    check("共通btn由来のSAVEとGATE EDITは44px以上", baseBtn.height >= 44
+    check("日報入口とGATE EDITは44px以上", baseBtn.height >= 44
       && editTarget.width >= 44 && editTarget.height >= 44, JSON.stringify({ baseBtn, editTarget }));
     await page.locator("#towerGateStrip .tower-gate").first().scrollIntoViewIfNeeded();
     const gateHit = await page.evaluate(() => {

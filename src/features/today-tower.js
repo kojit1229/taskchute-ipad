@@ -263,9 +263,9 @@ function renderTodayNowCard(now, blocks, flights) {
         <div class="today-now-details" id="todayNowDetails">${todayNowDetails(block, now, !!running)}</div>
         ${options ? `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(towerArrivalSelectionKey(selection))}" aria-label="開始するARRIVALS便">${options}</select>` : ""}
         <div class="tower-now-actions">${ironLink}<button type="button" class="btn primary" data-action="${running ? "now-end" : "now-start"}" data-id="${id}">${running ? "■ 終了して報告" : "▶ 開始"}</button>
-          ${running ? `<button type="button" class="btn" data-action="edit-block" data-id="${id}">時刻を直す</button>` : '<span class="today-now-help">開始後、実行中カードのポモドーロで計れます</span><button type="button" class="btn" data-action="remaining-shift">遅れた分を後ろへずらす</button>'}
+          ${running ? `<button type="button" class="btn" data-action="complete-block-with-actual" data-id="${id}">■ 完了(実績を記入)</button><button type="button" class="btn" data-action="now-conveyor-complete" data-id="${id}">▶ 次へ</button><button type="button" class="btn" data-action="edit-block" data-id="${id}">時刻を直す</button>` : '<span class="today-now-help">開始後、実行中カードのポモドーロで計れます</span><button type="button" class="btn" data-action="remaining-shift">遅れた分を後ろへずらす</button>'}
         </div>` : '本日の予定はありません ─ タイムラインで追加できます <button type="button" class="btn" data-action="nav" data-view="exec">実行で予定を追加</button>'}
-    </div>${running ? renderTodayPomodoro(blocks, queueBlocksOf(blocks), true) : ""}
+    </div>${(running || state.pomodoro?.running) ? renderTodayPomodoro(blocks, queueBlocksOf(blocks), true) : ""}
   </section>`;
 }
 
@@ -615,7 +615,8 @@ function renderTodayTower() {
       <span id="towerDate">${date} (${weekday})</span><time id="towerClock">${clockText(now)}</time>
       <span>本日残り <strong id="towerDayLeft">${dayLeftText(now)}</strong></span>
       <span role="group" aria-label="今日の閲覧">${Object.entries(READING_LABELS).map(([kind, label]) => `<button type="button" data-action="daily-reading-open" data-reading-kind="${kind}">${label}</button>`).join("")}</span>
-      <nav aria-label="今日の移動"><button type="button" data-action="nav" data-view="journal">日報を書く ›</button></nav>
+      <nav aria-label="今日の移動"><button type="button" data-action="today-plans-jump">予定へ</button><button type="button" data-action="today-journal-jump">記録へ</button></nav>
+      <button type="button" data-action="nav" data-view="journal">日報を書く ›</button>
     </header>
     ${renderTodayNowCard(now, blocks, flights)}
     <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>

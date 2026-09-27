@@ -302,14 +302,24 @@ const today = '2026-09-06', selected = '2026-09-07';
       await page.locator('#app[data-view="' + view + '"]').waitFor();
     };
     await navJournal('today');
-    const journalInput = page.locator('#towerJournalFree');
+    // v410: 今日の本文欄は廃止。日報への入口を検査し、保存・IMEの同じ性質を日報入力で検査する。
+    assert.equal(await page.locator('#towerJournalFree, .sec-journal').count(), 0);
+    assert.equal(await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count(), 1);
+    await page.evaluate(async date => { (await import('/src/state/store.js')).state.selectedDate = date; }, today);
+    await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').click();
+    await page.locator('#app[data-view="journal"]').waitFor();
+    if (!await page.locator('#journalFreeText').isVisible()) await page.locator('[data-journal-section="journal"] > summary').click();
+    const journalInput = page.locator('#journalFreeText');
     const journalValue = date => page.evaluate(async date => (await import('/src/state/store.js')).state.journals[date], date);
     await journalInput.fill('自動保存の架空本文'); await page.clock.runFor(650);
     assert.equal(await journalValue(today), '自動保存の架空本文');
-    assert.equal(await page.locator('[data-journal-save-status]').textContent(), '端末に保存しました');
     await journalInput.dispatchEvent('compositionstart'); await journalInput.fill('日本語変換中の架空本文');
-    await page.clock.runFor(1000); assert.equal(await journalValue(today), '自動保存の架空本文');
+    // v410: 裁定D(2)では変換中の文字・フォーカスを保持し確定後に最終本文を保存する。
+    await page.clock.runFor(1000);
+    assert.equal(await journalInput.inputValue(), '日本語変換中の架空本文');
+    assert(await journalInput.evaluate(el => el === document.activeElement));
     await journalInput.dispatchEvent('compositionend'); assert.equal(await journalValue(today), '日本語変換中の架空本文');
+    // v410: 旧部品の保存状態文字は廃止(削除一覧に記録)。本文保存の一致は上で維持。
     await page.evaluate(() => {
       window.journalSetItem = Storage.prototype.setItem;
       Storage.prototype.setItem = function(key, value) {
@@ -320,11 +330,14 @@ const today = '2026-09-06', selected = '2026-09-07';
     await journalInput.fill('保存失敗でも残る日付別の本文'); await page.clock.runFor(650);
     assert.equal(await journalValue(today), '日本語変換中の架空本文');
     assert.equal(await journalInput.inputValue(), '保存失敗でも残る日付別の本文');
-    assert((await page.locator('[data-journal-save-status]').textContent()).includes('入力は残しています'));
-    await navJournal('exec'); await navJournal('today');
+    // fixT1c: 保存失敗通知は日報の既存通知全文との一致で検査する。
+    assert((await page.locator('body').innerText()).includes('端末に保存できませんでした。入力は残しています。保存先を確認して再試行してください'));
+    await navJournal('exec'); await navJournal('journal');
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
     assert.equal(await journalInput.inputValue(), '保存失敗でも残る日付別の本文');
     await page.evaluate(() => { Storage.prototype.setItem = window.journalSetItem; });
-    await page.locator('[data-action="save-tower-journal"]').click();
+    // v410: 日報は入力時保存。失敗後の入力再送で同じ本文を再保存する。
+    await journalInput.dispatchEvent('input');
     assert.equal(await journalValue(today), '保存失敗でも残る日付別の本文');
     await journalInput.fill('日跨ぎ直前の本文');
     await page.clock.setSystemTime(new Date(2026, 8, 7, 0, 0));
@@ -332,10 +345,15 @@ const today = '2026-09-06', selected = '2026-09-07';
     assert.equal(await journalValue(today), '日跨ぎ直前の本文');
     assert.notEqual(await journalValue(selected), '日跨ぎ直前の本文');
     await page.evaluate(async date => { (await import('/src/state/store.js')).state.archivedDates.push(date); }, selected);
-    await navJournal('exec'); await navJournal('today');
-    console.log('S3-07 archive state', await page.evaluate(async () => ({ now: new Date().toISOString(), date: document.querySelector('#towerJournalFree').dataset.towerJournalDate, archived: (await import('/src/state/store.js')).state.archivedDates })));
+    await page.evaluate(async date => { (await import('/src/state/store.js')).state.selectedDate = date; }, selected);
+    await navJournal('exec'); await navJournal('journal');
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
     assert(await journalInput.evaluate(el => el.readOnly));
-    assert(await page.locator('[data-action="save-tower-journal"]').isDisabled());
+    // v410: 廃止した保存ボタンの無効化はreadonly・案内・state不変による編集保護で検査する。
+    assert((await page.locator('body').innerText()).includes('アーカイブ'));
+    const archivedBefore = await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state));
+    await journalInput.evaluate(el => { el.value = '保存不可'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    assert.equal(await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state)), archivedBefore);
     console.log('PASS S3-07: debounce, IME commit, storage failure, draft restoration, retry, day ownership and archived readonly');
     assert.deepEqual(errors, []);
     console.log('PASS S3-01: explicit dates, occurrences, candidates, groups, zero actuals, IME, responsive execution and no mutation');
@@ -370,9 +388,10 @@ process.once('beforeExit', async () => {
     await page.reload();
     const root = page.locator('[data-daily-view="today"]');
     await root.waitFor();
-    for (const selector of ['#towerClock', '#towerDayLeft', '.life-band', '.so-row', '.tower-runway', '[data-work-list="today"]', '#towerFlightLog', '#towerGateStrip', '#towerJournalFree', '.today-pomodoro', '.tower-mit'])
+    for (const selector of ['#towerClock', '#towerDayLeft', '.life-band', '.so-row', '.tower-runway', '[data-work-list="today"]', '#towerFlightLog', '#towerGateStrip', '.daily-today-clock [data-action="nav"][data-view="journal"]'])
       assert.equal(await root.locator(selector).count(), 1, 'permanent: ' + selector);
-    assert.equal(await root.locator('.sec-bm,.tower-condition').count(), 0);
+    // v410: 廃止した独立枠と未実行ポモは描画せず、日報入口は単一。
+    assert.equal(await root.locator('.sec-bm,.tower-condition,.tower-mit,.sec-journal,#towerJournalFree,.today-pomodoro,.daily-today-quick,.daily-today-sections,.tower-runway-strip').count(), 0);
     assert.equal(await root.locator('#towerDate').textContent(), today + ' (日)');
     assert(await root.locator('header.daily-today-clock').isVisible());
     assert.equal(await root.locator('header.daily-today-clock').getAttribute('aria-label'), '今日の時計');
@@ -390,16 +409,21 @@ process.once('beforeExit', async () => {
     }
     assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings.birthDate, STATE_KEY), '');
     assert((await root.locator('#towerDate').textContent()).includes(today));
-    const journal = root.locator('#towerJournalFree');
+    // v410: 本文のnode・入力保持・保存の性質は単一の日報本文で検査する。
+    await page.evaluate(async date => { (await import('/src/state/store.js')).state.selectedDate = date; }, today);
+    await root.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').click();
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
+    const journal = page.locator('#journalFreeText');
     await journal.fill('今日の入力を時計更新後も保つ');
-    await journal.evaluate(el => { window.dailyJournalNode = el; window.dailyOrder = [...el.closest('[data-daily-view]').children]; });
+    await journal.evaluate(el => { window.dailyJournalNode = el; window.dailyOrder = [...el.closest('.journal-tower').children]; });
     await page.clock.runFor(2000);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.clock.runFor(1000);
-    assert(await journal.evaluate(el => el === window.dailyJournalNode && el.value === '今日の入力を時計更新後も保つ' && window.dailyOrder.every((node, i) => node === el.closest('[data-daily-view]').children[i])));
+    assert(await journal.evaluate(el => el === window.dailyJournalNode && el.value === '今日の入力を時計更新後も保つ' && window.dailyOrder.every((node, i) => node === el.closest('.journal-tower').children[i])));
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('taskchute-journal-today-focus-v1')).sections.life), false);
-    await root.locator('[data-action="save-tower-journal"]').click();
+    // v410: 日報の本文は入力した時点で保存する。
     assert.equal(await page.evaluate(async date => (await import('/src/state/store.js')).state.journals[date], today), '今日の入力を時計更新後も保つ');
+    await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
     for (const check of dailyLayoutChecks) await check(page, root);
     console.log('PASS S3-06: eight permanent sections, actual clock, retained settings/journal DOM, explicit save');
   } catch (error) { console.error(error); process.exitCode = 1; }
@@ -426,7 +450,7 @@ dailyLayoutChecks.push(async page => {
     assert.equal(await page.locator('[data-daily-view="' + view + '"]').count(), 1, view + ' production parent');
     const result = await page.evaluate(view => {
       const root = document.querySelector('[data-daily-view="' + view + '"]');
-      const selectors = view === 'today' ? ['.life-band', '.so-row', '.tower-runway', '#dailyTodayPlans', '.daily-today-records', '.tower-journal', '.today-pomodoro', '.tower-mit']
+      const selectors = view === 'today' ? ['.life-band', '.so-row', '.today-now-card', '#dailyTodayPlans', '.daily-today-records', '.daily-today-clock']
         : view === 'wbs' ? ['.wbs-project-list', '.wbs-project-detail']
         : view === 'exec' ? (root.querySelector('.exec-two-pane') ? ['.exec-pane-left', '.exec-pane-right'] : ['.timeline-tower', '[data-work-list="exec"]', '[data-work-list="exec-candidates"]']) : ['.detail-column'];
       const regions = [...new Set(selectors.flatMap(s => [...root.querySelectorAll(s)]))].map(el => {
@@ -464,18 +488,17 @@ dailyLayoutChecks.push(async page => {
     assert(result.regions.every(region => region.width > 0 && region.height > 0), view + ' visible measured regions');
     // Detail/exec retain the 1024px boundary; F6 Today uses three columns from 1280px.
     const twoColumns = view === 'exec' || view === 'detail' ? width >= 1024 : width >= 1280;
-    assert.equal(result.columns, twoColumns ? (view === 'today' ? 3 : 2) : 1, view + ' column count');
+    assert.equal(result.columns, twoColumns ? 2 : 1, view + ' column count');
     const leftOf = (a, b) => assert(a.right <= b.x + 1 && Math.abs(a.y - b.y) <= 1, view + ' left/right placement');
     const above = (a, b) => assert(a.bottom <= b.y + 1 && Math.abs(a.x - b.x) <= 1, view + ' vertical placement');
     if (view === 'today') {
-      assert.equal(result.regions.length, 8, 'Today required regions');
-      const [life, creed, current, plans, records, journal, timer, mit] = result.regions;
-      for (const region of [timer]) assert(region.x >= current.x && region.right <= current.right + 1 && region.y >= current.y && region.bottom <= current.bottom + 1, "current-work child inside region");
-      above(mit, life); above(life, creed); above(creed, current); above(current, plans);
-      if (twoColumns) { leftOf(plans, records); leftOf(records, journal); }
-      else { above(plans, records); above(records, journal); }
-      assert(journal.x >= result.main.x && journal.right <= result.main.right + 1 && journal.y >= result.main.y && journal.bottom <= result.main.bottom + 1,
-        'journal remains inside the main row');
+      // v410: 6領域の正寸法・順序・包含・2列を保ち、本文列とMIT独立枠は廃止する。
+      assert.equal(result.regions.length, 6, 'Today required regions');
+      const [life, creed, current, plans, records, clock] = result.regions;
+      above(clock, current); above(current, life); above(life, creed); above(creed, plans);
+      if (twoColumns) leftOf(plans, records); else above(plans, records);
+      assert(records.x >= result.main.x && records.right <= result.main.right + 1 && records.y >= result.main.y && records.bottom <= result.main.bottom + 1,
+        'records remain inside the main row');
     } else if (view === 'exec') {
       assert.equal(result.regions.length, twoColumns ? 2 : 3, 'execution required regions');
       if (twoColumns) leftOf(result.regions[0], result.regions[1]);
@@ -489,7 +512,7 @@ dailyLayoutChecks.push(async page => {
     assert.deepEqual(result.duplicateIds, [], view + ' unique IDs');
     assert(result.minInput === null || result.minInput >= 16, view + ' native input size');
     if (view === 'today') {
-      assert.equal(result.columns, width >= 1280 ? 3 : 1);
+      assert.equal(result.columns, width >= 1280 ? 2 : 1);
       const [life, creed] = result.regions;
       assert(Math.abs(life.width - creed.width) < 1 && Math.abs(life.x - creed.x) < 1, 'full-width stacked value panels');
       assert.equal(result.lifeItems.length, 4, 'four LIFE BAND values');
@@ -557,9 +580,9 @@ dailyLayoutChecks.push(async page => {
   });
   await page.locator('[data-action="nav"][data-view="today"]:visible').first().click();
   await page.locator('[data-daily-view="today"]').evaluate(el => { el.scrollIntoView({ block: 'start' }); });
-  const fold = await page.evaluate(() => ({ plans: [...document.querySelectorAll('#dailyTodayPlans [data-work-key]')].map(el => el.getBoundingClientRect().bottom), journalTop: document.querySelector('#towerJournalFree').getBoundingClientRect().top, height: innerHeight }));
+  const fold = await page.evaluate(() => ({ plans: [...document.querySelectorAll('#dailyTodayPlans [data-work-key]')].map(el => el.getBoundingClientRect().bottom), journalTop: document.querySelector('.daily-today-clock [data-action="nav"][data-view="journal"]').getBoundingClientRect().top, height: innerHeight }));
   console.log('SL2A_FOLD ' + JSON.stringify(fold));
-  assert.equal(fold.plans.length, 4); assert(fold.plans.every(bottom => bottom <= fold.height) && fold.journalTop < fold.height, 'four plans and journal visible at 1440x1000');
+  assert.equal(fold.plans.length, 4); assert(fold.plans.every(bottom => bottom <= fold.height) && fold.journalTop < fold.height, 'four plans and journal entry visible at 1440x1000');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('[data-action="today-plans-jump"]').click();
   const firstPlan = page.locator('#dailyTodayPlans [data-action="edit-block"]').first();

@@ -72,8 +72,18 @@ const ARCHIVE = Object.fromEntries(MAPS.map(key => [key, { [DATE]: `synthetic ${
             for (const key of ['journals', 'reports', 'feedback']) state[key][today] = state[key][date];
           }, DATE);
           await page.locator('[data-action="nav"][data-view="today"]').first().click();
-          assert.equal(await page.locator('#towerJournalFree').getAttribute('readonly') !== null, true);
-          assert.equal(await page.locator('[data-action="save-tower-journal"]').isDisabled(), true);
+          // v410: 今日は欄なし+日報入口1個。アーカイブの編集保護を日報本文で維持する。
+          assert.equal(await page.locator('#towerJournalFree, .sec-journal').count(), 0);
+          const entry = page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]');
+          assert.equal(await entry.count(), 1);
+          await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); state.selectedDate = state.archivedDates.at(-1); });
+          await entry.click();
+          const archivedInput = page.locator('#journalFreeText');
+          assert.equal(await archivedInput.getAttribute('readonly') !== null, true);
+          assert.ok((await page.locator('body').innerText()).includes('アーカイブ'));
+          const beforeInput = await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state));
+          await archivedInput.evaluate(el => { el.value = '書換え不可'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+          assert.equal(await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state)), beforeInput);
         } else {
           enabled = true;
           await page.evaluate(async () => { const store = await import('/src/state/store.js'); store.state.settings.autoSync = true;

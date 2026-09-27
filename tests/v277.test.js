@@ -122,8 +122,9 @@ function check(name, cond, extra = "") {
         const total = today.columns.reduce((sum, value) => sum + value, 0);
         // v405 fix(CHANGELOG 2026-09-14 16:50 C-2): 記録列は minmax(320px, 1.4fr) で最小幅を持つため、
         // 比率 1.8:1:1.4 の厳密一致ではなく「3列・記録列≥320px・予定列が最も広い・はみ出しなし」を検査する。
-        check(`${width}px Todayは3列で記録列が320px以上・予定列が最も広い`, today.columns.length === 3 && total > 0
-          && today.columns[1] >= 320 && today.columns[0] > today.columns[1] && today.columns[0] > today.columns[2] && !today.overflow, JSON.stringify(today));
+        // v410: 本文列を除いた2列でも最小幅・予定列の広さ・横溢れの性質を維持する。
+        check(`${width}px Todayは2列で記録列が320px以上・予定列が最も広い`, today.columns.length === 2 && total > 0
+          && today.columns[1] >= 320 && today.columns[0] > today.columns[1] && !today.overflow, JSON.stringify(today));
       }
     }
 
