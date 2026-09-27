@@ -30,7 +30,7 @@ import {
 } from "./src/core/track.js";
 // v336: 12WY週次目安(task.twyPlan)の正規化純関数。plan.jsもstate/store.js/app.jsを
 // importしない葉モジュール(track.jsと同じ契約)。
-import { normalizeTwyPlan } from "./src/core/plan.js";
+import { normalizeTwyPlan, twyMemoLine } from "./src/core/plan.js";
 import { createVisionRead } from "./src/features/vision-read.js";
 import { createVisionOverview } from "./src/features/vision-overview.js";
 import { DAILY_ACTIONS } from "./src/ui/daily-parts/contract.js";
@@ -6393,6 +6393,8 @@ function renderTaskTree(task, allTasksOfProject, depth, hideProgress = false) {
 }
 
 function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, hideProgress = false, compactMode = false, projectTitle = "") {
+  const memo = state.projects.some((p) => p.id === task.projectId && p.twelveWeekStartDate) ? twyMemoLine(task) : "";
+  const memoHTML = memo ? `<div class="task-twy-memo">${escapeHTML(memo)}</div>` : "";
   const canAddSub = depth < 2;  // 最大 3 階層(0,1,2)、depth=2 の子はもう作らない
   const planParent = planParentFor(task);
   // v302: 12WY週次実行計画Stepは担当・並べ替え・追加操作を保護し、通常Taskだけを圧縮する。
@@ -6461,7 +6463,7 @@ function renderTaskRow(task, depth = 0, hasChildren = false, collapsed = false, 
   return `
     <div class="row wbs-task-row${compact ? " is-compact" : ""}${suspended ? " is-suspended" : ""}${task.status === "completed" ? " is-completed" : ""}">
       <div class="wbs-task-check">${depth > 0 ? `<span class="wbs-branch">└</span>` : ""}${caret}<button class="checkbox-button ${task.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${task.id}">✓</button></div>
-      <div class="wbs-task-copy"><button class="btn ghost wbs-task-title" data-action="edit-task" data-id="${task.id}">${escapeHTML(task.title)}</button>${metaHTML}${editMode && !compact ? inlineEdit : ""}${progressHTML}</div>
+      <div class="wbs-task-copy"><button class="btn ghost wbs-task-title" data-action="edit-task" data-id="${task.id}">${escapeHTML(task.title)}</button>${memoHTML}${metaHTML}${editMode && !compact ? inlineEdit : ""}${progressHTML}</div>
       <div>${scheduledToday ? `<button class="btn wbs-today-btn" data-action="placement-add-today" data-id="${task.id}">予定を見る</button>` : ""}${task.status === "completed" ? `<span class="wbs-task-done">完了</span>` : `<button class="btn wbs-today-btn" data-action="${scheduledToday ? "placement-add-another" : "task-today"}" data-id="${task.id}">${scheduledToday ? "別の予定を追加" : "今日へ"}</button>`}</div>
       <button class="wbs-row-menu-toggle" data-action="wbs-row-menu-toggle" aria-expanded="false" aria-label="${escapeHTML(task.title)}の副操作">…</button>
       <div class="wbs-row-menu-panel" hidden>

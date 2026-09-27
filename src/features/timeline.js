@@ -49,6 +49,7 @@ import { registerActions } from "../ui/actions.js";
 import { scheduleDisplay, scheduleWarning, scheduleTimelineRows, renderSchedule } from "./single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps } from "./daily-gap-placement.js";
 import { plannedMinute } from "../core/planned-occupancy.js";
+import { twyMemoLine } from "../core/plan.js";
 let plannedDraftIntervals = () => [];
 export function restoreTimelineOrigin(initial, current) {
   const el = document.querySelector('.timeline[data-date]');
@@ -573,6 +574,9 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
   const isMigrated = Boolean(block.migratedTo);
   const migratedBadgeHTML = isMigrated
     ? `<span class="migrated-badge" title="明日へ送りました">→送済</span>` : "";
+  const task = state.tasks?.find((task) => task.id === block.taskId);
+  const memo = task && state.projects?.some((p) => p.id === task.projectId && p.twelveWeekStartDate) ? twyMemoLine(task) : "";
+  const memoHTML = memo ? ` · <span class="block-twy-memo">${escapeHTML(memo)}</span>` : "";
   return `
     <div class="timeline-card ${block.completed ? "completed" : ""} ${isActual ? "is-actual" : ""} ${isShort ? "is-short" : ""} ${isMigrated ? "is-migrated" : ""}"
          ${overflowAttr}
@@ -582,7 +586,7 @@ function renderTimelineCard(positioned, mode = "planned", maxLanes = 5) {
       ${completeBtnHTML}
       ${startEndBtn}
       <div class="tl-card-body">
-        <small>${isActual ? "実績" : "予定枠"}${block.completed ? " / 完了" : ""}${block.timelineHint ? ` / ${escapeHTML(block.timelineHint)}` : ""}</small>
+        <small>${isActual ? "実績" : "予定枠"}${block.completed ? " / 完了" : ""}${block.timelineHint ? ` / ${escapeHTML(block.timelineHint)}` : ""}${memoHTML}</small>
         <strong>${escapeHTML(block.title)}${migrationBadgeHTML(block.carryCount)}${leverageTypeMarkHTML(block.leverageType)}${migratedBadgeHTML}</strong>
       </div>
     </div>
