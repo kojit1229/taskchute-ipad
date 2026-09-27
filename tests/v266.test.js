@@ -460,10 +460,10 @@ async function toggleLifeScore(page) {
       aiMitCandidates: [], aiImported: false, ideal: "", aiTaskCandidates: ["実候補"], aiRequest: ""
     } }, aiLinkFreshness: { feedbackAt: TODAY, planAt: TODAY } });
     await page.locator('.nav-button[data-view="today"]').click();
-    // fixV392 / 設計06 §4/§7: 記録列の常設ジャーナルと本文入力は各1個。
-    await page.waitForSelector(".daily-today-main > .sec-journal");
-    check("記録列のJOURNALは1個だけ", await page.locator(".daily-today-main > .sec-journal").count() === 1);
-    check("記録列の本文入力も1個だけ", await page.locator(".daily-today-main > .sec-journal #towerJournalFree").count() === 1);
+    // v410(束T1、K決定 2026-09-27): ジャーナル欄は今日タブに置かない。日報タブへの入口だけ(fixV392 の「各1個」は「0個+入口1個」へ)。
+    await page.waitForSelector(".daily-today-main");
+    check("今日タブにJOURNAL欄が無い", await page.locator(".daily-today-main > .sec-journal, #towerJournalFree").count() === 0);
+    check("上の帯に日報タブへの入口が1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
     check("v299削除済み朝プラン・再プランactionがソースに存在しない",
       !appSource.includes('"ai-morning-plan"') && !appSource.includes('"today-replan"'));
     check("維持対象の下書き操作と廃止済み候補・鮮度UIをtodayへ重複描画しない",

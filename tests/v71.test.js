@@ -149,8 +149,11 @@ function check(name, cond, extra = "") {
       feedback: { [YESTERDAY]: "## 明日のMIT候補\n- テスト候補タスクX\n- テスト候補タスクY\n" },
       aiLinkFreshness: { feedbackAt: YESTERDAY, planAt: null }
     });
-    check("today/TOWERの記録列にJOURNALを描画", await page.locator(".daily-today-main > .sec-journal").count() === 1 && await page.locator(".today-tower .sec-journal").count() === 1);
-    check("記録列のJOURNALは単一", await page.locator(".daily-today-main > .sec-journal").count() === 1 && await page.locator(".today-tower .sec-journal").count() === 1);
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
+    // v410: 旧JOURNAL枠も本文も重複して残さない。
+    check("旧JOURNAL枠はない", await page.locator(".daily-today-main > .sec-journal").count() === 0);
     check("旧ATISセクションを描画しない", await page.locator(".sec-atis").count() === 0);
     check("旧ATIS data属性を描画しない", await page.locator("[data-atis-panel], [data-atis-task-candidates]").count() === 0);
     check("鮮度・候補の旧UIを描画しない", await page.locator('.ai-freshness-line, [data-action="mit-candidate-add"], [data-action="ai-mit-adopt"]').count() === 0);

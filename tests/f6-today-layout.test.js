@@ -36,12 +36,12 @@ const shots = process.env.F6_SHOTS_DIR;
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: '2026-09-14' });
     await page.reload(); await page.locator('.daily-table-row button').first().waitFor();
-    const ordered = ['.daily-today-clock', '.tower-mit', '.life-band', '.so-row', '.tower-runway', '.daily-today-sections', '#dailyTodayPlans', '.daily-today-records', '.tower-journal'];
+    const ordered = ['.daily-today-clock', '.tower-runway', '.life-band', '.so-row', '#dailyTodayPlans', '.daily-today-records'];
     const domOrder = await page.evaluate(selectors => selectors.map(selector => document.querySelector('[data-daily-view="today"] ' + selector)).every((node, index, nodes) => node && (!index || Boolean(nodes[index - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING))), ordered);
-    check('上部帯から末尾の記録・ジャーナルまでモック順（8枠と記録内の順序）', domOrder);
+    check('上部帯・カード・LIFE BAND・信条・予定・記録の順', domOrder);
     check('表の5列', JSON.stringify(await page.locator('[role="columnheader"]').allTextContents()) === JSON.stringify(['時刻', 'タスク', 'プロジェクト', '見積', '状態']));
-    check('MITは上部に1枠、NOW横に重複なし', await page.locator('.today-tower > .tower-mit').count() === 1 && await page.locator('.tower-runway .tower-mit').count() === 0);
-    check('MITにタイトル・時刻・見積・状態', /読書ノートをまとめる[\s\S]*14:00–14:30・見積 30分・進行中/.test(await page.locator('.tower-mit').innerText()));
+    check('MIT独立枠なし・カードの作業名に★', await page.locator('.tower-mit').count() === 0 && (await page.locator('.tower-now-title').innerText()).includes('★'));
+    check('MITの予定時刻・見積は予定行に残る', /14:00[\s\S]*読書ノートをまとめる[\s\S]*30/.test(await page.locator('[data-work-key="block:f6-0"] summary').innerText()));
     check('生年月日未設定は年齢2枠とも未設定', JSON.stringify(await page.locator('.life-unset').allTextContents()) === JSON.stringify(['未設定', '未設定']));
     check('記録群はルーティン/実績一覧の2つ・からだの帯/きろくなし', await page.locator('.tower-condition').count() === 0 && await page.locator('.sec-bodymind').count() === 0
       && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']));
@@ -59,7 +59,7 @@ const shots = process.env.F6_SHOTS_DIR;
     check('時計更新で内訳の開閉を維持', await first.getAttribute('open') !== null);
     await first.locator('summary > span').last().click();
     for (const width of [390, 768, 1024, 1280, 1440]) {
-      await setViewportAndWaitForStableLayout(page, { width, height: 1080 }, '.daily-today-sections button');
+      await setViewportAndWaitForStableLayout(page, { width, height: 1080 }, '.daily-today-clock button');
       await page.evaluate(() => { document.scrollingElement.scrollTop = 0; document.querySelector('#main')?.scrollTo(0, 0); });
       const m = await page.evaluate(selectors => {
         const tower = document.querySelector('[data-daily-view="today"]');
@@ -81,19 +81,19 @@ const shots = process.env.F6_SHOTS_DIR;
       if (width === 1440) {
         check('1440px LIFE BAND高さ70px前後', m.life.height >= 60 && m.life.height <= 80, m.life);
         check('1440px 信条3枠が同じ行', m.creeds.every(r => Math.abs(r.y - m.creeds[0].y) < 1));
-        const [plans, records, journal] = m.sections.slice(-3);
-        check('1440px予定・記録・ジャーナルは3列', Math.abs(plans.y - records.y) < 1 && Math.abs(records.y - journal.y) < 1 && plans.right <= records.x && records.right <= journal.x);
+        const [plans, records] = m.sections.slice(-2);
+        check('1440px予定・記録は2列', Math.abs(plans.y - records.y) < 1 && plans.right <= records.x);
       }
       if (shots && [390, 1440].includes(width)) {
         fs.mkdirSync(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, `today-${width}.png`), fullPage: true });
       }
     }
-    const before = await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state));
-    for (const section of ['focus', 'records', 'journal', 'life']) {
-      await page.locator(`[data-action="today-section-jump"][data-section="${section}"]`).click();
-      check(`4切替 ${section} は今日のまま`, await page.locator('#app').getAttribute('data-view') === 'today');
+    for (const selector of ['.daily-today-quick', '.tower-mit', '.daily-today-sections', '.tower-journal']) {
+      check(`廃止した枠 ${selector} は出ない`, await page.locator(selector).count() === 0);
     }
-    check('4切替はstateを変更しない', before === await page.evaluate(async () => JSON.stringify((await import('/src/state/store.js')).state)));
+    await page.locator('.daily-today-clock [data-view="journal"]').click();
+    check('上部の日報導線でjournalへ移る', await page.locator('#app').getAttribute('data-view') === 'journal');
+    await page.locator('[data-action="nav"][data-view="today"]').first().click();
     await page.locator('.life-cycle-details summary').click();
     await page.locator('.life-cycle-popover [data-action="nav"]').click();
     await page.locator('#app[data-view="twelveweek"]').waitFor();

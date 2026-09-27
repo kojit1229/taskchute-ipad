@@ -55,17 +55,23 @@ function check(name, condition, extra = "") {
       }));
     }, { key: STATE_KEY, focusKey: FOCUS_KEY, today: TODAY, oldRequest: OLD_REQUEST });
     await page.reload();
-    await page.waitForSelector(".today-tower #towerJournalFree");
+    await page.waitForSelector(".today-tower");
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
 
     console.log("[1][2] Today: 旧AI依頼UIなし・既存state非破壊");
     await assertAiUiAbsent("Today");
-    check("Todayの案内placeholder", (await page.locator("#towerJournalFree").getAttribute("placeholder")).includes(REQUEST_GUIDE));
+    // v410: 本文案内と保存は今日上部の日報入口から同じ日付の本文で検査する。
+    await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').click();
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
+    check("日報の案内placeholder", (await page.locator("#journalFreeText").getAttribute("placeholder")).includes(REQUEST_GUIDE));
     check("Today描画後も旧aiRequestを保持", (await stateNow()).journalMeta[TODAY].aiRequest === OLD_REQUEST);
 
     console.log("[3] Today SAVE: 本文だけを保存しaiRequestを変更しない");
     const towerBody = `# ${TODAY} のジャーナル\n\n### 依頼\nTOWER本文から依頼`;
-    await page.locator("#towerJournalFree").fill(towerBody);
-    await page.locator('[data-action="save-tower-journal"]').click();
+    await page.locator("#journalFreeText").fill(towerBody);
+    // v410: 手動保存ではなく入力時保存で本文一致と旧値保持を検査する。
     await page.waitForFunction(({ key, today, body, oldRequest }) => {
       const state = JSON.parse(localStorage.getItem(key));
       return state.journals[today] === body
@@ -74,7 +80,8 @@ function check(name, condition, extra = "") {
     }, { key: STATE_KEY, today: TODAY, body: towerBody, oldRequest: OLD_REQUEST });
 
     console.log("[1][2] ジャーナル: 旧AI依頼UIなし・既存state非破壊");
-    await page.locator('[data-work-list="today"] [data-action="nav"][data-view="journal"]').click();
+    await page.reload();
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
     await page.waitForSelector(".journal-tower #journalFreeText");
     await assertAiUiAbsent("ジャーナル");
     check("ジャーナルの案内placeholder", (await page.locator("#journalFreeText").getAttribute("placeholder")).includes(REQUEST_GUIDE));
@@ -97,6 +104,7 @@ function check(name, condition, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY });
     await page.reload();
+    await page.locator('[data-journal-section="journal"]').evaluate(el => { el.open = true; });
     await page.waitForSelector(".journal-tower #journalFreeText");
     const defaultBody = await page.locator("#journalFreeText").inputValue();
     check("既定テンプレに### 依頼節がある", defaultBody.includes("### 依頼"), defaultBody);

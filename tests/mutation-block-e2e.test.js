@@ -260,20 +260,29 @@ test('F5-5 390px quick action is 44px directly below the clock; desktop hides it
         api.makeBlock({ date: '2026-09-10', title: '先の予定', plannedStartAt: '2026-09-10T09:00:00' })];
       api.render();
     });
-    const button = page.locator('.daily-today-quick');
-    assert.match(await button.textContent(), /次: 先の予定.*▶ 開始/);
+    // v410: 近道の開始→終了・44px・時計直下の性質は単一カードで検査する。
+    assert.equal(await page.locator('.daily-today-quick').count(), 0);
+    const card = page.locator('.today-now-card');
+    const button = card.locator('.tower-now-actions > .btn.primary');
+    assert.equal(await button.count(), 1);
+    assert.match(await card.textContent(), /先の予定/);
+    assert.match(await button.textContent(), /▶ 開始/);
     const box = await button.boundingBox(), clock = await page.locator('.daily-today-clock').boundingBox();
     assert.equal(box.height, 44);
     assert.ok(box.y >= clock.y + clock.height && box.y + box.height < 844);
-    assert.equal(await button.evaluate(el => el.previousElementSibling.classList.contains('daily-today-clock')), true);
+    assert.equal(await card.evaluate(el => el.previousElementSibling.classList.contains('daily-today-clock')), true);
     await button.click();
     assert.ok(await page.locator('[data-action="declare-skip"]').isVisible());
     await page.locator('[data-action="declare-skip"]').click();
-    assert.match(await button.textContent(), /いま: 先の予定.*■ 終了/);
+    // v410: 実行中は同じカードの主操作が終了へ切り替わる。
+    assert.match(await card.textContent(), /実行中[\s\S]*先の予定/);
+    assert.match(await button.textContent(), /■ 終了して報告/);
     await button.click();
     assert.ok(await page.locator('[data-action="report-skip"]').isVisible());
     await page.setViewportSize({ width: 768, height: 844 });
-    assert.equal(await button.isVisible(), false);
+    // v410: カードの主操作はPCでも表示する。
+    await page.locator('[data-action="report-skip"]').click();
+    assert.equal(await button.isVisible(), true);
     await page.evaluate(() => { const api = window.__f5; api.getState().blocks = []; api.render(); });
     assert.equal(await button.count(), 0);
   });

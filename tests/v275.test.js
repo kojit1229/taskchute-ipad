@@ -134,8 +134,9 @@ async function openLifeDetails(page) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1024 });
       mobile = await layout();
       check(`${width}pxは主領域が縦積み1列`, mobile.mainColumns.trim().split(/\s+/).length === 1, JSON.stringify(mobile));
-      check(`${width}pxは時計→LIFE→SO→現在作業→予定/記録の縦順・全幅`, mobile.clock.bottom < mobile.life.top && mobile.life.bottom <= mobile.so.top
-        && mobile.so.bottom < mobile.mit.top && mobile.mit.bottom < mobile.focus.top
+      // v410: カードを帯の上・本文なし2列へ移し、順序・横溢れ・最小幅を維持する。
+      check(`${width}pxは時計→カード→LIFE→SO→予定/記録の縦順・全幅`, mobile.clock.bottom < mobile.mit.top && mobile.mit.bottom <= mobile.life.top
+        && mobile.life.bottom <= mobile.so.top && mobile.so.bottom < mobile.focus.top
         && [mobile.life.width, mobile.clock.width, mobile.so.width].every((value) => Math.abs(value - mobile.band.width) < 1), JSON.stringify(mobile));
       check(`${width}pxは横溢れなし・LIFE指標は390pxで2x2・768px以上は横4枠・時計内の情報が枠内`, mobile.scrollWidth <= mobile.innerWidth
         && mobile.sigRows === (width < 768 ? 2 : 1) && mobile.clockFits, JSON.stringify(mobile));
@@ -176,20 +177,23 @@ async function openLifeDetails(page) {
       await page.setViewportSize({ width, height: 900 });
       pc = await layout();
       if (width === 1280) boundaryPc = pc;
-      check(`${width}pxは時計→人生/信条→現在作業の全幅帯・横溢れなし`,
-        pc.mit.width > 0 && pc.clock.width > 0 && pc.clock.bottom <= pc.life.top
-        && pc.life.bottom <= pc.mit.top && pc.so.bottom <= pc.mit.top
+      // v410: カードを帯の上・本文なし2列へ移し、順序・横溢れ・最小幅を維持する。
+      check(`${width}pxは時計→カード→人生/信条の全幅帯・横溢れなし`,
+        pc.mit.width > 0 && pc.clock.width > 0 && pc.clock.bottom <= pc.mit.top
+        && pc.mit.bottom <= pc.life.top && pc.so.bottom <= pc.focus.top
         && Math.abs(pc.so.right - pc.clock.right) < 1 && Math.abs(pc.life.x - pc.mit.x) < 1
         && pc.scrollWidth <= pc.innerWidth, JSON.stringify(pc));
       check(`${width}pxはSOがLIFEの直下で同幅・LIFEは横4枠`, pc.so.top >= pc.life.bottom
         && Math.abs(pc.so.width - pc.life.width) < 1 && Math.abs(pc.so.x - pc.life.x) < 1
         && pc.sigRows === 1, JSON.stringify(pc));
     }
-    check("1280px境界の親は縦flex、人生/信条は1列・予定/記録/ジャーナルは3列", boundaryPc.gridAreas === 'none'
+    // v410: カードを帯の上・本文なし2列へ移し、順序・横溢れ・最小幅を維持する。
+    check("1280px境界の親は縦flex、人生/信条は1列・予定/記録は2列", boundaryPc.gridAreas === 'none'
       && boundaryPc.rootDisplay === 'flex' && boundaryPc.rootDirection === 'column'
-      && boundaryPc.valueColumns.trim().split(/\s+/).length === 1 && boundaryPc.mainColumns.trim().split(/\s+/).length === 3, JSON.stringify(boundaryPc));
+      && boundaryPc.valueColumns.trim().split(/\s+/).length === 1 && boundaryPc.mainColumns.trim().split(/\s+/).length === 2, JSON.stringify(boundaryPc));
     const pcColumns = pc.mainColumns.trim().split(/\s+/).map(parseFloat);
-    check("1440pxは主領域3列・各列320px以上", pcColumns.length === 3 && pcColumns.every(width => width >= 320), JSON.stringify(pc));
+    // v410: カードを帯の上・本文なし2列へ移し、順序・横溢れ・最小幅を維持する。
+    check("1440pxは主領域2列・各列320px以上", pcColumns.length === 2 && pcColumns.every(width => width >= 320), JSON.stringify(pc));
     check("PCは信条横3件・新3パネル各1件", pc.soColumns.trim().split(/\s+/).length === 3
       && pc.sigs === 4 && pc.soItems === 3 && pc.duplicateCount === 3, JSON.stringify(pc));
     const soType = await page.locator(".so-item").first().evaluate((item) => {

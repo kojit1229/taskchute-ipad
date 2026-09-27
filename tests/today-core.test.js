@@ -112,6 +112,72 @@ function check(name, cond, extra = "") {
     check("旧読書カード・入力・保存セレクタはDOMに出現しない",
       await page.locator('details[data-fold-id="home-reading"], [data-reading-reflection-input], [data-action="reading-save"]').count() === 0);
 
+    console.log("[T1] 次にやること / 実行中カードの新契約");
+    const nowCardBlock = block('t1-card', { title: '今日の作業', isMIT: true, plannedStartAt: at('10:00'), plannedEndAt: at('10:30') });
+    await seed({ blocks: [nowCardBlock] });
+    check('次にやることだけが表示され、滑走路の絵はない', await page.locator('.today-now-card[data-now-mode="ready"]').count() === 1
+      && (await page.locator('.today-now-card h2').textContent()).includes('次にやること') && await page.locator('.today-now-card[data-now-mode="running"], .tower-runway-strip, #towerPlane').count() === 0);
+    const oneStart = await page.locator('[data-action="now-start"]:visible').count() === 1 && await page.locator('[data-action="now-end"]:visible').count() === 0;
+    const lateBefore = await page.locator('.today-now-late').textContent();
+    const cardHandle = await page.locator('.today-now-card').elementHandle();
+    await page.clock.setFixedTime(fixedTime(12, 1));
+    await page.waitForFunction(() => document.querySelector('.today-now-late')?.textContent === '2時間1分遅れ');
+    check('遅れは予定開始から計算し、分の経過でカードを再描画せず更新する', lateBefore === '2時間0分遅れ' && await cardHandle.evaluate(el => el.isConnected));
+    await seed({ blocks: [{ ...nowCardBlock, actualStartAt: at('12:00') }] });
+    check('実行中だけに切り替わりポモドーロをカード内に持つ', await page.locator('.today-now-card[data-now-mode="running"] .today-pomodoro').count() === 1
+      && await page.locator('.today-now-card[data-now-mode="ready"]').count() === 0 && await page.locator('.today-tower > .today-pomodoro').count() === 0);
+    check('開始/終了の主ボタンは各パターンで1つ', oneStart && await page.locator('[data-action="now-end"]:visible').count() === 1
+      && await page.locator('[data-action="now-start"]:visible').count() === 0);
+    check('今日にジャーナル入力はなく日報への導線がある', await page.locator('.tower-journal, [data-journal-date]').count() === 0
+      && await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
+    console.log("[T1c] C5カードを1280px/390pxで実測");
+    const cardMeasurements = [];
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const mode of ['ready', 'running']) {
+        await seed({ blocks: [{ ...nowCardBlock, actualStartAt: mode === 'running' ? at('12:00') : '' }] });
+        await page.locator(`.today-now-card[data-now-mode="${mode}"]`).waitFor();
+        const measured = await page.evaluate(() => {
+          const card = document.querySelector('.today-now-card');
+          const css = getComputedStyle(card);
+          const primary = card.querySelector('.btn.primary');
+          const pomo = document.querySelector('.today-pomodoro');
+          const probe = document.createElement('span');
+          probe.style.color = 'color-mix(in srgb, var(--tower-amber) 68%, transparent)';
+          card.append(probe);
+          const amberBorder = getComputedStyle(probe).color;
+          probe.remove();
+          const cardRect = card.getBoundingClientRect();
+          return {
+            viewport: innerWidth, pageWidth: document.documentElement.scrollWidth,
+            cardWidth: card.clientWidth, cardScrollWidth: card.scrollWidth,
+            buttonHeight: primary.getBoundingClientRect().height,
+            borderColor: css.borderTopColor, leftColor: css.borderLeftColor, leftWidth: css.borderLeftWidth, amberBorder,
+            headingColor: getComputedStyle(card.querySelector('h2')).color,
+            lateColor: card.querySelector('.today-now-late') ? getComputedStyle(card.querySelector('.today-now-late')).color : null,
+            glass: css.backdropFilter, shadow: css.boxShadow, backgroundImage: css.backgroundImage,
+            containsPomo: !!pomo && card.contains(pomo),
+            pomoInsideBounds: !!pomo && pomo.getBoundingClientRect().left >= cardRect.left && pomo.getBoundingClientRect().right <= cardRect.right,
+            pomoBorder: pomo ? getComputedStyle(pomo).borderTopStyle : null,
+            checkboxCount: card.querySelectorAll('input[type="checkbox"]').length,
+            help: card.querySelector('.today-now-help')?.textContent,
+          };
+        });
+        cardMeasurements.push({ width, mode, ...measured });
+        if (process.env.T1C_EVIDENCE_DIR) {
+          fs.mkdirSync(process.env.T1C_EVIDENCE_DIR, { recursive: true });
+          await page.screenshot({ path: path.join(process.env.T1C_EVIDENCE_DIR, `c5-${mode}-${width}.png`), fullPage: true });
+        }
+      }
+    }
+    console.log('  T1c measurements', JSON.stringify(cardMeasurements));
+    check('C5: 両幅・両パターンで横はみ出しなし、主ボタン44px以上', cardMeasurements.every(m => m.pageWidth <= m.viewport && m.cardScrollWidth <= m.cardWidth && m.buttonHeight >= 44), JSON.stringify(cardMeasurements));
+    check('C5: 次カードは砂色4px・遅れは赤系、実行中は琥珀枠とGLASS面', cardMeasurements.every(m => m.headingColor === 'rgb(232, 217, 181)' && (m.mode === 'ready' ? m.leftColor === 'rgb(201, 181, 138)' && m.leftWidth === '4px' && m.lateColor === 'rgb(255, 180, 173)' : m.borderColor === m.amberBorder && m.backgroundImage !== 'none' && m.glass !== 'none' && m.shadow !== 'none')), JSON.stringify(cardMeasurements));
+    check('C5: ポモドーロは実行中カード内の点線枠だけ', cardMeasurements.every(m => m.mode === 'running' ? m.containsPomo && m.pomoInsideBounds && m.pomoBorder === 'dashed' : !m.containsPomo), JSON.stringify(cardMeasurements));
+    check('C5: 無効チェックはなく、次カードに開始後の操作を案内', cardMeasurements.every(m => m.checkboxCount === 0 && (m.mode === 'running' || m.help === '開始後、実行中カードのポモドーロで計れます')));
+    await page.setViewportSize({ width: 1100, height: 1400 });
+    await page.clock.setFixedTime(now0);
+
     // ============================================================
     // [2] 既存stateは最後のビュー復元が壊れない
     // ============================================================

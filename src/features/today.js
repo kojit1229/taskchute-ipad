@@ -130,7 +130,7 @@ function configureToday(deps) {
   });
   registerActions({
     "today-plans-jump": () => focusTodaySection("#dailyTodayPlans"),
-    "today-journal-jump": () => focusTodaySection(".tower-journal"),
+    "today-journal-jump": () => focusTodaySection(".daily-today-records"),
     "today-section-jump": ({ target }) => {
       const selector = { focus: ".tower-runway", records: ".daily-today-records", journal: ".tower-journal", life: ".life-band" }[target.dataset.section];
       if (selector) document.querySelector('[data-daily-view="today"] ' + selector)?.scrollIntoView({ block: "start" });
@@ -193,7 +193,7 @@ function todayPomodoroDisplay(nowMs = Date.now()) {
   };
 }
 
-function renderTodayPomodoro(blocks, queue) {
+function renderTodayPomodoro(blocks, queue, embedded = false) {
   const display = todayPomodoroDisplay();
   const block = (state.blocks || []).find((item) => item.id === state.pomodoro?.blockId);
   // v191(C2): ルーティンBlockに紐づく実行中ポモは、タスク名を出さず汎用表記にする
@@ -229,7 +229,7 @@ function renderTodayPomodoro(blocks, queue) {
       <div class="today-pomodoro-info">
         <strong id="todayPomodoroMode">${display.mode === "break" ? "BREAK" : "POMODORO"} — ${display.label}</strong>
         <span>${block ? (isRoutinePomodoro ? "ルーティン実行中" : escapeHTML(block.title)) : display.mode === "break" ? "休憩中" : display.running ? "連動なし" : startTarget ? `開始候補: ${escapeHTML(startTarget.title)}` : "対象Blockなし"}</span>
-        ${controls}
+        ${embedded ? controls.replaceAll('btn primary', 'btn') : controls}
       </div>
     </div>
   </section>`;

@@ -191,7 +191,10 @@ function check(name, cond, extra = "") {
       && (await page.locator('[data-work-list="today"]').textContent()).includes("実績1"));
     check("FLIGHT LOG節が生存し実績1件を含む", (await page.locator(".sec-log").textContent()).includes("実績1"));
     check("GATE ROUTINE節が生存", await page.locator(".tower-gates").count() === 1);
-    check("今日の必須欄と健康画面を分離", await page.locator('.sec-journal').count() === 1 && await page.locator('.sec-bodymind').count() === 0);
+    // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。
+    check("今日には本文欄なし", await page.locator('#towerJournalFree, .sec-journal').count() === 0);
+    check("上部帯の日報入口は1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
+    check("今日の必須欄と健康画面を分離", await page.locator('.sec-journal').count() === 0 && await page.locator('.sec-bodymind').count() === 0);
     await page.locator('[data-action="nav"][data-view="more"]:visible').first().click();
     await page.locator('[data-action="nav"][data-view="instruments"]:visible').first().click();
     await page.waitForSelector('.sec-bodymind');

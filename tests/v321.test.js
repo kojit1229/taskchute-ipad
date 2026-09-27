@@ -98,27 +98,20 @@ function block(id, title, start, end, extra = {}) {
     // fixF6d(監督者決定2): F6-1でMITは上部帯の直下・LIFE BAND/NOW LANDINGより前の大見出しへ
     // 移動した(.tower-runwayへの内包は前提でなくなった)。同じ性質(存在・表示順・行数・★件数)を
     // 新配置で検査する: #dailyTodayPlansとNOW LANDING(.tower-runway)の両方より前に出ること。
-    const mitLayout = await page.locator(".tower-mit").evaluate((mit) => {
-      const band = document.querySelector("#dailyTodayPlans");
-      const runway = document.querySelector(".tower-runway");
-      const style = getComputedStyle(mit);
-      const rowStyle = getComputedStyle(mit.querySelector(".tower-mit-row"));
-      return {
-        beforeBand: Boolean(mit.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING),
-        beforeRunway: Boolean(runway && (mit.compareDocumentPosition(runway) & Node.DOCUMENT_POSITION_FOLLOWING)),
-        borderColor: style.borderColor, rowHeight: parseFloat(rowStyle.minHeight), fontSize: parseFloat(rowStyle.fontSize)
-      };
+    // v410: 独立MIT見出しを廃止。★の件数・対象・操作寸法を予定行と単一カードで維持する。
+    check("MIT独立枠は無い", await page.locator('.tower-mit, .tower-mit-row, .tower-mit-empty').count() === 0);
+    check("完了MITの予定行に★が1つ", await page.locator('[data-work-key="block:mit-done"] .mit-star').count() === 1);
+    const cardLayout = await page.locator('.today-now-card').evaluate(card => {
+      const plan = document.querySelector('#dailyTodayPlans');
+      const button = card.querySelector('.tower-now-actions > .btn.primary');
+      return { beforePlans: Boolean(card.compareDocumentPosition(plan) & Node.DOCUMENT_POSITION_FOLLOWING),
+        height: button.getBoundingClientRect().height, fontSize: parseFloat(getComputedStyle(button).fontSize) };
     });
-    check("MIT見出しはNOW LANDING・予定より前に1行・各行★付き", mitLayout.beforeBand && mitLayout.beforeRunway
-      && await page.locator(".tower-mit-row").count() === 1
-      && await page.locator(".tower-mit-row .mit-star").count() === 1, JSON.stringify(mitLayout));
-    check("MIT行は44px・11px以上でアンバー枠", mitLayout.rowHeight >= 44 && mitLayout.fontSize >= 11
-      && mitLayout.borderColor !== "rgba(0, 0, 0, 0)", JSON.stringify(mitLayout));
+    check("カードは予定より前・主操作は44px/11px以上", cardLayout.beforePlans && cardLayout.height >= 44 && cardLayout.fontSize >= 11, JSON.stringify(cardLayout));
     await seed([block("plain", "通常予定", "11:00", "11:30")]);
-    // fixF6d(監督者決定2): F6-1でMIT未設定の空状態文言は「MIT を決める」の1行案内に変わった
-    // (旧文言はNOW LANDING横の小枠時代のもの。新見出しの下に出る点・1行である点は維持)。
-    check("MIT 0件は指定の空文言1行", await page.locator(".tower-mit-row").count() === 0
-      && (await page.locator(".tower-mit-empty").textContent()).trim() === "MIT を決める 実行の予定詳細で ☆ を選択");
+    // v410: MIT未設定はカードと予定行に★を出さず、通常の次の予定を表示する。
+    check("MIT 0件はカードと予定行の★なし", await page.locator('.today-now-card .mit-star, [data-work-list="today"] .mit-star').count() === 0
+      && (await page.locator('.today-now-card .tower-now-title').textContent()).trim() === "通常予定");
     const mitPopulation = [
       block("mit-fourth", "当日4", "13:00", "13:30", { isMIT: true }),
       block("mit-other-day", "別日", "08:00", "08:30", { isMIT: true, date: "2026-09-02" }),
@@ -128,17 +121,21 @@ function block(id, title, start, end, extra = {}) {
       block("mit-first", "当日1", "10:30", "11:00", { isMIT: true })
     ];
     await seed(mitPopulation);
-    const mitTitles = await page.locator(".tower-mit-title").allTextContents();
-    // fixV404f(監督者追随): 同日1件の契約。旧データに複数あっても表示は時刻順の先頭1件だけ(データは触らない)。
-    check("MIT母集団は当日・未削除の時刻順先頭1件(旧データに複数あっても1件)", JSON.stringify(mitTitles) === JSON.stringify(["当日1"]), JSON.stringify(mitTitles));
+    // fixT1c: 裁定Gでは複数MIT旧データのカード★は最大1つ、完了MITは記録側、独立枠は0件を検査する。
+    check("複数MIT旧データでもカードの★は最大1つ", await page.locator('.today-now-card .mit-star').count() <= 1);
+    check("複数MIT旧データでも独立MIT枠は無い", await page.locator('.tower-mit, .tower-mit-row, .tower-mit-empty').count() === 0);
+    await seed([mitTwo[0], ...mitPopulation]);
+    check("完了MITの★は記録側に1つ", await page.locator('.tower-log-title .mit-star').count() === 1
+      && await page.locator('.tower-log-row[data-flight-id="mit-done"] .tower-log-title .mit-star').count() === 1);
 
     console.log("[2] LIFE BAND OFFでもMITカードを残し、同期stateへ書かない");
     await seed(mitTwo);
     const beforeLifeToggle = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     await page.click('[data-action="today-plans-jump"]');
     await page.waitForSelector('[data-work-list="today"]');
-    check("予定へ移動しても人生/信条とMITを常設", await page.locator(".life-band, .so-row").count() === 2
-      && await page.locator(".tower-mit").count() === 1);
+    // v410: 移動後も人生/信条・カードを常設し、独立MIT枠は戻さない。
+    check("予定へ移動しても人生/信条とカードを常設", await page.locator(".life-band, .so-row").count() === 2
+      && await page.locator(".today-now-card").count() === 1 && await page.locator(".tower-mit").count() === 0);
     check("LIFE表示切替は同期state非書込", await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === beforeLifeToggle
       && await changedStateWrites() === 0);
 
@@ -189,6 +186,11 @@ function block(id, title, start, end, extra = {}) {
     check("今日の全件一覧の完了MIT行にも★", await page.locator('[data-work-list="today"] [data-work-key="block:star-done"] .mit-star').count() === 1);
     await seed(starBlocks("star-running"));
     check("NOW LANDINGのMITタイトルに★", await page.locator('.tower-now-title[data-id="star-running"] .mit-star').count() === 1);
+    const runningWidths = await page.locator('.today-now-card').evaluate(card => ({
+      page: document.documentElement.scrollWidth, viewport: window.innerWidth, card: card.clientWidth, content: card.scrollWidth
+    }));
+    check("390pxの実行中カードとページに横溢れなし", runningWidths.page <= runningWidths.viewport + 1
+      && runningWidths.content <= runningWidths.card + 1, JSON.stringify(runningWidths));
 
     console.log("[6][7] 予定0件HUD・390px横スクロール・pageerror・state非書込");
     await seed([]);

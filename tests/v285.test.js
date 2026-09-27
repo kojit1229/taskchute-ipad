@@ -27,7 +27,9 @@ const removedHelpers = [
 ];
 check("旧UI専用helper定義・参照が無い", removedHelpers.every((name) => !new RegExp(`\\b${name}\\b`).test(`${appSource}\n${todaySource}\n${towerSource}`)));
 check("実行コードに旧DOMセレクタ文字列が無い", !/sec-atis|data-atis|tower-atis/.test(`${appSource}\n${todaySource}\n${towerSource}`));
-check("今日本文は旧表示設定で消さず描画", towerSource.includes('$' + '{renderTowerJournal(today)}')
+// v410: 今日の本文描画を廃止し、旧非表示設定に依存しない日報入口を維持する。
+check("今日から日報へ単一の入口", !towerSource.slice(towerSource.indexOf("function renderTodayTower()")).includes('{renderTowerJournal(today)}')
+  && towerSource.includes('data-action="nav" data-view="journal">日報を書く ›')
   && !towerSource.includes("focusVisibility.atis") && !towerSource.includes("focusVisibility.journal ?"));
 const legacyPomoVariable = ["pomodoro", "Right"].join("");
 // fixF6d(監督者決定2、F6-1): MITはNOW LANDING(現在作業)の外の独立見出しへ移動したため、
@@ -56,9 +58,10 @@ check("予定/実績/ルーティン/本文を常設し健康は今日から分�
 // fixF6d(監督者決定2、束F6新配置): モバイル順序の断言文言はMITが独立見出しへ移動した
 // 現行契約(tower-core.test.js [34])に合わせて更新されている。同じ「tripwireが現行スイートに
 // 残っている」性質を新文言で検査する。
+// v410: 既存の退行防止検査の存在を新構成の順序で検査する。
 check("tower-coreの負方向・現行モバイル順序を維持", towerTestSource.includes("DEPARTURES要素・旧action・明日便タイトルを描画しない")
   && towerTestSource.includes("Block 0件でもDEPARTURESは復活しない")
-  && towerTestSource.includes("pxはMIT→人生→信条→現在作業→予定→ルーティン→実績→本文"));
+  && towerTestSource.includes("pxはカード→人生→信条→予定→ルーティン→実績"));
 
 (async () => {
   const server = startServer(PORT);
@@ -85,7 +88,7 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
       }));
     }, { stateKey: STATE_KEY, focusKey: FOCUS_KEY });
     await page.reload();
-    await page.waitForSelector(".today-tower .sec-journal");
+    await page.waitForSelector(".today-tower");
 
     console.log("[4] legacy localStorage/stateを読み捨て・保持しつつtodayを正常描画する");
     check("today DOMに旧パネル/data属性/専用子要素が無い",
@@ -93,7 +96,9 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     // fixF6d(監督者決定2、F6-3): 表形式化でJOURNALは記録群(.daily-today-records)から独立し、
     // 本体(.daily-today-main)の3枠目になった。同じ「JOURNALはそれだけの1枠」という性質を
     // 新配置(本体直下・記録群には混在しない)で検査する。
-    check("本文の枠はJOURNALだけ", await page.locator(".daily-today-main > .sec-journal").count() === 1);
+    // v410: 今日の本文枠なし+上部の日報入口1個で導線を検査する。
+    check("今日に本文欄なし", await page.locator(".sec-journal, #towerJournalFree").count() === 0);
+    check("日報入口は上部に1個", await page.locator('.daily-today-clock [data-action="nav"][data-view="journal"]').count() === 1);
     check("記録群にJOURNALは混在しない", await page.locator(".daily-today-records > .sec-journal").count() === 0);
     const focusActions = await page.$$eval(".daily-today-clock nav [data-action]", (nodes) => nodes.map((node) => node.dataset.action));
     check("VIEWバーは本体+side/journal/lifeの4操作だけ", JSON.stringify(focusActions) === JSON.stringify(["today-plans-jump", "today-journal-jump"]), JSON.stringify(focusActions));
@@ -108,7 +113,7 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     check("予定へ移動しても予定/実績/ルーティン/本文を維持",
       await page.locator('[data-work-list="today"]').count() === 1
       && await page.locator('.sec-log').count() === 1
-      && await page.locator('.sec-gates').count() === 1 && await page.locator('.sec-journal').count() === 1);
+      && await page.locator('.sec-gates').count() === 1 && await page.locator('.sec-journal').count() === 0);
     const persistedFocus = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), FOCUS_KEY);
     check("旧VIEW sectionsは消去・書換えしない", JSON.stringify(persistedFocus.sections) === JSON.stringify({ gate: true, atis: false, journal: true }), JSON.stringify(persistedFocus));
     check("旧VIEW restoreも消去・書換えしない", JSON.stringify(persistedFocus.restore) === JSON.stringify({ gate: true, atis: true, journal: true }), JSON.stringify(persistedFocus));
@@ -124,8 +129,9 @@ check("tower-coreの負方向・現行モバイル順序を維持", towerTestSou
     const afterLegacyClick = await page.evaluate((key) => localStorage.getItem(key), FOCUS_KEY);
     check("旧action名をクリックしても表示stateを変更しない", afterLegacyClick === beforeLegacyClick);
     await page.click('[data-action="today-journal-jump"]');
-    await page.waitForSelector(".sec-journal");
-    check("記録への移動で単一本文へフォーカス", await page.locator("#towerJournalFree").evaluate(el => el === document.activeElement));
+    await page.waitForSelector(".daily-today-records");
+    // v410: 裁定Aの記録列へ移動してフォーカスする性質を維持する。
+    check("記録への移動で記録列へフォーカス", await page.locator(".daily-today-records").evaluate(el => el.contains(document.activeElement)));
     check("pageerrorなし", pageErrors.length === 0, JSON.stringify(pageErrors));
   } finally {
     await browser.close();
