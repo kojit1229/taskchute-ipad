@@ -1167,8 +1167,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 23,
-      "assertionHash": "4e301843dce8bb0b",
-      "sourceHash": "f09b285780d53b13",
+      "assertionHash": "f246ee579242d80b",
+      "sourceHash": "10d83708f75fb2b4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3579,9 +3579,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 150,
-      "assertionHash": "97746d25b381eae5",
-      "sourceHash": "ee21d890ed6cef8e",
+      "assertionSignals": 159,
+      "assertionHash": "370f462b4f9a8ad4",
+      "sourceHash": "515243e82c5ffd8e",
       "waits": {
         "fixedCount": 4,
         "numericMilliseconds": 4250,
@@ -3590,7 +3590,7 @@
       "sideEffects": {
         "browser": true,
         "server": true,
-        "fileWrite": false,
+        "fileWrite": true,
         "networkMock": true,
         "clock": true
       }
@@ -3656,8 +3656,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 167,
-      "assertionHash": "53594230f34b65f4",
-      "sourceHash": "0f375070d73bcdad",
+      "assertionHash": "7cbdc5af98254281",
+      "sourceHash": "2c8e59e0c3e23adf",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3846,8 +3846,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 23,
-      "assertionHash": "369a9ff9584082af",
-      "sourceHash": "4ae2e4e70e9e7368",
+      "assertionHash": "f720ceca2f37dd83",
+      "sourceHash": "35112187aecee25f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4831,8 +4831,8 @@
         "content-ai"
       ],
       "assertionSignals": 8,
-      "assertionHash": "473ee2c112a243ea",
-      "sourceHash": "b607a5ed54e117ba",
+      "assertionHash": "a6280de6ff07bd6a",
+      "sourceHash": "35f7090c819ad610",
       "waits": {
         "fixedCount": 3,
         "numericMilliseconds": 1500,
@@ -6447,7 +6447,7 @@
       ],
       "assertionSignals": 16,
       "assertionHash": "0d02ddaf6c6ddaaa",
-      "sourceHash": "c8cca03af1484874",
+      "sourceHash": "da9ef1a848489844",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

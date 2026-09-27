@@ -1,0 +1,72 @@
+{
+  "version": 410,
+  "date": "2026-09-27",
+  "title": "今日タブの作り直し 束T1: 「次にやること」/「実行中」カード(2パターン)、ポモドーロ内蔵、近道・MIT枠・切替帯・ジャーナル欄の廃止、色 C5",
+  "summary": "K 採用のモック m11(C5)の形に今日タブを作り直す第1弾。実行中の Block が無いときは「次にやること」カード(★・作業名・予定時刻と遅れ・見積・プロジェクト・開始1ボタン・後ろへずらす・12WY の今週の内容)、あるときは「実行中」カード(進みバー・経過・着陸予定・元の予定と遅れ・終了して報告・時刻を直す・ポモドーロ内蔵)。近道「次:」・MIT の独立枠・表示位置の切替帯・ジャーナル欄・NOW LANDING の滑走路を廃止し、上の帯に「日報を書く ›」。LIFE BAND と信条の帯はそのまま。保存・同期・データ構造・日付処理は不変。",
+  "changedFiles": [
+    "CHANGES_v410.md",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v410.json",
+    "src/features/today-tower.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/f6-today-layout.test.js",
+    "tests/suite-manifest.json",
+    "tests/today-core.test.js",
+    "tests/tower-core.test.js",
+    "tests/ui-a-layout.test.js",
+    "tests/v143.test.js",
+    "tests/v307.test.js"
+  ],
+  "intent": [
+    "案件 2026-09-27-today-tab-redesign 束 T1(orders/01・02)。K 採用 2026-09-27 12:5x(m11 C5)。根拠 2026-09-04-12wy-tab-mock/reports/today-visual/findings.md"
+  ],
+  "changes": [
+    "src/features/today-tower.js: renderTodayNowCard / todayNowDetails を新設し renderTodayTower の構成を「上の帯 → カード → LIFE BAND・信条 → 予定 | 右列」に変更。renderTodayQuickAction / renderTowerMIT / renderTowerRunway / renderTowerJournal は呼ばない(掃除は T3)。updateTowerRunway は進みバー・残り・遅れを1分ごとに差分更新",
+    "src/features/today.js: renderTodayPomodoro に embedded 引数(カード内では主ボタン扱いにしない)",
+    "styles.css: .today-now-card(C5: 左線 #c9b58a・見出し #e8d9b5・遅れ #ffb4ad・実行中は琥珀の枠と面・ポモドーロは点線枠)、上の帯の時刻とリンクを砂色系、main を 1.8fr/1fr",
+    "tests: today-core に新契約の断言 9 件(排他カード・主ボタン1つ・遅れの tick・ポモドーロ内包・ジャーナル欄なし・C5 実色・44px・横はみ出しなし)。f6-today-layout / ui-a-layout / tower-core / v143 の旧契約(NOW LANDING・MIT枠・切替帯・ジャーナル欄・近道)を新契約へ更新(緩和・skip なし)。v307 は fixture の当日 Block を増やして前提(ページ高さ)を満たす(断言は不変)",
+    "sw.js: CACHE_NAME v410"
+  ],
+  "uncertainties": [
+    "実機(iPhone)は未確認(束 T3 で K 確認)",
+    "「ポモドーロで計る」チェックは置かない(監督者裁定。開始が宣言モーダル経由のため連動できない)。実行中カード内のポモドーロで開始する",
+    "遅れの文言は「n時間m分遅れ」(0時間のときの表記調整は T2/T3)"
+  ],
+  "reviewFocus": [
+    "renderTodayNowCard が state を書かないこと / 既存 data-action(now-start・now-end・edit-block・remaining-shift・nav・ポモドーロ系)だけを使うこと",
+    "1分 tick(updateTodayTowerTick→updateTowerRunway)が新 id で動き、入力中の要素を壊さないこと",
+    "保存・同期・normalizeState・日付ヘルパーに差分が無いこと",
+    "旧契約テストの更新が『緩和』でないこと(削除した断言が無いか)"
+  ],
+  "verification": [
+    "Codex bundleT1(T1a/T1b)+T1c: 影響マップ選定+指定6スイート 0、code:index/manifest 0。監督者実走: v307 today-core tower-core f6-today-layout ui-a-layout remaining-screen-labels v143 daily-start-end-e2e exec-layout-media action-registry-core 全通過(reports/T1/supervisor-tests.log)",
+    "独立検証(1系統・表示のみ): orders/03-verify-T1.md(記入待ち)",
+    "release-gate --final: (記入待ち)"
+  ],
+  "knownLimitations": [
+    "一覧(今日の予定・実績)の3列化・遅れ印・「これを次に」・ルーティンのチップ化は束 T2",
+    "未使用になった関数(renderTodayQuickAction / renderTowerMIT / renderTowerRunway / renderTowerJournal)と滑走路の CSS の掃除は束 T3"
+  ],
+  "relatedSuites": [
+    "today-core",
+    "tower-core",
+    "f6-today-layout",
+    "ui-a-layout",
+    "v143",
+    "v307",
+    "daily-start-end-e2e",
+    "exec-layout-media",
+    "remaining-screen-labels",
+    "action-registry-core",
+    "v57",
+    "v75",
+    "v134",
+    "v140",
+    "tower-model-core",
+    "coach-core"
+  ]
+}

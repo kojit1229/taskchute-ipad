@@ -152,7 +152,7 @@
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
 | timeline-tick-wiring.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 16 | 8 | 4500 |
-| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 150 | 4 | 4250 |
+| today-core.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 159 | 4 | 4250 |
 | today-detail-integration-e2e.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 45 | 0 | 0 |
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 50 | 0 | 0 |
 | tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 167 | 0 | 0 |
@@ -528,7 +528,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v304.test.js | 32 |
 | missing-timezone | 1 | tests/v305.test.js | 58 |
 | missing-timezone | 2 | tests/v306.test.js | 54, 114 |
-| missing-timezone | 1 | tests/v307.test.js | 191 |
+| missing-timezone | 1 | tests/v307.test.js | 195 |
 | missing-timezone | 2 | tests/v308.test.js | 46, 163 |
 | missing-timezone | 1 | tests/v309.test.js | 60 |
 | missing-timezone | 1 | tests/v310.test.js | 41 |
