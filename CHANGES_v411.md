@@ -38,7 +38,7 @@ iPhone の保存上限(約262万文字)を再び超えないようにする根�
 
 - Codex bundleB18 / fixB18 / fixB18b: 影響マップ選定 112 本+指定 8 本 0(v334 のみ 1 = B-18 前の 43b70f8 でも失敗する環境の揺れ、reports/B18/v334-base-43b70f8.log)、test:core 0、manifest/index 0。受入6 の計測 reports/B18/measure-b18.json(旧正規化→新正規化: 未削除 1821 不変・墓標 534→67・2,526,866→2,383,495 文字)
 - Codex レビュー(39): 差し戻し 高2・中1 → 裁定 B18-3/4/5 で全件反映(fixB18b)
-- 独立検証(Claude fresh、Node 実測込み): orders/40-verify-B18.md → reviews/40-verify-B18.md(記入待ち)
+- 独立検証(Claude fresh、Node 実測込み): orders/40-verify-B18.md → reviews/40-verify-B18.md **PASS**(HEAD 2cc5964、指紋 d5447cf5… 一致。指定 9 テスト 0、自前計測 未削除 1,821 不変・墓標 534→75・−138,105 文字・境目 2026-06-29、往復実験で蘇生なし。low 3 件は既知の制限へ記載)
 - release-gate --final: 1回目 feedback-lifecycle-e2e(負荷の揺れ、単独は worktree/43b70f8 とも 0)/ 2・3回目 v334(環境の揺れ、43b70f8 でも単独失敗)のみ失敗。CI(PR #147)1回目: daily-block-merge(本修正)+ feedback-recovery-e2e(既知の揺れ)
 
 ## 既知の制約・保留

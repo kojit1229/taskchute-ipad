@@ -30,7 +30,7 @@
     "tests/daily-block-merge.test.js: mergeBlockLists の呼び出し引数の固定検査に第3引数 archivedBlocksBefore を追加(端末=local の固定は不変。PR #147 CI で検出。影響マップは daily-block-merge を選ばなかったため relatedSuites に明記)"
   ],
   "uncertainties": [
-    "既知の制限(受入8): 境目より前の日付に新規作成し、かつ最終編集も境目より前(=時計が狂った端末)の Block は作成端末に残るが他端末へ同期されない",
+    "既知の制限(受入8、独立検証40 low②): 境目より前の日付に新規作成し、かつ最終編集(updatedAt)も境目より前または空の Block は作成端末に残るが他端末へ同期されない(時計が狂った端末・updatedAt の無い旧データ)。境目・墓標の日付検査は形式(YYYY-MM-DD)だけで存在しない日付は通す(low①)。受け側の runArchive で同じ id がアーカイブへ二重に書かれうるのは既存挙動(low③)",
     "初回起動で境目 2026-06-29 が導出され、退避済み墓標 467 件が消える(内容は archive/ に退避済み)。iPhone の実機で「いま読込」後の文字数減を K が確認"
   ],
   "reviewFocus": [
@@ -43,7 +43,7 @@
   "verification": [
     "Codex bundleB18 / fixB18 / fixB18b: 影響マップ選定 112 本+指定 8 本 0(v334 のみ 1 = B-18 前の 43b70f8 でも失敗する環境の揺れ、reports/B18/v334-base-43b70f8.log)、test:core 0、manifest/index 0。受入6 の計測 reports/B18/measure-b18.json(旧正規化→新正規化: 未削除 1821 不変・墓標 534→67・2,526,866→2,383,495 文字)",
     "Codex レビュー(39): 差し戻し 高2・中1 → 裁定 B18-3/4/5 で全件反映(fixB18b)",
-    "独立検証(Claude fresh、Node 実測込み): orders/40-verify-B18.md → reviews/40-verify-B18.md(記入待ち)",
+    "独立検証(Claude fresh、Node 実測込み): orders/40-verify-B18.md → reviews/40-verify-B18.md **PASS**(HEAD 2cc5964、指紋 d5447cf5… 一致。指定 9 テスト 0、自前計測 未削除 1,821 不変・墓標 534→75・−138,105 文字・境目 2026-06-29、往復実験で蘇生なし。low 3 件は既知の制限へ記載)",
     "release-gate --final: 1回目 feedback-lifecycle-e2e(負荷の揺れ、単独は worktree/43b70f8 とも 0)/ 2・3回目 v334(環境の揺れ、43b70f8 でも単独失敗)のみ失敗。CI(PR #147)1回目: daily-block-merge(本修正)+ feedback-recovery-e2e(既知の揺れ)"
   ],
   "knownLimitations": [
