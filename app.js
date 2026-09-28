@@ -397,6 +397,7 @@ configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDa
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
+  recordTrackMeasurement, saveState, openProjectEditor,
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek, nowDateTime,
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
   render  // v360(R2): PLAN面切替(非永続)の再描画用
@@ -1915,7 +1916,7 @@ document.addEventListener("change", (event) => {
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
-  if (target.matches("select[data-action]")
+  if (target.matches('select[data-action],textarea[data-action="twy-review-note"]')
     && dispatchAction(target.dataset.action, { event, target, id: target.dataset.id })) return;
   // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。
@@ -4150,11 +4151,11 @@ function mergeEditedMilestones(existing, fields, incoming, now) {
     .map((milestone) => milestone.deleted ? milestone : { ...milestone, deleted: true, updatedAt: now })];
 }
 
-function saveTrackFromForm(projectId, kind, fields) {
-  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => saveTrackFromForm(projectId, kind, fields));
+function saveTrackFromForm(projectId, kind, fields, targetTrack) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => saveTrackFromForm(projectId, kind, fields, targetTrack));
   const validation = validateTrackDraft(kind, fields);
   if (!validation.ok) return validation;
-  const existing = activeTrackForProject(state.tracks || [], projectId);
+  const existing = targetTrack === undefined ? activeTrackForProject(state.tracks || [], projectId) : targetTrack;
   const now = nowDateTime();
   let track;
   if (existing && !trackDefinitionChanged(existing, kind, fields)) {
@@ -4168,7 +4169,8 @@ function saveTrackFromForm(projectId, kind, fields) {
       carriedFromTrackId: existing.carriedFromTrackId || "" };
     state.tracks = state.tracks.map((entry) => entry.id === existing.id ? track : entry);
   } else {
-    if (existing) closeTracksForOwner("project", projectId, "superseded");
+    if (existing && targetTrack === undefined) closeTracksForOwner("project", projectId, "superseded");
+    else if (existing) state.tracks = state.tracks.map(t => t.id === existing.id ? { ...t, status: "closed", closedAt: now, closedReason: "superseded", updatedAt: now } : t);
     track = trackRecord(projectId, kind, fields, now, existing ? { supersedesTrackId: existing.id } : {});
     state.tracks = [...(state.tracks || []), track];
   }
@@ -4176,8 +4178,13 @@ function saveTrackFromForm(projectId, kind, fields) {
   return { ok: true, track };
 }
 
-function closeActiveTrackManual(projectId) {
-  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => closeActiveTrackManual(projectId));
+function closeActiveTrackManual(projectId, trackId) {
+  if (!draftSaveTransaction.active) return runTwelveWeekChange(() => closeActiveTrackManual(projectId, trackId));
+  if (trackId) {
+    const now = nowDateTime();
+    state.tracks = state.tracks.map(t => t.id === trackId ? { ...t, status: "closed", closedAt: now, closedReason: "manual", updatedAt: now } : t);
+    saveState(); return { ok: true };
+  }
   if (!closeTracksForOwner("project", projectId, "manual")) return { ok: true };
   saveState();
   return { ok: true };
@@ -14017,11 +14024,11 @@ function twyCommitUpdateCaret(ctx, group, checkedCount) {
   if (caret) caret.textContent = `${checked}/${group.blocks.length}コマ ${_twyCommitOpenGroupIds.has(`${ctx}:${group.taskId}`) ? "▾" : "▸"}`;
 }
 
-function openProjectEditor(id) {
+function openProjectEditor(id, trackId) {
   const project = state.projects.find((p) => p.id === id);
   if (!project) return;
   state.modal = { type: "project", id };
-  renderModal(buildProjectModal(project));
+  renderModal(buildProjectModal(project, trackId));
 }
 
 function openTaskEditor(id) {
@@ -14399,20 +14406,21 @@ function setTrackKind(kind) {
 
 function saveProjectTrackFromModal(id, fields) {
   if (!fields.is12WY) return true;
-  const existing = activeTrackForProject(state.tracks || [], id);
+  const trackId = modalRoot.querySelector("[data-twy-review-track]")?.dataset.twyReviewTrack;
+  const existing = trackId === undefined ? activeTrackForProject(state.tracks || [], id) : (state.tracks || []).find(t => t.id === trackId) || null;
   const kind = fields.twyKind || "none";
   if (kind === "none") {
     if (existing && !window.confirm("12WYトラックを終了しますか?(過去の記録は保持されます)")) {
       setTrackKind(existing.kind); return true;
     }
-    if (existing) closeActiveTrackManual(id);
+    if (existing) closeActiveTrackManual(id, trackId);
     return true;
   }
   const draft = readTrackDraft(fields);
   if (existing && trackDefinitionChanged(existing, kind, draft)
     && !window.confirm("計測方法が変わります。過去の記録を保持して新しいトラックを開始しますか?")) return false;
   if (trackDraftMatchesExisting(existing, kind, draft)) return true;
-  const result = saveTrackFromForm(id, kind, draft);
+  const result = saveTrackFromForm(id, kind, draft, trackId === undefined ? undefined : existing);
   if (result.ok) return true;
   const errors = modalRoot.querySelector("[data-twy-errors]");
   if (errors) { errors.hidden = false; errors.textContent = result.errors.join(" / "); }
@@ -14429,11 +14437,11 @@ function legacyDetailFrame(kind, record, title, className, canDelete, saveLabel,
   }, { slots: { legacyFields: fields }, className }).replace('<div class="modal-card', `<div${["task", "project", "block"].includes(kind) ? ' data-daily-view="detail"' : ""} class="modal-card`);
 }
 
-function buildProjectModal(project) {
+function buildProjectModal(project, reviewTrackId) {
   const status = project.status || "active";
   const kind = project.kind || "normal";
   const is12WY = Boolean(project.twelveWeekStartDate);
-  const track = activeTrackForProject(state.tracks || [], project.id);
+  const track = reviewTrackId === undefined ? activeTrackForProject(state.tracks || [], project.id) : (state.tracks || []).find(t => t.id === reviewTrackId) || null;
   const trackKind = track?.kind || "none";
   // v259: 表示・action・確定の3経路で同じ過去側carry判定を使う。
   const canCarryCycle = is12WY && canCarryProjectCycle(project);
@@ -14520,7 +14528,7 @@ function buildProjectModal(project) {
             <button type="button" class="btn primary" data-action="twy-carry-confirm">移行を確定</button>
           </div>` : ""}
         </div>` : ""}
-        <section class="twy-track-section" data-twy-track ${is12WY ? "" : "hidden"}>
+        <section class="twy-track-section" data-twy-track ${reviewTrackId === undefined ? "" : `data-twy-review-track="${escapeHTML(reviewTrackId)}"`} ${is12WY ? "" : "hidden"}>
           <div class="twy-track-title">12WY TRACK <span>任意・1プロジェクト1トラック</span></div>
           <div class="twy-kind">
             ${[["numeric", "数値", "章・kg・件・冊など"], ["milestone", "節目", "要件→設計→提出など"], ["none", "なし", "行動コマだけで運用"]].map(([value, label, hint]) =>

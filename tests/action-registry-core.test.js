@@ -213,7 +213,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "fund-select", "fund-report-open", "fund-report-engine", "fund-report-family", "fund-report-previous", "fund-report-next", "fund-report-refresh", "fund-report-back",
   "fund-refresh",  // v356: FUNDタブの手動再取得ボタンの意図的追加
   // v360(R1/R2、review-r2-claude-a L4): 12WYタブ VISION編集+PLAN/CYCLE面切替の意図的追加
-  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish"
+  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
+  "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add"
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
 ];
@@ -255,7 +256,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "fund-refresh",
   // v360(R1/R2、review-r2-claude-a L4): src/features/twelve-week.js。top-level
   // registerActionsのため、importするだけで登録される。
-  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish"
+  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
+  "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
@@ -474,7 +476,7 @@ const EXPECTED_REMAINING_MODAL_IF_CHAIN = GOLDEN_MODAL_TYPES.filter(
 // `state.modal.type === "..."`の残存if-else分岐を静的抽出する。
 function extractModalIfChainTypes() {
   const startMarker = "function submitModal(options) {";
-  const endMarker = "function buildProjectModal(project) {";
+  const endMarker = "function buildProjectModal(project, reviewTrackId) {";
   const start = appSource.indexOf(startMarker);
   const end = appSource.indexOf(endMarker, start);
   if (start < 0 || end < 0) {
