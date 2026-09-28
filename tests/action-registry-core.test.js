@@ -213,7 +213,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "fund-select", "fund-report-open", "fund-report-engine", "fund-report-family", "fund-report-previous", "fund-report-next", "fund-report-refresh", "fund-report-back",
   "fund-refresh",  // v356: FUNDタブの手動再取得ボタンの意図的追加
   // v360(R1/R2、review-r2-claude-a L4): 12WYタブ VISION編集+PLAN/CYCLE面切替の意図的追加
-  "twy-vision-open", "twy-vision-save", "twy-face-select"
+  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish"
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
 ];
@@ -255,7 +255,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "fund-refresh",
   // v360(R1/R2、review-r2-claude-a L4): src/features/twelve-week.js。top-level
   // registerActionsのため、importするだけで登録される。
-  "twy-vision-open", "twy-vision-save", "twy-face-select"
+  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ

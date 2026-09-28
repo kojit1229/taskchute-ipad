@@ -105,9 +105,9 @@ async function snapshot(page) {
     const before = await snapshot(page);
     await page.evaluate(() => { window.__setItemChanges = []; });
     await openWeek(page);
-    assert.equal(await page.locator('[data-action="twy-face-select"][data-face="week"]').innerText(), "今週\n毎朝");
-    assert.equal(await page.locator('.twy-face-segmented button:disabled').count(), 1);
-    assert.match(await page.locator('.twy-face-segmented button:disabled').innerText(), /振り返り.*準備中/s);
+    assert.equal(await page.locator('[data-action="twy-face-select"][data-face="week"]').innerText(), "今日やる\n毎日");
+    assert.equal(await page.locator('.twy-face-segmented button:disabled').count(), 0);
+    assert.equal(await page.locator('.twy-face-segmented [data-face="review"]').innerText(), "ふりかえる\n土曜の朝");
     assert.equal(await page.locator('.twy-week-score-big').innerText(), "57%");
     assert.equal(await page.locator('.twy-week-score-big').getAttribute("data-under"), "1");
     const scoreText = await page.locator('.twy-week-score').innerText();
@@ -171,7 +171,8 @@ async function snapshot(page) {
       }
       for (let i = 0; i < m.boxes.length - 1; i++) assert.ok(m.boxes[i].bottom <= m.boxes[i + 1].top + 1, `${width}: 縦1列`);
     }
-    await page.locator('[data-face="cycle"]').click();
+    await page.locator('.twy-face-segmented [data-face="plan"]').click();
+    await page.locator(".twy-cycle-fold > summary").click();
     await openWeek(page);
     assert.equal(await snapshot(page), before, "面切替でstateを書き換えない");
     assert.equal(await page.evaluate((key) => window.__setItemChanges.filter((x) => x === key).length, STATE_KEY), 0);

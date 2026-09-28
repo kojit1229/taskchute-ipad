@@ -97,8 +97,17 @@ async function writeSeedOnce(page, values) {
     if (settings) Object.assign(current.settings, settings);
     localStorage.setItem(key, JSON.stringify(current));
   }, { key: STATE_KEY, values });
-  await page.reload();
+  await page.reload(); await openCycleWhenTwelveWeek(page);
   await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+}
+
+async function openCycleWhenTwelveWeek(page) {
+  await page.waitForSelector('[data-action="nav"]', { state: "attached" });
+  if (!await page.locator(".twy-tower").count()) return;
+  await page.click('.twy-face-segmented [data-face="plan"]');
+  const cycleLink = page.locator('.twy-plan-link-edit[data-face="cycle"]');
+  if (await cycleLink.count()) await cycleLink.click();
+  else await page.click(".twy-cycle-fold > summary");
 }
 
 // v357テスト安定化: 前回reload由来のsyncFromGitHubOnStartup()(全reloadで発火する非同期処理)が
@@ -234,8 +243,8 @@ async function seed(page, values) {
 
     // LOW-1(R1)+R2でPLANを有効化: 初期表示はCYCLEだけactive・PLANは有効(disabledでない)・
     // WEEKは束Wで有効化、REVIEWだけdisabledのまま(spec受入1)。
-    check("面チップ: activeは1件(CYCLE)", await page.locator(".twy-face-segmented button.active").count() === 1);
-    check("面チップ: disabledは1件(REVIEWだけ。WEEKは束Wで有効化)", await page.locator(".twy-face-segmented button:disabled").count() === 1);
+    check("面チップ: activeは1件(今週を決める)", await page.locator(".twy-face-segmented button.active").count() === 1);
+    check("面チップ: 3面すべて有効", await page.locator(".twy-face-segmented button:disabled").count() === 0);
 
     // ============================================================
     // [2] S2 GLASSがcomputedで効く
@@ -277,12 +286,15 @@ async function seed(page, values) {
     const writesOnNavRender = await contentChangingWrites(page, STATE_KEY);
     check("12WYタブへ戻る描画の書き込みはcurrentView永続化の1回だけ(12WY固有の余計な書き込みが無い)",
       writesOnNavRender === 1, writesOnNavRender);
-    // ここから先(準備中チップのクリック・13 WEEKSバーのhover/tap・幅跨ぎリサイズ)は
+    // ここから先(ふりかえるチップの往復・13 WEEKSバーのhover/tap・幅跨ぎリサイズ)は
     // currentViewも含めて一切書き込まないはずの経路なので、resetSetItemLog後に
     // 「0回書き込み」を厳密に検証する(旧実装はforce+.catchの空クリックだけで自明に0回
     // だったため、実際にhover/クリックを当てるバー操作を追加した)。
     await resetSetItemLog(page);
-    await page.click('.twy-face-segmented button:disabled', { force: true }).catch(() => {});
+    await page.click('.twy-face-segmented [data-face="review"]');
+    check("ふりかえる面が開く", await page.locator(".twy-review-score").isVisible());
+    await page.click('.twy-face-segmented [data-face="plan"]');
+    await page.click(".twy-cycle-fold > summary");
     const firstWeekBar = page.locator(".twy-week").first();
     if (await firstWeekBar.count()) {
       await firstWeekBar.hover();
@@ -294,7 +306,7 @@ async function seed(page, values) {
     await page.waitForFunction((w) => window.innerWidth === w, 1280);
     const writesDuringReadOnly = await contentChangingWrites(page, STATE_KEY);
     const fixtureAfter = await coreFixtureSnapshot(page);
-    check("準備中チップのクリック・バーhover/tap・リサイズはstateへ内容変更を伴う書き込みをしない(0回)", writesDuringReadOnly === 0, writesDuringReadOnly);
+    check("ふりかえるチップの往復・バーhover/tap・リサイズはstateへ内容変更を伴う書き込みをしない(0回)", writesDuringReadOnly === 0, writesDuringReadOnly);
     check("WBS往復・戻り描画・チップ・バーhover/tap・リサイズを通してtasks/projects/tracks/weeklyCommitmentsが変化しない(fixture値比較)",
       fixtureAfter === fixtureBefore);
 
@@ -317,7 +329,7 @@ async function seed(page, values) {
       localStorage.setItem(KEY, JSON.stringify(s));
       return s.dataModifiedAt;
     }, STATE_KEY);
-    await page.reload();
+    await page.reload(); await openCycleWhenTwelveWeek(page);
     await page.waitForSelector('[data-action="nav"]', { state: "attached" });
     const afterMigration = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), STATE_KEY);
     check("settings.twelveWeekReviewWeekMinItemsが既定値3で補完される", afterMigration.settings.twelveWeekReviewWeekMinItems === 3);

@@ -2,7 +2,7 @@
 // fund.js/topband.jsと同じ依存注入型feature(app.js側の未export関数はconfigureTwelveWeek(deps)で受け取る)。
 import { state } from "../state/store.js";
 import { activeTrackForProject, dateParts, daysBetween, dedupeById } from "../core/track.js";
-import { taskWeekTriple, cycleWeeksSummary, taskPlanGrid, remainingTarget, normalizeTwyPlan, weekStartOfISO } from "../core/plan.js";
+import { taskWeekTriple, cycleWeeksSummary, taskPlanGrid, remainingTarget, normalizeTwyPlan, weekStartOfISO, addDaysISO } from "../core/plan.js";
 import { registerActions } from "../ui/actions.js";
 import { weekOutlook, weekDayStrip, todayTwyBlocks, missedTwyItems, projectWeekScore, taskDayChips } from "../core/week.js";
 
@@ -35,21 +35,31 @@ function deleteWeeklyReview(id) {
   return record;
 }
 
-// 上部チップ(CYCLE|PLAN|WEEK|REVIEW)。今週面まで有効化。振り返りは準備中。
+// 発注53: 3つの面。旧サイクル面は「今週を決める」の折りたたみへ。
 // 面切替はstateへ保存しない非永続の表示状態(design §A。_wbsSelectedProjectIdと同じ方式)。
 const TWY_FACES = [
-  { id: "cycle", label: "サイクル", note: "俯瞰" }, { id: "plan", label: "計画", note: "計画" },
-  { id: "week", label: "今週", note: "毎朝" }, { id: "review", label: "振り返り", note: "準備中" }
+  { id: "plan", label: "今週を決める", note: "予定を確認" },
+  { id: "week", label: "今日やる", note: "毎日" }, { id: "review", label: "ふりかえる", note: "土曜の朝" }
 ];
-const TWY_ENABLED_FACES = new Set(["cycle", "plan", "week"]);
-let _twyActiveFace = "cycle";
+const TWY_ENABLED_FACES = new Set(TWY_FACES.map((face) => face.id));
+let _twyActiveFace = "";
+let _twyShowCycle = false;
+
+function twyReviewFinished(weekStart) {
+  const previousWeek = addDaysISO(weekStart, -7);
+  return (state.twyWeeklyReviews || []).some((review) => !review.deleted && review.weekStart === previousWeek
+    && String(review.reviewedAt || "").slice(0, 10) >= weekStart
+    && String(review.reviewedAt || "").slice(0, 10) <= todayISO());
+}
+
+function twyDefaultFace(weekStart) {
+  return todayISO() === weekStart ? (twyReviewFinished(weekStart) ? "plan" : "review") : "week";
+}
 
 function twyFaceChipsHTML(activeFace) {
   return `<div class="segmented twy-face-segmented" role="tablist" aria-label="12週計画の面切替">
-    ${TWY_FACES.map((face) => TWY_ENABLED_FACES.has(face.id)
-    ? `<button type="button" class="${face.id === activeFace ? "active" : ""}" aria-current="${face.id === activeFace}"
-        data-action="twy-face-select" data-face="${face.id}">${escapeHTML(face.label)}<small>${escapeHTML(face.note)}</small></button>`
-    : `<button type="button" disabled title="準備中">${escapeHTML(face.label)}<small>${escapeHTML(face.note)}</small></button>`).join("")}
+    ${TWY_FACES.map((face) => `<button type="button" style="min-height:44px;min-width:0" class="${face.id === activeFace ? "active" : ""}" aria-current="${face.id === activeFace}"
+        data-action="twy-face-select" data-face="${face.id}">${escapeHTML(face.label)}<small>${escapeHTML(face.note)}</small></button>`).join("")}
   </div>`;
 }
 
@@ -218,15 +228,40 @@ function renderTwelveWeek() {
   const inReview = Boolean(summary?.weeks[12]?.isCurrent);
   const ended = Boolean(summary?.cycleEnded); // A-M1: W13末を過ぎたら「サイクル総括(終了)」にする。
   const headline = ended ? "サイクル総括(終了)" : inReview ? "サイクル総括" : "12週間実行サイクル";
-  const face = TWY_ENABLED_FACES.has(_twyActiveFace) ? _twyActiveFace : "cycle";
+  const face = TWY_ENABLED_FACES.has(_twyActiveFace) ? _twyActiveFace : twyDefaultFace(weekStart);
   const bodyHTML = face === "plan"
-    ? twyPlanFaceHTML(cycleStart, summary)
-    : face === "week" ? twyWeekFaceHTML(cycleStart, weekStart) : twyCycleFaceHTML(cycleStart, weekStart, inReview, summary);
+    ? `${twyPlanFaceHTML(cycleStart, summary)}<details class="twy-cycle-fold" style="grid-column:1/-1;min-width:0" ${_twyShowCycle ? "open" : ""}>
+        <summary class="btn" style="min-height:44px">12週の目標と進み具合</summary>
+        ${twyCycleFaceHTML(cycleStart, weekStart, inReview, summary)}</details>`
+    : face === "week" ? twyWeekFaceHTML(cycleStart, weekStart) : twyReviewFaceHTML(cycleStart, weekStart);
   return `<div class="today-tower twy-tower" data-twy-face="${face}">
     ${renderHeader(headline, "12週計画")}
     ${twyFaceChipsHTML(face)}
     ${bodyHTML}
   </div>`;
+}
+
+function twyReviewFaceHTML(cycleStart, weekStart) {
+  const previousWeek = addDaysISO(weekStart, -7), today = todayISO(), records = state.weeklyCommitments || [];
+  const score = weekOutlook(records, previousWeek, today);
+  const days = weekDayStrip(records, previousWeek, today);
+  const labels = new Map(days.map((day) => [day.dateISO, day.label]));
+  const missed = missedTwyItems(records, previousWeek, today);
+  const largest = Math.max(0, ...days.map((day) => day.missed));
+  const bias = largest ? `まだの${missed.length}回のうち${days.filter((day) => day.missed === largest).map((day) => day.label + "曜").join("・")}が各${largest}回。次の週を決める材料に。`
+    : "予定日を過ぎてまだの物はありません。";
+  const weekNo = cycleStart ? Math.floor(daysBetween(cycleStart, previousWeek) / 7) + 1 : 0;
+  const title = weekNo >= 1 && weekNo <= 12 ? `W${weekNo}` : "先週";
+  return `<section class="panel tower-panel-box twy-review-score" style="overflow-wrap:anywhere">
+    <h2>① ${title}を見る <small>${previousWeek}〜${addDaysISO(previousWeek, 6)}</small></h2>
+    <div class="twy-week-score-big">${score.pct === null ? "—" : `${score.pct}%`}</div>
+    <p>できた割合 · 予定 ${score.committed}回のうち できた ${score.done} · まだ ${score.total - score.done} · 点数に含めない ${score.excused}</p>
+    ${score.status === "uncommitted" ? "<p>先週の予定はまだ確定されていません</p>" : ""}
+    <ul>${missed.map((item) => `<li>${labels.get(item.plannedDate) || ""} ${escapeHTML(item.title || "名前のない予定")}${twyWeekProjectTag(item.projectId)}</li>`).join("")}</ul>
+    <p>${bias}</p></section>
+    <section class="panel tower-panel-box twy-review-finish"><h2>③ 終える</h2>
+    ${twyReviewFinished(weekStart) ? "<p>✓ ふりかえり済み</p>" : ""}
+    <button type="button" class="btn primary" style="min-height:44px;max-width:100%;white-space:normal" data-action="twy-review-finish">ふりかえりを終えて『次の週を決める』へ ›</button></section>`;
 }
 
 // R2: PLAN面(design §2.1b・§2.0)。LINK(連動図5ノード)+12-WEEK PLANグリッド+「目安なし」一覧。
@@ -448,6 +483,18 @@ function buildTwyVisionModalHTML(settings) {
 }
 
 registerActions({
+  "twy-review-finish": () => {
+    const weekStart = weekRange(todayISO()).weekStart, previousWeek = addDaysISO(weekStart, -7);
+    const rawStart = state.settings?.twelveWeekStartDate || "";
+    const cycleStart = rawStart ? weekRange(rawStart).weekStart : "";
+    const projects = twyGoalCandidates(cycleStart);
+    for (const projectId of projects.length ? projects.map((project) => project.id) : [""]) {
+      upsertWeeklyReview(previousWeek, projectId, { reviewedAt: todayISO(), cycleStartDate: cycleStart, deleted: false });
+    }
+    _twyActiveFace = "plan";
+    _twyShowCycle = false;
+    saveAndRender("ふりかえりを終えました");
+  },
   "twy-vision-open": () => {
     state.modal = { type: "twyVision", id: "" };
     renderModal(buildTwyVisionModalHTML(state.settings));
@@ -460,10 +507,11 @@ registerActions({
     closeModal();
     saveAndRender("ビジョンを保存しました");
   },
-  // R2: 面切替(CYCLE/PLAN)。design §A「面切替は非永続」どおりstateへ保存せずrender()のみ。
+  // 旧PLAN内のサイクル導線も折りたたみへつなぐ。面切替は非永続。
   "twy-face-select": ({ target }) => {
-    const face = target.dataset.face;
-    if (!TWY_ENABLED_FACES.has(face) || face === _twyActiveFace) return;
+    const face = target.dataset.face === "cycle" ? "plan" : target.dataset.face;
+    if (!TWY_ENABLED_FACES.has(face)) return;
+    _twyShowCycle = target.dataset.face === "cycle";
     _twyActiveFace = face;
     render();
   }
