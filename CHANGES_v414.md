@@ -39,10 +39,10 @@ K 採用のモック m08(シンプル版)に沿って 12WY タブを作り直す
 
 ## 検証
 
-- Codex bundleR2(①③+チップ、製品 80 行、新規 52 断言、選定 16 本/core/manifest/index 0)+ bundleR2b(②+文章、製品 86 行、新規 55 断言、最終 14 件 0)。製品 164 行(reports/R2/result.md)
-- Codex レビュー: (記入待ち)
-- 独立検証(Claude fresh): (記入待ち)
-- release-gate --final: (記入待ち)
+- Codex bundleR2(①③+チップ、製品 80 行)+ bundleR2b(②+文章、製品 86 行)+ fixR2(裁定 R2-1〜5、製品 129 行に整理)。選定/core/manifest/index 0(reports/R2/result.md)
+- Codex レビュー 55: 要修正 高1(1 目標に複数 active トラック)・中3・低1 → 裁定 R2-1〜5 で反映(fixR2)。2 周目 59: 新規指摘なし・5 件すべて解消
+- 独立検証(Claude fresh): 1 周目 56 PASS(HEAD f2695cc)、2 周目 58 PASS(HEAD 2edde3e、差分+契約テスト 4 本、low 2)
+- release-gate --final(base aff5868): 1 回目 track-crud-core / v258 / v264 失敗(関数の署名変更=本物)→ fixR2 で署名を元に戻し 2 回目 PASS(reports/R2/gate-final-2.log)。workspace verify.sh 77 検査通過
 
 ## 既知の制約・保留
 
