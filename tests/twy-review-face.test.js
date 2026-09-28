@@ -266,14 +266,19 @@ async function browserChecks() {
     await page.locator('.twy-face-segmented [data-face="review"]').click();
     eq(await page.locator('[data-review-week]').getAttribute('data-review-week'), week);
     await page.clock.setFixedTime(new Date(2026, 8, 12, 0, 1));
+    // 日跨ぎ再描画(A3-H2)が入力の途中で走らないよう、時計を進めた直後に分 tick を先に消化してから操作する(独立検証 67 med 1)
+    await page.clock.runFor(61_000);
+    await page.locator('[data-review-week]').waitFor();
+    // 再描画後に画面が示している週(土曜 0 時を越えたので次の週の「先週」)を読み、操作はその週へ保存されることを確かめる(裁定 R2-3: 操作時の today ではなく表示中の週)
+    const shownWeek = await page.locator('[data-review-week]').getAttribute('data-review-week');
     await row("num2").locator('[data-action="twy-review-same"]').click();
     await page.locator('.twy-review-notes summary').click();
     await well.fill("週をまたいだメモ");
     await obstacles.click();
     await page.locator('[data-action="twy-review-finish"]').click();
     const rollover = await snapshot();
-    eq(rollover.twyWeeklyReviews.find(r => r.projectId === "p1" && r.weekStart === week).wentWell, "週をまたいだメモ");
-    eq(rollover.twyWeeklyReviews.filter(r => r.weekStart !== week).length, 0, "same/note/finish retain displayed week across Saturday");
+    eq(rollover.twyWeeklyReviews.find(r => r.projectId === "p1" && r.weekStart === shownWeek).wentWell, "週をまたいだメモ", "note saved to the displayed week");
+    eq(rollover.twyWeeklyReviews.filter(r => r.weekStart !== week && r.weekStart !== shownWeek).length, 0, "same/note/finish never write to a week other than the displayed one");
     await page.clock.setFixedTime(new Date(2026, 8, 7, 10));
     await page.reload();
     await page.waitForSelector('.twy-tower[data-twy-face="week"]');
