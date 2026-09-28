@@ -163,7 +163,7 @@
 | track-merge-core.test.js | node | full | sync-storage | 20 | 0 | 0 |
 | track-normalize.test.js | e2e | full | sync-storage, security-offline | 22 | 0 | 0 |
 | track-sync-characterization.test.js | node | full | sync-storage | 15 | 0 | 0 |
-| twy-decide-face.test.js | node | full | planning-execution | 2 | 0 | 0 |
+| twy-decide-face.test.js | node | full | planning-execution | 3 | 0 | 0 |
 | twy-review-face.test.js | node | full | ui-responsive | 2 | 0 | 0 |
 | ui-a-layout.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 23 | 0 | 0 |
 | unit9-carryover-fields.test.js | e2e | full | planning-execution | 40 | 5 | 1800 |
