@@ -83,6 +83,33 @@ function test(name, fn) {
   }
 }
 
+test("R3-1: weekly days matches Tuesday Thursday Saturday; empty preserves anchor behavior", () => {
+  const rule = { kind: "weekly", anchorDate: "2026-09-05", days: [2, 4, 6] };
+  assert.deepEqual(Array.from({ length: 7 }, (_, i) => recurrenceMatchesDate(rule, addDaysISO(rule.anchorDate, i))),
+    [true, false, false, true, false, true, false]);
+  for (const days of [undefined, []]) {
+    assert.equal(recurrenceMatchesDate({ ...rule, days }, "2026-09-08"), false);
+    assert.equal(recurrenceMatchesDate({ ...rule, days }, "2026-09-12"), true);
+  }
+  assert.equal(recurrenceMatchesDate({ ...rule, exceptionDates: ["2026-09-08"] }, "2026-09-08"), false);
+});
+
+test("R3-1: normalizeState cleans days without changing legacy records or timestamps", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const normalize = parse(source, { ecmaVersion: "latest", sourceType: "module" }).body.find(n => n.type === "FunctionDeclaration" && n.id.name === "normalizeState");
+  const migration = normalize.body.body.find(n => n.type === "ExpressionStatement"
+    && source.slice(n.start, n.end).startsWith("value.recurrences = value.recurrences.map") && source.slice(n.start, n.end).includes("delete result.days"));
+  assert.ok(migration, "migration belongs to normalizeState");
+  const legacy = { id: "old", kind: "weekly", anchorDate: "2026-09-05", updatedAt: "2026-09-01T08:00" };
+  const value = { recurrences: [legacy, { ...legacy, id: "valid", days: [6, 2, 4, 2, -1, 7, 2.5, "3", null] },
+    { ...legacy, id: "empty", days: [] }, { ...legacy, id: "invalid", days: "2,4" }, { ...legacy, id: "invalid-array", days: [8, "1"] }] };
+  vm.runInNewContext(source.slice(migration.start, migration.end), { value });
+  assert.deepEqual(JSON.parse(JSON.stringify(value.recurrences[0])), legacy);
+  assert.deepEqual(Array.from(value.recurrences[1].days), [2, 4, 6]);
+  assert.equal(value.recurrences[1].updatedAt, legacy.updatedAt);
+  for (const r of value.recurrences.slice(2)) assert.equal(Object.hasOwn(r, "days"), false);
+});
+
 // =====================================================================
 // recurrenceMatchesDate
 // =====================================================================

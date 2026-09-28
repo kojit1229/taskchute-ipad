@@ -75,7 +75,8 @@ function recurrenceMatchesDate(rule, isoDate) {
   switch (rule.kind) {
     case "daily":    return true;
     case "weekdays": return wd >= 1 && wd <= 5;
-    case "weekly":   return rule.anchorDate ? wd === parseDate(rule.anchorDate).getDay() : true;
+    case "weekly":   return Array.isArray(rule.days) && rule.days.length ? rule.days.includes(wd)
+      : rule.anchorDate ? wd === parseDate(rule.anchorDate).getDay() : true;
     case "monthly":  return rule.anchorDate ? d.getDate() === parseDate(rule.anchorDate).getDate() : true;
     default:         return false;
   }

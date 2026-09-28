@@ -397,6 +397,7 @@ configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDa
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
+  makeBlock, isTouchedBlock, createRecurrenceRule, maintainRecurrences,
   recordTrackMeasurement, saveState, openProjectEditor,
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek, nowDateTime,
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
@@ -797,7 +798,7 @@ registerActions({
   // v266: COUNTDOWNのスコア信号を展開/折りたたむ。
   "twy-score-toggle": () => { toggleTwyScoreExpanded(); render(); },
   // v263: 週次確定シート。チェックと展開は入力保持のためモーダルDOMだけを更新する。
-  "twy-open-commit": () => openTwyCommitSheet(),
+  "twy-open-commit": ({ target }) => openTwyCommitSheet(target?.dataset.weekStart),
   "twy-commit-toggle-group": ({ target }) => {
     const ctx = target.dataset.twySelection, taskId = target.dataset.twyTaskId;
     const selection = twyCommitSelectionFor(ctx), group = twyCommitGroupByTaskId(ctx, taskId);
@@ -1916,7 +1917,7 @@ document.addEventListener("change", (event) => {
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
-  if (target.matches('select[data-action],textarea[data-action="twy-review-note"]')
+  if (target.matches('select[data-action],textarea[data-action="twy-review-note"],input[data-action="twy-decide-aim"]')
     && dispatchAction(target.dataset.action, { event, target, id: target.dataset.id })) return;
   // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。
@@ -2810,6 +2811,12 @@ function normalizeState(value) {
   // (集中力・体力)を保護するメンテナンス工程」は実行率で裁かず、連続欠落日数で見せるための
   // ルール属性。既定false(後方互換。既存ルールは従来どおりの表示・挙動のまま)。
   value.recurrences = value.recurrences.map((r) => ({ protection: false, ...r }));
+  value.recurrences = value.recurrences.map((r) => {
+    const days = [...new Set((Array.isArray(r.days) ? r.days : []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+    const result = { ...r };
+    if (days.length) result.days = days; else delete result.days;
+    return result;
+  });
   // v115: 縮退版(ROADMAP提案G①、2026-07-16 K採用)。保護系ルーティンが崩れた日でも
   // ワンタップで最小構成実行できるよう、繰り返しルールに縮退版のタイトル/所要分を持たせる。
   // 既定は未設定("" / null。ボタンは表示されない=後方互換)。
@@ -13837,8 +13844,7 @@ function modalHeaderHTML(title, className = "") {
       <div class="modal-body">`;
 }
 
-function openTwyCommitSheet() {
-  const weekStart = weekRange(todayISO()).weekStart;
+function openTwyCommitSheet(weekStart = weekRange(todayISO()).weekStart) {
   _twyCommitOpenGroupIds = new Set();
   _twyAddCandidateSelectedIds = new Set();
   _twyExcuseOpenItemId = null;

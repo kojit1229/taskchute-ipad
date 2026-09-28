@@ -626,6 +626,7 @@
         "^src/features/twelve-week\\.js$"
       ],
       "suites": [
+        "twy-decide-face",
         "twy-review-face",
         "r1-twelveweek",
         "r2-twelveweek-plan",

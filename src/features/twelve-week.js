@@ -8,8 +8,11 @@ import { weekOutlook, weekDayStrip, todayTwyBlocks, missedTwyItems, projectWeekS
 
 let escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek, nowDateTime;
 let recordTrackMeasurement, saveState, openProjectEditor;
+let makeBlock, isTouchedBlock, createRecurrenceRule, maintainRecurrences;
+const twyDayNames = ["日", "月", "火", "水", "木", "金", "土"];
 
 function configureTwelveWeek(deps) {
+  ({ makeBlock, isTouchedBlock, createRecurrenceRule, maintainRecurrences } = deps);
   ({ escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone, render, candidateBlocksForWeek, nowDateTime } = deps);
   ({ recordTrackMeasurement, saveState, openProjectEditor } = deps);
 }
@@ -232,15 +235,126 @@ function renderTwelveWeek() {
   const headline = ended ? "サイクル総括(終了)" : inReview ? "サイクル総括" : "12週間実行サイクル";
   const face = TWY_ENABLED_FACES.has(_twyActiveFace) ? _twyActiveFace : twyDefaultFace(weekStart);
   const bodyHTML = face === "plan"
-    ? `${twyPlanFaceHTML(cycleStart, summary)}<details class="twy-cycle-fold" style="grid-column:1/-1;min-width:0" ${_twyShowCycle ? "open" : ""}>
+    ? `${twyDecideFaceHTML(cycleStart)}<details class="twy-cycle-fold" style="grid-column:1/-1;min-width:0" ${_twyShowCycle ? "open" : ""}>
         <summary class="btn" style="min-height:44px">12週の目標と進み具合</summary>
-        ${twyCycleFaceHTML(cycleStart, weekStart, inReview, summary)}</details>`
+        ${twyCycleFaceHTML(cycleStart, weekStart, inReview, summary)}${twyPlanFaceHTML(cycleStart, summary)}</details>`
     : face === "week" ? twyWeekFaceHTML(cycleStart, weekStart) : twyReviewFaceHTML(cycleStart, weekStart);
   return `<div class="today-tower twy-tower" data-twy-face="${face}">
     ${renderHeader(headline, "12週計画")}
     ${twyFaceChipsHTML(face)}
     ${bodyHTML}
   </div>`;
+}
+
+function twyDecideWeek() {
+  const today = todayISO(), week = weekStartOfISO(today);
+  return today === week ? week : addDaysISO(week, 7);
+}
+function twyDecideDates(week) { return Array.from({ length: 7 }, (_, i) => addDaysISO(week, i)); }
+function twyDecideDay(date) { return (daysBetween(weekStartOfISO(date), date) + 6) % 7; }
+function twyDecideRule(task) { return (state.recurrences || []).find((r) => !r.deleted && r.taskId === task.id); }
+function twyDecideDays(rule) {
+  if (!rule) return [];
+  if (rule.kind === "daily") return [0, 1, 2, 3, 4, 5, 6];
+  if (rule.kind === "weekdays") return [1, 2, 3, 4, 5];
+  return rule.kind === "weekly" ? (rule.days?.length ? rule.days : rule.anchorDate ? [twyDecideDay(rule.anchorDate)] : []) : [];
+}
+function twyDecideBlocks(taskId, week) {
+  return (state.blocks || []).filter((b) => !b.deleted && b.taskId === taskId && b.date >= week && b.date <= addDaysISO(week, 6));
+}
+function twyDecideMeta(week) { return (state.weeklyCommitments || []).find((r) => !r.deleted && r.recordType === "week" && r.weekStart === week); }
+function twyDecideFaceHTML(cycleStart) {
+  const week = twyDecideWeek(), previous = addDaysISO(week, -7), projects = twyGoalCandidates(cycleStart);
+  const tasks = projects.flatMap((p) => twyPlanTaskList(p.id)), blocks = tasks.flatMap((t) => twyDecideBlocks(t.id, week));
+  const count = (t) => { const r = twyDecideRule(t); return r?.kind === "monthly" ? twyDecideDates(week).filter((d) => d.slice(8) === r.anchorDate?.slice(8)).length : r ? twyDecideDays(r).length : normalizeTwyPlan(t.twyPlan).perWeek; };
+  const missing = tasks.map((t) => ({ t, n: Math.max(0, count(t) - twyDecideBlocks(t.id, week).length) })).filter(({ t, n }) => n && twyDecideRule(t)?.kind !== "monthly");
+  const last = tasks.reduce((n, t) => n + twyDecideBlocks(t.id, previous).length, 0);
+  const minutes = blocks.reduce((n, b) => {
+    const value = (s) => { const [h, m] = String(s || "").slice(11, 16).split(":").map(Number); return h * 60 + m; };
+    return n + (Math.max(0, value(b.plannedEndAt) - value(b.plannedStartAt)) || Number(b.estimateMin) || 30);
+  }, 0);
+  const crowded = twyDecideDates(week).filter((date) => blocks.filter((b) => b.date === date).length > 5);
+  const meta = twyDecideMeta(week), ids = new Set(tasks.map((t) => t.id));
+  const changed = meta?.committedAt && [...(state.blocks || []).filter((b) => ids.has(b.taskId) && b.date >= week && b.date <= addDaysISO(week, 6)), ...(state.recurrences || []).filter((r) => ids.has(r.taskId))].some((r) => r.updatedAt > meta.committedAt);
+  return `<section class="twy-decide" data-decide-week="${week}"><section class="panel tower-panel-box"><h2>次の週 W${cycleStart ? Math.floor(daysBetween(cycleStart, week) / 7) + 1 : "—"} のやること</h2><p>${week}〜${addDaysISO(week, 6)}</p>
+    ${projects.map((p) => {
+      const score = projectWeekScore(state.weeklyCommitments || [], previous, p.id);
+      const review = (state.twyWeeklyReviews || []).find((r) => !r.deleted && r.weekStart === week && r.projectId === p.id);
+      return `<section data-decide-project="${escapeHTML(p.id)}"><h3>${escapeHTML(p.title)} <small>先週 できた ${score.done}/${score.total} · まだ ${score.total - score.done}</small></h3>
+        <label>今週めざすこと(任意 1 行)<input class="input" data-action="twy-decide-aim" data-id="${escapeHTML(p.id)}" value="${escapeHTML(review?.aim || "")}"></label>
+        ${twyPlanTaskList(p.id).map((t) => {
+          const rule = twyDecideRule(t), n = count(t), m = twyDecideBlocks(t.id, week).length, k = n - m;
+          const when = rule?.kind === "monthly" ? `毎月 ${Number(rule.anchorDate?.slice(8)) || "未設定"} 日 · この週は ${n} 回` : `${rule ? (twyDecideDays(rule).map((d) => twyDayNames[d]).join("・") || "毎週(曜日未設定)") + " " + escapeHTML(rule.startTime || "") : "未設定"} → 週 ${n} 回${rule ? "(ルール)" : ""}`;
+          return `<div class="twy-decide-task" data-decide-task="${escapeHTML(t.id)}"><h4>${t.twyPlan?.keystone ? "★ " : ""}${escapeHTML(t.title)}</h4><p>いつ: ${when} · この週の予定 ${m} 件${rule?.kind === "monthly" ? "" : ` · ${k > 0 ? `あと ${k} 件` : k < 0 ? `${-k} 件 多い` : "✓ 足りています"}`}</p>
+            <button class="btn" data-action="twy-decide-when" data-id="${escapeHTML(t.id)}">曜日・時刻を変える</button> ${k > 0 && rule?.kind !== "monthly" ? `<button class="btn" data-action="twy-decide-when" data-add-missing="true" data-id="${escapeHTML(t.id)}">予定を ${k} 件足す</button>` : ""}</div>`;
+        }).join("")}<button class="btn ghost" data-action="nav" data-view="wbs">作業一覧で編集 ›</button></section>`;
+    }).join("") || "<p>対象の12週の目標がありません</p>"}</section>
+    <section class="panel tower-panel-box twy-decide-total"><h2>決める</h2><p>W${cycleStart ? Math.floor(daysBetween(cycleStart, week) / 7) + 1 : "—"} の予定: ${blocks.length} 回 · 約 ${Math.round(minutes / 6) / 10} 時間(先週 ${last} 回)</p>
+    <p>まだ予定が無い分: ${missing.map(({ t, n }) => `${escapeHTML(t.title)} ${n} 件`).join(" / ") || "なし"}</p><p>${crowded.length ? `! 1 日に 5 回を超える日があります(${crowded.map((d) => twyDayNames[twyDecideDay(d)]).join("・")})` : "✓ 1 日に 5 回を超える日はありません"}</p>
+    <button class="btn primary" data-action="twy-open-commit" data-week-start="${week}">確定シートで予定を確認 ›</button>${meta ? `<p>${changed ? "! 確定後に変更あり" : `✓ 確定済み(${escapeHTML(meta.committedAt || "")})`}</p>` : ""}</section></section>`;
+}
+function twyDecideAdd(id) {
+  const task = state.tasks.find((t) => !t.deleted && t.id === id); if (!task) return;
+  const rule = twyDecideRule(task), days = twyDecideDays(rule), week = twyDecideWeek();
+  if (!days.length) { openTwyDecideWhen(id); return; }
+  for (const date of twyDecideDates(week)) if (days.includes(twyDecideDay(date)) && !twyDecideBlocks(id, week).some((b) => b.date === date)) {
+    state.blocks.push(makeBlock({ taskId: id, title: task.title, category: task.category || "", date,
+      plannedStartAt: rule.startTime ? `${date}T${rule.startTime}` : "", plannedEndAt: rule.endTime ? `${date}T${rule.endTime}` : "" }));
+  }
+  saveAndRender("足りない曜日に予定を追加しました");
+}
+function openTwyDecideWhen(id) {
+  const task = state.tasks.find((t) => !t.deleted && t.id === id); if (!task) return;
+  const week = twyDecideWeek(), rule = twyDecideRule(task), blocks = twyDecideBlocks(id, week);
+  const days = twyDecideDays(rule);
+  state.modal = { type: "twyDecideWhen", id, weekStart: week };
+  renderModal(`${modalHeaderHTML(`いつやる? — ${escapeHTML(task.title)}`)}<div class="twy-decide-sheet">
+    ${rule && !days.length ? "<p>これからずっとを選ぶと、選んだ曜日の毎週の繰り返しに置き換えます。</p>" : ""}
+    <div class="twy-decide-days">${[6, 0, 1, 2, 3, 4, 5].map((d) => `<button class="btn" data-action="twy-decide-day" data-day="${d}" aria-pressed="${days.includes(d)}">${twyDayNames[d]}</button>`).join("")}</div>
+    <label>時刻<input class="input" type="time" step="300" data-modal-field="time" value="${escapeHTML(blocks[0]?.plannedStartAt?.slice(11, 16) || rule?.startTime || "07:30")}"></label>
+    <label>適用する範囲<select class="select" data-modal-field="scope"><option value="week">今週だけ</option><option value="always">これからずっと</option></select></label><p data-decide-message role="status"></p>
+    <button class="btn primary" data-action="twy-decide-save">これで決める</button></div></div></div>`);
+}
+function saveTwyDecideWhen() {
+  const { id, weekStart: week } = state.modal || {}, task = state.tasks.find((t) => !t.deleted && t.id === id); if (!task) return;
+  const root = document.querySelector(".twy-decide-sheet"), days = [...root.querySelectorAll('[data-day][aria-pressed="true"]')].map((b) => Number(b.dataset.day)).sort((a, b) => a - b);
+  const time = root.querySelector('[data-modal-field="time"]'), always = root.querySelector('[data-modal-field="scope"]').value === "always";
+  if (!time.value || !time.checkValidity() || (always && !days.length)) { root.querySelector("[data-decide-message]").textContent = "時刻と、繰り返す場合は曜日を選んでください"; return; }
+  const dates = twyDecideDates(week).filter((d) => days.includes(twyDecideDay(d))), now = nowDateTime();
+  let rule = twyDecideRule(task);
+  const minute = (v) => { const [h, m] = String(v || "").split(":").map(Number); return h * 60 + m; };
+  const duration = Math.max(0, minute(rule?.endTime) - minute(rule?.startTime)) || 30;
+  const end = Math.min(1439, minute(time.value) + duration), endTime = `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+  const template = (date) => ({ taskId: id, title: task.title, category: task.category || "", date, plannedStartAt: `${date}T${time.value}`, plannedEndAt: `${date}T${endTime}`, estimateMin: duration });
+  const editable = (b) => {
+    const r = (state.recurrences || []).find((r) => r.id === b.recurrenceGroupId);
+    const normalized = (v) => String(v || "").slice(0, 16);
+    return !isTouchedBlock(b) && b.title === task.title
+      && (!r || (normalized(b.plannedStartAt) === normalized(r.startTime ? `${b.date}T${r.startTime}` : "") && normalized(b.plannedEndAt) === normalized(r.endTime ? `${b.date}T${r.endTime}` : "")));
+  };
+  if (always) {
+    const kind = rule && !twyDecideDays(rule).length ? "weekly" : days.length === 7 ? "daily" : days.join() === "1,2,3,4,5" ? "weekdays" : "weekly";
+    const replace = new Set((state.blocks || []).filter((b) => rule && b.date >= week && b.recurrenceGroupId === rule.id
+      && (editable(b) || (b.deleted && b.source === "twy-decide-week"))));
+    if (!rule) { if (!createRecurrenceRule(template(week), kind)) return; rule = twyDecideRule(task); if (!rule) return; }
+    Object.assign(rule, { kind, startTime: time.value, endTime, anchorDate: week, anchor: "", updatedAt: now });
+    if (kind === "weekly") rule.days = days; else delete rule.days;
+    for (const b of twyDecideBlocks(id, week)) if (!b.recurrenceGroupId && editable(b)) { b.deleted = true; b.updatedAt = now; }
+    for (const b of replace) {
+      if (days.includes(twyDecideDay(b.date))) { Object.assign(b, template(b.date), { deleted: false, updatedAt: now }); if (b.source === "twy-decide-week") b.source = ""; }
+      else Object.assign(b, { deleted: true, updatedAt: now, source: "twy-decide-week" });
+    }
+    maintainRecurrences({ persist: false });
+  } else {
+    for (const b of twyDecideBlocks(id, week)) {
+      if (!editable(b)) continue;
+      b.deleted = true; b.updatedAt = now; if (b.recurrenceGroupId) b.source = "twy-decide-week";
+    }
+    for (const date of dates) if (!twyDecideBlocks(id, week).some((b) => b.date === date)) state.blocks.push(makeBlock(template(date)));
+  }
+  const savedTask = state.tasks.find((t) => t.id === id);
+  if (always) { savedTask.twyPlan = { ...normalizeTwyPlan(savedTask.twyPlan), perWeek: days.length }; savedTask.updatedAt = now; }
+  closeModal(); saveAndRender("曜日と時刻を保存しました");
 }
 
 function twyReviewResultsHTML(cycleStart, weekStart) {
@@ -509,6 +623,13 @@ function buildTwyVisionModalHTML(settings) {
 }
 
 registerActions({
+  "twy-decide-aim": ({ event, id, target }) => {
+    if (event.type !== "change") return;
+    upsertWeeklyReview(target.closest("[data-decide-week]").dataset.decideWeek, id, { aim: target.value }); saveState();
+  },
+  "twy-decide-when": ({ id, target }) => target.dataset.addMissing ? twyDecideAdd(id) : openTwyDecideWhen(id),
+  "twy-decide-day": ({ target }) => target.setAttribute("aria-pressed", String(target.getAttribute("aria-pressed") !== "true")),
+  "twy-decide-save": () => saveTwyDecideWhen(),
   "twy-review-record": ({ id, target }) => {
     const row = target.closest("[data-review-track]"), input = row.querySelector("[data-review-value]");
     if (!input.value.trim() || !input.checkValidity()) { row.querySelector("[data-review-message]").textContent = "数字を入れてください"; return; }
