@@ -1,3 +1,9 @@
+.twy-decide { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
+.twy-decide-task { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.twy-decide .btn, .twy-decide-sheet .btn, .twy-cycle-fold .btn { min-height: 44px; min-width: 44px; max-width: 100%; white-space: normal; }
+.twy-decide input, .twy-decide-sheet input, .twy-decide-sheet select { font-size: 16px; min-width: 0; width: 100%; box-sizing: border-box; }
+.twy-decide-days { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+.twy-decide-days [aria-pressed="true"] { background: var(--accent); color: var(--bg); }
 :root {
   /* v151: 既定はライト値のフォールバック(data-theme未設定時、または旧キャッシュ等で
      index.htmlの同期スクリプトが走る前の一瞬)。実際の適用はdata-theme属性(下記)経由。

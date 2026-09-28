@@ -105,9 +105,10 @@ async function openCycleWhenTwelveWeek(page) {
   await page.waitForSelector('[data-action="nav"]', { state: "attached" });
   if (!await page.locator(".twy-tower").count()) return;
   await page.click('.twy-face-segmented [data-face="plan"]');
+  await page.click(".twy-cycle-fold > summary");
   const cycleLink = page.locator('.twy-plan-link-edit[data-face="cycle"]');
   if (await cycleLink.count()) await cycleLink.click();
-  else await page.click(".twy-cycle-fold > summary");
+
 }
 
 // v357テスト安定化: 前回reload由来のsyncFromGitHubOnStartup()(全reloadで発火する非同期処理)が
@@ -636,6 +637,7 @@ async function seed(page, values) {
     await seed(page, { projects: [pWed], tasks: [tWed], currentView: "twelveweek" });
     const wedStateBefore = await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state));
     await page.click('.twy-face-segmented button[data-face="plan"]');
+    await page.click(".twy-cycle-fold > summary");
     await page.waitForSelector(".twy-plan-task-row");
     check("M2: PLAN面でも非土曜開始は丸め後の経過日数基準でW3が当週列になる",
       await page.locator(".twy-plan-grid thead th[data-current=\"1\"]").count() === 1

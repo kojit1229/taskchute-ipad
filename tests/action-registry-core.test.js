@@ -214,7 +214,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "fund-refresh",  // v356: FUNDタブの手動再取得ボタンの意図的追加
   // v360(R1/R2、review-r2-claude-a L4): 12WYタブ VISION編集+PLAN/CYCLE面切替の意図的追加
   "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
-  "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add"
+  "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
+  "twy-decide-aim", "twy-decide-when", "twy-decide-day", "twy-decide-save"
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
 ];
@@ -257,7 +258,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // v360(R1/R2、review-r2-claude-a L4): src/features/twelve-week.js。top-level
   // registerActionsのため、importするだけで登録される。
   "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
-  "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add"
+  "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
+  "twy-decide-aim", "twy-decide-when", "twy-decide-day", "twy-decide-save"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ
