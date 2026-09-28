@@ -119,21 +119,22 @@ function makeRecurrenceInstance(rule, isoDate) {
 //       新規作成しない(保存の二重発火等で同一内容のルールが重複生成される事故の再発防止、
 //       2026-05-22実害・2026-07-15調査で確定)。削除済みルールは対象外(誤ブロックしない)。
 // (元routine.js:713-717、逐語コピー。stateアクセスをgetState()経由に変更)
-function findActiveDuplicateRecurrenceRule(title, startTime) {
+function findActiveDuplicateRecurrenceRule(title, startTime, taskId) {
   const state = getState();
   const t = (title || "").trim();
   return (state.recurrences || []).find(
-    (r) => !r.deleted && (r.title || "").trim() === t && (r.startTime || "") === (startTime || ""));
+    (r) => !r.deleted && (taskId === undefined || r.taskId === taskId)
+      && (r.title || "").trim() === t && (r.startTime || "") === (startTime || ""));
 }
 
 // 戻り値: 作成したルール。重複検知時は作成せず null(呼び出し側はトースト表示済みとして扱う)。
 // (元routine.js:720-751、逐語コピー。stateアクセスをgetState()経由に変更)
-function createRecurrenceRule(block, kind) {
-  if (mutate && !mutationActive()) return mutate(() => createRecurrenceRule(block, kind));
+function createRecurrenceRule(block, kind, { sameTaskOnly = false } = {}) {
+  if (mutate && !mutationActive()) return mutate(() => createRecurrenceRule(block, kind, { sameTaskOnly }));
   const state = getState();
   const title = block.title || "繰り返しBlock";
   const startTime = block.plannedStartAt ? (block.plannedStartAt.split("T")[1] || "") : "";
-  if (findActiveDuplicateRecurrenceRule(title, startTime)) {
+  if (findActiveDuplicateRecurrenceRule(title, startTime, sameTaskOnly ? block.taskId || "" : undefined)) {
     showToast(`「${title}」の繰り返しルールは既にあるため作成しませんでした`);
     return null;
   }

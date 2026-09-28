@@ -285,7 +285,7 @@ function twyDecideFaceHTML(cycleStart) {
         ${twyPlanTaskList(p.id).map((t) => {
           const rule = twyDecideRule(t), n = count(t), m = twyDecideBlocks(t.id, week).length, k = n - m;
           const when = rule?.kind === "monthly" ? `毎月 ${Number(rule.anchorDate?.slice(8)) || "未設定"} 日 · この週は ${n} 回` : `${rule ? (twyDecideDays(rule).map((d) => twyDayNames[d]).join("・") || "毎週(曜日未設定)") + " " + escapeHTML(rule.startTime || "") : "未設定"} → 週 ${n} 回${rule ? "(ルール)" : ""}`;
-          const memo = escapeHTML(String(t.memo || "").split(/\r?\n/)[0]);
+          const memo = escapeHTML(String(t.memo || "").split(/\r\n|\r|\n/)[0]);
           return `<div class="twy-decide-task" data-decide-task="${escapeHTML(t.id)}"><h4>${t.twyPlan?.keystone ? "★ " : ""}${escapeHTML(t.title)} <small data-decide-memo-preview>${memo}</small></h4><p>いつ: ${when} · この週の予定 ${m} 件${rule?.kind === "monthly" ? "" : ` · ${k > 0 ? `あと ${k} 件` : k < 0 ? `${-k} 件 多い` : "✓ 足りています"}`}</p>
             <button class="btn" data-action="twy-decide-when" data-id="${escapeHTML(t.id)}">曜日・時刻を変える</button> ${k > 0 && rule?.kind !== "monthly" ? `<button class="btn" data-action="twy-decide-when" data-add-missing="true" data-id="${escapeHTML(t.id)}">予定を ${k} 件足す</button>` : ""}
             <details><summary>今回やる内容(メモ)</summary><input class="input" aria-label="今回やる内容(メモ)" data-action="twy-decide-memo" data-id="${escapeHTML(t.id)}" value="${memo}"></details></div>`;
@@ -317,7 +317,7 @@ function saveTwyDecideTask() {
   const kind = days.length === 7 ? "daily" : days.join() === "1,2,3,4,5" ? "weekdays" : "weekly";
   const saved = createTwyTask({ title, projectId: id, twyPerWeek: days.length, twyKeystone: root.querySelector('[data-modal-field="keystone"]').checked }, (task) => {
     const rule = createRecurrenceRule({ taskId: task.id, title, date: week, plannedStartAt: `${week}T${time.value}`,
-      plannedEndAt: `${week}T${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}` }, kind);
+      plannedEndAt: `${week}T${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}` }, kind, { sameTaskOnly: true });
     if (!rule) return false;
     if (kind === "weekly") rule.days = days;
     maintainRecurrences({ persist: false }); return true;
@@ -657,7 +657,8 @@ registerActions({
   "twy-decide-memo": ({ event, id, target }) => {
     if (event.type !== "change") return;
     const task = state.tasks.find((t) => !t.deleted && t.id === id); if (!task) return;
-    task.memo = target.value + String(task.memo || "").replace(/^[^\r\n]*/, ""); task.updatedAt = nowDateTime(); saveState();
+    const memo = String(task.memo || ""), boundary = memo.search(/\r\n|\r|\n/);
+    task.memo = target.value + (boundary < 0 ? "" : memo.slice(boundary)); task.updatedAt = nowDateTime(); saveState();
     target.closest("[data-decide-task]").querySelector("[data-decide-memo-preview]").textContent = target.value;
   },
   "twy-decide-add-task": ({ id }) => openTwyDecideTask(id),
