@@ -37,7 +37,9 @@
   ],
   "uncertainties": [
     "裁定 R3-1: recurrences に任意項目 days(0〜6 の配列)。normalizeState で補正、無ければ従来どおり anchorDate の曜日",
-    "実機(iPhone)は未確認"
+    "実機(iPhone)は未確認",
+    "裁定 R3-2〜7: 外した実体は墓標 / 今週だけは perWeek 不変 / 予定を足すは不足曜日に追加のみ / 確定後の変更は committedAt と updatedAt から / monthly と曜日未設定 weekly の表示と置き換え / 未編集判定は先頭 16 文字比較+isTouchedBlock",
+    "tests/twy-review-face.test.js は負荷時に時間差で揺れる(日跨ぎ再描画との競合)。テスト側の待ち方の改善は R3(2/2)で扱う"
   ],
   "reviewFocus": [
     "days の判定・補正が旧データを変えないこと",
@@ -47,10 +49,10 @@
     "契約テスト(action-registry-core / recurrence-core / r2-twelveweek-plan)の更新が追随だけで緩和でないこと"
   ],
   "verification": [
-    "Codex bundleR3b: 選定 109 本・core・impact・manifest/index すべて 0、製品 133 行(reports/R3/result.md)",
-    "Codex レビュー: (記入待ち)",
-    "独立検証(Claude fresh、契約テスト込み): (記入待ち)",
-    "release-gate --final: (記入待ち)"
+    "Codex bundleR3b(製品 133 行)+ fixR3(裁定 R3-2〜6)+ fixR3b(裁定 R3-7)= 製品 148 行。選定/core/manifest/index 0(reports/R3/result.md)",
+    "Codex レビュー 62: 要修正 高1(曜日から外した実体の物理削除→同期で復活)・中4 → 裁定 R3-2〜6。2 周目 66: 全件解消・新規 0",
+    "独立検証(Claude fresh、関門の契約テスト込み): 1 周目 63 FAIL high 1(未編集判定が完全一致で正規化後に効かない)→ 裁定 R3-7 → 2 周目 67 PASS(HEAD a4b2b6a、再読込をはさむ 20 項目 OK、med 1=twy-review-face の時間差の揺れ、low 2)",
+    "release-gate --final(base b338db0): 1 回目 twy-review-face のみ失敗(入力→blur の競合、単独 0)、2 回目 PASS(reports/R3/gate-final-2.log)。workspace verify.sh 77 検査通過"
   ],
   "knownLimitations": [
     "R3(2/2)= 今回やる内容(メモ 1 行目)と「+ やることを足す」シート、R4 = 今日やる面・旧面の整理 が続く"

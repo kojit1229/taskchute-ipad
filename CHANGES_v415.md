@@ -42,10 +42,10 @@ K 採用のモック m08 に沿った第 2 弾。「今週を決める」面を�
 
 ## 検証
 
-- Codex bundleR3b: 選定 109 本・core・impact・manifest/index すべて 0、製品 133 行(reports/R3/result.md)
-- Codex レビュー: (記入待ち)
-- 独立検証(Claude fresh、契約テスト込み): (記入待ち)
-- release-gate --final: (記入待ち)
+- Codex bundleR3b(製品 133 行)+ fixR3(裁定 R3-2〜6)+ fixR3b(裁定 R3-7)= 製品 148 行。選定/core/manifest/index 0(reports/R3/result.md)
+- Codex レビュー 62: 要修正 高1(曜日から外した実体の物理削除→同期で復活)・中4 → 裁定 R3-2〜6。2 周目 66: 全件解消・新規 0
+- 独立検証(Claude fresh、関門の契約テスト込み): 1 周目 63 FAIL high 1(未編集判定が完全一致で正規化後に効かない)→ 裁定 R3-7 → 2 周目 67 PASS(HEAD a4b2b6a、再読込をはさむ 20 項目 OK、med 1=twy-review-face の時間差の揺れ、low 2)
+- release-gate --final(base b338db0): 1 回目 twy-review-face のみ失敗(入力→blur の競合、単独 0)、2 回目 PASS(reports/R3/gate-final-2.log)。workspace verify.sh 77 検査通過
 
 ## 既知の制約・保留
 
