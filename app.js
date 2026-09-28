@@ -397,6 +397,7 @@ configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDa
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
+  recordTrackMeasurement, saveState, openProjectEditor,
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek, nowDateTime,
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
   render  // v360(R2): PLAN面切替(非永続)の再描画用
@@ -1915,7 +1916,7 @@ document.addEventListener("change", (event) => {
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
-  if (target.matches("select[data-action]")
+  if (target.matches('select[data-action],textarea[data-action="twy-review-note"]')
     && dispatchAction(target.dataset.action, { event, target, id: target.dataset.id })) return;
   // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。

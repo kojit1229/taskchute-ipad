@@ -229,16 +229,17 @@ async function seed(page, values) {
     // [1] PLANチップで面が切り替わる(非永続)
     // ============================================================
     console.log("[1] PLANチップで面が切り替わる(非永続)");
-    check("初期表示はCYCLE面(data-twy-face=cycle)", await page.locator('.twy-tower[data-twy-face="cycle"]').count() === 1);
+    check("土曜の初期表示はふりかえる面(data-twy-face=review)", await page.locator('.twy-tower[data-twy-face="review"]').count() === 1);
     check("PLANチップはdisabledではない", await page.locator('.twy-face-segmented button[data-face="plan"]').isDisabled() === false);
     await page.click('.twy-face-segmented button[data-face="plan"]');
     await page.waitForSelector(".twy-plan-link-panel");
     check("PLANチップクリックでPLAN面へ切り替わる(data-twy-face=plan)", await page.locator('.twy-tower[data-twy-face="plan"]').count() === 1);
     check("PLANチップがactiveになる", await page.locator('.twy-face-segmented button[data-face="plan"].active').count() === 1);
-    check("CYCLE専用のVISIONパネルはPLAN面に無い", await page.locator(".twy-vision-panel").count() === 0);
+    check("PLAN内のCYCLE折りたたみは既定で閉じている", await page.locator(".twy-cycle-fold").getAttribute("open") === null);
+    check("CYCLEのVISIONパネルは折りたたみ内に1件", await page.locator(".twy-cycle-fold .twy-vision-panel").count() === 1);
     await page.reload();
     await page.waitForSelector('[data-action="nav"]', { state: "attached" });
-    check("非永続: reloadするとCYCLE面に戻る", await page.locator('.twy-tower[data-twy-face="cycle"]').count() === 1);
+    check("非永続: reloadすると土曜はふりかえる面に戻る", await page.locator('.twy-tower[data-twy-face="review"]').count() === 1);
     await page.click('.twy-face-segmented button[data-face="plan"]');
     await page.waitForSelector(".twy-plan-link-panel");
 
@@ -392,7 +393,7 @@ async function seed(page, values) {
     await page.waitForSelector('[data-modal-field="title"]');
     await page.click('[data-action="modal-close"]');
     await page.waitForSelector('[data-modal-field="title"]', { state: "detached" });
-    await page.click('.twy-face-segmented button[data-face="cycle"]');
+    await page.click('.twy-plan-link-edit[data-face="cycle"]');
     await page.waitForSelector(".twy-vision-panel");
     await page.click('.twy-face-segmented button[data-face="plan"]');
     await page.waitForSelector(".twy-plan-task-row");

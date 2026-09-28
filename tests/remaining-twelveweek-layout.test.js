@@ -109,6 +109,7 @@ async function run() {
       await nav(page, "twelveweek");
       const faces = [];
       for (const face of ["cycle", "plan"]) {
+        if (face === "cycle") await page.locator('.twy-face-segmented [data-face="plan"]').click();
         await page.locator('[data-action="twy-face-select"][data-face="' + face + '"]').first().click();
         await setViewportAndWaitForStableLayout(page, { width, height: 1000 }, ".twy-tower > *");
         const m = await measure(page);

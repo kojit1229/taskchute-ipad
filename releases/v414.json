@@ -1,0 +1,66 @@
+{
+  "version": 414,
+  "date": "2026-09-28",
+  "title": "12WY タブの作り直し R2: 上部チップを 3 つ(今週を決める / 今日やる / ふりかえる)に、「ふりかえる」面(① 先週を見る ② 結果の数字 ③ 終える)",
+  "summary": "K 採用のモック m08(シンプル版)に沿って 12WY タブを作り直す第 1 弾。上部チップを「今週を決める / 今日やる / ふりかえる」の 3 つにし(旧 CYCLE 面は「今週を決める」の折りたたみ「12 週の目標と進み具合」へ)、既定の面を平日=今日やる・土曜=ふりかえる(済みなら今週を決める)に。「ふりかえる」面: ① 先週のできた割合・まだの物・曜日の偏り、② 目標ごとの結果の数字(いま/目標、記録、数字は同じ、編集、追加、達成表示)と任意の「よかった・困った」、③ 終える(確認日を記録して今週を決めるへ)。保存は既存経路(trackMeasurements / tracks / twyWeeklyReviews)のみ。「今週を決める」「今日やる」の中身は R3/R4 で置き換える(当面は既存の PLAN 面・今週面)。",
+  "changedFiles": [
+    "CHANGES_v414.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v414.json",
+    "src/features/twelve-week.js",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/r1-twelveweek.test.js",
+    "tests/r2-twelveweek-plan.test.js",
+    "tests/r3-twelveweek-week.test.js",
+    "tests/remaining-screen-labels.test.js",
+    "tests/remaining-twelveweek-layout.test.js",
+    "tests/suite-manifest.json",
+    "tests/twy-review-face.test.js"
+  ],
+  "intent": [
+    "案件 2026-09-04-12wy-tab-mock 束R R2(design/R2R3-review-face.md 2026-09-28 全面改訂、orders/53・54)。K 採用 m08「これでお願い」2026-09-28。背景: K「使い方が分かりにくい」→ Claude/Codex の独立調査 reports/twy-usability/"
+  ],
+  "changes": [
+    "src/features/twelve-week.js: TWY_FACES を plan/week/review の 3 つに(表示名: 今週を決める / 今日やる / ふりかえる)。twyDefaultFace(平日=week、土曜=review、ふりかえり済みなら plan)。旧 cycle 面は plan 面の末尾の折りたたみ(twy-face-select で cycle を指定した既存導線は折りたたみを開く)",
+    "src/features/twelve-week.js twyReviewFaceHTML / twyReviewResultsHTML: ① 先週(直前の土〜金)の weekOutlook / weekDayStrip / missedTwyItems と曜日の偏り、② 目標ごとの未終了トラックを「名前 · いま n / 目標 m 単位」で並べ、twy-review-record(recordTrackMeasurement)/ twy-review-same(reviewedAt を nowDateTime)/ twy-review-edit・twy-review-add(openProjectEditor にトラック指定)/ 達成(twyTrackIsDone)は ✓ 表示で先週より前の達成は折りたたみ、任意の折りたたみ「よかった・困った」(twy-review-note、change で upsertWeeklyReview)、③ twy-review-finish(先週分の reviewedAt を nowDateTime で更新し plan 面へ)",
+    "app.js: configureTwelveWeek に recordTrackMeasurement / saveState / openProjectEditor を注入。saveTrackFromForm・closeActiveTrackManual・openProjectEditor・buildProjectModal・saveProjectTrackFromModal に「対象トラックの指定」を追加(未指定なら従来どおり activeTrack)。change イベントで textarea[data-action=twy-review-note] も登録表経由に",
+    "tests/twy-review-face.test.js: 新規(チップ・既定の面・①の数字・②の記録/同じ/達成・任意の文章の保存・③・1280/390 の実測)。既存 6 本(action-registry-core / r1 / r2 / r3 / remaining-screen-labels / remaining-twelveweek-layout)は 4 面→3 面の新契約へ追随(削除した断言は reports/R2/result.md に列挙)",
+    "sw.js: CACHE_NAME v414"
+  ],
+  "uncertainties": [
+    "「今週を決める」「今日やる」の中身は当面は既存の PLAN 面・今週面(v408)のまま。m08 の形への置き換えは R3/R4",
+    "実機(iPhone)は未確認",
+    "裁定 R2-1: 既存の「1 プロジェクト 1 active トラック」の契約を維持。ふりかえり ② は active 1 本+達成して閉じた物差しの折りたたみ。「+ 追加・変更」は既存のプロジェクト編集モーダル(定義変更=前の記録を保持して新しいトラックを開始)"
+  ],
+  "reviewFocus": [
+    "保存は既存経路のみ(recordTrackMeasurement / saveTrackFromForm / upsertWeeklyReview)で新しい state キーが無いこと",
+    "reviewedAt が nowDateTime 形式であること",
+    "既存テストの更新が 4 面→3 面の追随だけで緩和でないこと",
+    "画面の言葉が design の表どおりで専門語が出ていないこと"
+  ],
+  "verification": [
+    "Codex bundleR2(①③+チップ、製品 80 行)+ bundleR2b(②+文章、製品 86 行)+ fixR2(裁定 R2-1〜5、製品 129 行に整理)。選定/core/manifest/index 0(reports/R2/result.md)",
+    "Codex レビュー 55: 要修正 高1(1 目標に複数 active トラック)・中3・低1 → 裁定 R2-1〜5 で反映(fixR2)。2 周目 59: 新規指摘なし・5 件すべて解消",
+    "独立検証(Claude fresh): 1 周目 56 PASS(HEAD f2695cc)、2 周目 58 PASS(HEAD 2edde3e、差分+契約テスト 4 本、low 2)",
+    "release-gate --final(base aff5868): 1 回目 track-crud-core / v258 / v264 失敗(関数の署名変更=本物)→ fixR2 で署名を元に戻し 2 回目 PASS(reports/R2/gate-final-2.log)。workspace verify.sh 77 検査通過"
+  ],
+  "knownLimitations": [
+    "R3(今週を決める: 曜日シート・やること追加・確定)と R4(今日やる・旧面の整理)が続く"
+  ],
+  "relatedSuites": [
+    "twy-review-face",
+    "r1-twelveweek",
+    "r2-twelveweek-plan",
+    "r3-twelveweek-week",
+    "weekly-reviews-core",
+    "action-registry-core",
+    "remaining-screen-labels",
+    "remaining-twelveweek-layout",
+    "today-core"
+  ]
+}
