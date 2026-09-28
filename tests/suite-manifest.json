@@ -8483,6 +8483,30 @@
       }
     },
     {
+      "file": "weekly-reviews-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "journal-health"
+      ],
+      "assertionSignals": 4,
+      "assertionHash": "d2b512ed0916f4c6",
+      "sourceHash": "8c9a4311e988d367",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
       "file": "weekly-save-e2e.test.js",
       "kind": "e2e",
       "tier": "full",

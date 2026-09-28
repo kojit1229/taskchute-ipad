@@ -30,6 +30,11 @@
     "fund-data-contract"
   ],
   "areas": {
+    "weekly-reviews": {
+      "paths": ["^src/features/twelve-week\\.js$", "^src/sync/github\\.js$"],
+      "patterns": ["weeklyReviews|WeeklyReview"],
+      "suites": ["weekly-reviews-core"]
+    },
     "schedule-occurrence-time": {
       "paths": ["^src/features/schedule-occurrence-time\\.js$"],
       "suites": ["schedule-series-sync-e2e", "placement-e2e"]
