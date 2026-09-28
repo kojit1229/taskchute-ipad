@@ -62,18 +62,20 @@ async function nodeChecks() {
     ok(feature.renderTwelveWeek().includes(`twy-week-score-big">${expected}</div>`), "empty/all-excused is not zero percent");
   }
   store.state.weeklyCommitments = records;
-  dispatchAction("twy-review-finish", { target: { dataset: {} } });
+  ok(html.includes(`data-review-week="${week}"`));
+  clock = "2026-09-12";
+  dispatchAction("twy-review-finish", { target: { closest: () => ({ dataset: { reviewWeek: week } }) } });
   eq(saves, 1, "finish uses existing save path once");
-  eq(store.state.twyWeeklyReviews[0], { ...savedReview, reviewedAt: `${today}T10:00:00`, updatedAt: `${today}T10:00:00` });
+  eq(store.state.twyWeeklyReviews[0], { ...savedReview, reviewedAt: `${clock}T10:00:00`, updatedAt: `${clock}T10:00:00` });
   ok(feature.renderTwelveWeek().includes('data-twy-face="plan"'));
   eq(store.state.weeklyCommitments, records, "finishing never edits commitments");
   store.state.twyWeeklyReviews[0].deleted = true;
-  dispatchAction("twy-review-finish", { target: { dataset: {} } });
+  dispatchAction("twy-review-finish", { target: { closest: () => ({ dataset: { reviewWeek: week } }) } });
   eq(store.state.twyWeeklyReviews.length, 1, "finish restores the same tombstoned review id");
   eq(store.state.twyWeeklyReviews[0].deleted, false);
   store.state.projects = [];
-  dispatchAction("twy-review-finish", { target: { dataset: {} } });
-  eq(store.state.twyWeeklyReviews.find(r => r.projectId === "").reviewedAt, `${today}T10:00:00`, "empty goals can finish without a new state key");
+  dispatchAction("twy-review-finish", { target: { closest: () => ({ dataset: { reviewWeek: week } }) } });
+  eq(store.state.twyWeeklyReviews.find(r => r.projectId === "").reviewedAt, `${clock}T10:00:00`, "empty goals can finish without a new state key");
 }
 
 async function browserChecks() {
@@ -106,6 +108,7 @@ async function browserChecks() {
     eq(await page.locator(".twy-face-segmented button:disabled").count(), 0);
     eq(await page.locator(".twy-review-score .twy-week-score-big").innerText(), "25%", JSON.stringify(seeded));
     ok((await page.locator(".twy-review-score").innerText()).includes("予定 5回のうち できた 1 · まだ 3 · 点数に含めない 1"));
+    ok((await page.locator('[data-review-project="p1"]').innerText()).includes("まだ物差しが無い"));
     eq(await page.locator(".twy-review-score li").count(), 3);
     eq((await page.locator(".twy-review-score li").allTextContents()).map(s => s.trim()),
       ["火 予定tue検定", "金 予定fri1検定", "金 予定fri2検定"]);
@@ -115,19 +118,18 @@ async function browserChecks() {
       const track = (id, ownerId, name, extra = {}) => ({ id, ownerId, ownerType: "project", kind: "numeric", name,
         baselineValue: 0, goalValue: 8, unit: "回", valueStep: 1, startDate: cycle, deadline: "2026-10-02",
         cycleStartDate: cycle, status: "active", deleted: false, createdAt: `${cycle}T08:00:00`, updatedAt: `${cycle}T08:00:00`, ...extra });
-      s.tracks = [track("num1", "p1", "過去問"), track("num2", "p1", "復習", { goalValue: 10 }),
-        track("done", "p1", "テキスト", { goalValue: 27, unit: "章" }),
+      s.tracks = [track("num2", "p1", "復習", { goalValue: 10 }),
+        track("done", "p1", "テキスト", { goalValue: 27, unit: "章", status: "closed", closedReason: "superseded" }),
         track("weight", "p2", "体重", { baselineValue: 75, goalValue: 72, valueStep: 0.1, unit: "kg" }),
         track("closed", "p1", "終了済み", { status: "closed" }), track("deleted", "p1", "削除済み", { deleted: true }),
-        track("milestone", "p1", "提出", { kind: "milestone", milestones: [{ id: "ms1", label: "下書き", plannedDate: "2026-09-10", doneAt: "", deleted: false }] })];
+        track("milestone", "p3", "提出", { kind: "milestone", milestones: [{ id: "ms1", label: "下書き", plannedDate: "2026-09-10", doneAt: "", deleted: false }] })];
       s.trackMeasurements = [{ id: "done-measurement", trackId: "done", value: 27, observedAt: `${today}T09:00:00`, deleted: false },
         { id: "weight-measurement", trackId: "weight", value: 72.8, observedAt: `${today}T09:00:00`, deleted: false }];
     }, { cycle, today });
     await page.locator('.twy-face-segmented [data-face="review"]').click();
     eq(await page.locator("[data-review-project]").count(), 3, "one group per goal");
-    eq(await page.locator('[data-review-project="p1"] [data-review-track]').count(), 3, "all numeric tracks, not just activeTrackForProject");
-    eq(await page.locator('[data-review-project="p1"] [data-twy-track-id="milestone"]').count(), 1, "milestone uses existing readonly renderer");
-    ok((await page.locator('[data-review-project="p3"]').innerText()).includes("まだ物差しが無い"));
+    eq(await page.locator('[data-review-project="p1"] [data-review-track]').count(), 2, "one active plus achieved closed track");
+    eq(await page.locator('[data-review-project="p3"] [data-twy-track-id="milestone"]').count(), 1, "milestone uses existing readonly renderer");
     ok(!(await page.locator('.twy-review-results').innerText()).includes("終了済み"));
     ok(!(await page.locator('.twy-review-results').innerText()).includes("削除済み"));
     eq(await page.locator('[data-review-track="done"] input').count(), 0);
@@ -142,9 +144,9 @@ async function browserChecks() {
         inputs: [...root.querySelectorAll("input,select,textarea")].map(el => ({ font: parseFloat(getComputedStyle(el).fontSize), width: el.getBoundingClientRect().width }))
       }));
       eq(metrics.overflow, false, `${width}: no horizontal overflow`);
-      eq(metrics.targets.length, 18, `${width}: chips, finish, 6 recording actions, 4 editors, 3 additions, notes summary`);
+      eq(metrics.targets.length, 17, `${width}: chips, finish, 4 recording actions, 3 visible editors, 3 additions, 2 summaries`);
       ok(metrics.targets.every(m => m.width >= 44 && m.height >= 44), JSON.stringify(metrics.targets));
-      eq(metrics.inputs.length, 9, "three number fields and two note fields per goal");
+      eq(metrics.inputs.length, 8, "two number fields and two note fields per goal");
       ok(metrics.inputs.every(m => m.font >= 16 && m.width >= 120), `${width}: ${JSON.stringify(metrics.inputs)}`);
       await page.screenshot({ path: path.join(evidence, `review-${width}.png`), fullPage: true });
     }
@@ -155,8 +157,14 @@ async function browserChecks() {
     await row("num2").locator('[data-action="twy-review-record"]').click();
     eq((await snapshot()).trackMeasurements, initial.trackMeasurements, "empty number never records zero");
     ok((await row("num2").innerText()).includes("数字を入れてください"));
+    await row("weight").locator("input").fill("72.4");
+    await row("done").locator("summary").click();
     await row("num2").locator("input").fill("4.5");
     await row("num2").locator('[data-action="twy-review-record"]').click();
+    eq(await row("weight").locator("input").inputValue(), "72.4", "other row draft survives recording");
+    eq(await row("done").getAttribute("open"), "", "fold state survives recording");
+    eq(await page.locator(".twy-review-notes").getAttribute("open"), "");
+    ok((await row("num2").locator("[data-review-message]").innerText()).includes(today));
     const recorded = await snapshot();
     eq(recorded.trackMeasurements.length, initial.trackMeasurements.length + 1);
     eq(recorded.trackMeasurements.at(-1).trackId, "num2");
@@ -165,11 +173,10 @@ async function browserChecks() {
     ok((await row("num2").innerText()).includes("復習 · いま 4.5 / 目標 10 回"));
     eq(recorded.tracks, initial.tracks, "recording preserves definitions");
     eq(recorded.twyWeeklyReviews, initial.twyWeeklyReviews, "recording does not finish the review");
-    await row("num1").locator('[data-action="twy-review-same"]').click();
+    await row("num2").locator('[data-action="twy-review-same"]').click();
     const same = await snapshot();
     eq(same.twyWeeklyReviews[0], { ...savedReview, reviewedAt: `${today}T10:00:00`, updatedAt: `${today}T10:00:00` });
     for (const key of ["tracks", "trackMeasurements", "weeklyCommitments", "projects", "tasks", "blocks"]) eq(same[key], recorded[key], `same preserves ${key}`);
-    await page.locator('.twy-review-notes summary').click();
     const well = page.locator('[data-review-field="wentWell"][data-id="p1"]');
     const obstacles = page.locator('[data-review-field="obstacles"][data-id="p1"]');
     await well.fill("朝に3回できた <継続>");
@@ -185,43 +192,40 @@ async function browserChecks() {
     eq(await obstacles.inputValue(), "雨で移動が大変");
     await row("weight").locator("input").fill("72");
     await row("weight").locator('[data-action="twy-review-record"]').click();
-    eq(await row("weight").locator("input").count(), 0, "decreasing goal reaches done");
+    eq(await row("weight").locator("input").inputValue(), "72", "record only patches its row");
+    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    eq(await row("weight").locator("input").count(), 0, "decreasing goal is achieved on next render");
     ok((await row("weight").innerText()).includes(`✓ 達成(${today})`));
+    await row("milestone").locator('[data-action="twy-review-edit"]').click();
+    eq(await page.locator('[data-modal-field="twyName"]').inputValue(), "提出", "milestone opens existing editor");
+    await page.locator('[data-action="modal-save"]').click();
     await row("num2").locator('[data-action="twy-review-edit"]').click();
-    eq(await page.locator('[data-modal-field="twyName"]').inputValue(), "復習", "edit the selected second track");
+    eq(await page.locator('[data-modal-field="twyName"]').inputValue(), "復習");
     await page.locator('[data-modal-field="twyName"]').fill("復習の回数");
     await page.locator('[data-action="modal-save"]').click();
     eq((await snapshot()).tracks.find(t => t.id === "num2").name, "復習の回数");
-    eq((await snapshot()).tracks.find(t => t.id === "num1"), initial.tracks.find(t => t.id === "num1"));
-    await page.locator('[data-review-project="p1"] [data-action="twy-review-add"]').click();
-    eq(await page.locator('[data-modal-field="twyName"]').inputValue(), "", "new path starts blank alongside existing tracks");
-    await page.locator('[data-action="twy-kind-numeric"]').click();
-    for (const [field, value] of [["twyName", "模試"], ["twyGoal", "5"], ["twyUnit", "回"], ["twyDeadline", "2026-10-02"]])
+    await page.locator('[data-review-project="p2"] [data-action="twy-review-add"]').click();
+    eq(await page.locator('[data-modal-field="twyName"]').inputValue(), "体重", "addition edits the one active track");
+    for (const [field, value] of [["twyName", "次の物差し"], ["twyBaseline", "0"], ["twyGoal", "5"], ["twyUnit", "回"]])
       await page.locator(`[data-modal-field="${field}"]`).fill(value);
+    page.once("dialog", dialog => dialog.accept());
     await page.locator('[data-action="modal-save"]').click();
     const added = await snapshot();
-    const newTrack = added.tracks.find(t => t.name === "模試");
-    ok(newTrack && newTrack.id !== "num1" && newTrack.status === "active");
-    eq(added.tracks.filter(t => !t.deleted && t.ownerId === "p1" && t.status === "active").length, 5);
-    eq(added.trackMeasurements.slice(0, recorded.trackMeasurements.length), recorded.trackMeasurements, "adding preserves earlier measurements");
+    const newTrack = added.tracks.find(t => t.name === "次の物差し");
+    ok(newTrack && newTrack.id !== "weight" && newTrack.status === "active");
+    eq(added.tracks.filter(t => !t.deleted && t.ownerId === "p2" && t.status === "active").length, 1);
+    eq(added.tracks.find(t => t.id === "weight").closedReason, "superseded");
+    eq(newTrack.supersedesTrackId, "weight");
+    eq(added.trackMeasurements.slice(0, recorded.trackMeasurements.length), recorded.trackMeasurements, "switching preserves history");
+    eq(await row("weight").evaluate(el => el.tagName), "DETAILS", "achieved superseded track remains folded");
     await row(newTrack.id).locator('[data-action="twy-review-edit"]').click();
     await page.locator('[data-action="twy-kind-none"]').click();
     page.once("dialog", dialog => dialog.accept());
     await page.locator('[data-action="modal-save"]').click();
     const archived = await snapshot();
     eq(archived.tracks.find(t => t.id === newTrack.id).closedReason, "manual");
-    eq(archived.tracks.find(t => t.id === "num1").status, "active", "archive only selected track");
+    eq(archived.tracks.filter(t => !t.deleted && t.ownerId === "p2" && t.status === "active").length, 0);
     eq(archived.trackMeasurements, added.trackMeasurements, "archive preserves measurements");
-    await row("num2").locator('[data-action="twy-review-edit"]').click();
-    await page.locator('[data-modal-field="twyGoal"]').fill("12");
-    await page.locator('[data-modal-field="twyUnit"]').fill("問");
-    page.once("dialog", dialog => dialog.accept());
-    await page.locator('[data-action="modal-save"]').click();
-    const revised = await snapshot();
-    eq(revised.tracks.find(t => t.id === "num2").closedReason, "superseded");
-    eq(revised.tracks.find(t => t.id === "num1"), archived.tracks.find(t => t.id === "num1"), "changing definition preserves sibling");
-    eq(revised.tracks.find(t => t.supersedesTrackId === "num2").goalValue, 12);
-    eq(revised.trackMeasurements, archived.trackMeasurements, "editing retains history");
     await page.locator('.twy-review-notes summary').click();
     const secondNote = page.locator('[data-review-field="wentWell"][data-id="p2"]');
     await secondNote.fill("歩けた");
@@ -258,6 +262,18 @@ async function browserChecks() {
     eq(await row("done").getAttribute("open"), null);
     ok((await row("done").locator("summary").innerText()).includes("✓ 達成(2026-09-04)"));
     eq(await row("done").locator("input").count(), 0);
+    await page.clock.setFixedTime(new Date(2026, 8, 11, 23, 59));
+    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    eq(await page.locator('[data-review-week]').getAttribute('data-review-week'), week);
+    await page.clock.setFixedTime(new Date(2026, 8, 12, 0, 1));
+    await row("num2").locator('[data-action="twy-review-same"]').click();
+    await page.locator('.twy-review-notes summary').click();
+    await well.fill("週をまたいだメモ");
+    await obstacles.click();
+    await page.locator('[data-action="twy-review-finish"]').click();
+    const rollover = await snapshot();
+    eq(rollover.twyWeeklyReviews.find(r => r.projectId === "p1" && r.weekStart === week).wentWell, "週をまたいだメモ");
+    eq(rollover.twyWeeklyReviews.filter(r => r.weekStart !== week).length, 0, "same/note/finish retain displayed week across Saturday");
     await page.clock.setFixedTime(new Date(2026, 8, 7, 10));
     await page.reload();
     await page.waitForSelector('.twy-tower[data-twy-face="week"]');

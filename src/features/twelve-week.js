@@ -247,16 +247,18 @@ function twyReviewResultsHTML(cycleStart, weekStart) {
   const projects = twyGoalCandidates(cycleStart), previousWeek = addDaysISO(weekStart, -7);
   const button = (label, action, id) => `<button type="button" class="btn" style="min-height:44px;max-width:100%;white-space:normal" data-action="${action}" data-id="${escapeHTML(id)}">${label}</button>`;
   return `<section class="panel tower-panel-box twy-review-results" style="overflow-wrap:anywhere"><h2>② 結果の数字を入れる</h2>${projects.map(project => {
-    const tracks = (state.tracks || []).filter(t => !t.deleted && t.status === "active" && t.ownerType === "project" && t.ownerId === project.id);
+    const active = activeTrackForProject(state.tracks || [], project.id);
+    const tracks = [active, ...(state.tracks || []).filter(t => !t.deleted && t.status === "closed"
+      && t.ownerType === "project" && t.ownerId === project.id && (t.closedReason === "achieved" || twyTrackIsDone(t)))].filter(Boolean);
     return `<section data-review-project="${escapeHTML(project.id)}"><h3>${escapeHTML(project.title)}</h3>${tracks.length ? tracks.map(track => {
-      if (track.kind === "milestone") return renderTwyTrackReadOnly(track);
-      const measurement = latestMeasurement(state.trackMeasurements || [], track.id), done = twyTrackIsDone(track);
+      const measurement = latestMeasurement(state.trackMeasurements || [], track.id), done = track.closedReason === "achieved" || twyTrackIsDone(track);
       const value = measurement?.value ?? track.baselineValue, date = String(measurement?.observedAt || track.startDate).slice(0, 10);
-      const tag = done && date < weekStart ? "details" : "div", heading = tag === "details" ? "summary" : "p";
-      return `<${tag} data-review-track="${escapeHTML(track.id)}" style="padding:12px 0;border-bottom:1px solid var(--border)"><${heading} style="min-height:44px">${escapeHTML(track.name)} · いま ${escapeHTML(value)} / 目標 ${escapeHTML(track.goalValue)} ${escapeHTML(track.unit || "")}${tag === "details" ? ` · ✓ 達成(${escapeHTML(date)})` : ""}</${heading}>
+      const tag = track.status === "closed" || (done && date < weekStart) ? "details" : "div", heading = tag === "details" ? "summary" : "p";
+      if (track.kind === "milestone") return `<${tag} data-review-track="${escapeHTML(track.id)}"><${heading} style="min-height:44px">${escapeHTML(track.name)}${done ? " · ✓ 達成" : ""}</${heading}>${renderTwyTrackReadOnly(track)}${button("編集", "twy-review-edit", project.id)}</${tag}>`;
+      return `<${tag} data-review-track="${escapeHTML(track.id)}" style="padding:12px 0;border-bottom:1px solid var(--border)"><${heading} style="min-height:44px">${escapeHTML(track.name)} · いま <span data-review-current>${escapeHTML(value)}</span> / 目標 ${escapeHTML(track.goalValue)} ${escapeHTML(track.unit || "")}${tag === "details" ? ` · ✓ 達成(${escapeHTML(date)})` : ""}</${heading}>
         ${done ? `<p>✓ 達成(${escapeHTML(date)})</p>` : `<label>いまの数字<input class="input" type="number" inputmode="decimal" step="any" style="font-size:16px;width:100%;min-width:120px;box-sizing:border-box" data-review-value value="${escapeHTML(value)}"></label>
         ${button("この数字を記録", "twy-review-record", track.id)} ${button("数字は同じ", "twy-review-same", project.id)}`}
-        ${button("編集", "twy-review-edit", track.id)}<p data-review-message role="status"></p></${tag}>`;
+        ${button("編集", "twy-review-edit", project.id)}<p data-review-message role="status"></p></${tag}>`;
     }).join("") : "<p>まだ物差しが無い</p>"}${button("+ 結果の数字を追加・変更", "twy-review-add", project.id)}</section>`;
   }).join("")}<details class="twy-review-notes"><summary style="min-height:44px;display:flex;align-items:center">書きたい時だけ: よかったこと・困ったこと</summary>${projects.map(project => {
     const review = (state.twyWeeklyReviews || []).find(r => !r.deleted && r.weekStart === previousWeek && r.projectId === project.id);
@@ -275,17 +277,17 @@ function twyReviewFaceHTML(cycleStart, weekStart) {
     : "予定日を過ぎてまだの物はありません。";
   const weekNo = cycleStart ? Math.floor(daysBetween(cycleStart, previousWeek) / 7) + 1 : 0;
   const title = weekNo >= 1 && weekNo <= 12 ? `W${weekNo}` : "先週";
-  return `<section class="panel tower-panel-box twy-review-score" style="overflow-wrap:anywhere">
+  return `<section data-review-week="${previousWeek}"><section class="panel tower-panel-box twy-review-score" style="overflow-wrap:anywhere">
     <h2>① ${title}を見る <small>${previousWeek}〜${addDaysISO(previousWeek, 6)}</small></h2>
     <div class="twy-week-score-big">${score.pct === null ? "—" : `${score.pct}%`}</div>
     <p>できた割合 · 予定 ${score.committed}回のうち できた ${score.done} · まだ ${score.total - score.done} · 点数に含めない ${score.excused}</p>
-    ${score.status === "uncommitted" ? "<p>先週の予定はまだ確定されていません</p>" : ""}
+    ${score.status === "uncommitted" ? "<p>先週の予定は決めていませんでした</p>" : ""}
     <ul>${missed.map((item) => `<li>${labels.get(item.plannedDate) || ""} ${escapeHTML(item.title || "名前のない予定")}${twyWeekProjectTag(item.projectId)}</li>`).join("")}</ul>
     <p>${bias}</p></section>
     ${twyReviewResultsHTML(cycleStart, weekStart)}
     <section class="panel tower-panel-box twy-review-finish"><h2>③ 終える</h2>
     ${twyReviewFinished(weekStart) ? "<p>✓ ふりかえり済み</p>" : ""}
-    <button type="button" class="btn primary" style="min-height:44px;max-width:100%;white-space:normal" data-action="twy-review-finish">ふりかえりを終えて『次の週を決める』へ ›</button></section>`;
+    <button type="button" class="btn primary" style="min-height:44px;max-width:100%;white-space:normal" data-action="twy-review-finish">ふりかえりを終えて『次の週を決める』へ ›</button></section></section>`;
 }
 
 // R2: PLAN面(design §2.1b・§2.0)。LINK(連動図5ノード)+12-WEEK PLANグリッド+「目安なし」一覧。
@@ -512,23 +514,21 @@ registerActions({
     if (!input.value.trim() || !input.checkValidity()) { row.querySelector("[data-review-message]").textContent = "数字を入れてください"; return; }
     const result = recordTrackMeasurement(id, Number(input.value), { sourceKind: "twy-review" });
     if (!result.ok) { row.querySelector("[data-review-message]").textContent = result.errors.join(" / "); return; }
-    _twyActiveFace = "review"; render();
+    row.querySelector("[data-review-current]").textContent = String(result.measurement.value);
+    row.querySelector("[data-review-message]").textContent = `記録しました(${String(result.measurement.observedAt).slice(0, 10)})`;
   },
   "twy-review-same": ({ id, target }) => {
-    upsertWeeklyReview(addDaysISO(weekRange(todayISO()).weekStart, -7), id, { reviewedAt: nowDateTime() });
+    upsertWeeklyReview(target.closest("[data-review-week]").dataset.reviewWeek, id, { reviewedAt: nowDateTime() });
     saveState(); target.closest("[data-review-track]").querySelector("[data-review-message]").textContent = "数字は同じ · 確認しました";
   },
   "twy-review-note": ({ event, id, target }) => {
     if (event.type !== "change" || !["wentWell", "obstacles"].includes(target.dataset.reviewField)) return;
-    upsertWeeklyReview(addDaysISO(weekRange(todayISO()).weekStart, -7), id, { [target.dataset.reviewField]: target.value }); saveState();
+    upsertWeeklyReview(target.closest("[data-review-week]").dataset.reviewWeek, id, { [target.dataset.reviewField]: target.value }); saveState();
   },
-  "twy-review-edit": ({ id }) => {
-    const track = (state.tracks || []).find(t => t.id === id && !t.deleted && t.status === "active");
-    if (track) openProjectEditor(track.ownerId, track.id);
-  },
-  "twy-review-add": ({ id }) => openProjectEditor(id, ""),
-  "twy-review-finish": () => {
-    const weekStart = weekRange(todayISO()).weekStart, previousWeek = addDaysISO(weekStart, -7);
+  "twy-review-edit": ({ id }) => openProjectEditor(id),
+  "twy-review-add": ({ id }) => openProjectEditor(id),
+  "twy-review-finish": ({ target }) => {
+    const previousWeek = target.closest("[data-review-week]").dataset.reviewWeek;
     const rawStart = state.settings?.twelveWeekStartDate || "";
     const cycleStart = rawStart ? weekRange(rawStart).weekStart : "";
     const projects = twyGoalCandidates(cycleStart);

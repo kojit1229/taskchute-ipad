@@ -476,7 +476,7 @@ const EXPECTED_REMAINING_MODAL_IF_CHAIN = GOLDEN_MODAL_TYPES.filter(
 // `state.modal.type === "..."`の残存if-else分岐を静的抽出する。
 function extractModalIfChainTypes() {
   const startMarker = "function submitModal(options) {";
-  const endMarker = "function buildProjectModal(project, reviewTrackId) {";
+  const endMarker = "function buildProjectModal(project) {";
   const start = appSource.indexOf(startMarker);
   const end = appSource.indexOf(endMarker, start);
   if (start < 0 || end < 0) {
