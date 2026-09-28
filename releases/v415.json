@@ -1,0 +1,71 @@
+{
+  "version": 415,
+  "date": "2026-09-28",
+  "title": "12WY タブの作り直し R3(1/2): 「今週を決める」面(やること行・曜日と時刻のシート・予定を足す・決める)",
+  "summary": "K 採用のモック m08 に沿った第 2 弾。「今週を決める」面を、目標ごとの「やること × 曜日・時刻」で決める形に置き換える。行をタップして開く小さなシートで曜日 7 つと時刻を選ぶと、週の回数・予定の件数・不足・合計が連動する(「今週だけ」は対象週の単発予定、「これからずっと」は繰り返し設定)。予定が足りない分だけ「予定を n 件足す」。「今回やる内容(メモ)」と「+ やることを足す」は次の単位(R3 2/2)。最後に「確定シートで予定を確認」。旧 PLAN 表とつながり図は「12 週の目標と進み具合」の折りたたみ(面の最後)へ。裁定 R3-1: 複数曜日を表すため weekly ルールに任意の days 配列を追加(旧データ無変更、同期は既存どおり)。",
+  "changedFiles": [
+    "CHANGES_v415.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v415.json",
+    "src/core/recurrence.js",
+    "src/features/twelve-week.js",
+    "styles.css",
+    "sw.js",
+    "tests/action-registry-core.test.js",
+    "tests/impact-regression-map.json",
+    "tests/r1-twelveweek.test.js",
+    "tests/r2-twelveweek-plan.test.js",
+    "tests/recurrence-core.test.js",
+    "tests/remaining-screen-labels.test.js",
+    "tests/remaining-twelveweek-layout.test.js",
+    "tests/suite-manifest.json",
+    "tests/twy-decide-face.test.js"
+  ],
+  "intent": [
+    "案件 2026-09-04-12wy-tab-mock 束R R3(design/R2R3-review-face.md「面 2」+裁定 R3-1、orders/60・61)。K 採用 m08 2026-09-28"
+  ],
+  "changes": [
+    "src/features/twelve-week.js twyDecideFaceHTML: plan 面の本体を「次の週のやること」に置き換え。目標(twyGoalCandidates)ごとに「今週めざすこと(任意)」(twy-decide-aim → upsertWeeklyReview)と、やること行(★・名前・いつ: 曜日 時刻 → 週 n 回 · 予定 m 件 · あと k 件/✓)。旧 PLAN 表とつながり図は折りたたみ「12 週の目標と進み具合」(面の最後)へ",
+    "src/features/twelve-week.js openTwyDecideWhen / saveTwyDecideWhen: シート「いつやる?」(曜日 7 トグル・時刻・今週だけ/これからずっと)。今週だけ=対象週の単発予定(makeBlock)を増減(未編集の余分は削除)、ずっと=繰り返し設定(createRecurrenceRule / kind と days・startTime)を更新し maintainRecurrences で再生成。twyPlan.perWeek に曜日数を書き戻す。「予定を k 件足す」は同じシート",
+    "src/features/twelve-week.js 決める: 合計回数・約 h 時間・まだ予定が無い分、1 日 5 回超の警告、twy-open-commit(weekStart 指定)→ openTwyCommitSheet(対象週)、確定済み/確定後に変更あり",
+    "src/core/recurrence.js recurrenceMatchesDate: weekly で days があれば days.includes(曜日)、無ければ従来どおり。app.js normalizeState(recurrences): days を 0〜6 の整数・重複除去・昇順に補正、空なら削除。app.js: configureTwelveWeek に makeBlock / isTouchedBlock / createRecurrenceRule / maintainRecurrences を注入、openTwyCommitSheet に weekStart 引数、change イベントで input[data-action=twy-decide-aim]",
+    "tests/twy-decide-face.test.js(新規 66 断言)、recurrence-core に days の判定と補正、旧 PLAN 面の期待(r2-twelveweek-plan 等)は折りたたみ内の契約へ追随",
+    "sw.js: CACHE_NAME v415"
+  ],
+  "uncertainties": [
+    "裁定 R3-1: recurrences に任意項目 days(0〜6 の配列)。normalizeState で補正、無ければ従来どおり anchorDate の曜日",
+    "実機(iPhone)は未確認"
+  ],
+  "reviewFocus": [
+    "days の判定・補正が旧データを変えないこと",
+    "「今週だけ」が繰り返し設定を変えず対象週の予定だけ増減すること",
+    "task.memo の 1 行目だけ差し替え・2 行目以降不変",
+    "新規タスク作成が既存のタスク・繰り返し・予定の作成経路を使うこと",
+    "契約テスト(action-registry-core / recurrence-core / r2-twelveweek-plan)の更新が追随だけで緩和でないこと"
+  ],
+  "verification": [
+    "Codex bundleR3b: 選定 109 本・core・impact・manifest/index すべて 0、製品 133 行(reports/R3/result.md)",
+    "Codex レビュー: (記入待ち)",
+    "独立検証(Claude fresh、契約テスト込み): (記入待ち)",
+    "release-gate --final: (記入待ち)"
+  ],
+  "knownLimitations": [
+    "R3(2/2)= 今回やる内容(メモ 1 行目)と「+ やることを足す」シート、R4 = 今日やる面・旧面の整理 が続く"
+  ],
+  "relatedSuites": [
+    "twy-decide-face",
+    "twy-review-face",
+    "recurrence-core",
+    "r0-twyplan",
+    "r1-twelveweek",
+    "r2-twelveweek-plan",
+    "r3-twelveweek-week",
+    "weekly-reviews-core",
+    "today-core",
+    "action-registry-core",
+    "mutation-recurrence-e2e"
+  ]
+}
