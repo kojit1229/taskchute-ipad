@@ -34,10 +34,10 @@ K 採用モック m08 の第 3 弾。「今週を決める」面の各やるこ�
 
 ## 検証
 
-- Codex bundleR3c: 製品 70 行、新規 94 断言、指定検査/core/manifest/index 0(reports/R3b/result.md)
-- Codex レビュー: (記入待ち)
-- 独立検証(Claude fresh、再読込込み・契約テスト込み): (記入待ち)
-- release-gate --final: (記入待ち)
+- Codex bundleR3c(製品 70 行)+ fixR3c(裁定 R3-8/9)= 製品 82 行。指定検査/core/manifest/index 0(reports/R3b/result.md)
+- Codex レビュー 69: 要修正 中1(別目標の同名同時刻で追加が失敗)・低1(CR 単独改行のメモ)→ 裁定 R3-8/9。2 周目 72: 解消・新規 0
+- 独立検証(Claude fresh、再読込込み・契約テスト込み)70: PASS(HEAD b819c76、18 項目 OK、11 テスト 0、low 2=新規タスクの二重作成防止はモーダルが閉じることに依存 / メモは blur 保存)
+- release-gate --final(base f16118b): 1・2 回目 v334 のみ失敗(環境の揺れ: 単独は作業ツリー 0・対照 7a8f83d 1)、3 回目 PASS(reports/R3b/gate-final-3.log)。workspace verify.sh 77 検査通過
 
 ## 既知の制約・保留
 
