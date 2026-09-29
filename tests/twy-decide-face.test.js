@@ -253,6 +253,142 @@ async function browserChecks() {
     await page.locator('.twy-face-segmented [data-face="plan"]').click();
     await page.locator('.twy-decide [data-action="twy-open-commit"]').click();
     s = await snapshot(); eq(s.modal.id, "2026-09-12", "commit sheet opens the displayed next week");
+    await page.locator('[data-action="modal-close"]').click();
+    // Order 68 (a): first line only, no full render, persistence and absent memo.
+    const order68Start = assertions, memoRow = page.locator(`[data-decide-task="${task.id}"]`);
+    await memoRow.locator("summary").click();
+    const memoInput = memoRow.locator('[data-action="twy-decide-memo"]');
+    await memoInput.fill("最初のメモ"); await memoInput.dispatchEvent("change");
+    s = await snapshot(); eq(s.tasks.find(t => t.id === task.id).memo, "最初のメモ", "missing memo gains first line");
+    await page.evaluate(async () => {
+      const s = (await import("/src/state/store.js")).state;
+      s.tasks.find(t => t.id === "decide-task").memo = "古い先頭\r\n2 行目\n3 行目\n";
+    });
+    const memoBefore = (await snapshot()).tasks.find(t => t.id === task.id);
+    await page.clock.setFixedTime(new Date(2026, 8, 7, 10, 1));
+    await memoInput.fill("過去問 <1> を解く"); await memoInput.dispatchEvent("change");
+    s = await snapshot(); const memoAfter = s.tasks.find(t => t.id === task.id);
+    eq(memoAfter.memo, "過去問 <1> を解く\r\n2 行目\n3 行目\n", "suffix and original line endings preserved");
+    ok(memoAfter.updatedAt > memoBefore.updatedAt, "memo update advances timestamp");
+    eq(await memoInput.evaluate(el => el === document.activeElement), true, "memo save preserves focus");
+    eq(await memoRow.locator('[data-decide-memo-preview]').innerText(), "過去問 <1> を解く");
+    await page.reload(); await page.locator('.twy-face-segmented [data-face="plan"]').click();
+    s = await snapshot(); eq(s.tasks.find(t => t.id === task.id).memo, memoAfter.memo, "memo survives reload");
+    eq(s.tasks.find(t => t.id === task.id).updatedAt, memoAfter.updatedAt);
+    eq(await memoRow.locator('[data-decide-memo-preview]').innerText(), "過去問 <1> を解く", "escaped preview survives reload");
+    await memoRow.locator("summary").click();
+    await setViewportAndWaitForStableLayout(page, { width: 390, height: 1000 }, ".twy-tower");
+    ok(await memoInput.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 16));
+    ok(await memoInput.evaluate(el => el.getBoundingClientRect().height >= 44 && el.getBoundingClientRect().width >= 44));
+    ok(await memoRow.locator("summary").evaluate(el => el.getBoundingClientRect().height >= 44 && el.getBoundingClientRect().width >= 44));
+    await page.screenshot({ path: path.join(evidence, "memo-390.png"), fullPage: true });
+    // Order 71 R3-9: display and save share CR, CRLF and LF boundaries.
+    for (const newline of ["\r", "\r\n", "\n"]) {
+      const suffix = `${newline}2 行目${newline}3 行目${newline}`;
+      await page.evaluate(async ({ key, suffix }) => {
+        const saved = JSON.parse(localStorage.getItem(key));
+        saved.tasks.find(t => t.id === "decide-task").memo = `古い先頭${suffix}`;
+        localStorage.setItem(key, JSON.stringify(saved));
+      }, { key: STATE_KEY, suffix });
+      await page.reload(); await page.locator('.twy-face-segmented [data-face="plan"]').click();
+      await memoRow.locator("summary").click();
+      eq(await memoInput.inputValue(), "古い先頭", `display first line: ${JSON.stringify(newline)}`);
+      eq(await memoRow.locator('[data-decide-memo-preview]').innerText(), "古い先頭");
+      await memoInput.fill("新しい先頭"); await memoInput.dispatchEvent("change");
+      eq((await snapshot()).tasks.find(t => t.id === task.id).memo, `新しい先頭${suffix}`);
+      await page.reload(); await page.locator('.twy-face-segmented [data-face="plan"]').click();
+      eq((await snapshot()).tasks.find(t => t.id === task.id).memo, `新しい先頭${suffix}`, "persisted suffix is byte-for-byte unchanged");
+    }
+    const targetWeek = "2026-09-12", addedTaskIds = [];
+    for (const [days, kind] of [[[2, 4, 6], "weekly"], [[0, 1, 2, 3, 4, 5, 6], "daily"], [[1, 2, 3, 4, 5], "weekdays"]]) {
+      const before = await snapshot(), rowsBefore = await page.locator("[data-decide-task]").count();
+      await page.locator(`[data-action="twy-decide-add-task"][data-id="${project.id}"]`).click();
+      await page.locator(".twy-decide-sheet").evaluate(async () => { await Promise.all(document.getAnimations().map(a => a.finished)); });
+      const sheet = page.locator(".twy-decide-sheet");
+      const titleInput = sheet.locator('[data-modal-field="title"]');
+      await titleInput.fill("   ");
+      for (const day of days) await sheet.locator(`[data-day="${day}"]`).click();
+      await sheet.locator('[data-modal-field="time"]').fill("07:30");
+      await sheet.locator('[data-action="twy-decide-create"]').click();
+      s = await snapshot(); eq(s.tasks, before.tasks, "blank name creates no task"); eq(s.recurrences, before.recurrences); eq(s.blocks, before.blocks);
+      eq(await sheet.locator("[data-decide-count]").innerText(), String(days.length));
+      await titleInput.fill(`Anki ${kind} を復習する`);
+      await sheet.locator('[data-modal-field="keystone"]').check();
+      eq(await sheet.locator('[data-modal-field="time"]').getAttribute("type"), "time");
+      eq(await sheet.locator('[data-modal-field="time"]').getAttribute("step"), "300");
+      const sizes = await sheet.evaluate(root => ({
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        fonts: [...root.querySelectorAll("input")].map(el => parseFloat(getComputedStyle(el).fontSize)),
+        controls: [...root.closest(".modal-card").querySelectorAll("input,button")].map(el => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height }))
+      }));
+      eq(sizes.overflow, false); ok(sizes.fonts.every(n => n >= 16)); ok(sizes.controls.every(r => r.w >= 44 && r.h >= 44), JSON.stringify(sizes));
+      if (kind === "weekly") await page.screenshot({ path: path.join(evidence, "sheet-task-390.png"), fullPage: true });
+      await sheet.locator('[data-action="twy-decide-create"]').click();
+      await page.waitForSelector(".twy-decide-sheet", { state: "detached" });
+      s = await snapshot(); const created = s.tasks.filter(t => !before.tasks.some(old => old.id === t.id));
+      eq(created.length, 1); const newTask = created[0]; addedTaskIds.push(newTask.id);
+      eq(newTask.projectId, project.id); eq(newTask.title, `Anki ${kind} を復習する`);
+      eq(newTask.twyPlan.perWeek, days.length); eq(newTask.twyPlan.keystone, true);
+      const rules = s.recurrences.filter(r => !r.deleted && r.taskId === newTask.id); eq(rules.length, 1);
+      eq(rules[0].kind, kind); eq(rules[0].days, kind === "weekly" ? days : undefined); eq(rules[0].startTime, "07:30");
+      eq(rules[0].anchorDate, targetWeek);
+      const planned = s.blocks.filter(b => !b.deleted && b.taskId === newTask.id && b.date >= targetWeek && b.date <= "2026-09-18");
+      eq(planned.length, days.length);
+      eq(planned.map(b => (new Date(Number(b.date.slice(0, 4)), Number(b.date.slice(5, 7)) - 1, Number(b.date.slice(8, 10)))).getDay()).sort(), days);
+      ok(planned.every(b => b.recurrenceGroupId === rules[0].id && b.plannedStartAt.slice(11, 16) === "07:30" && b.plannedEndAt.slice(11, 16) === "08:00"));
+      eq(await page.locator("[data-decide-task]").count(), rowsBefore + 1);
+      const rowText = await page.locator(`[data-decide-task="${newTask.id}"]`).innerText();
+      ok(rowText.includes(`★ ${newTask.title}`)); ok(rowText.includes(`週 ${days.length} 回(ルール) · この週の予定 ${days.length} 件 · ✓ 足りています`));
+      const total = s.blocks.filter(b => !b.deleted && b.date >= targetWeek && b.date <= "2026-09-18");
+      const minutes = total.reduce((n, b) => { const val = v => Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16)); return n + val(b.plannedEndAt) - val(b.plannedStartAt); }, 0);
+      ok((await page.locator(".twy-decide-total").innerText()).includes(`${total.length} 回 · 約 ${Math.round(minutes / 6) / 10} 時間`), "total follows new schedules");
+    }
+    await page.reload(); await page.locator('.twy-face-segmented [data-face="plan"]').click();
+    s = await snapshot(); ok(addedTaskIds.every(id => s.tasks.some(t => t.id === id) && s.recurrences.some(r => r.taskId === id) && s.blocks.some(b => b.taskId === id)), "new tasks, rules and schedules survive reload");
+    // Order 71 R3-8: another goal/task may use the same name and time.
+    await page.evaluate(async ({ key, project }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.projects.push({ ...project, id: "other-goal", title: "別目標" });
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: STATE_KEY, project });
+    await page.reload(); await page.locator('.twy-face-segmented [data-face="plan"]').click();
+    for (const projectId of ["other-goal", project.id]) {
+      const before = await snapshot();
+      await page.locator(`[data-action="twy-decide-add-task"][data-id="${projectId}"]`).click();
+      await page.locator('[data-modal-field="title"]').fill("Anki weekly を復習する");
+      await page.locator('[data-action="twy-decide-day"][data-day="1"]').click();
+      await page.locator('[data-action="twy-decide-create"]').click();
+      await page.waitForSelector(".twy-decide-sheet", { state: "detached" });
+      s = await snapshot();
+      const created = s.tasks.filter(t => !before.tasks.some(old => old.id === t.id));
+      eq(created.length, 1); eq(created[0].projectId, projectId);
+      const rules = s.recurrences.filter(r => !r.deleted && r.taskId === created[0].id);
+      eq(rules.length, 1); eq(rules[0].startTime, "07:30"); eq(rules[0].days, [1]);
+      ok(s.blocks.some(b => !b.deleted && b.taskId === created[0].id && b.recurrenceGroupId === rules[0].id));
+      eq(s.recurrences.filter(r => before.recurrences.some(old => old.id === r.id)), before.recurrences);
+      const duplicate = await page.evaluate(async id => {
+        const { createRecurrenceRule } = await import("/src/core/recurrence.js");
+        return createRecurrenceRule({ taskId: id, title: "Anki weekly を復習する", date: "2026-09-12", plannedStartAt: "2026-09-12T07:30" }, "weekly", { sameTaskOnly: true });
+      }, created[0].id);
+      eq(duplicate, null, "same task duplicate is rejected");
+      eq((await snapshot()).recurrences, s.recurrences, "duplicate adds no rule");
+    }
+    // Force a same-task duplicate to retain the editor rollback assertions.
+    await page.evaluate(async () => {
+      const s = (await import("/src/state/store.js")).state;
+      s.recurrences.push({ ...s.recurrences.find(r => r.title === "Anki weekly を復習する"), id: "duplicate-fixture", taskId: "duplicate-task" });
+      window.order71RandomUUID = crypto.randomUUID;
+      crypto.randomUUID = () => "duplicate-task";
+    });
+    const beforeDuplicate = await snapshot();
+    await page.locator(`[data-action="twy-decide-add-task"][data-id="${project.id}"]`).click();
+    await page.locator('[data-modal-field="title"]').fill("Anki weekly を復習する");
+    await page.locator('[data-action="twy-decide-day"][data-day="2"]').click();
+    await page.locator('[data-action="twy-decide-create"]').click();
+    s = await snapshot(); eq(s.tasks, beforeDuplicate.tasks); eq(s.recurrences, beforeDuplicate.recurrences); eq(s.blocks, beforeDuplicate.blocks);
+    eq(await page.locator(".twy-decide-sheet").count(), 1, "failed creation keeps sheet available");
+    await page.evaluate(() => { crypto.randomUUID = window.order71RandomUUID; delete window.order71RandomUUID; });
+    console.log(`order68: ${assertions - order68Start} added assertions passed`);
     eq(errors, [], "no browser errors");
   } catch (error) {
     const diagnostic = await page.evaluate(async key => {

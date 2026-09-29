@@ -397,6 +397,12 @@ configureFund({ root: main, escapeHTML, renderHeader, renderMarkdown, personalDa
 // v356: 12WYタブ。GOALSカードは編集不可のrenderTwyTrackReadOnlyを渡す(renderTwyTrackRowはWBS専用)。
 // v357: 達成トラック数判定用にtwyTrackIsDoneを追加注入(B-H1)。
 configureTwelveWeek({
+  createTwyTask: (fields, schedule) => draftSaveTransaction.run(() => {
+    const ids = new Set(state.tasks.map((t) => t.id));
+    saveTaskFromModal("", fields);
+    const task = state.tasks.find((t) => !ids.has(t.id));
+    if (!task || !schedule(task)) throw Object.assign(new Error("Invalid task schedule"), { invalid: true });
+  }, { kinds: ["tasks", "recurrences", "blocks"] }).ok,
   makeBlock, isTouchedBlock, createRecurrenceRule, maintainRecurrences,
   recordTrackMeasurement, saveState, openProjectEditor,
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek, nowDateTime,
@@ -1917,7 +1923,7 @@ document.addEventListener("change", (event) => {
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
-  if (target.matches('select[data-action],textarea[data-action="twy-review-note"],input[data-action="twy-decide-aim"]')
+  if (target.matches('select[data-action],textarea[data-action="twy-review-note"],input[data-action="twy-decide-aim"],input[data-action="twy-decide-memo"]')
     && dispatchAction(target.dataset.action, { event, target, id: target.dataset.id })) return;
   // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。

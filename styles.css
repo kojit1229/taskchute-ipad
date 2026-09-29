@@ -1,7 +1,12 @@
 .twy-decide { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
 .twy-decide-task { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.twy-decide-task summary { min-height: 44px; min-width: 44px; cursor: pointer; }
+.twy-decide-task [data-decide-memo-preview] { color: var(--muted); font-weight: normal; }
+.twy-decide-sheet .twy-decide-key { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.twy-decide-sheet .twy-decide-key input { width: 44px; height: 44px; }
+.twy-decide-dialog [data-action="modal-close"] { min-width: 44px; min-height: 44px; }
 .twy-decide .btn, .twy-decide-sheet .btn, .twy-cycle-fold .btn { min-height: 44px; min-width: 44px; max-width: 100%; white-space: normal; }
-.twy-decide input, .twy-decide-sheet input, .twy-decide-sheet select { font-size: 16px; min-width: 0; width: 100%; box-sizing: border-box; }
+.twy-decide input, .twy-decide-sheet input, .twy-decide-sheet select { font-size: 16px; min-height: 44px; min-width: 0; width: 100%; box-sizing: border-box; }
 .twy-decide-days { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
 .twy-decide-days [aria-pressed="true"] { background: var(--accent); color: var(--bg); }
 :root {
