@@ -96,7 +96,8 @@ function check(name, cond, extra = "") {
 
     console.log("[2] 廃止したAI集約UIを設定・today・execのどこにも戻さない");
     await seedSkin("cockpit", "settings");
-    check("todaySkinの設定selectが存在しない", await page.locator('select[data-setting-field="todaySkin"]').count() === 0);
+    // K承認 2026-09-29: 既定TOWERを維持し、設定で「いま」へ切り替える。
+    check("todaySkinの設定selectが1つあり選択肢がnow/towerの2つ", await page.locator('select[data-setting-field="todaySkin"]').evaluateAll(els => els.length === 1 && JSON.stringify([...els[0].options].map(option => option.value).sort()) === JSON.stringify(["now", "tower"])));
     await page.evaluate(() => { const fold = document.querySelector('details[data-legacy-fold="settings-daily"]'); if (fold) fold.open = true; });
     check("削除済みtoday-replan actionがソースに存在しない", !appSource.includes('"today-replan"'));
     await page.evaluate(({ KEY, yesterday }) => {

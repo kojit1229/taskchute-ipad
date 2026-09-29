@@ -2452,6 +2452,31 @@
       }
     },
     {
+      "file": "now-view.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 2,
+      "assertionHash": "11e2a081ff96688b",
+      "sourceHash": "6c1ac23c20a3aa5a",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": false,
+        "clock": true
+      }
+    },
+    {
       "file": "placement-core.test.js",
       "kind": "node",
       "tier": "full",
@@ -3656,8 +3681,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 167,
-      "assertionHash": "7cbdc5af98254281",
-      "sourceHash": "2c8e59e0c3e23adf",
+      "assertionHash": "b2fa7882512df11f",
+      "sourceHash": "ef1e51ba876b831f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -7336,8 +7361,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 36,
-      "assertionHash": "ef254c524bee7f86",
-      "sourceHash": "a7d86db3d387dbb6",
+      "assertionHash": "3af485975320ab36",
+      "sourceHash": "eb87a3bf2671be4f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

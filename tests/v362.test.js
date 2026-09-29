@@ -196,8 +196,9 @@ async function seed(page, values) {
       "[data-setting-autosync]", "[data-setting-focustimerauto]", "[data-setting-pomoguidedaccesshint]",
       "[data-setting-dailybuffermin]", "[data-setting-dayclosehours]", "[data-setting-scoretarget]"
     ].join(",")).count();
-    check("data-setting-*の総数は17件のまま(A2は表示配置のみでBの行構造には触れていない)",
-      settingCount === 17, String(settingCount));
+    // K承認 2026-09-30: v417 で「今日タブの見た目」の切替 1 項目を足したため 17→18。
+    check("data-setting-*の総数は18件(v417 の todaySkin 1 項目を含む。(A2は表示配置のみでBの行構造には触れていない)",
+      settingCount === 18, String(settingCount));
 
     // ============================================================
     console.log("[7] vision-open-direct-settings誘導がPC幅でも空振りしない(H2差し戻し対応)");

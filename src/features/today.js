@@ -7,6 +7,7 @@ import { recurrenceMatchesDate } from "../core/recurrence.js";
 import { state } from "../state/store.js";
 import { registerActions } from "../ui/actions.js";
 import { configureTodayTower, renderTodayTower, updateTodayTowerTick } from "./today-tower.js";
+import { renderNowView, updateNowViewTick } from "./now-view.js";
 import { linkedGymBlock } from "./iron-log.js";
 import {
   runningBlockOf as coreRunningBlockOf, queueBlocksOf as coreQueueBlocksOf,
@@ -242,7 +243,7 @@ function towerFlights(blocks, nowMin) {
 function renderToday() {
   todayRenderedDateISO = todayISO();
   startTodayTicker();
-  return renderTodayTower();
+  return state.settings.todaySkin === "now" ? renderNowView() : renderTodayTower();
 }
 
 function updateTodayPomodoroTick() {
@@ -275,7 +276,8 @@ function updateTodayTick() {
     renderDeferringForFocus();
     return;
   }
-  if (document.querySelector(".today-tower")) {
+  if (document.querySelector(".now-view")) updateNowViewTick();
+  else if (document.querySelector(".today-tower")) {
     updateTodayTowerTick();
     updateTodayPomodoroTick();
   }
