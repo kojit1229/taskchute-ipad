@@ -1,0 +1,73 @@
+{
+  "version": 417,
+  "date": "2026-09-30",
+  "title": "今日タブの新しい見た目「いま」(束1。設定で切替、既定は TOWER のまま)",
+  "summary": "今日タブに新しい見た目「いま」を追加。今日の Block カード→既存の宣言モーダル→実行中カード(経過は毎秒、カードは作り直さない)→既存の終了報告モーダル→「今日できた」の一枚→履歴。設定「今日タブの見た目」で いま / TOWER を切り替える(既定は TOWER=K 裁定7)。保存・同期・日付ヘルパーは変更なし。タワー・輪は枠だけ(数値は束4)。",
+  "changedFiles": [
+    "CHANGES_v417.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "releases/v417.json",
+    "scripts/test-manifest.js",
+    "src/features/now-view.js",
+    "src/features/today.js",
+    "styles.css",
+    "sw.js",
+    "tests/impact-regression-map.json",
+    "tests/now-view.test.js",
+    "tests/suite-manifest.json",
+    "tests/tower-core.test.js",
+    "tests/v358.test.js",
+    "tests/v362.test.js"
+  ],
+  "intent": [
+    "案件 2026-09-28-gamify-dopamine 束1(spec.md 受入条件 1〜10、SHA256 216b245f4ce7c9b8d68352df78d783b8f164950db8bdd0cf1b0af4796f6baca6。K 裁定 1〜7、採用モック reactive-run m18)。発注 06/08/10/11"
+  ],
+  "changes": [
+    "src/features/now-view.js(新規): configureNowView / renderNowView / updateNowViewTick。開始・いま・今日できた・積み上げの枠・これから。経過の文字だけ textContent で更新。非表示では止まり、復帰で実時間に追いつく",
+    "記録は Block(actualStartAt / actualEndAt / comment)からの投影。表示の終了は開始の最低 1 分後。壊れた時刻は「--:--」「時刻不明」。完了のみ(終了時刻なし)の Block も「今日できた」に出す。履歴は新しい順・直近 30 件",
+    "src/features/today.js: renderToday / updateTodayTick を todaySkin で分岐",
+    "app.js: configureNowView の注入、#app の data-skin、設定「今日タブの見た目」の select、normalizeState の todaySkin は \"now\" 以外を \"tower\" に直す(1 行)",
+    "styles.css: #app[data-view=today][data-skin=now] 配下だけ。375px はみ出しなし・44px・1280px で 3 列・動きの停止(off / calm / 非表示 / OS の reduce-motion、疑似要素を含む)",
+    "tests: now-view(84 断言)を追加。既存の期待の変更は K 承認の 3 項目だけ(tower-core「todaySkin の設定 select」の有無、v362 と v358 の「data-setting-* の総数」17→18)",
+    "sw.js: APP_SHELL に now-view.js、CACHE_NAME v417"
+  ],
+  "uncertainties": [
+    "実機(iPhone)は未確認",
+    "768px・1024px は未実測"
+  ],
+  "reviewFocus": [
+    "既存の宣言・終了報告モーダル経路だけで保存していること",
+    "0 時跨ぎ・翌朝起動で前日の記録が残ること",
+    "経過更新でカードの DOM が同一であること",
+    "TOWER 側の表示が v416 と変わらないこと"
+  ],
+  "verification": [
+    "Codex b1-now-view(製品 121 行)→ fixb1-rulingA(裁定7)→ fixb1b(レビュー 09 の中 2・開始カードの幅)→ fixb1c(履歴の上限と並び順)= 製品 134 行(reports/b1・b1-fix・b1-fix2・b1-fix3)",
+    "Codex レビュー 09(reviews/11-codex-b1.md): 要修正 高0・中2(壊れた時刻の表示 / 完了のみの記録が出ない)→ fixb1b で対応",
+    "独立検証+レビュー(Claude fresh、再読込込み・契約テスト込み)reviews/12-verify-b1.md: PASS(HEAD 3e1bdb8、受入 1〜10、既存テスト 13 本+生成物 2 本 0)。reviews/10-claude-b1.md: 高0・中3・低8。中(1)記録の文章=本ファイルで修正、中(3)履歴の上限=fixb1c、中(2)カード内の宣言欄・見積ボタンは束2 へ(監督者裁定 B1-2)"
+  ],
+  "knownLimitations": [
+    "積み上げ(タワー・輪)は枠のみ。集計は束4",
+    "カード内の宣言欄・見積 15/25/50 は未実装(宣言は既存モーダルで行う)。束2 で扱う",
+    "既存端末・新規端末とも既定は TOWER。「いま」は 設定 › 今日タブの見た目 で切り替える",
+    "data-motion=calm は off と同じく全停止(中間の動きは束4 で決める)"
+  ],
+  "relatedSuites": [
+    "now-view",
+    "today-core",
+    "tower-core",
+    "tower-model-core",
+    "f6-today-layout",
+    "today-detail-integration-e2e",
+    "action-registry-core",
+    "three-screen-flow-e2e",
+    "remaining-screen-labels",
+    "track-crud-core",
+    "v258",
+    "v264",
+    "v362"
+  ]
+}

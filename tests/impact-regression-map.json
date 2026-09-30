@@ -349,7 +349,7 @@
     },
     "today-feature": {
       "paths": [
-        "^src/features/(?:today(?:-tower)?|coach)\\.js$"
+        "^src/features/(?:today(?:-tower)?|now-view|coach)\\.js$"
       ],
       "patterns": [
         "renderToday|renderTodayTower|towerFlights|todaySkin|QUICK_MEALS"
@@ -357,6 +357,7 @@
       "suites": [
         "today-core",
         "tower-core",
+        "now-view",
         "tower-model-core",
         "coach-core",
         "remaining-screen-labels"

@@ -89,6 +89,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
+import { configureNowView } from "./src/features/now-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
   toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
@@ -335,6 +336,7 @@ configureGithubSync({
 });
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
+configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -2375,7 +2377,7 @@ function normalizeState(value) {
     value.settings.theme = "dark";
   }
   // v221: cockpitスキン廃止。旧stateも含め、互換フィールドはtower固定へ正規化する。
-  value.settings.todaySkin = "tower";
+  if (value.settings.todaySkin !== "now") value.settings.todaySkin = "tower";
   // v229: 早起きチェックは目標超過でも有効。ここは警告表示に使うHH:mmだけを正規化する。
   if (!/^\d{2}:\d{2}$/.test(value.settings.earlyRiseTarget || "")) value.settings.earlyRiseTarget = "06:00";
   // v243: 12WY週次コミット達成率の目安。整数へ丸め、設定可能範囲70〜100に収める。
@@ -3445,6 +3447,7 @@ function render() {
     return;
   }
   app.dataset.view = state.currentView;
+  app.dataset.skin = state.currentView === "today" ? state.settings.todaySkin : "";
   renderSidebar();
   renderBottomNav();
   rememberWorkListScroll();
@@ -8481,6 +8484,12 @@ function renderSettingsThemePanel() {
         <option value="light" ${theme === "light" ? "selected" : ""}>ライト</option>
         <option value="cockpit" ${theme === "cockpit" ? "selected" : ""}>コックピット</option>
         <option value="auto" ${theme === "auto" ? "selected" : ""}>端末の設定に合わせる</option>
+      </select>
+    </label>
+    <label>今日タブの見た目
+      <select class="select" data-setting-field="todaySkin" aria-label="今日タブの見た目">
+        <option value="now" ${state.settings.todaySkin === "now" ? "selected" : ""}>いま</option>
+        <option value="tower" ${state.settings.todaySkin === "tower" ? "selected" : ""}>TOWER</option>
       </select>
     </label>
     <label>タワーの動き

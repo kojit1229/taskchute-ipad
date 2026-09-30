@@ -123,6 +123,7 @@ const explicitDomains = {
   "v281.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
   "fund-integration-e2e.test.js": ["content-ai", "sync-storage", "ui-responsive", "security-offline"],
   "today-detail-integration-e2e.test.js": ["sync-storage", "planning-execution", "journal-health", "ui-responsive"],
+  "now-view.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
   "work-list-e2e.test.js": ["planning-execution", "ui-responsive"],
   "ui-a-layout.test.js": ["planning-execution", "journal-health", "ui-responsive"],
   "detail-draft-e2e.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
