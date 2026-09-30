@@ -9,37 +9,47 @@ function scheduled(taskId, date) {
 }
 export function moveDandoriBlock(id, dir) {
   if (dir !== "up" && dir !== "down") return;
-  const blocks = pending(deps.getState().selectedDate), index = blocks.findIndex(b => b.id === id);
+  const blocks = pending(deps.todayISO()), index = blocks.findIndex(b => b.id === id);
   const block = blocks[index], neighbor = blocks[index + (dir === "up" ? -1 : 1)];
   if (!block || !neighbor) return;
+  const duration = b => b.plannedEndAt
+    ? deps.localDateTimeToMs(b.plannedEndAt) - deps.localDateTimeToMs(b.plannedStartAt)
+    : deps.resolveEstimateMin(b) * 60000;
+  const lengths = [duration(block), duration(neighbor)];
   [block.plannedStartAt, neighbor.plannedStartAt] = [neighbor.plannedStartAt, block.plannedStartAt];
-  [block.plannedEndAt, neighbor.plannedEndAt] = [neighbor.plannedEndAt, block.plannedEndAt];
+  [block, neighbor].forEach((b, i) => {
+    b.plannedEndAt = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(b.plannedStartAt) + lengths[i]));
+  });
   deps.saveAndRender();
 }
 export function addDandoriTask(id) {
-  const state = deps.getState(), today = deps.todayISO();
-  const task = state.tasks.find(t => t.id === id && !t.deleted && t.status !== "completed" && t.kind !== "other");
+  const today = deps.todayISO();
+  const task = deps.fillGapTaskPool(today).find(t => t.id === id);
   if (!task || scheduled(id, today)) return;
-  const last = pending(today).at(-1);
+  const end = deps.blocksForDate(today).map(b => b.plannedEndAt || b.actualEndAt || "").sort().at(-1);
   let { plannedStartAt } = deps.defaultPlannedTimes(today);
-  const match = last?.plannedEndAt?.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  const match = end?.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (match) {
     const minutes = Math.ceil((Number(match[2]) * 60 + Number(match[3]) + Number(match[4] || 0) / 60) / 5) * 5;
     const date = deps.addDays(match[1], Math.floor(minutes / 1440));
     plannedStartAt = `${date}T${String(Math.floor(minutes % 1440 / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
   }
-  state.selectedDate = today;
-  deps.createBlockFromTask(id, { plannedStartAt });
+  const block = deps.createBlockFromTask(id, { plannedStartAt, estimateMin: deps.resolveEstimateMin(task), silent: true });
+  if (!block) return;
+  block.date = today;
+  deps.saveAndRender("今日のBlockに追加しました");
 }
 export function renderDandoriView() {
   const { escapeHTML: e, getState, todayISO, addDays, blocksForDate, timeFromDateTime, resolveEstimateMin, projectedEndText } = deps;
-  const state = getState(), today = todayISO(), blocks = pending(state.selectedDate);
+  const state = getState(), today = todayISO(), blocks = pending(today);
   const carry = blocksForDate(addDays(today, -1)).filter(b => !b.completed && !b.migratedTo);
-  const tasks = state.tasks.filter(t => !t.deleted && t.status !== "completed" && t.kind !== "other")
-    .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999")).slice(0, 10);
+  const pool = deps.fillGapTaskPool(today)
+    .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+  const tasks = [...pool.filter(t => !scheduled(t.id, today)).slice(0, 10), ...pool.filter(t => scheduled(t.id, today))];
   const button = (action, id, label, extra = "") => `<button type="button" class="btn" data-action="${action}" data-id="${e(id)}" ${extra}>${label}</button>`;
   return `<section class="dandori-view" aria-label="段取り">
-    <header><h2>段取り</h2><p>${blocks.length}件 ・ 見積 ${blocks.reduce((sum, b) => sum + resolveEstimateMin(b), 0)}分 ・ <span class="dandori-end">${e(projectedEndText() || "見込み終了 —")}</span></p></header>
+    ${state.selectedDate !== today ? "<p>時間軸は選択日、段取りは今日です</p>" : ""}
+    <header><h2>段取り — 今日 ${e(today)}</h2><p>${blocks.length}件 ・ 見積 ${blocks.reduce((sum, b) => sum + resolveEstimateMin(b), 0)}分 ・ <span class="dandori-end">${e(projectedEndText() || "見込み終了 —")}</span></p></header>
     <div class="dandori-columns"><section class="dandori-today"><h3>今日やる</h3>
       ${blocks.map((b, i) => `<article class="dandori-card" data-block-id="${e(b.id)}">
         <span class="dandori-number">${i + 1}</span><div class="dandori-info"><strong>${e(b.title)}</strong>

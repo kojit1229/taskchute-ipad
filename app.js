@@ -339,7 +339,8 @@ configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiv
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
-  resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText });
+  resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
+  fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -723,7 +724,7 @@ registerActions({
   "carry-over": ({ id }) => requestCarryOver(id),
   "dandori-move": ({ id, target }) => moveDandoriBlock(id, target.dataset.dir),
   "dandori-add-task": ({ id }) => addDandoriTask(id),
-  "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); },
+  "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); if (state.modal) closeModal(); },
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry
   // ごと削除(K裁定2026-08-29。journalMeta[date].idealは保持)。

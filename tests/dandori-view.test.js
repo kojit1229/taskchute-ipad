@@ -60,7 +60,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await order(), ['b', 'a'], '下へ移動');
     let saved = (await stored()).blocks;
     equal(saved.filter(b => ['a', 'b'].includes(b.id)).map(b => [b.id, b.plannedStartAt, b.plannedEndAt]),
-      [['b', `${day}T09:00:00`, `${day}T09:25:00`], ['a', `${day}T10:00:00`, `${day}T10:23:00`]], '開始と終了の両方を保存');
+      [['b', `${day}T09:00:00`, `${day}T09:23:00`], ['a', `${day}T10:00:00`, `${day}T10:25:00`]], '開始を交換し元の長さで終了を保存');
     await page.reload(); await page.locator('.dandori-view').waitFor();
     equal(await order(), ['b', 'a'], '保存→再読込で順番維持');
     await page.locator('[data-action="dandori-move"][data-id="a"][data-dir="up"]').click();
@@ -86,7 +86,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     page.once('dialog', dialog => dialog.dismiss());
     await page.locator('.dandori-view [data-action="dandori-remove"][data-id="a"]').click();
     equal((await live()).blocks.find(b => b.id === 'a').deleted, false, '外すの既存確認を取消して保持');
-    await page.locator('[data-action="modal-close"]').first().click();
+    equal((await live()).modal, null, '外すの取消でモーダルも閉じる');
     page.once('dialog', dialog => dialog.accept());
     await page.locator('.dandori-view [data-action="dandori-remove"][data-id="a"]').click();
     equal((await stored()).blocks.find(b => b.id === 'a').deleted, true, '外すは既存削除経路の墓標保存');
@@ -139,10 +139,31 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       (await import('/src/state/store.js')).state.selectedDate = date;
       document.querySelector('.dandori-view').outerHTML = (await import('/src/features/dandori-view.js')).renderDandoriView();
     }, yesterday);
-    equal(await order(), ['selected'], '今日やる欄は選択日を表示');
+    equal(await order(), ['today'], '今日やる欄は常に今日を表示');
+    ok((await page.locator('.dandori-view').innerText()).includes('時間軸は選択日、段取りは今日です'), '選択日と今日の注意');
+    ok((await page.locator('.dandori-view header').innerText()).includes(`今日 ${day}`), '見出しに今日の日付');
     await page.locator('[data-action="dandori-add-task"][data-id="from-past"]').click();
     equal((await stored()).blocks.find(b => b.taskId === 'from-past').date, day, '過去日閲覧中も候補は今日へ');
     equal((await stored()).blocks.find(b => b.taskId === 'from-past').plannedStartAt, `${day}T10:25:00`, '過去日ではなく今日の末尾に追加');
+    equal((await live()).selectedDate, yesterday, '追加しても選択日を維持');
+    equal((await stored()).selectedDate, yesterday, '保存した選択日も維持');
+    await seed([block('short', '09:00', '09:10', { estimateMin: 10 }), block('long', '10:00', '10:50', { estimateMin: 50 })]);
+    await page.locator('[data-action="dandori-move"][data-id="short"][data-dir="down"]').click();
+    equal((await stored()).blocks.map(b => [b.id, b.plannedStartAt, b.plannedEndAt, b.estimateMin]),
+      [['short', `${day}T10:00:00`, `${day}T10:10:00`, 10], ['long', `${day}T09:00:00`, `${day}T09:50:00`, 50]], '10分と50分の長さと見積を保って開始だけ交換');
+    await seed([block('running', '10:00', '11:00', { actualStartAt: `${day}T10:00:00` })], [task('estimate', '', { estimateMin: 50 })]);
+    await page.locator('[data-action="dandori-add-task"][data-id="estimate"]').click();
+    added = (await stored()).blocks.find(b => b.taskId === 'estimate');
+    equal(added.plannedStartAt, `${day}T11:00:00`, '実行中の終了以降に追加');
+    equal(added.estimateMin, 50, 'タスクの見積をBlockへ渡す');
+    equal(added.plannedEndAt, `${day}T11:50:00`, '見積とBlockの長さが一致');
+    const many = Array.from({ length: 12 }, (_, i) => task(`new-${i}`, `2026-10-${String(i + 1).padStart(2, '0')}`));
+    const already = Array.from({ length: 11 }, (_, i) => task(`added-${i}`, day));
+    await seed(already.map(t => block(t.id, '09:00', '09:25', { taskId: t.id })),
+      [...already, ...many, task('suspended', day, { status: 'suspended' }), task('cancelled', day, { status: 'cancelled' })]);
+    equal(await page.locator('[data-action="dandori-add-task"]').evaluateAll(rows => rows.map(r => r.dataset.id)),
+      [...many.slice(0, 10), ...already].map(t => t.id), '未追加10件の後に追加済み全件・停止と中止は除外');
+    ok(await page.locator('[data-action="dandori-add-task"][aria-disabled="true"]').evaluateAll(rows => rows.length === 11 && rows.every(el => Number(getComputedStyle(el).opacity) < 1)), '追加済み全件を薄く表示');
     equal(errors, [], 'ブラウザ例外なし');
     console.log(`PASS dandori-view: ${assertions} assertions`);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
