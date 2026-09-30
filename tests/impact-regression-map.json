@@ -347,6 +347,11 @@
         "v141"
       ]
     },
+    "dandori-view": {
+      "paths": ["^src/features/dandori-view\\.js$"],
+      "patterns": ["[Dd]andori"],
+      "suites": ["dandori-view", "now-view", "exec-timeline-e2e", "exec-layout-media", "v334", "work-list-e2e", "three-screen-flow-e2e", "action-registry-core", "track-crud-core", "v258", "v264"]
+    },
     "today-feature": {
       "paths": [
         "^src/features/(?:today(?:-tower)?|now-view|coach)\\.js$"

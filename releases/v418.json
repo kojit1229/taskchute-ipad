@@ -1,0 +1,20 @@
+{
+  "version": 418,
+  "date": "2026-10-01",
+  "title": "段取り: 今日やる・持ち越し・期限が近いタスク(束2a)",
+  "summary": "見た目が「いま」の実行タブ計画モードに段取りを追加。予定順のカードと候補を上に、既存タイムラインを下に表示する。",
+  "changedFiles": ["app.js", "src/features/dandori-view.js", "styles.css", "sw.js", "releases/v418.json", "tests/dandori-view.test.js", "tests/impact-regression-map.json", "scripts/test-manifest.js", "tests/suite-manifest.json", "docs/test-impact-map.generated.md", "docs/code-index.generated.json", "docs/code-index.generated.md"],
+  "intent": ["発注15・受入11〜16。spec.md SHA256 216b245f4ce7c9b8d68352df78d783b8f164950db8bdd0cf1b0af4796f6baca6。監督者裁定B2-1/B2-2。"],
+  "changes": [
+    "configureDandoriView / renderDandoriView: 依存注入・選択日の未着手カード・件数と見積・既存の見込み終了",
+    "moveDandoriBlock: 隣のBlockと予定開始・終了を交換してsaveAndRender",
+    "addDandoriTask: 今日の未着手末尾の予定終了を5分刻みに切り上げ、既存createBlockFromTask。重複作成を防止",
+    "持ち越し・編集・削除は既存経路。外すは既存編集モーダルを開いて既存の削除確認を呼ぶ",
+    "TOWER・実績・下書き・空き時間シートの分岐は維持。SW v418 / APP_SHELL追加"
+  ],
+  "uncertainties": ["iOS実機は未確認"],
+  "reviewFocus": ["Blockの保存・並べ替え・再読込", "今日と選択日の区別", "既存タイムラインと空き時間シートの維持"],
+  "verification": ["発注15の実行結果・終了コードは案件reports/b2a/command-results.jsonlとresult.mdに記録"],
+  "knownLimitations": ["自由追加とルーティン候補は束2b", "実機iOS Safariの確認は別途必要"],
+  "relatedSuites": ["dandori-view", "now-view", "exec-timeline-e2e", "exec-layout-media", "v334", "work-list-e2e", "three-screen-flow-e2e", "action-registry-core", "track-crud-core", "v258", "v264"]
+}

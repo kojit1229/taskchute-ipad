@@ -90,6 +90,7 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday } from "./src/features/today.js";
 import { configureNowView } from "./src/features/now-view.js";
+import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
   toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
@@ -337,6 +338,8 @@ configureGithubSync({
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
+configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
+  resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -718,6 +721,9 @@ registerActions({
   "download-data": () => downloadData(),
   "life-export": ({ target }) => downloadLifeData(target.dataset.kind),
   "carry-over": ({ id }) => requestCarryOver(id),
+  "dandori-move": ({ id, target }) => moveDandoriBlock(id, target.dataset.dir),
+  "dandori-add-task": ({ id }) => addDandoriTask(id),
+  "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); },
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry
   // ごと削除(K裁定2026-08-29。journalMeta[date].idealは保持)。
@@ -6639,7 +6645,8 @@ function renderExecView() {
   // 「✅実績」へ切替えても下書きが消えないようにする)。state.timelineModeは書き換えない。
   const draftActiveHere = Boolean(_scheduleDraft) && _scheduleDraft.date === state.selectedDate;
   const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: draftActiveHere ? "planned" : (isActual ? "actual" : timelineMode) })}</div>`;
-  const listHTML = isActual ? renderWorkList("exec-actual") : renderTasks({ embedded: true });
+  const dandori = !isActual && state.settings.todaySkin === "now";
+  const listHTML = isActual ? renderWorkList("exec-actual") : dandori ? renderDandoriView() : renderTasks({ embedded: true });
   // v357(§3): PC(1280px以上)で「空き時間を補うシート」が開いている間は、左列を一覧ではなく
   // シート本体に差し替える(閉じる/置く/作るで一覧に戻る。右の時間軸は動かさない)。
   const fillGapDesktopActive = fillGapExecDesktop() && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate;
@@ -6650,7 +6657,7 @@ function renderExecView() {
   // timelineHTML(mode="planned"でrenderDraftLayerが乗る)を優先してnarrow幅でも
   // 下書きレイヤへ到達できるようにする(日付を移せば従来どおり一覧に戻る)。
   // Block/配置ロジックには触れない。
-  const bodyHTML = desktop
+  const bodyHTML = dandori && !fillGapDesktopActive ? `<div class="dandori-layout">${leftHTML}${timelineHTML}</div>` : desktop
     ? `<div class="exec-two-pane"><div class="exec-pane-left">${leftHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
     : `${leftHTML}${timelineHTML}`;
   return `

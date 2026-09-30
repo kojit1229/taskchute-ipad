@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "85a124ffc9460cb0",
+      "sourceHash": "ef999839c0e69beb",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -898,6 +898,31 @@
         "server": true,
         "fileWrite": true,
         "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "dandori-view.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "sync-storage",
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 2,
+      "assertionHash": "11e2a081ff96688b",
+      "sourceHash": "e7bd2b35905a24d6",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": true,
+        "networkMock": false,
         "clock": true
       }
     },
