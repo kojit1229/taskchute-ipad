@@ -19,6 +19,7 @@
     "tests/now-view.test.js",
     "tests/suite-manifest.json",
     "tests/tower-core.test.js",
+    "tests/v358.test.js",
     "tests/v362.test.js"
   ],
   "intent": [
@@ -30,7 +31,7 @@
     "src/features/today.js: renderToday / updateTodayTick を todaySkin で分岐",
     "app.js: configureNowView の注入、#app の data-skin、設定「今日タブの見た目」の select、normalizeState の todaySkin は \"now\" 以外を \"tower\" に直す(1 行)",
     "styles.css: #app[data-view=today][data-skin=now] 配下だけ。375px はみ出しなし・44px・1280px で 3 列・動きの停止(off / calm / 非表示 / OS の reduce-motion、疑似要素を含む)",
-    "tests: now-view(84 断言)を追加。既存の期待の変更は K 承認の 2 項目だけ(tower-core「todaySkin の設定 select」の有無、v362「data-setting-* の総数」17→18)",
+    "tests: now-view(84 断言)を追加。既存の期待の変更は K 承認の 3 項目だけ(tower-core「todaySkin の設定 select」の有無、v362 と v358 の「data-setting-* の総数」17→18)",
     "sw.js: APP_SHELL に now-view.js、CACHE_NAME v417"
   ],
   "uncertainties": [

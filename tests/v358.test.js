@@ -189,7 +189,8 @@ async function stateNow(page) {
       "[data-setting-autosync]", "[data-setting-focustimerauto]", "[data-setting-pomoguidedaccesshint]",
       "[data-setting-dailybuffermin]", "[data-setting-dayclosehours]", "[data-setting-scoretarget]"
     ].join(",")).count();
-    check("data-setting-*の総数は17件のまま(静的pin。既存設定を1件も消していない)", settingCount === 17, String(settingCount));
+    // K承認 2026-09-30: v417 で「今日タブの見た目」の切替 1 項目を足したため 17→18。
+    check("data-setting-*の総数は18件(静的pin。既存設定を1件も消していない。v417 の todaySkin 1 項目を含む)", settingCount === 18, String(settingCount));
     check("「現在のファイル構成」(モックに無い既存設定)は「その他」群に残っている",
       await page.locator("details:has-text('現在のファイル構成')").count() === 1);
     check("GitHub Pagesリンク(モックに無い既存設定)も消えていない",
