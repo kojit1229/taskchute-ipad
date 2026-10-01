@@ -41,7 +41,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
   }
   try {
     await page.clock.install({ time: new Date(2026, 8, 29, 10, 0) });
-    await page.clock.pauseAt(new Date(2026, 8, 29, 10, 0));
+    await page.clock.pauseAt(new Date(2026, 8, 29, 10, 0, 5)); // install 直後の同時刻は「過去」になり得る(負荷で揺れた)ため 5 秒先で止める
     await page.goto('http://localhost:' + server.address().port + '/');
     await passGithubGate(page);
     await seed([block('today-timeline'), block('past-timeline', '09:00', '09:25', {
