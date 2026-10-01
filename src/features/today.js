@@ -265,7 +265,7 @@ function updateTodayPomodoroTick() {
 }
 
 function updateTodayTick() {
-  if (state.currentView !== "today") {
+  if (state.currentView !== "today" && state.currentView !== "now") {
     stopTodayTicker();
     return;
   }

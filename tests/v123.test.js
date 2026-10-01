@@ -105,9 +105,9 @@ function check(name, cond, extra = "") {
       });
     });
     // v333の統合仕様: 廃止された時間項目を復活させず、順序・表示名・全遷移を固定する。
-    check("下部ナビは今日/実行/作業一覧/その他の4項目がこの順序で重複なく並ぶ",
+    check("下部ナビは いま/段取り/今日/実行/作業一覧/その他 の6項目がこの順序で重複なく並ぶ(v418: K承認 2026-10-01)",
       JSON.stringify(navButtons.map(b => [b.id, b.label])) === JSON.stringify([
-        ["today", "今日"], ["exec", "実行"], ["wbs", "作業一覧"], ["more", "その他"]]), JSON.stringify(navButtons));
+        ["now", "いま"], ["dandori", "段取り"], ["today", "今日"], ["exec", "実行"], ["wbs", "作業一覧"], ["more", "その他"]]), JSON.stringify(navButtons));
     check("すべてのボタンにラベルテキストがある", navButtons.every((b) => b.text.length > 0), JSON.stringify(navButtons));
     check("すべてのボタンが可視(opacity>0・visibility:visible・サイズ>0)",
       navButtons.every((b) => b.opacity > 0 && b.visibility === "visible" && b.width > 0 && b.height > 0),

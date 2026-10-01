@@ -75,8 +75,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     }
     await seed([], 'now');
     await page.getByRole('button', { name: '段取りで決める', exact: true }).click();
-    await page.locator('#app[data-view="exec"]').waitFor();
-    equal((await live()).currentView, 'exec', 'Blockなしの案内で実行タブへ');
+    await page.locator('#app[data-view="dandori"]').waitFor();
+    equal((await live()).currentView, 'dandori', 'Blockなしの案内で段取りタブへ');
     await seed([block('b', { plannedStartAt: `${day}T13:00:00` }), block('a', { isMIT: true })], 'now');
     equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['a', 'b'], '未着手は予定順');
     ok((await page.locator('.now-start').textContent()).includes('★'), '主役に★');

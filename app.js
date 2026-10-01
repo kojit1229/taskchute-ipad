@@ -88,8 +88,8 @@ import {
 import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
-import { configureToday, renderToday } from "./src/features/today.js";
-import { configureNowView } from "./src/features/now-view.js";
+import { configureToday, renderToday, startTodayTicker } from "./src/features/today.js";
+import { configureNowView, renderNowView } from "./src/features/now-view.js";
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
@@ -266,6 +266,8 @@ function pruneExpiredSuggestedThemes(list) {
 // (§C。exec自体はv333で新設済み・navItemsは今回まで無改修だった)。旧2項目のバッジ
 // (未着手件数)はそのままexecへ引き継ぐ(renderSidebarのバッジ条件をitem.id==="exec"へ変更)。
 const navItems = [
+  { id: "now", label: "いま", mark: "◎" },
+  { id: "dandori", label: "段取り", mark: "☰" },
   { id: "today", label: "今日", mark: "▶" },
   { id: "exec", label: "実行", mark: "E" },
   { id: "wbs", label: "作業一覧", mark: "W" },
@@ -288,6 +290,8 @@ const navItems = [
 // v333: 実行ラッパー(タスクシュート+タイムライン統合)。モバイル下部ナビは「実行」1項目に
 //       まとめ、「時間」を廃止する(PCサイドバー統合はv333b。navItemsは今回無改修)。
 const mobileNav = [
+  { id: "now", label: "いま" },
+  { id: "dandori", label: "段取り" },
   { id: "today", label: "今日" },
   { id: "exec", label: "実行" },
   { id: "wbs", label: "作業一覧" },
@@ -340,7 +344,7 @@ configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiv
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
-  fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime });
+  fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -2285,7 +2289,7 @@ function normalizeState(value) {
     value.settings.dailyReadingRoutineIds = { affirmation: "", visionBoard: "", ...actualSettings.dailyReadingRoutineIds };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
-    "today", "wbs", "wish", "tasks", "timeline", "exec",
+    "now", "dandori", "today", "wbs", "wish", "tasks", "timeline", "exec",
     "journal", "zero", "vision", "ai-reports", "settings", "more",
     "iron-log", "instruments", "fund", "twelveweek"
   ]);
@@ -3454,7 +3458,7 @@ function render() {
     return;
   }
   app.dataset.view = state.currentView;
-  app.dataset.skin = state.currentView === "today" ? state.settings.todaySkin : "";
+  app.dataset.skin = state.currentView === "now" ? "now" : state.currentView === "today" ? state.settings.todaySkin : "";
   renderSidebar();
   renderBottomNav();
   rememberWorkListScroll();
@@ -3627,6 +3631,11 @@ function renderMain() {
   _lastScrollDate = state.selectedDate;
 
   if (view === "today") main.innerHTML = renderToday();
+  if (view === "now") {
+    main.innerHTML = renderNowView();
+    startTodayTicker();
+  }
+  if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "fund") main.innerHTML = renderFund();
@@ -6646,8 +6655,7 @@ function renderExecView() {
   // 「✅実績」へ切替えても下書きが消えないようにする)。state.timelineModeは書き換えない。
   const draftActiveHere = Boolean(_scheduleDraft) && _scheduleDraft.date === state.selectedDate;
   const timelineHTML = `<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: draftActiveHere ? "planned" : (isActual ? "actual" : timelineMode) })}</div>`;
-  const dandori = !isActual && state.settings.todaySkin === "now";
-  const listHTML = isActual ? renderWorkList("exec-actual") : dandori ? renderDandoriView() : renderTasks({ embedded: true });
+  const listHTML = isActual ? renderWorkList("exec-actual") : renderTasks({ embedded: true });
   // v357(§3): PC(1280px以上)で「空き時間を補うシート」が開いている間は、左列を一覧ではなく
   // シート本体に差し替える(閉じる/置く/作るで一覧に戻る。右の時間軸は動かさない)。
   const fillGapDesktopActive = fillGapExecDesktop() && state.modal?.type === "fillGap" && state.modal.date === state.selectedDate;
@@ -6658,7 +6666,7 @@ function renderExecView() {
   // timelineHTML(mode="planned"でrenderDraftLayerが乗る)を優先してnarrow幅でも
   // 下書きレイヤへ到達できるようにする(日付を移せば従来どおり一覧に戻る)。
   // Block/配置ロジックには触れない。
-  const bodyHTML = dandori && !fillGapDesktopActive ? `<div class="dandori-layout">${leftHTML}${timelineHTML}</div>` : desktop
+  const bodyHTML = desktop
     ? `<div class="exec-two-pane"><div class="exec-pane-left">${leftHTML}</div><div class="exec-pane-right">${timelineHTML}</div></div>`
     : `${leftHTML}${timelineHTML}`;
   return `

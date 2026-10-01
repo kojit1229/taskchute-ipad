@@ -12,6 +12,10 @@ export function moveDandoriBlock(id, dir) {
   const blocks = pending(deps.todayISO()), index = blocks.findIndex(b => b.id === id);
   const block = blocks[index], neighbor = blocks[index + (dir === "up" ? -1 : 1)];
   if (!block || !neighbor) return;
+  if (!block.plannedStartAt || !neighbor.plannedStartAt) {
+    deps.showToast("開始時刻のない予定とは入れ替えられません");
+    return;
+  }
   const duration = b => b.plannedEndAt
     ? deps.localDateTimeToMs(b.plannedEndAt) - deps.localDateTimeToMs(b.plannedStartAt)
     : deps.resolveEstimateMin(b) * 60000;

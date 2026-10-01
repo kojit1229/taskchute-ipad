@@ -513,7 +513,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v278.test.js | 31 |
 | missing-timezone | 1 | tests/v280.test.js | 74 |
 | missing-timezone | 1 | tests/v282.test.js | 226 |
-| fixed-date | 13 | tests/v283.test.js | 160, 214, 268, 308, 341, 379, 404, 405, 441, 465, 469, 483, 495 |
+| fixed-date | 13 | tests/v283.test.js | 160, 216, 270, 310, 343, 381, 406, 407, 443, 467, 471, 485, 497 |
 | missing-timezone | 2 | tests/v283.test.js | 113, 131 |
 | missing-timezone | 1 | tests/v284.test.js | 217 |
 | missing-timezone | 1 | tests/v285.test.js | 69 |

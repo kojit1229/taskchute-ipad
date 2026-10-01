@@ -25,22 +25,23 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.evaluate(({ key, blocks, tasks, skin, date, day }) => {
       const s = JSON.parse(localStorage.getItem(key));
       Object.assign(s, { blocks, tasks, projects: [{ id: 'p', title: '仕事', status: 'active', deleted: false }],
-        recurrences: [], singleSchedules: [], declarations: [], currentView: 'exec', selectedDate: date, timelineMode: 'planned' });
+        recurrences: [], singleSchedules: [], declarations: [], currentView: 'dandori', selectedDate: date, timelineMode: 'planned' });
       Object.assign(s.settings, { todaySkin: skin, autoSync: false, lastOpenedDate: day, timelineCategoryFilter: '' });
       s.settings.github.autoSave = false;
       s.pomodoro.running = false;
       localStorage.setItem(key, JSON.stringify(s));
     }, { key: STATE_KEY, blocks, tasks, skin, date, day });
     await page.reload();
-    await page.locator('#app[data-view="exec"] .timeline-tower').waitFor();
+    await page.locator('#app[data-view="dandori"] .timeline-tower').waitFor();
   }
-  async function screenshot(width) {
+  async function screenshot(width, view) {
     if (!process.env.DANDORI_REPORT_DIR) return;
     fs.mkdirSync(process.env.DANDORI_REPORT_DIR, { recursive: true });
-    await page.screenshot({ path: path.join(process.env.DANDORI_REPORT_DIR, `${width}.png`), fullPage: true });
+    await page.screenshot({ path: path.join(process.env.DANDORI_REPORT_DIR, `${width}-${view}.png`), fullPage: true });
   }
   try {
-    await page.clock.setFixedTime(new Date(2026, 8, 29, 10, 0));
+    await page.clock.install({ time: new Date(2026, 8, 29, 10, 0) });
+    await page.clock.pauseAt(new Date(2026, 8, 29, 10, 0));
     await page.goto('http://localhost:' + server.address().port + '/');
     await passGithubGate(page);
     const initial = [block('b', '10:00', '10:23'), block('a'), block('done', '08:00', '08:25', { completed: true }),
@@ -48,12 +49,15 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       block('moved', '07:30', '07:55', { migratedTo: 'elsewhere' })];
     const tasks = [task('none'), task('late', '2026-10-02'), task('early', day), task('done', day, { status: 'completed' }), task('deleted', day, { deleted: true })];
     await seed(initial, tasks);
-    equal(await page.locator('.dandori-view').count(), 1, 'now計画モードに段取り');
+    equal(await page.locator('.dandori-view').count(), 1, '独立した段取りタブに段取り');
     equal(await order(), ['a', 'b'], '未完了・未開始・有効Blockを予定開始順');
     equal(await page.locator('.dandori-number').allTextContents(), ['1', '2'], 'カードの番号');
     ok((await page.locator('.dandori-card').first().innerText()).includes('09:00 ・ 見積 25分 ・ 仕事'), '時刻・見積・カテゴリ');
     ok((await page.locator('.dandori-view header').innerText()).includes('2件 ・ 見積 50分'), '件数と既存見積ヘルパーの合計');
-    equal(await page.locator('.dandori-end').innerText(), await page.locator('#projected-end').innerText(), '見込み終了は既存execヘッダーと一致');
+    const endText = await page.locator('.dandori-end').innerText();
+    await page.locator('#bottomNav [data-view="exec"]').click();
+    equal(endText, await page.locator('#projected-end').innerText(), '見込み終了は既存execヘッダーと一致');
+    await page.locator('#bottomNav [data-view="dandori"]').click();
     equal(await page.locator('[data-action="dandori-add-task"]').evaluateAll(rows => rows.map(r => r.dataset.id)), ['early', 'late', 'none'], '未完了タスク期限順・期限なし末尾');
     ok(await page.locator('[data-action="dandori-move"][data-id="a"][data-dir="up"]').isDisabled(), '先頭を上へ動かせない');
     await page.locator('[data-action="dandori-move"][data-id="a"][data-dir="down"]').click();
@@ -107,26 +111,31 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     for (const width of [375, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       const geometry = await page.evaluate(() => {
-        const root = document.querySelector('.dandori-view'), today = root.querySelector('.dandori-today').getBoundingClientRect(), candidates = root.querySelector('.dandori-candidates').getBoundingClientRect();
+        const root = document.querySelector('.dandori-view'), rect = root.getBoundingClientRect(), timeline = document.querySelector('.timeline-tower').getBoundingClientRect();
         return { scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
           targets: [...root.querySelectorAll('button')].every(b => b.getBoundingClientRect().height >= 44 && b.getBoundingClientRect().width >= 44),
-          columns: getComputedStyle(root.querySelector('.dandori-columns')).gridTemplateColumns.split(' ').length,
-          below: document.querySelector('.timeline-tower').getBoundingClientRect().top >= root.getBoundingClientRect().bottom,
-          sideBySide: Math.abs(today.top - candidates.top) < 1 && candidates.left > today.left };
+          columns: getComputedStyle(document.querySelector('.dandori-layout')).gridTemplateColumns.split(' ').length,
+          below: timeline.top >= rect.bottom,
+          sideBySide: Math.abs(rect.top - timeline.top) < 1 && timeline.left >= rect.right };
       });
       ok(geometry.scroll <= geometry.client, `${width}px 横はみ出しなし`);
       ok(geometry.targets, `${width}px 全ボタン44px以上`);
       equal(geometry.columns, width === 1280 ? 2 : 1, `${width}px 列数`);
-      ok(geometry.below, `${width}px 既存タイムラインが下にある`);
-      if (width === 1280) ok(geometry.sideBySide, '1280px 今日やると候補が横並び');
-      await screenshot(width);
+      ok(width === 1280 ? geometry.sideBySide : geometry.below, `${width}px 段取りとタイムラインはPC横並び・スマホ縦並び`);
+      if (width === 1280) ok(geometry.sideBySide, '1280px 段取りとタイムラインが横並び');
+      await screenshot(width, 'dandori');
     }
+    await page.locator('#sidebar [data-view="exec"]').click();
+    equal(await page.locator('.dandori-view').count(), 0, 'now設定でも実行計画モードは段取りなし');
+    ok(await page.locator('[data-work-list="exec"]').isVisible(), 'now設定でも実行タブは従来の一覧');
     await page.locator('[data-action="exec-mode-toggle"][data-mode="actual"]').first().click();
     equal(await page.locator('.dandori-view').count(), 0, 'now実績モードは段取りなし');
     ok(await page.locator('.timeline-tower').isVisible(), '実績タイムラインは保持');
     await page.locator('[data-action="exec-mode-toggle"][data-mode="plan"]').first().click();
     await seed(initial, tasks, 'tower');
-    equal(await page.locator('.dandori-view').count(), 0, 'tower計画モードは段取りなし');
+    equal(await page.locator('.dandori-view').count(), 1, 'tower設定でも段取りタブに表示');
+    await page.locator('#sidebar [data-view="exec"]').click();
+    equal(await page.locator('.dandori-view').count(), 0, 'tower設定でも実行計画モードは段取りなし');
     ok(await page.locator('[data-work-list="exec"]').isVisible(), 'towerは従来の一覧');
     await seed([], [task('empty')]);
     await page.locator('[data-action="dandori-add-task"][data-id="empty"]').click();
@@ -164,6 +173,56 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('[data-action="dandori-add-task"]').evaluateAll(rows => rows.map(r => r.dataset.id)),
       [...many.slice(0, 10), ...already].map(t => t.id), '未追加10件の後に追加済み全件・停止と中止は除外');
     ok(await page.locator('[data-action="dandori-add-task"][aria-disabled="true"]').evaluateAll(rows => rows.length === 11 && rows.every(el => Number(getComputedStyle(el).opacity) < 1)), '追加済み全件を薄く表示');
+    await seed([block('timed'), block('undated', '', '', { plannedStartAt: '', plannedEndAt: '' })]);
+    const beforeUndated = await stored();
+    await page.locator('.dandori-card').first().locator('[data-dir="down"]').click();
+    await page.getByText('開始時刻のない予定とは入れ替えられません', { exact: true }).waitFor();
+    equal(await stored(), beforeUndated, '未定Blockの隣で▼を押しても保存値は変わらない');
+    ok(!JSON.stringify((await stored()).blocks).includes('1970'), '未定Blockの並べ替えで1970を書かない');
+    equal((await live()).blocks, beforeUndated.blocks, '未定Blockの並べ替えで実行中stateも変えない');
+    for (const width of [375, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await seed([block('running', '09:00', '10:25', { actualStartAt: `${day}T09:00:00` })], tasks, 'tower');
+      const nav = width === 375 ? '#bottomNav' : '#sidebar';
+      for (const id of ['now', 'dandori']) {
+        equal(await page.locator(`${nav} [data-view="${id}"]`).count(), 1, `${width}px ${id}タブが常設`);
+        await page.locator(`${nav} [data-view="${id}"]`).click();
+        equal((await live()).currentView, id, `${width}px ${id}タブへ切替`);
+        ok(await page.locator(`${nav} [data-view="${id}"].active`).isVisible(), `${width}px ${id}タブの選択表示`);
+      }
+      if (width === 375) {
+        const buttons = await page.locator('#bottomNav button').evaluateAll(els => els.map(el => {
+          const r = el.getBoundingClientRect();
+          return { id: el.dataset.view, width: r.width, height: r.height, left: r.left, right: r.right,
+            nowrap: getComputedStyle(el).whiteSpace === 'nowrap', fits: el.scrollWidth <= el.clientWidth };
+        }));
+        equal(buttons.map(b => b.id), ['now', 'dandori', 'today', 'exec', 'wbs', 'more'], '375px 下ナビ6枠の順序');
+        ok(buttons.every(b => b.width >= 44 && b.height >= 44), '375px 下ナビ全6枠44px以上');
+        ok(buttons.every(b => b.left >= 0 && b.right <= 375 && b.nowrap && b.fits), '375px 下ナビは横はみ出し・文字折返しなし');
+      }
+      await page.locator(`${nav} [data-view="exec"]`).click();
+      await page.clock.runFor(1000);
+      equal(await page.evaluate(async () => (await import('/src/features/today.js')).isTodayTickerRunning()), false, '実行タブでticker停止');
+      await page.locator(`${nav} [data-view="now"]`).click();
+      equal(await page.locator('#app').getAttribute('data-skin'), 'now', 'tower設定でもいまタブはnowスキン');
+      const elapsed = await page.locator('[data-elapsed-id="running"]').innerText();
+      for (let second = 1; second <= 2; second++) {
+        await page.clock.runFor(1000);
+        const initialSeconds = elapsed.split(':').reduce((m, s) => m * 60 + Number(s), 0) + second;
+        equal(await page.locator('[data-elapsed-id="running"]').innerText(), `${Math.floor(initialSeconds / 60)}:${String(initialSeconds % 60).padStart(2, '0')}`, `${width}px いまタブの${second}秒後の経過更新`);
+      }
+      await screenshot(width, 'now');
+      await page.locator(`${nav} [data-view="today"]`).click();
+      equal(await page.locator('#app').getAttribute('data-skin'), 'tower', '今日タブはtower設定を維持');
+      ok(await page.locator('.today-tower').isVisible(), '今日タブにTOWERを表示');
+      await screenshot(width, 'today');
+      await seed([], [], 'now');
+      await page.locator(`${nav} [data-view="today"]`).click();
+      ok(await page.locator('#app[data-view="today"][data-skin="now"] .now-view').isVisible(), '今日タブのnow設定も維持');
+      await page.getByRole('button', { name: '段取りで決める', exact: true }).click();
+      equal((await live()).currentView, 'dandori', '空のいまから段取りタブへ');
+      await page.clock.setSystemTime(new Date(2026, 8, 29, 10, 0));
+    }
     equal(errors, [], 'ブラウザ例外なし');
     console.log(`PASS dandori-view: ${assertions} assertions`);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
