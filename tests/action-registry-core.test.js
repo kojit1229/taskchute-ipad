@@ -103,6 +103,7 @@ function check(name, cond, extra = "") {
 // v356: FUNDタブのヘッダ「再取得」ボタン(fund-refresh)を意図的に追加(221→222)。
 // v367: 「この画面で編集」(vision-edit-open/vision-edit-cancel/vision-edit-save)を
 //       意図的に追加(222→225)。
+// v418: 段取り(dandori-move/dandori-add-task/dandori-remove)を意図的に追加(225→228)。
 const GOLDEN_CLICK_ACTIONS = [
   "start-overlap-choice",
   "remaining-shift", "remaining-tomorrow",
@@ -216,7 +217,9 @@ const GOLDEN_CLICK_ACTIONS = [
   "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
   "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
   "twy-decide-aim", "twy-decide-when", "twy-decide-day", "twy-decide-save",
-  "twy-decide-memo", "twy-decide-add-task", "twy-decide-create"
+  "twy-decide-memo", "twy-decide-add-task", "twy-decide-create",
+  // v418(束2a 段取り、監督者の契約追随 2026-10-01): 今日やるの並べ替え・候補からの追加・外す
+  "dandori-move", "dandori-add-task", "dandori-remove"
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
 ];
@@ -398,6 +401,8 @@ const APP_JS_REGISTERED_ACTIONS = [
   "energy-open-category", "timeline-clear-cat"
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
+  // v418(束2a 段取り、監督者の契約追随 2026-10-01): 今日やるの並べ替え・候補からの追加・外す
+  "dandori-move", "dandori-add-task", "dandori-remove"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(

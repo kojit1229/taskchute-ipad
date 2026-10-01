@@ -115,7 +115,7 @@ function check(name, cond, extra = "") {
     // v278: 固定化ルーティンを確認する計器盤2画面を「その他」の前へ常設したため期待順を更新。
     // v403 契約追随(監督者 2026-09-13、束R4-A 4回-06): 共通ナビの表示ラベルを日本語に(順序・件数は不変)。
     const expectedOrder = [
-      "今日", "実行", "作業一覧",
+      "いま", "段取り", "今日", "実行", "作業一覧",  // v418: いま・段取りを追加(K承認 2026-10-01)
       "日報", "AIレポート", "やりたいこと", "ビジョン", "0秒思考",
       "健康と継続", "筋トレ記録", "資産", "12週計画", "その他", "設定"
     ];
@@ -127,7 +127,7 @@ function check(name, cond, extra = "") {
     console.log("[1b] 下部タブ(mobileNav)は 今日/実行/作業一覧/その他(S-B1)");
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("mobileNavはS-B1の4項目構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
+    check("mobileNavは6項目構成(v418: いま・段取りを追加、K承認 2026-10-01)", JSON.stringify(bottomLabels) === JSON.stringify(["いま", "段取り", "今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
 
     // v230: home本体と専用fold群は描画コードごと撤去。移設先のないUIは不存在を固定する。
     console.log("[2] v230: homeナビ・タブ・専用fold群が存在せず、旧home stateはtodayへ縮退する");

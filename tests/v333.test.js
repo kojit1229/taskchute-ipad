@@ -126,7 +126,7 @@ async function seed(page, values) {
 
     console.log("[3] ナビ: モバイル4項目(今日/ジャーナル/実行/その他)・旧「時間」は消える");
     const bottomNavLabels = await page.$$eval("#bottomNav button", (els) => els.map((el) => el.childNodes[0]?.textContent?.trim()));
-    check("モバイル下部ナビが4項目", bottomNavLabels.length === 4, JSON.stringify(bottomNavLabels));
+    check("モバイル下部ナビが6項目(v418: いま・段取りを追加、K承認 2026-10-01)", bottomNavLabels.length === 6, JSON.stringify(bottomNavLabels));
     check("ナビ項目に「実行」がある", bottomNavLabels.includes("実行"), JSON.stringify(bottomNavLabels));
     check("ナビ項目に「時間」は無い(タスクシュート/タイムライン統合)", !bottomNavLabels.includes("時間"), JSON.stringify(bottomNavLabels));
     check("「実行」ボタンがactive", await page.locator('#bottomNav button:has-text("実行")').evaluate((el) => el.classList.contains("active")));

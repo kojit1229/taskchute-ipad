@@ -88,8 +88,9 @@ import {
 import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
-import { configureToday, renderToday } from "./src/features/today.js";
+import { configureToday, renderToday, renderNow } from "./src/features/today.js";
 import { configureNowView } from "./src/features/now-view.js";
+import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
   toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
@@ -265,6 +266,8 @@ function pruneExpiredSuggestedThemes(list) {
 // (§C。exec自体はv333で新設済み・navItemsは今回まで無改修だった)。旧2項目のバッジ
 // (未着手件数)はそのままexecへ引き継ぐ(renderSidebarのバッジ条件をitem.id==="exec"へ変更)。
 const navItems = [
+  { id: "now", label: "いま", mark: "◎" },
+  { id: "dandori", label: "段取り", mark: "☰" },
   { id: "today", label: "今日", mark: "▶" },
   { id: "exec", label: "実行", mark: "E" },
   { id: "wbs", label: "作業一覧", mark: "W" },
@@ -287,6 +290,8 @@ const navItems = [
 // v333: 実行ラッパー(タスクシュート+タイムライン統合)。モバイル下部ナビは「実行」1項目に
 //       まとめ、「時間」を廃止する(PCサイドバー統合はv333b。navItemsは今回無改修)。
 const mobileNav = [
+  { id: "now", label: "いま" },
+  { id: "dandori", label: "段取り" },
   { id: "today", label: "今日" },
   { id: "exec", label: "実行" },
   { id: "wbs", label: "作業一覧" },
@@ -337,6 +342,9 @@ configureGithubSync({
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
+configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
+  resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
+  fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -718,6 +726,9 @@ registerActions({
   "download-data": () => downloadData(),
   "life-export": ({ target }) => downloadLifeData(target.dataset.kind),
   "carry-over": ({ id }) => requestCarryOver(id),
+  "dandori-move": ({ id, target }) => moveDandoriBlock(id, target.dataset.dir),
+  "dandori-add-task": ({ id }) => addDandoriTask(id),
+  "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); if (state.modal) closeModal(); },
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry
   // ごと削除(K裁定2026-08-29。journalMeta[date].idealは保持)。
@@ -2278,7 +2289,7 @@ function normalizeState(value) {
     value.settings.dailyReadingRoutineIds = { affirmation: "", visionBoard: "", ...actualSettings.dailyReadingRoutineIds };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
-    "today", "wbs", "wish", "tasks", "timeline", "exec",
+    "now", "dandori", "today", "wbs", "wish", "tasks", "timeline", "exec",
     "journal", "zero", "vision", "ai-reports", "settings", "more",
     "iron-log", "instruments", "fund", "twelveweek"
   ]);
@@ -3447,7 +3458,7 @@ function render() {
     return;
   }
   app.dataset.view = state.currentView;
-  app.dataset.skin = state.currentView === "today" ? state.settings.todaySkin : "";
+  app.dataset.skin = state.currentView === "now" ? "now" : state.currentView === "today" ? state.settings.todaySkin : "";
   renderSidebar();
   renderBottomNav();
   rememberWorkListScroll();
@@ -3620,6 +3631,8 @@ function renderMain() {
   _lastScrollDate = state.selectedDate;
 
   if (view === "today") main.innerHTML = renderToday();
+  if (view === "now") main.innerHTML = renderNow();
+  if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "fund") main.innerHTML = renderFund();
@@ -12819,6 +12832,7 @@ function setView(view = "today", skipDraftGuard = false) {
     _execMode = "plan";
   }
   state.currentView = view;
+  if (view === "dandori") state.selectedDate = todayISO();
   // v37: 画面切替は「データの変更」ではない。dataModifiedAt を汚すと
   //      端末間の新旧比較が壊れる(タブを触っただけの古い端末が「最新」扱いになる)ため、
   //      永続化のみ行い、更新時刻スタンプと自動保存はしない。

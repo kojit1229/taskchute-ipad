@@ -240,6 +240,12 @@ function towerFlights(blocks, nowMin) {
   return coreTowerFlights(blocks, nowMin, { minutesOf });
 }
 
+function renderNow() {
+  todayRenderedDateISO = todayISO();
+  startTodayTicker();
+  return renderNowView();
+}
+
 function renderToday() {
   todayRenderedDateISO = todayISO();
   startTodayTicker();
@@ -265,7 +271,7 @@ function updateTodayPomodoroTick() {
 }
 
 function updateTodayTick() {
-  if (state.currentView !== "today") {
+  if (state.currentView !== "today" && state.currentView !== "now") {
     stopTodayTicker();
     return;
   }
@@ -300,7 +306,7 @@ function isTodayTickerRunning() {
 }
 
 export {
-  configureToday, renderToday, updateTodayTick, startTodayTicker, stopTodayTicker,
+  configureToday, renderToday, renderNow, updateTodayTick, startTodayTicker, stopTodayTicker,
   isTodayTickerRunning, runningBlockOf, queueBlocksOf, towerFlights,
   todayPomodoroDisplay, renderTodayPomodoro, updateTodayPomodoroTick
 };

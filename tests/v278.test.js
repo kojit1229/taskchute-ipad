@@ -68,8 +68,10 @@ const block = (id, ruleId, title = "朝の読書") => ({
     })));
     // v333: 実行タブ統合(タスクシュート+タイムライン=exec)でモバイル下部ナビは
     // 今日/実行/作業一覧/その他の4枠へ変わった(「時間」廃止)。仕様変更としてセレクタ追随。
-    check("mobileNavは今日/実行/作業一覧/その他の4枠",
+    // v418: K承認(2026-10-01)により、いま・段取りの独立タブを先頭に追加する。
+    check("mobileNavはいま/段取り/今日/実行/作業一覧/その他の6枠",
       JSON.stringify(mobileItems) === JSON.stringify([
+        { id: "now", label: "いま" }, { id: "dandori", label: "段取り" },
         { id: "today", label: "今日" }, { id: "exec", label: "実行" },
         { id: "wbs", label: "作業一覧" }, { id: "more", label: "その他" }
       ]), JSON.stringify(mobileItems));

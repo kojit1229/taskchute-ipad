@@ -204,7 +204,7 @@ try {
    await page.locator('.more-tower-item[data-view="fund"]').click();await selectFable(page);
    assert.equal(await page.locator('#app[data-view="fund"]').count(),1);assert.equal(await page.locator('.fund-loading').count(),1);
    const before=await monitor(page);hold=false;release();await page.waitForSelector('.fund-summary');await unchanged(page,before);
-   const mobile=await page.locator('#bottomNav [data-action="nav"]').evaluateAll(es=>es.map(e=>e.dataset.view));assert.equal(mobile.length,4);assert.ok(!mobile.includes('fund'));
+   const mobile=await page.locator('#bottomNav [data-action="nav"]').evaluateAll(es=>es.map(e=>e.dataset.view));assert.equal(mobile.length,6 /* v418: いま・段取りを追加(K承認 2026-10-01) */);assert.ok(!mobile.includes('fund'));
    assert.equal(await page.locator('.nav-list [data-view="fund"]').count(),1);assert.equal(requests,1);
    if(version==='v301'){
     assert.equal(await page.locator('.fund-journal strong').textContent(),'既存Markdown経路');

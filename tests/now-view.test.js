@@ -68,6 +68,30 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.goto(`http://localhost:${port}/`);
     await page.locator('[data-action="gate-continue"]').waitFor();
     await passGithubGate(page);
+    const nextDay = '2026-09-30';
+    await seed([
+      block('previous-candidate'),
+      block('next-candidate', { date: nextDay, plannedStartAt: `${nextDay}T12:00:00`, plannedEndAt: `${nextDay}T12:25:00` }),
+      block('previous-done', { completed: true, actualStartAt: `${day}T10:00:00`, actualEndAt: `${day}T10:25:00` }),
+      block('next-done', { date: nextDay, completed: true, plannedStartAt: `${nextDay}T00:00:00`, plannedEndAt: `${nextDay}T00:01:00`, actualStartAt: `${nextDay}T00:00:00`, actualEndAt: `${nextDay}T00:01:00` })
+    ], 'now');
+    await page.evaluate(key => {
+      const s = JSON.parse(localStorage.getItem(key));
+      s.currentView = 'now';
+      localStorage.setItem(key, JSON.stringify(s));
+    }, STATE_KEY);
+    await page.clock.setFixedTime(at(23, 59));
+    await page.reload();
+    await page.locator('#app[data-view="now"] .now-view').waitFor();
+    equal((await live()).currentView, 'now', '保存されたいまタブから起動');
+    equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['previous-candidate'], '日跨ぎ前は当日の開始候補');
+    equal(await page.locator('.now-done > [data-record-id]').evaluateAll(els => els.map(el => el.dataset.recordId)), ['previous-done'], '日跨ぎ前は当日の今日できた');
+    await page.clock.setFixedTime(at(0, 1, 0, 30));
+    await page.evaluate(async () => (await import('/src/features/today.js')).updateTodayTick());
+    equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['next-candidate'], '日跨ぎtickで翌日の開始候補へ');
+    equal(await page.locator('.now-done > [data-record-id]').evaluateAll(els => els.map(el => el.dataset.recordId)), ['next-done'], '日跨ぎtickで翌日の今日できたへ');
+    equal(await page.locator('.now-done details [data-record-id="previous-done"]').count(), 1, '日跨ぎtickで前日の記録は履歴へ');
+    await page.clock.setFixedTime(at(12, 0));
     for (const skin of ['missing', 'invalid', 'cockpit', 'now', 'tower']) {
       await seed([], skin);
       equal((await live()).settings.todaySkin, skin === 'now' ? 'now' : 'tower', `${skin}: normalizeStateの補完`);
@@ -75,8 +99,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     }
     await seed([], 'now');
     await page.getByRole('button', { name: '段取りで決める', exact: true }).click();
-    await page.locator('#app[data-view="exec"]').waitFor();
-    equal((await live()).currentView, 'exec', 'Blockなしの案内で実行タブへ');
+    await page.locator('#app[data-view="dandori"]').waitFor();
+    equal((await live()).currentView, 'dandori', 'Blockなしの案内で段取りタブへ');
     await seed([block('b', { plannedStartAt: `${day}T13:00:00` }), block('a', { isMIT: true })], 'now');
     equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['a', 'b'], '未着手は予定順');
     ok((await page.locator('.now-start').textContent()).includes('★'), '主役に★');
