@@ -10092,7 +10092,7 @@ function getTaskDepth(task) {
 }
 
 function toggleTask(id) {
-  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleTask(id), { kinds: ["tasks", "blocks"] }).ok;
+  if (!draftSaveTransaction.active) return draftSaveTransaction.run(() => toggleTask(id), { kinds: ["tasks", "blocks", "habitStreaks"] }).ok;
   const task = state.tasks.find((t) => t.id === id);
   if (!task) return;
   if (task.status === "completed") {
@@ -10124,6 +10124,7 @@ function toggleTask(id) {
     });
     state.blocks.push(actual);
   }
+  syncHabitStreakForBlock(actual);
   // v419: 完了した Task の明日以降の「未着手」予定 Block を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
   const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date > date);

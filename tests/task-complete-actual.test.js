@@ -32,23 +32,28 @@ const block = (id, extra = {}) => ({ id, taskId: 'task', title: '完了実績の
       await page.locator('[data-action="wbs-select-project"][data-id="project"]').first().click();
       await page.locator('[data-action="toggle-task"][data-id="task"]').first().waitFor();
     }
-    async function seed(estimateMin, blocks = [], hour = 10, minute = 0, second = 0) {
+    async function seed(estimateMin, blocks = [], hour = 10, minute = 0, second = 0, habits = {}) {
       await page.clock.setFixedTime(new Date(2026, 9, 1, hour, minute, second));
-      await page.evaluate(({ key, day, task, blocks }) => {
+      await page.evaluate(({ key, day, task, blocks, habits }) => {
         const state = JSON.parse(localStorage.getItem(key));
         Object.assign(state, { currentView: 'wbs', selectedDate: day, tasks: [task], blocks,
           projects: [{ id: 'project', title: '検証Project', kind: 'project', status: 'active', deleted: false }],
-          recurrences: [], singleSchedules: [], declarations: [], reports: {}, journals: { [day]: '検証本文' } });
+          recurrences: [], habitStreaks: {}, singleSchedules: [], declarations: [], reports: {}, journals: { [day]: '検証本文' }, ...habits });
         Object.assign(state.settings, { lastOpenedDate: day, autoSync: false, wbsHideCompleted: false });
         state.settings.github.autoSave = false; state.pomodoro.running = false;
         localStorage.setItem(key, JSON.stringify(state));
-      }, { key: STATE_KEY, day: DAY, task: task(estimateMin), blocks });
+      }, { key: STATE_KEY, day: DAY, task: task(estimateMin), blocks, habits });
       await page.reload(); await openTask(); dialogs.length = 0;
     }
     async function toggle(status = 'completed') {
       await page.locator('[data-action="toggle-task"][data-id="task"]').first().click();
       await page.waitForFunction(({ key, status }) => JSON.parse(localStorage.getItem(key)).tasks.find(t => t.id === 'task').status === status,
-        { key: STATE_KEY, status });
+        { key: STATE_KEY, status }).catch(async error => {
+        console.error('Task completion diagnostic', errors, dialogs, await page.evaluate(key => ({
+          stored: JSON.parse(localStorage.getItem(key)), text: document.body.innerText.slice(-1800)
+        }), STATE_KEY));
+        throw error;
+      });
       return stored();
     }
     async function report() {
@@ -111,6 +116,32 @@ const block = (id, extra = {}) => ({ id, taskId: 'task', title: '完了実績の
     equal([actual.id, ...times(actual)], ['planned', `${DAY}T09:35:00`, `${DAY}T10:00:00`, true], '(c) planned Block receives task estimate actual');
     equal([actual.plannedStartAt, actual.plannedEndAt], [`${DAY}T11:00:00`, `${DAY}T11:50:00`], '(c) original plan retained');
     equal(dialogs, [], '(c) today excluded from cleanup confirmation');
+
+    const previousStreaks = { habit: { logs: { [PREV]: { doneAt: `${PREV}T10:00:00` } } } };
+    for (const kind of ['daily', 'weekdays']) {
+      const habits = { recurrences: [{ id: 'habit', kind, title: task(25).title, taskId: 'task',
+        category: '作業', anchorDate: PREV, startTime: '11:00', endTime: '11:50', streakSince: PREV, deleted: false }],
+        habitStreaks: previousStreaks };
+      const recurringBlock = block('habit-block', { recurrenceGroupId: 'habit' });
+      await seed(25, [recurringBlock], 10, 0, 0, habits);
+      await page.evaluate(() => {
+        const button = document.createElement('button'); button.dataset.action = 'toggle-block';
+        button.dataset.id = 'habit-block'; button.id = 'streak-reference'; document.querySelector('#app').append(button);
+      });
+      await page.locator('#streak-reference').click();
+      await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).blocks.find(b => b.id === 'habit-block').completed, STATE_KEY);
+      const normalStreaks = (await stored()).habitStreaks;
+      equal(normalStreaks, { habit: { logs: { ...previousStreaks.habit.logs, [DAY]: { doneAt: `${DAY}T10:00:00` } },
+        updatedAt: `${DAY}T10:00:01` } },
+        `habit (${kind}) normal Block completion records today and retains previous log`);
+      await seed(25, [recurringBlock], 10, 0, 0, habits);
+      state = await toggle();
+      equal(state.habitStreaks, normalStreaks, `habit (${kind}) task completion matches normal Block completion`);
+    }
+    await seed(25, [block('non-recurring')], 10, 0, 0, { habitStreaks: previousStreaks });
+    const unchangedStreaks = (await stored()).habitStreaks;
+    state = await toggle();
+    equal(state.habitStreaks, unchangedStreaks, 'non-recurring Block task completion preserves habit streaks');
 
     await seed(25, [block('planned'), block('running', { actualStartAt: `${DAY}T09:50:00` })]); state = await toggle();
     equal(state.blocks.length, 2, '(d) no extra Block with running candidate');
