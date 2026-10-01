@@ -396,10 +396,11 @@ async function verifyTaskBadges(browser) {
     })));
     // v333: 実行タブ統合で4項目化(「時間」廃止、未着手バッジはexecへ移動)。仕様変更としてセレクタ追随。
     const expectedMobileItems = [
+      { id: "now", label: "いま" }, { id: "dandori", label: "段取り" }, // v418: K承認 2026-10-01
       { id: "today", label: "今日" }, { id: "exec", label: "実行" },
       { id: "wbs", label: "作業一覧" }, { id: "more", label: "その他" }
     ];
-    check("mobileNavは4項目・id・ラベル", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
+    check("mobileNavは6項目・id・ラベル(v418)", JSON.stringify(mobileItems) === JSON.stringify(expectedMobileItems), JSON.stringify(mobileItems));
 
     await page.locator('.exec-row [data-action="now-start"][data-id="valid-start-block"]').click();
     // v406(F5-3 M-26): 別の Block が実行中なら重なりの選択シート→「並行して開始」を選んでから declare へ
