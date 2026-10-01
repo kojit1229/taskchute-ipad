@@ -44,6 +44,18 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.clock.pauseAt(new Date(2026, 8, 29, 10, 0));
     await page.goto('http://localhost:' + server.address().port + '/');
     await passGithubGate(page);
+    await seed([block('today-timeline'), block('past-timeline', '09:00', '09:25', {
+      date: yesterday, plannedStartAt: `${yesterday}T09:00:00`, plannedEndAt: `${yesterday}T09:25:00`
+    })]);
+    await page.locator('#bottomNav [data-view="exec"]').click();
+    await page.locator('[data-action="date-prev"]').click();
+    equal((await live()).selectedDate, yesterday, '実行タブで前日を選択');
+    await page.locator('#bottomNav [data-view="dandori"]').click();
+    equal((await live()).selectedDate, day, '段取りタブへの切替で選択日を今日に戻す');
+    equal((await stored()).selectedDate, day, '段取りへの切替後は今日を保存');
+    const timelineText = await page.locator('.dandori-layout .timeline-tower').innerText();
+    ok(timelineText.includes('作業 today-timeline'), '段取りの下のタイムラインに今日の予定');
+    ok(!timelineText.includes('作業 past-timeline'), '段取りの下のタイムラインに前日の予定を出さない');
     const initial = [block('b', '10:00', '10:23'), block('a'), block('done', '08:00', '08:25', { completed: true }),
       block('running', '08:30', '08:55', { actualStartAt: `${day}T08:30:00` }), block('deleted', '07:00', '07:25', { deleted: true }),
       block('moved', '07:30', '07:55', { migratedTo: 'elsewhere' })];

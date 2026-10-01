@@ -88,8 +88,8 @@ import {
 import { configureInstruments, renderInstruments } from "./src/features/instruments.js";
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
-import { configureToday, renderToday, startTodayTicker } from "./src/features/today.js";
-import { configureNowView, renderNowView } from "./src/features/now-view.js";
+import { configureToday, renderToday, renderNow } from "./src/features/today.js";
+import { configureNowView } from "./src/features/now-view.js";
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
@@ -3631,10 +3631,7 @@ function renderMain() {
   _lastScrollDate = state.selectedDate;
 
   if (view === "today") main.innerHTML = renderToday();
-  if (view === "now") {
-    main.innerHTML = renderNowView();
-    startTodayTicker();
-  }
+  if (view === "now") main.innerHTML = renderNow();
   if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "wish") main.innerHTML = renderWish();
@@ -12835,6 +12832,7 @@ function setView(view = "today", skipDraftGuard = false) {
     _execMode = "plan";
   }
   state.currentView = view;
+  if (view === "dandori") state.selectedDate = todayISO();
   // v37: 画面切替は「データの変更」ではない。dataModifiedAt を汚すと
   //      端末間の新旧比較が壊れる(タブを触っただけの古い端末が「最新」扱いになる)ため、
   //      永続化のみ行い、更新時刻スタンプと自動保存はしない。
