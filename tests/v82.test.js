@@ -99,7 +99,7 @@ function check(name, cond, extra = "") {
     await seed({ blocks: [], view: "home" });
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
     // v333: 4枠へ統合。実行内の実績タイムラインはv333.test.jsで別途維持。
-    check("bottom-navの並びがS-B1の4項目仕様", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
+    check("bottom-navの並びが6項目仕様(v418: いま・段取りを追加、K承認 2026-10-01)", JSON.stringify(bottomLabels) === JSON.stringify(["いま", "段取り", "今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
 
     console.log("[1b] ホームからジャーナルへ1タップで遷移できる(朝の体調記録の日課動線)");
     // v410: 今日の本文は廃止。欄なしと上部帯の単一の日報入口で導線を維持する。

@@ -83,7 +83,7 @@ module.exports = async function navJapanese() {
       }
       assert.deepEqual(await stored(), baseline, 'all ten round trips preserve user records');
       assert.deepEqual(await page.locator('#bottomNav > button').evaluateAll(nodes => nodes.map(n => n.dataset.view)),
-        ['now', 'dandori', 'today', 'exec', 'wbs', 'more']); // v418: 6枠(K承認 2026-10-01)
+        ['now', 'dandori', 'today', 'exec', 'wbs', 'more'] /* v418: 6枠(K承認 2026-10-01) */);
     }
     fs.writeFileSync(path.join(output, 'more-dimensions.json'), JSON.stringify(dimensions, null, 2), 'utf8');
     assert.deepEqual(errors, []);

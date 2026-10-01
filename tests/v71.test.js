@@ -127,7 +127,7 @@ function check(name, cond, extra = "") {
     console.log("[1b] 下部タブ(mobileNav)は 今日/実行/作業一覧/その他(S-B1)");
     const bottomLabels = await page.locator("#bottomNav button").allTextContents();
     // v182 D2: mobileNav先頭差替え/moreGroups計画群へhome追加
-    check("mobileNavはS-B1の4項目構成", JSON.stringify(bottomLabels) === JSON.stringify(["今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
+    check("mobileNavは6項目構成(v418: いま・段取りを追加、K承認 2026-10-01)", JSON.stringify(bottomLabels) === JSON.stringify(["いま", "段取り", "今日", "実行", "作業一覧", "その他"]), JSON.stringify(bottomLabels));
 
     // v230: home本体と専用fold群は描画コードごと撤去。移設先のないUIは不存在を固定する。
     console.log("[2] v230: homeナビ・タブ・専用fold群が存在せず、旧home stateはtodayへ縮退する");
