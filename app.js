@@ -10106,14 +10106,32 @@ function toggleTask(id) {
   }
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t) } : t);
-  // v48: 完了した Task の今日以降の「未着手」予定 Block(ゾンビ予定)を確認つきで整理。
+  const date = todayISO(), end = nowDateTime();
+  const minutes = Number.isFinite(task.estimateMin) && task.estimateMin > 0 ? task.estimateMin : 15;
+  // 既存の減算ヘルパーは分までを返すので、チェック時刻の秒を保つ。
+  const start = `${subtractMinutesFromDateTime(end, minutes)}:${end.slice(17, 19)}`;
+  const todayBlocks = state.blocks.filter((b) => !b.deleted && b.taskId === id && b.date === date && !b.completed);
+  let actual = todayBlocks.find((b) => b.actualStartAt && !b.actualEndAt)
+    || todayBlocks.find((b) => !b.actualStartAt);
+  if (actual) {
+    actual = { ...actual, actualStartAt: actual.actualStartAt || start, actualEndAt: end, completed: true };
+    state.blocks = state.blocks.map((b) => b.id === actual.id ? actual : b);
+  } else {
+    actual = makeBlock({
+      taskId: id, date, title: task.title, category: task.category || projectName(task.projectId),
+      estimateMin: minutes, plannedStartAt: start, plannedEndAt: end,
+      actualStartAt: start, actualEndAt: end, completed: true
+    });
+    state.blocks.push(actual);
+  }
+  // v419: 完了した Task の明日以降の「未着手」予定 Block を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
-  const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date >= todayISO());
-  if (stale.length && window.confirm(`このTaskの今日以降の未完了Block ${stale.length}件も削除しますか?\n(完了済みの実績はそのまま残ります)`)) {
+  const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date > date);
+  if (stale.length && window.confirm(`このTaskの明日以降の未着手Block ${stale.length}件も削除しますか?\n(完了済みの実績はそのまま残ります)`)) {
     const ids = new Set(stale.map((b) => b.id));
     state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true } : b);
   }
-  saveAndRender("Taskを完了しました");
+  saveAndRender(`完了して実績を記録しました(${timeFromDateTime(actual.actualStartAt)}〜${timeFromDateTime(end)})`);
   maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#1(WBS/一覧のチェックボタン)
 }
 

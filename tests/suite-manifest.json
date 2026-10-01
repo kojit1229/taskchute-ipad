@@ -3476,6 +3476,32 @@
       }
     },
     {
+      "file": "task-complete-actual.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "sync-storage",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 2,
+      "assertionHash": "11e2a081ff96688b",
+      "sourceHash": "4606d2d8eca882bb",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
       "file": "test-manifest-generator.test.js",
       "kind": "node",
       "tier": "full",
