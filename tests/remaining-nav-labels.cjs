@@ -27,9 +27,9 @@ module.exports = async function navJapanese() {
   const plain = expression => JSON.parse(vm.runInContext('JSON.stringify(' + expression + ')', context));
   assert.deepEqual(plain('moreItems.map(({id,label,group}) => [id,label,group])'), entries);
   assert.deepEqual(plain('mobileNav.map(({id,label}) => [id,label])'),
-    [['now', 'いま'], ['dandori', '段取り'], ['today', '今日'], ['exec', '実行'], ['wbs', '作業一覧'], ['more', 'その他']] // v418: いま・段取りを独立タブに(K承認 2026-10-01));
+    [['now', 'いま'], ['dandori', '段取り'], ['today', '今日'], ['exec', '実行'], ['wbs', '作業一覧'], ['more', 'その他']]); // v418: いま・段取りを独立タブに(K承認 2026-10-01)
   const sidebar = plain('navItems.map(({id,label}) => [id,label])');
-  assert.equal(sidebar.length, 14);
+  assert.equal(sidebar.length, 16); // v418: いま・段取りを追加(K承認 2026-10-01)
   assert.deepEqual(sidebar.find(([id]) => id === 'journal'), ['journal', '日報']);
   for (const [id, label, group] of entries) {
     assert.deepEqual(sidebar.find(item => item[0] === id), [id, label]);
