@@ -136,7 +136,9 @@ const block = (id, extra = {}) => ({ id, taskId: 'task', title: '完了実績の
         `habit (${kind}) normal Block completion records today and retains previous log`);
       await seed(25, [recurringBlock], 10, 0, 0, habits);
       state = await toggle();
-      equal(state.habitStreaks, normalStreaks, `habit (${kind}) task completion matches normal Block completion`);
+      // 監督者裁定 C-3(2026-10-01): 通常経路は daily-operation の記録スタンプ(updatedAt)が付くが、同期の habitStreaks は updatedAt を使わない比較(fail-close)なので、記録(logs)の一致だけを確かめる。
+      const logsOnly = streaks => Object.fromEntries(Object.entries(streaks || {}).map(([k, v]) => [k, v.logs]));
+      equal(logsOnly(state.habitStreaks), logsOnly(normalStreaks), `habit (${kind}) task completion records the same logs as normal Block completion`);
     }
     await seed(25, [block('non-recurring')], 10, 0, 0, { habitStreaks: previousStreaks });
     const unchangedStreaks = (await stored()).habitStreaks;
