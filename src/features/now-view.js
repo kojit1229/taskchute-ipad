@@ -26,25 +26,26 @@ function hasDateTime(value) {
 
 function clearStartedDrafts() {
   for (const block of getState().blocks) {
-    if (block.actualStartAt) declarationDrafts.delete(String(block.id));
+    if (!block.actualStartAt) continue;
+    const id = String(block.id);
+    declarationDrafts.delete(id);
+    if (declarationStartId === id) declarationStartId = null;
   }
 }
 
-// モーダル生成後に初期値を渡す。重複開始の確認を挟んだ場合も同じ経路で渡す。
+// now-start によるモーダル生成後に初期値を渡す。
 export function withNowDeclaration(action, startId) {
   const { currentView, settings } = getState();
   if (currentView !== "now" && !(currentView === "today" && settings.todaySkin === "now")) return action();
   if (startId !== undefined) declarationStartId = String(startId);
   if (declarationStartId === null) return action();
   const result = action();
-  clearStartedDrafts();
   const modal = getState().modal, input = document.querySelector('[data-declare-note]');
   const id = String(modal?.id);
   if (modal?.type === "declare" && id === declarationStartId && input && declarationDrafts.has(id) && input.dataset.nowDraftId !== id) {
     input.value = declarationDrafts.get(id);
     input.dataset.nowDraftId = id;
   }
-  if (getState().blocks.some(b => String(b.id) === declarationStartId && b.actualStartAt)) declarationStartId = null;
   return result;
 }
 
@@ -108,6 +109,7 @@ export function renderNowView() {
 }
 
 export function updateNowViewTick() {
+  clearStartedDrafts();
   if (document.hidden) return;
   const root = document.querySelector(".now-view");
   if (!root) return;

@@ -1203,7 +1203,7 @@ registerActions({
   "today-add-actual": () => openTodayActualBlock(false),
   "remaining-shift": () => adjustRemainingBlocks(false),
   "remaining-tomorrow": () => adjustRemainingBlocks(true),
-  "start-overlap-choice": ({ target }) => withNowDeclaration(() => chooseStartOverlap(target.dataset.choice)),
+  "start-overlap-choice": ({ target }) => chooseStartOverlap(target.dataset.choice),
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
@@ -1270,8 +1270,8 @@ registerActions({
     render();
   },
   "complete-pomodoro": () => openReportModal(state.pomodoro.blockId, "pomodoro"),
-  "declare-confirm": () => withNowDeclaration(confirmDeclare),
-  "declare-skip": () => withNowDeclaration(skipDeclare),
+  "declare-confirm": () => confirmDeclare(),
+  "declare-skip": () => skipDeclare(),
   "report-outcome": ({ target }) => {
     const note = modalRoot.querySelector("[data-report-note]")?.value || "";
     finishReport(target.dataset.outcome || "", note);
