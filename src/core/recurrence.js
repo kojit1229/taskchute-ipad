@@ -84,6 +84,8 @@ function recurrenceMatchesDate(rule, isoDate) {
 
 // ルール + 日付 から表示用 Block(実体)を生成(元routine.js:678-707、逐語コピー。state参照なし)。
 function makeRecurrenceInstance(rule, isoDate) {
+  const crossesMidnight = rule.startTime && rule.endTime && rule.endTime < rule.startTime;
+  const endDate = crossesMidnight ? addDays(isoDate, 1) : isoDate;
   return {
     id: `rec_${rule.id}_${isoDate}`,
     taskId: rule.taskId || "",
@@ -91,7 +93,9 @@ function makeRecurrenceInstance(rule, isoDate) {
     title: rule.title || "繰り返しBlock",
     category: rule.category || "",
     plannedStartAt: rule.startTime ? `${isoDate}T${rule.startTime}` : "",
-    plannedEndAt: rule.endTime ? `${isoDate}T${rule.endTime}` : "",
+    plannedEndAt: rule.endTime ? `${endDate}T${rule.endTime}` : "",
+    ...(crossesMidnight ? { estimateMin: (minutesOf(`${isoDate}T${rule.endTime}`)
+      - minutesOf(`${isoDate}T${rule.startTime}`) + 1440) % 1440 } : {}),
     actualStartAt: "",
     actualEndAt: "",
     completed: false,
