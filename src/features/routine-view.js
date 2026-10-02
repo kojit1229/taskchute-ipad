@@ -1,3 +1,4 @@
+import { findActiveDuplicateRecurrenceRule } from "../core/recurrence.js";
 let deps, editingId = null, draft = null;
 const kinds = { daily: "毎日", weekdays: "平日", weekend: "週末", weekly: "曜日", monthly: "毎月" };
 const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
@@ -69,6 +70,10 @@ export function saveRoutine(id) {
   const days = draft.kind === "weekend" ? [0, 6] : draft.days;
   if (!title || (kind === "weekly" && !days.length)) { deps.showToast("題名と曜日を入力してください"); return; }
   return deps.runRecurrenceChange(() => {
+    if (id && findActiveDuplicateRecurrenceRule(title, start, undefined, { excludeId: id })) {
+      deps.showToast(`「${title}」の繰り返しルールは既にあるため作成しませんでした`);
+      return;
+    }
     const date = deps.todayISO();
     let rule = id ? activeRules().find(item => item.id === id) : deps.createRecurrenceRule({ title, date, category, taskId: "",
       plannedStartAt: start ? `${date}T${start}` : "", plannedEndAt: end ? `${date}T${end}` : "" }, kind);
