@@ -1,0 +1,22 @@
+{
+  "version": 423,
+  "date": "2026-10-02",
+  "title": "いまの積み上げに週7本のタワーと30分の輪",
+  "summary": "今週の実績を曜日別の本と2時間の基準線で表示。実行中も伸びる輪と、昨日を超えた日のきらめきを追加。",
+  "changedFiles": [
+    "src/features/now-view.js", "styles.css", "sw.js", "releases/v423.json", "tests/now-view.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": ["発注50 / G4b。spec.md受入21〜25。SHA256 4c684bd45f9f9f662bb43476cb43424bf68f4457e7fe2649475cde51e7ddc321。基準HEAD 5868c5b68f3264a0e2ca515cb99e55dd8d2c9df8。"],
+  "changes": [
+    "tower-week.jsの純粋関数で暦週・実績・30分の輪・昨日比較を表示",
+    "毎秒の属性・テキスト更新でタワーと輪のDOMを保持",
+    "昨日超えの演出を日付ごとにモジュール内で1回に制限",
+    "SWにtower-week.jsを追加しCACHE_NAMEをv423へ更新"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["暦週と帰属日", "毎秒更新のDOM保持と縮尺", "375pxと動きの抑制"],
+  "verification": ["発注50の実走結果をreports/g4b/result.mdとcommand-results.jsonlに記録"],
+  "knownLimitations": ["落下・着地の演出は今回の対象外"],
+  "relatedSuites": ["tower-week-core", "now-view", "today-core", "tower-core", "dandori-view", "action-registry-core"]
+}

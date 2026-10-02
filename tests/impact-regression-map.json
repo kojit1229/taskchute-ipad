@@ -358,7 +358,8 @@
     },
     "today-feature": {
       "paths": [
-        "^src/features/(?:today(?:-tower)?|now-view|coach)\\.js$"
+        "^src/features/(?:today(?:-tower)?|now-view|coach)\\.js$",
+        "^src/core/tower-week\\.js$"
       ],
       "patterns": [
         "renderToday|renderTodayTower|towerFlights|todaySkin|QUICK_MEALS"
@@ -367,6 +368,7 @@
         "today-core",
         "tower-core",
         "now-view",
+        "tower-week-core",
         "tower-model-core",
         "coach-core",
         "remaining-screen-labels"
