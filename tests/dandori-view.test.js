@@ -238,10 +238,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.setViewportSize({ width: 375, height: 900 });
     await seed([block('tail', '10:00', '10:23', { completed: true, actualEndAt: `${day}T10:27:01` })]);
     const rules = [
-      { id: 'daily', title: '朝の支度', kind: 'daily', startTime: '06:00', estimateMin: 25, category: '生活', taskId: 'routine-task' },
-      { id: 'weekdays', title: '平日の整理', kind: 'weekdays', startTime: '07:00', estimateMin: 15 },
-      { id: 'monthly', title: '月の整理', kind: 'monthly', startTime: '08:00', estimateMin: 50 },
-      { id: 'weekly', title: '週の整理', kind: 'weekly', startTime: '09:00', estimateMin: 10 },
+      { id: 'daily', title: '朝の支度', kind: 'daily', startTime: '06:00', endTime: '06:25', category: '生活', taskId: 'routine-task' },
+      { id: 'weekdays', title: '平日の整理', kind: 'weekdays', startTime: '07:00', endTime: '07:15' },
+      { id: 'monthly', title: '月の整理', kind: 'monthly', startTime: '08:00', endTime: '08:50' },
+      { id: 'weekly', title: '週の整理', kind: 'weekly', startTime: '09:00', endTime: '09:10' },
       { id: 'deleted-rule', title: '削除済み', kind: 'daily', deleted: true },
       { id: 'unsupported', title: '対象外', kind: 'none' }
     ];
@@ -286,12 +286,22 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await routineButton.evaluate(el => el.click());
     equal((await live()).blocks.length, 1, '同じtaskId・同名Blockを二重追加しない');
     await seed([block('no-task-title', '09:00', '09:25', { title: rules[1].title })]);
-    await page.evaluate(async () => {
-      // 再読込時の「その他」補完後に、空taskIdという判定対象を設定する。
-      (await import('/src/state/store.js')).state.blocks.find(b => b.id === 'no-task-title').taskId = '';
-    });
     await setRoutines(rules);
     equal(await page.locator('[data-action="dandori-add-routine"][data-id="weekdays"]').getAttribute('aria-disabled'), 'true', 'taskIdなしのルールは空taskIdの同名Blockと一致');
+    await seed([]);
+    await setRoutines([{ ...rules[0], taskId: '' }]);
+    const otherTaskId = (await live()).tasks.find(t => t.kind === 'other' && !t.deleted).id;
+    ok((await routineButton.innerText()).includes('見積 25分'), 'taskId空・生活カテゴリの実ルール形も候補は25分');
+    await routineButton.click();
+    const unlinkedRoutineBlock = (await stored()).blocks.find(b => b.title === rules[0].title);
+    equal([unlinkedRoutineBlock.estimateMin, unlinkedRoutineBlock.taskId], [25, otherTaskId], '空taskIdのルールは25分・その他Taskで追加');
+    await page.reload(); await page.locator('.dandori-view').waitFor();
+    equal((await live()).blocks.find(b => b.id === unlinkedRoutineBlock.id).taskId, otherTaskId, '再読込後の実物もその他Task');
+    equal(await routineButton.getAttribute('aria-disabled'), 'true', '空taskIdルールは再読込後も追加済み');
+    ok(await routineButton.evaluate(el => Number(getComputedStyle(el).opacity) < 1), '空taskIdルールの候補は再読込後も薄い');
+    const countAfterReload = (await live()).blocks.length;
+    await routineButton.evaluate(el => el.click());
+    equal((await live()).blocks.length, countAfterReload, '空taskIdルールは再読込後も二重追加しない');
     await seed([block('draft-tail', '10:00', '10:23')]);
     await setRoutines(rules);
     const draftInput = page.locator('[data-field="dandori-free-title"]');

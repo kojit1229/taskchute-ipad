@@ -73,7 +73,18 @@ function routines() {
 }
 function routineScheduled(rule, today) {
   return deps.blocksForDate(today).some(b => b.id === `rec_${rule.id}_${today}`
-    || (b.title === rule.title && (b.taskId || "") === (rule.taskId || "")));
+    || (b.title === rule.title && (b.taskId || "") === routineTaskId(rule)));
+}
+function routineTaskId(rule) {
+  return rule.taskId || deps.getOtherTask()?.id || "";
+}
+function routineEstimateMin(rule) {
+  if (!rule.startTime || !rule.endTime) return deps.resolveEstimateMin(rule);
+  const minutes = time => {
+    const match = time.match(/^(\d{2}):(\d{2})/);
+    return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+  };
+  return Math.max(1, minutes(rule.endTime) - minutes(rule.startTime));
 }
 function addCandidate(input) {
   const date = deps.todayISO(), plannedStartAt = tailStart(date);
@@ -85,7 +96,7 @@ function addCandidate(input) {
 export function addDandoriRoutine(id) {
   const rule = routines().find(r => r.id === id);
   if (!rule || routineScheduled(rule, deps.todayISO())) return;
-  addCandidate({ title: rule.title, category: rule.category, estimateMin: rule.estimateMin, taskId: rule.taskId });
+  addCandidate({ title: rule.title, category: rule.category, estimateMin: routineEstimateMin(rule), taskId: routineTaskId(rule) });
 }
 export function addDandoriFree() {
   const input = document.querySelector('[data-field="dandori-free-title"]');
@@ -116,7 +127,7 @@ export function renderDandoriView() {
     </section><section class="dandori-candidates"><h3>候補</h3>
       <div class="dandori-free"><input data-field="dandori-free-title" value="${e(freeTitle)}" aria-label="自由追加" placeholder="自由に追加(Block名)" autocomplete="off">${button("dandori-add-free", "", "足す")}</div>
       <h4>ルーティン</h4><div class="dandori-options">
-      ${routines().map(r => button("dandori-add-routine", r.id, `${e(r.title)}<small>いつも ${e(r.startTime || "--:--")} ・ 見積 ${resolveEstimateMin(r)}分${routineScheduled(r, today) ? " ・ 追加済み" : ""}</small>`, routineScheduled(r, today) ? 'aria-disabled="true"' : "")).join("") || "<p>ルーティンはありません。</p>"}
+      ${routines().map(r => button("dandori-add-routine", r.id, `${e(r.title)}<small>いつも ${e(r.startTime || "--:--")} ・ 見積 ${routineEstimateMin(r)}分${routineScheduled(r, today) ? " ・ 追加済み" : ""}</small>`, routineScheduled(r, today) ? 'aria-disabled="true"' : "")).join("") || "<p>ルーティンはありません。</p>"}
       </div><h4>昨日の持ち越し</h4><div class="dandori-options">
       ${carry.map(b => button("carry-over", b.id, `${e(b.title)}<small>${e(timeFromDateTime(b.plannedStartAt) || "--:--")}</small>`)).join("") || "<p>持ち越しはありません。</p>"}
       </div><h4>期限が近いタスク</h4><div class="dandori-options">
