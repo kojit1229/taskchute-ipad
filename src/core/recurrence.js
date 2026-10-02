@@ -85,7 +85,7 @@ function recurrenceMatchesDate(rule, isoDate) {
 // ルール + 日付 から表示用 Block(実体)を生成(元routine.js:678-707、逐語コピー。state参照なし)。
 function makeRecurrenceInstance(rule, isoDate) {
   // minutesOf は不正値も 0 にするため、比較前に時刻形式を確認する。
-  const validTime = /^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+  const validTime = /^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?$/;
   const s = validTime.test(rule.startTime) ? minutesOf(`${isoDate}T${rule.startTime}`) : NaN;
   const e = validTime.test(rule.endTime) ? minutesOf(`${isoDate}T${rule.endTime}`) : NaN;
   const crossesMidnight = Number.isFinite(s) && Number.isFinite(e) && e < s;

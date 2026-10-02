@@ -241,6 +241,13 @@ test("B2-34: 23:30:00〜00:15:00は翌日終了になる", () => {
   assert.equal(inst.plannedEndAt, "2026-08-21T00:15:00");
 });
 
+test("B2-44: 23:30:00.000〜00:15:00.000は翌日終了になる", () => {
+  const inst = makeRecurrenceInstance({ id: "fractional-seconds-night", startTime: "23:30:00.000",
+    endTime: "00:15:00.000" }, "2026-08-20");
+  assert.equal(inst.plannedStartAt, "2026-08-20T23:30:00.000");
+  assert.equal(inst.plannedEndAt, "2026-08-21T00:15:00.000");
+});
+
 test("makeRecurrenceInstance: ルーティン以外はcharge/dischargeを0にする", () => {
   const rule = { id: "r2", title: "MTG", category: "仕事", expectedCharge: 5, expectedDischarge: 5 };
   const inst = makeRecurrenceInstance(rule, "2026-08-20");
