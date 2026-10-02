@@ -113,7 +113,8 @@ for (const [name, prepare] of operations) test(`16a ${name}: failure restores al
       }
     }
     assert.ok(changed > 0);
-    if (name === 'toggleTask') assert.equal(f.ctx.state.blocks[0].deleted, true);
+    // v419(K承認 2026-10-02): 完了チェックは今日の未着手 Block を削除せず、実績を書いて完了にする(spec 受入2)。
+    if (name === 'toggleTask') { const b0 = f.ctx.state.blocks[0]; assert.equal(b0.deleted, undefined); assert.equal(b0.completed, true); assert.ok(b0.actualStartAt && b0.actualEndAt && b0.actualEndAt > b0.actualStartAt, 'actual recorded'); }
     if (name === 'deleteTask' || name === 'deleteTaskModal') assert.equal(f.ctx.state.blocks[0].taskId, '');
     if (name === 'updateTaskField') assert.equal(f.ctx.state.tasks[0].progressNum, 10);
   });
