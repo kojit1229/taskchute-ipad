@@ -90,7 +90,7 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday, renderNow } from "./src/features/today.js";
 import { configureNowView, setNowEstimate, withNowDeclaration } from "./src/features/now-view.js";
-import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriRoutine, addDandoriFree } from "./src/features/dandori-view.js";
+import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriFree } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
   toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
@@ -728,7 +728,6 @@ registerActions({
   "carry-over": ({ id }) => requestCarryOver(id),
   "dandori-move": ({ id, target }) => moveDandoriBlock(id, target.dataset.dir),
   "dandori-add-task": ({ id }) => addDandoriTask(id),
-  "dandori-add-routine": ({ id }) => addDandoriRoutine(id),
   "dandori-add-free": () => addDandoriFree(),
   "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); if (state.modal) closeModal(); },
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),

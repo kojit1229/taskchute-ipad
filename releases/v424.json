@@ -1,0 +1,48 @@
+{
+  "version": 424,
+  "date": "2026-10-02",
+  "title": "いまのルーティン枠を別枠カードに",
+  "summary": "いまの開始枠をBlockとルーティンに分け、段取りの候補からルーティンを外しました。",
+  "changedFiles": [
+    "src/features/now-view.js",
+    "src/features/dandori-view.js",
+    "app.js",
+    "styles.css",
+    "sw.js",
+    "releases/v424.json",
+    "tests/now-view.test.js",
+    "tests/dandori-view.test.js"
+  ],
+  "intent": [
+    "発注51 / B2-36・B2-37。版v424。spec.md SHA256 4c684bd45f9f9f662bb43476cb43424bf68f4457e7fe2649475cde51e7ddc321。基準HEAD e27cd93e114e0b08a727433e9b7e4295b49cc190。"
+  ],
+  "changes": [
+    "今日の未着手Blockとルーティン実体を同じカード部品で別枠表示",
+    "ルーティン枠に編集ボタンを配置",
+    "段取りのルーティン候補と専用追加処理を削除",
+    "SW CACHE_NAMEをv424へ更新"
+  ],
+  "uncertainties": [
+    "iOS Safari実機は未確認"
+  ],
+  "reviewFocus": [
+    "ルーティンのみの日の空表示",
+    "宣言モーダルを経由した開始",
+    "段取りの自由追加と入力保持"
+  ],
+  "verification": [
+    "発注51の実走結果はreports/b236/result.mdとcommand-results.jsonlに記録"
+  ],
+  "knownLimitations": [
+    "編集先のroutine画面はv425で実装予定。本版では編集ボタンを押さない。",
+    "iOS Safari実機は未確認"
+  ],
+  "relatedSuites": [
+    "now-view",
+    "dandori-view",
+    "action-registry-core",
+    "daily-operations-registry",
+    "mutation-task-project-e2e",
+    "today-core"
+  ]
+}

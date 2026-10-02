@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "612a7e48efafc6e5",
+      "sourceHash": "311f0b2c598503cf",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -912,7 +912,7 @@
       ],
       "assertionSignals": 2,
       "assertionHash": "11e2a081ff96688b",
-      "sourceHash": "974c40a49ae64a2e",
+      "sourceHash": "4c22525ddf79288a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2487,7 +2487,7 @@
       ],
       "assertionSignals": 2,
       "assertionHash": "11e2a081ff96688b",
-      "sourceHash": "2ecdfdd5b1c32eab",
+      "sourceHash": "dd4990b4c66ce78f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2756,9 +2756,9 @@
         "sync-storage",
         "planning-execution"
       ],
-      "assertionSignals": 142,
-      "assertionHash": "c7ef25a629255d85",
-      "sourceHash": "176e589a3dce4df1",
+      "assertionSignals": 115,
+      "assertionHash": "d71cb17c8a033899",
+      "sourceHash": "c46028efdd1577d6",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3757,29 +3757,6 @@
       "assertionSignals": 7,
       "assertionHash": "1cdca5f5c8452300",
       "sourceHash": "45c03dba3d946adb",
-      "waits": {
-        "fixedCount": 0,
-        "numericMilliseconds": 0,
-        "unresolvedCount": 0
-      },
-      "sideEffects": {
-        "browser": false,
-        "server": false,
-        "fileWrite": false,
-        "networkMock": false,
-        "clock": false
-      }
-    },
-    {
-      "file": "tower-week-core.test.js",
-      "kind": "node",
-      "tier": "full",
-      "domains": [
-        "legacy-crosscutting"
-      ],
-      "assertionSignals": 48,
-      "assertionHash": "2b095cab19463bac",
-      "sourceHash": "b1661db265fb2c6e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

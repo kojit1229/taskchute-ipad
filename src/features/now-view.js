@@ -157,13 +157,16 @@ export function renderNowView() {
   const state = getState(), today = todayISO(), blocks = blocksForDate(today);
   const pending = blocks.filter(b => !b.completed && !b.actualStartAt && !b.actualEndAt)
     .sort((a, b) => String(a.plannedStartAt || "~").localeCompare(String(b.plannedStartAt || "~")) || (a.orderIndex || 0) - (b.orderIndex || 0));
+  const pendingBlocks = pending.filter(b => !b.recurrenceGroupId);
+  const pendingRoutines = pending.filter(b => b.recurrenceGroupId);
   const running = state.blocks.filter(b => !b.deleted && b.actualStartAt && !b.actualEndAt && !b.completed);
   const records = blocks.filter(b => b.completed || (b.actualStartAt && b.actualEndAt));
   const history = state.blocks.filter(b => !b.deleted && b.date < today && (b.completed || (b.actualStartAt && b.actualEndAt)))
     .sort((a, b) => b.date.localeCompare(a.date) || String(b.actualStartAt || "").localeCompare(String(a.actualStartAt || "")));
   return `<div class="now-view" data-motion="${escapeHTML(state.settings.towerMotion || "normal")}" data-paused="${document.hidden ? "1" : "0"}">
-    <section class="now-start"><h2>開始</h2><div class="now-candidate-list">${pending.map(candidateHTML).join("")}</div>
-      ${!blocks.length ? '<p>今日やることはまだ決まっていません。</p><button type="button" data-action="nav" data-view="dandori">段取りで決める</button>' : !pending.length ? '<p>未着手の Block はありません。</p>' : ""}</section>
+    <section class="now-start"><h2>開始</h2><div class="now-candidate-list" data-kind="block">${pendingBlocks.map(candidateHTML).join("")}
+      ${!blocks.length ? '<p>今日やることはまだ決まっていません。</p><button type="button" data-action="nav" data-view="dandori">段取りで決める</button>' : !pendingBlocks.length ? '<p>未着手の Block はありません。</p>' : ""}</div>
+      ${pendingRoutines.length ? `<div class="now-routine"><h3>ルーティン <button type="button" data-action="nav" data-view="routine">編集</button></h3><div class="now-candidate-list" data-kind="routine">${pendingRoutines.map(candidateHTML).join("")}</div></div>` : ""}</section>
     <section class="now-current"><h2>いま</h2>${running.map(b => `<article class="now-running" data-running-id="${escapeHTML(b.id)}"><div class="now-elapsed" data-elapsed-id="${escapeHTML(b.id)}">${elapsedText(b)}</div><small>経過</small><h3>${b.isMIT ? "★ " : ""}${escapeHTML(b.title)}</h3><button type="button" data-action="now-end" data-id="${escapeHTML(b.id)}">終了報告</button></article>`).join("") || '<p>実行中の Block はありません。開始するカードを選んでください。</p>'}</section>
     <section class="now-done"><h2>今日できた</h2>${records.map(recordHTML).join("") || '<p>終えたことが、ここに残ります。</p>'}
       ${history.length ? `<details><summary>これまでの履歴</summary>${history.slice(0, 30).map(b => `<div><small>${escapeHTML(b.date)}</small>${recordHTML(b)}</div>`).join("")}${history.length > 30 ? '<p>ほかの記録は実行タブの実績で見られます</p>' : ""}</details>` : ""}</section>
