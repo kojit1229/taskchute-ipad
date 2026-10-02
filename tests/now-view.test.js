@@ -172,7 +172,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['plain-a', 'plain-b'], 'Block枠は通常Block2件だけを予定順に表示');
     equal(await page.locator('.now-start [data-kind="routine"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineOne.id, routineTwo.id], 'ルーティン枠は今日の実体2件だけを予定順に表示');
     ok((await page.locator('.now-routine h3').innerText()).includes('ルーティン'), 'ルーティン枠の見出し');
-    equal(await page.locator('.now-routine h3 button[data-action="nav"][data-view="routine"][type="button"]').innerText(), '編集', '見出しにルーティン画面への編集ボタン');
+    equal(await page.locator('.now-routine h3 button').count(), 0, '見出しに編集ボタンが無い');
     equal(await page.locator('.now-next > p').allTextContents(), [`11:00 作業 ${routineOne.id}`, '12:00 作業 plain-a', `13:00 作業 ${routineTwo.id}`, '14:00 作業 plain-b'], 'これからはBlockとルーティンを混ぜて予定順に表示');
     const routineCard = page.locator('.now-routine .now-candidate').first();
     equal(await routineCard.locator('[data-action="now-estimate"]').allTextContents(), ['15分', '25分', '50分'], 'ルーティンにも既存の見積ボタン');
