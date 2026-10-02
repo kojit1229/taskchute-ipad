@@ -105,6 +105,8 @@ function check(name, cond, extra = "") {
 //       意図的に追加(222→225)。
 // v418: 段取り(dandori-move/dandori-add-task/dandori-remove)を意図的に追加(225→228)。
 const GOLDEN_CLICK_ACTIONS = [
+  // v425: B2-45 contract update (order 62): direct +6, total +6.
+  "routine-new", "routine-edit", "routine-save", "routine-cancel", "routine-end", "routine-end-confirm",
   "start-overlap-choice",
   "remaining-shift", "remaining-tomorrow",
   "today-add-interruption", "today-add-actual",
@@ -288,6 +290,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // で確信が持てない)、body-scan-*(ポモドーロ完了時トリガー)、
 // は従来どおり移行せず、if連鎖に残した(下のEXPECTED_REMAINING_IF_CHAINに含まれる)。
 const APP_JS_REGISTERED_ACTIONS = [
+  // v425: B2-45 contract update (order 62): direct +6, total +6.
+  "routine-new", "routine-edit", "routine-save", "routine-cancel", "routine-end", "routine-end-confirm",
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",

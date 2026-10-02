@@ -351,6 +351,11 @@
         "v141"
       ]
     },
+    "routine-view": {
+      "paths": ["^src/features/routine-view\\.js$"],
+      "patterns": ["routine-(new|edit|save|cancel|end)"],
+      "suites": ["routine-view", "now-view", "action-registry-core", "recurrence-core", "mutation-recurrence-e2e", "v333"]
+    },
     "dandori-view": {
       "paths": ["^src/features/dandori-view\\.js$"],
       "patterns": ["[Dd]andori"],
