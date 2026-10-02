@@ -308,6 +308,17 @@ test("triggerAnchorPlacements: アンカー完了1分後にルール側Blockを�
   assert.equal(placed[0].plannedEndAt, "2026-08-20T08:11");
 });
 
+test("triggerAnchorPlacements: 23:30〜00:15の日跨ぎルールは45分で配置する", () => {
+  resetState();
+  TODAY = "2026-08-20";
+  currentState.recurrences.push({ id: "overnight", title: "夜のルーティン", kind: "daily",
+    anchor: "anchorNight", startTime: "23:30", endTime: "00:15", deleted: false });
+  triggerAnchorPlacements("anchorNight", "2026-08-20T08:00");
+  const placed = currentState.blocks.find(b => b.recurrenceGroupId === "overnight");
+  assert.equal(placed.plannedStartAt, "2026-08-20T08:01");
+  assert.equal(placed.plannedEndAt, "2026-08-20T08:46");
+});
+
 test("triggerAnchorPlacements: 23:58完了時は開始・終了を23:59へクランプする", () => {
   resetState();
   TODAY = "2026-08-20";

@@ -1,8 +1,13 @@
-let getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin;
+let getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render;
 let visibilityBound = false;
+let declarationStartId = null;
+const declarationDrafts = new Map();
+if (typeof document !== "undefined") document.addEventListener("input", event => {
+  if (event.target?.matches('[data-field="now-declaration"]')) declarationDrafts.set(event.target.dataset.id, event.target.value);
+});
 
 export function configureNowView(deps) {
-  ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin } = deps);
+  ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render } = deps);
   if (!visibilityBound && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       const root = document.querySelector(".now-view");
@@ -14,7 +19,49 @@ export function configureNowView(deps) {
 }
 
 function hasDateTime(value) {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
+  const match = typeof value === "string" && value.match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  return Boolean(match && +match[1] >= 1 && +match[1] <= 12 && +match[2] >= 1 && +match[2] <= 31
+    && +match[3] <= 23 && +match[4] <= 59);
+}
+
+function clearStartedDrafts() {
+  for (const block of getState().blocks) {
+    if (!block.actualStartAt) continue;
+    const id = String(block.id);
+    declarationDrafts.delete(id);
+    if (declarationStartId === id) declarationStartId = null;
+  }
+}
+
+// now-start によるモーダル生成後に初期値を渡す。
+export function withNowDeclaration(action, startId) {
+  const { currentView, settings } = getState();
+  if (currentView !== "now" && !(currentView === "today" && settings.todaySkin === "now")) return action();
+  if (startId !== undefined) declarationStartId = String(startId);
+  if (declarationStartId === null) return action();
+  const result = action();
+  const modal = getState().modal, input = document.querySelector('[data-declare-note]');
+  const id = String(modal?.id);
+  if (modal?.type === "declare" && id === declarationStartId && input && declarationDrafts.has(id) && input.dataset.nowDraftId !== id) {
+    input.value = declarationDrafts.get(id);
+    input.dataset.nowDraftId = id;
+  }
+  return result;
+}
+
+export function setNowEstimate(id, minutes) {
+  const block = getState().blocks.find(b => String(b.id) === id && !b.deleted);
+  if (!block || block.completed || block.actualStartAt || block.actualEndAt || ![15, 25, 50].includes(minutes)) return;
+  if (updateBlockField(block.id, "estimateMin", minutes)) render();
+}
+
+function candidateHTML(block) {
+  const id = escapeHTML(block.id), estimate = resolveEstimateMin(block);
+  return `<article class="now-candidate">
+    <div class="now-candidates"><button type="button" data-action="now-start" data-id="${id}"><strong>${block.isMIT ? "★ " : ""}${escapeHTML(block.title)}</strong><small>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(estimate)}分</small></button></div>
+    <input type="text" data-field="now-declaration" data-id="${id}" aria-label="${escapeHTML(block.title)}の宣言(任意)" placeholder="宣言(任意)" value="${escapeHTML(declarationDrafts.get(String(block.id)) || "")}">
+    <div class="now-estimates" role="group" aria-label="見積">${[15, 25, 50].map(minutes => `<span><button type="button" data-action="now-estimate" data-id="${id}" data-minutes="${minutes}" aria-pressed="${estimate === minutes}">${minutes}分</button></span>`).join("")}</div>
+  </article>`;
 }
 
 function elapsedText(block) {
@@ -42,6 +89,7 @@ function recordHTML(block) {
 }
 
 export function renderNowView() {
+  clearStartedDrafts();
   const state = getState(), today = todayISO(), blocks = blocksForDate(today);
   const pending = blocks.filter(b => !b.completed && !b.actualStartAt && !b.actualEndAt)
     .sort((a, b) => String(a.plannedStartAt || "~").localeCompare(String(b.plannedStartAt || "~")) || (a.orderIndex || 0) - (b.orderIndex || 0));
@@ -50,7 +98,7 @@ export function renderNowView() {
   const history = state.blocks.filter(b => !b.deleted && b.date < today && (b.completed || (b.actualStartAt && b.actualEndAt)))
     .sort((a, b) => b.date.localeCompare(a.date) || String(b.actualStartAt || "").localeCompare(String(a.actualStartAt || "")));
   return `<div class="now-view" data-motion="${escapeHTML(state.settings.towerMotion || "normal")}" data-paused="${document.hidden ? "1" : "0"}">
-    <section class="now-start"><h2>開始</h2><div class="now-candidates">${pending.map(b => `<button type="button" data-action="now-start" data-id="${escapeHTML(b.id)}"><strong>${b.isMIT ? "★ " : ""}${escapeHTML(b.title)}</strong><small>${escapeHTML(timeFromDateTime(b.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(resolveEstimateMin(b))}分</small></button>`).join("")}</div>
+    <section class="now-start"><h2>開始</h2><div class="now-candidate-list">${pending.map(candidateHTML).join("")}</div>
       ${!blocks.length ? '<p>今日やることはまだ決まっていません。</p><button type="button" data-action="nav" data-view="dandori">段取りで決める</button>' : !pending.length ? '<p>未着手の Block はありません。</p>' : ""}</section>
     <section class="now-current"><h2>いま</h2>${running.map(b => `<article class="now-running" data-running-id="${escapeHTML(b.id)}"><div class="now-elapsed" data-elapsed-id="${escapeHTML(b.id)}">${elapsedText(b)}</div><small>経過</small><h3>${b.isMIT ? "★ " : ""}${escapeHTML(b.title)}</h3><button type="button" data-action="now-end" data-id="${escapeHTML(b.id)}">終了報告</button></article>`).join("") || '<p>実行中の Block はありません。開始するカードを選んでください。</p>'}</section>
     <section class="now-done"><h2>今日できた</h2>${records.map(recordHTML).join("") || '<p>終えたことが、ここに残ります。</p>'}
@@ -61,6 +109,7 @@ export function renderNowView() {
 }
 
 export function updateNowViewTick() {
+  clearStartedDrafts();
   if (document.hidden) return;
   const root = document.querySelector(".now-view");
   if (!root) return;

@@ -84,7 +84,8 @@ function routineEstimateMin(rule) {
     const match = time.match(/^(\d{2}):(\d{2})/);
     return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
   };
-  return Math.max(1, minutes(rule.endTime) - minutes(rule.startTime));
+  const duration = minutes(rule.endTime) - minutes(rule.startTime);
+  return Math.max(1, duration < 0 ? duration + 1440 : duration);
 }
 function addCandidate(input) {
   const date = deps.todayISO(), plannedStartAt = tailStart(date);

@@ -220,7 +220,7 @@ function triggerAnchorPlacements(anchorId, completedAtDateTime) {
     if (already) return;
     const inst = makeRecurrenceInstance(r, today);
     const durMin = (r.startTime && r.endTime)
-      ? Math.max(1, minutesOf(`${today}T${r.endTime}`) - minutesOf(`${today}T${r.startTime}`))
+      ? Math.max(1, (minutesOf(`${today}T${r.endTime}`) - minutesOf(`${today}T${r.startTime}`) + 1440) % 1440)
       : 10;
     const endMin = Math.min(23 * 60 + 59, afterMin + durMin);
     inst.plannedStartAt = `${today}T${startTime}`;

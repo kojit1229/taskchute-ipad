@@ -251,6 +251,12 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
         document.querySelector('.dandori-view').outerHTML = (await import('/src/features/dandori-view.js')).renderDandoriView();
       }, values);
     }
+    await setRoutines([{ id: 'overnight', title: '夜のルーティン', kind: 'daily', startTime: '23:30', endTime: '00:15' }]);
+    const overnightButton = page.locator('[data-action="dandori-add-routine"][data-id="overnight"]');
+    ok((await overnightButton.innerText()).includes('見積 45分'), '日跨ぎ23:30〜00:15のルーティン候補は45分');
+    await overnightButton.click();
+    equal((await stored()).blocks.find(b => b.title === '夜のルーティン').estimateMin, 45, '日跨ぎルーティンを45分のBlockとして保存');
+    await seed([block('tail', '10:00', '10:23', { completed: true, actualEndAt: `${day}T10:27:01` })]);
     await setRoutines(rules);
     equal(await page.locator('[data-action="dandori-add-routine"]').evaluateAll(els => els.map(el => el.dataset.id)),
       ['daily', 'weekdays', 'monthly', 'weekly'], '有効な4種類だけをルーティン候補へ');
