@@ -32,7 +32,8 @@ function clearStartedDrafts() {
 
 // モーダル生成後に初期値を渡す。重複開始の確認を挟んだ場合も同じ経路で渡す。
 export function withNowDeclaration(action, startId) {
-  if (getState().currentView !== "now") return action();
+  const { currentView, settings } = getState();
+  if (currentView !== "now" && !(currentView === "today" && settings.todaySkin === "now")) return action();
   if (startId !== undefined) declarationStartId = String(startId);
   if (declarationStartId === null) return action();
   const result = action();

@@ -113,6 +113,16 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('[data-declare-note]').inputValue(), '', '今日タブTOWERからの開始にはいまの宣言下書きを差し込まない');
     await page.locator('[data-action="declare-confirm"]').click();
     equal((await stored()).declarations.find(d => d.blockId === 'tower-draft').note, '', 'TOWERの宣言確定にもいまの下書きを差し込まない');
+    await seed([block('today-skin-draft')], 'now');
+    await page.locator('#app[data-view="today"] [data-field="now-declaration"][data-id="today-skin-draft"]').fill(draft);
+    await page.locator('#app[data-view="today"] [data-action="now-start"][data-id="today-skin-draft"]').click();
+    equal(await page.locator('[data-declare-note]').inputValue(), draft, '今日タブの見た目いまでもカードの宣言をモーダルへ渡す');
+    await seed([block('today-skin-draft')], 'tower');
+    await page.locator('[data-action="nav"][data-view="now"]:visible').click();
+    await page.locator('[data-field="now-declaration"][data-id="today-skin-draft"]').fill(draft);
+    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
+    await page.locator('.today-tower [data-action="now-start"][data-id="today-skin-draft"]').click();
+    equal(await page.locator('[data-declare-note]').inputValue(), '', '同じBlockも今日タブの見た目TOWERではいまタブの宣言を混ぜない');
     await page.clock.setFixedTime(at(12, 0));
     const nextDay = '2026-09-30';
     await seed([
