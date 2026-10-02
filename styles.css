@@ -6345,7 +6345,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-skin="now"] .now-tower[data-today="1"] { background:var(--accent); box-shadow:0 0 8px var(--accent-soft); }
 #app[data-skin="now"] .now-tower[data-future="1"] { opacity:.35; }
 #app[data-skin="now"] .now-tower-lines { position:absolute; inset:0; pointer-events:none; }
-#app[data-skin="now"] .now-tower-line { position:absolute; left:0; right:0; border-top:1px dashed var(--line); text-align:right; font-size:11px; line-height:14px; }
+#app[data-skin="now"] .now-tower-line { position:absolute; left:0; right:0; border-bottom:1px dashed var(--line); text-align:right; font-size:11px; line-height:14px; }
 #app[data-skin="now"] .now-ring-frame { position:relative; width:96px; height:96px; margin:20px auto 0; display:grid; place-items:center; }
 #app[data-skin="now"] .now-ring-frame::before { content:""; position:absolute; inset:4px; border:8px solid var(--line); border-radius:50%; }
 #app[data-skin="now"] .now-ring-frame svg { position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); }

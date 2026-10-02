@@ -356,6 +356,13 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-tower-line').allTextContents(), ['2h'], 'G4b: 実績0も2hの線');
     equal(await page.locator('.now-yesterday').textContent(), '昨日 0時間00分', 'G4b: 昨日0分も表示');
     equal(await page.locator('.now-beaten:visible').count(), 0, 'G4b: 今日と昨日が0なら昨日超えなし');
+    await seedDisplayBlocks([ended('two-hours', day, '09:00:00', '11:00:00')]);
+    const twoHourAlignment = await page.locator('.now-tower-frame').evaluate(frame => {
+      const book = frame.querySelector('.now-tower[data-today="1"]').getBoundingClientRect();
+      const line = [...frame.querySelectorAll('.now-tower-line')].find(el => el.textContent === '2h').getBoundingClientRect();
+      return Math.abs(book.top - line.bottom);
+    });
+    ok(twoHourAlignment <= 1, 'G4b: 2時間の本の天面と2h基準線の下辺の差は1px以内');
     await seedDisplayBlocks([ended('long', day, '09:00:00', '11:30:00')]);
     equal(await page.locator('.now-tower-line').allTextContents(), ['2h', '4h'], 'G4b: 天井150分なら切り上げ2本');
     equal(await bars.locator('[data-today="1"]').count(), 0, 'G4b: 本の内部に本を重ねない');
