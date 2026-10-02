@@ -341,7 +341,7 @@ configureGithubSync({
 });
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
-configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, saveAndRender });
+configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
   fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast, makeBlock, renderDeferringForFocus, getOtherTask, getCategoryNames });
@@ -1216,7 +1216,7 @@ registerActions({
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
   "toggle-block": ({ id }) => toggleBlock(id),
   "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
-  "now-start": ({ id }) => withNowDeclaration(() => openDeclareModal(id, "block")),
+  "now-start": ({ id }) => withNowDeclaration(() => openDeclareModal(id, "block"), id),
   "now-estimate": ({ id, target }) => setNowEstimate(id, Number(target.dataset.minutes)),
   "now-end": ({ id }) => openReportModal(id, "block"),
   "bulk-approve-planned": () => bulkApproveAsPlanned(),

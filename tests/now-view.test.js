@@ -68,7 +68,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.goto(`http://localhost:${port}/`);
     await page.locator('[data-action="gate-continue"]').waitFor();
     await passGithubGate(page);
-    await seed([block('draft-a', { estimateMin: 15 }), block('draft-b', { estimateMin: 50 })], 'now');
+    await seed([block('draft-a', { estimateMin: 15 }), block('draft-b', { estimateMin: 50, updatedAt: `${day}T11:00:00` })], 'now');
+    await page.locator('[data-action="nav"][data-view="now"]:visible').click();
     const declaration = page.locator('[data-field="now-declaration"][data-id="draft-a"]');
     const draft = 'まず <紙> を1枚 & "整理"';
     await declaration.fill(draft);
@@ -79,7 +80,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await declaration.dispatchEvent('compositionend', { data: draft });
     equal(await declaration.inputValue(), draft, '宣言欄のクリック・入力で開始しない');
     equal((await live()).blocks.find(b => b.id === 'draft-a').actualStartAt, '', '宣言下書きは未開始のまま');
+    const previousUpdatedAt = (await live()).blocks.find(b => b.id === 'draft-b').updatedAt;
+    await page.clock.setFixedTime(at(12, 1));
     await page.locator('[data-action="now-estimate"][data-id="draft-b"][data-minutes="25"]').click();
+    ok((await stored()).blocks.find(b => b.id === 'draft-b').updatedAt > previousUpdatedAt, '見積ボタンで保存したBlock.updatedAtが前より新しい');
     equal(await declaration.inputValue(), draft, '別カードの見積で全再描画しても宣言下書きを保持');
     equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '見積25をBlockへ反映');
     equal((await stored()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '見積25を既存保存経路で保存');
@@ -101,6 +105,15 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.locator('[data-action="now-estimate"][data-id="draft-b"]').first().waitFor();
     equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '再読込後も見積25を保持');
     equal(await page.locator('[data-action="now-estimate"][data-id="draft-b"][aria-pressed="true"]').getAttribute('data-minutes'), '25', '再読込後も25分が選択状態');
+    await seed([block('tower-draft')], 'tower');
+    await page.locator('[data-action="nav"][data-view="now"]:visible').click();
+    await page.locator('[data-field="now-declaration"][data-id="tower-draft"]').fill('いま専用の下書き');
+    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
+    await page.locator('.today-tower [data-action="now-start"][data-id="tower-draft"]').click();
+    equal(await page.locator('[data-declare-note]').inputValue(), '', '今日タブTOWERからの開始にはいまの宣言下書きを差し込まない');
+    await page.locator('[data-action="declare-confirm"]').click();
+    equal((await stored()).declarations.find(d => d.blockId === 'tower-draft').note, '', 'TOWERの宣言確定にもいまの下書きを差し込まない');
+    await page.clock.setFixedTime(at(12, 0));
     const nextDay = '2026-09-30';
     await seed([
       block('previous-candidate'),

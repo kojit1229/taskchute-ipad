@@ -1,12 +1,13 @@
-let getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, saveAndRender;
+let getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render;
 let visibilityBound = false;
+let declarationStartId = null;
 const declarationDrafts = new Map();
 if (typeof document !== "undefined") document.addEventListener("input", event => {
   if (event.target?.matches('[data-field="now-declaration"]')) declarationDrafts.set(event.target.dataset.id, event.target.value);
 });
 
 export function configureNowView(deps) {
-  ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, saveAndRender } = deps);
+  ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render } = deps);
   if (!visibilityBound && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       const root = document.querySelector(".now-view");
@@ -30,23 +31,26 @@ function clearStartedDrafts() {
 }
 
 // モーダル生成後に初期値を渡す。重複開始の確認を挟んだ場合も同じ経路で渡す。
-export function withNowDeclaration(action) {
+export function withNowDeclaration(action, startId) {
+  if (getState().currentView !== "now") return action();
+  if (startId !== undefined) declarationStartId = String(startId);
+  if (declarationStartId === null) return action();
   const result = action();
   clearStartedDrafts();
   const modal = getState().modal, input = document.querySelector('[data-declare-note]');
   const id = String(modal?.id);
-  if (modal?.type === "declare" && input && declarationDrafts.has(id) && input.dataset.nowDraftId !== id) {
+  if (modal?.type === "declare" && id === declarationStartId && input && declarationDrafts.has(id) && input.dataset.nowDraftId !== id) {
     input.value = declarationDrafts.get(id);
     input.dataset.nowDraftId = id;
   }
+  if (getState().blocks.some(b => String(b.id) === declarationStartId && b.actualStartAt)) declarationStartId = null;
   return result;
 }
 
 export function setNowEstimate(id, minutes) {
   const block = getState().blocks.find(b => String(b.id) === id && !b.deleted);
   if (!block || block.completed || block.actualStartAt || block.actualEndAt || ![15, 25, 50].includes(minutes)) return;
-  block.estimateMin = minutes;
-  saveAndRender();
+  if (updateBlockField(block.id, "estimateMin", minutes)) render();
 }
 
 function candidateHTML(block) {
