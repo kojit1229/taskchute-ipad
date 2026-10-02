@@ -105,6 +105,14 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.locator('[data-action="now-estimate"][data-id="draft-b"]').first().waitFor();
     equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '再読込後も見積25を保持');
     equal(await page.locator('[data-action="now-estimate"][data-id="draft-b"][aria-pressed="true"]').getAttribute('data-minutes'), '25', '再読込後も25分が選択状態');
+    for (const choice of ['end', 'parallel']) {
+      await seed([block('overlap-running', { actualStartAt: `${day}T11:55:00` }), block('overlap-draft')], 'now');
+      await page.locator('[data-action="nav"][data-view="now"]:visible').click();
+      await page.locator('[data-field="now-declaration"][data-id="overlap-draft"]').fill(draft);
+      await page.locator('[data-action="now-start"][data-id="overlap-draft"]').click();
+      await page.locator(`[data-action="start-overlap-choice"][data-choice="${choice}"]`).click();
+      equal(await page.locator('[data-declare-note]').inputValue(), draft, `重複開始の${choice}選択後もカードの宣言をモーダルへ渡す`);
+    }
     await seed([block('tower-draft')], 'tower');
     await page.locator('[data-action="nav"][data-view="now"]:visible').click();
     await page.locator('[data-field="now-declaration"][data-id="tower-draft"]').fill('いま専用の下書き');
