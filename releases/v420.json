@@ -1,0 +1,52 @@
+{
+  "version": 420,
+  "date": "2026-10-02",
+  "title": "段取りにルーティン候補と自由追加",
+  "summary": "段取りの候補からルーティンと自由入力を今日の末尾へ追加。開いたまま日付を跨ぐと今日やるとタイムラインを翌日へ切り替える。",
+  "changedFiles": [
+    "app.js",
+    "src/features/dandori-view.js",
+    "styles.css",
+    "sw.js",
+    "releases/v420.json",
+    "tests/dandori-view.test.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md"
+  ],
+  "intent": [
+    "発注28 / 束2b-1。受入条件 spec.md SHA256 216b245f4ce7c9b8d68352df78d783b8f164950db8bdd0cf1b0af4796f6baca6。基準HEAD e9fa3ea0ab49833679490fde3c8e11aab8b8d9e6。"
+  ],
+  "changes": [
+    "有効なルーティン候補の表示・今日だけのBlock追加・重複防止",
+    "自由入力を既存makeBlockと保存経路で追加",
+    "段取り専用tickerで日付変更を検知して上下を今日へ再描画",
+    "SW CACHE_NAMEをv420へ更新"
+  ],
+  "uncertainties": [
+    "iOS Safari実機は未確認"
+  ],
+  "reviewFocus": [
+    "末尾の最大終了と5分刻み",
+    "ルール値の継承と今日だけの追加",
+    "保存再読込・日跨ぎ・375px入力寸法"
+  ],
+  "verification": [
+    "発注28の実走結果はreports/b2b1/result.mdとcommand-results.jsonlに記録"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機は未確認"
+  ],
+  "relatedSuites": [
+    "dandori-view",
+    "now-view",
+    "recurrence-core",
+    "mutation-recurrence-e2e",
+    "exec-timeline-e2e",
+    "action-registry-core",
+    "track-crud-core",
+    "v258",
+    "v264"
+  ]
+}

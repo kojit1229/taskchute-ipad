@@ -235,6 +235,131 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       equal((await live()).currentView, 'dandori', '空のいまから段取りタブへ');
       await page.clock.setSystemTime(new Date(2026, 8, 29, 10, 0));
     }
+    await page.setViewportSize({ width: 375, height: 900 });
+    await seed([block('tail', '10:00', '10:23', { completed: true, actualEndAt: `${day}T10:27:01` })]);
+    const rules = [
+      { id: 'daily', title: '朝の支度', kind: 'daily', startTime: '06:00', endTime: '06:25', category: '生活', taskId: 'routine-task' },
+      { id: 'weekdays', title: '平日の整理', kind: 'weekdays', startTime: '07:00', endTime: '07:15' },
+      { id: 'monthly', title: '月の整理', kind: 'monthly', startTime: '08:00', endTime: '08:50' },
+      { id: 'weekly', title: '週の整理', kind: 'weekly', startTime: '09:00', endTime: '09:10' },
+      { id: 'deleted-rule', title: '削除済み', kind: 'daily', deleted: true },
+      { id: 'unsupported', title: '対象外', kind: 'none' }
+    ];
+    async function setRoutines(values) {
+      await page.evaluate(async values => {
+        (await import('/src/state/store.js')).state.recurrences = values;
+        document.querySelector('.dandori-view').outerHTML = (await import('/src/features/dandori-view.js')).renderDandoriView();
+      }, values);
+    }
+    await setRoutines(rules);
+    equal(await page.locator('[data-action="dandori-add-routine"]').evaluateAll(els => els.map(el => el.dataset.id)),
+      ['daily', 'weekdays', 'monthly', 'weekly'], '有効な4種類だけをルーティン候補へ');
+    ok((await page.locator('[data-action="dandori-add-routine"][data-id="daily"]').innerText()).includes('朝の支度\nいつも 06:00 ・ 見積 25分'), 'ルーティンの題名・いつもの時刻・見積');
+    await page.locator('[data-action="dandori-add-routine"][data-id="daily"]').click();
+    const routineBlock = (await stored()).blocks.find(b => b.title === '朝の支度');
+    equal([routineBlock.date, routineBlock.plannedStartAt, routineBlock.plannedEndAt], [day, `${day}T10:30:00`, `${day}T10:55:00`], '完了Blockも含む予定・実績の最大終了を5分に切り上げ');
+    equal([routineBlock.estimateMin, routineBlock.category, routineBlock.taskId], [25, '生活', 'routine-task'], 'ルールの見積・カテゴリ・taskIdを引き継ぐ');
+    ok(!routineBlock.recurrenceGroupId, '今日だけのBlockはルーティン実体にしない');
+    const routineButton = page.locator('[data-action="dandori-add-routine"][data-id="daily"]');
+    equal(await routineButton.getAttribute('aria-disabled'), 'true', '同題名の追加後は非活性表示');
+    ok(await routineButton.evaluate(el => Number(getComputedStyle(el).opacity) < 1), '追加したルーティン候補は薄い');
+    const countAfterRoutine = (await stored()).blocks.length;
+    await routineButton.evaluate(el => el.click());
+    equal((await stored()).blocks.length, countAfterRoutine, 'ルーティン再クリックで二重作成なし');
+    await page.reload(); await page.locator('.dandori-view').waitFor();
+    equal((await live()).blocks.find(b => b.id === routineBlock.id), { ...routineBlock, copiedFromId: '', isMIT: false, source: '' }, 'ルーティンの手動追加Blockは再読込後も残る');
+    await seed([block(`rec_daily_${day}`, '06:00', '06:25', { title: '実体の別名' })]);
+    await setRoutines(rules);
+    equal(await routineButton.getAttribute('aria-disabled'), 'true', 'rec_ruleId_date実体があれば初めから非活性');
+    ok(await routineButton.evaluate(el => Number(getComputedStyle(el).opacity) < 1), '実体があるルーティン候補は薄い');
+    await routineButton.evaluate(el => el.click());
+    equal((await live()).blocks.length, 1, '別名のルーティン実体でも二重作成なし');
+    await seed([block('same-title-other-task', '09:00', '09:25', { title: rules[0].title, taskId: 'other-task' })]);
+    await setRoutines(rules);
+    equal(await routineButton.getAttribute('aria-disabled'), null, '別taskIdの同名Blockでは未追加');
+    await routineButton.click();
+    equal((await stored()).blocks.filter(b => b.title === rules[0].title && b.taskId === rules[0].taskId).length, 1, '別タスクの同名Blockがあっても追加できる');
+    await seed([block('same-title-same-task', '09:00', '09:25', { title: rules[0].title, taskId: rules[0].taskId })]);
+    await setRoutines(rules);
+    equal(await routineButton.getAttribute('aria-disabled'), 'true', '同じtaskId・同名Blockは追加済み');
+    ok(await routineButton.evaluate(el => Number(getComputedStyle(el).opacity) < 1), '同じtaskId・同名Blockの候補は薄い');
+    await routineButton.evaluate(el => el.click());
+    equal((await live()).blocks.length, 1, '同じtaskId・同名Blockを二重追加しない');
+    await seed([block('no-task-title', '09:00', '09:25', { title: rules[1].title })]);
+    await setRoutines(rules);
+    equal(await page.locator('[data-action="dandori-add-routine"][data-id="weekdays"]').getAttribute('aria-disabled'), 'true', 'taskIdなしのルールは空taskIdの同名Blockと一致');
+    await seed([]);
+    await setRoutines([{ ...rules[0], taskId: '' }]);
+    const otherTaskId = (await live()).tasks.find(t => t.kind === 'other' && !t.deleted).id;
+    ok((await routineButton.innerText()).includes('見積 25分'), 'taskId空・生活カテゴリの実ルール形も候補は25分');
+    await routineButton.click();
+    const unlinkedRoutineBlock = (await stored()).blocks.find(b => b.title === rules[0].title);
+    equal([unlinkedRoutineBlock.estimateMin, unlinkedRoutineBlock.taskId], [25, otherTaskId], '空taskIdのルールは25分・その他Taskで追加');
+    await page.reload(); await page.locator('.dandori-view').waitFor();
+    equal((await live()).blocks.find(b => b.id === unlinkedRoutineBlock.id).taskId, otherTaskId, '再読込後の実物もその他Task');
+    equal(await routineButton.getAttribute('aria-disabled'), 'true', '空taskIdルールは再読込後も追加済み');
+    ok(await routineButton.evaluate(el => Number(getComputedStyle(el).opacity) < 1), '空taskIdルールの候補は再読込後も薄い');
+    const countAfterReload = (await live()).blocks.length;
+    await routineButton.evaluate(el => el.click());
+    equal((await live()).blocks.length, countAfterReload, '空taskIdルールは再読込後も二重追加しない');
+    await seed([block('draft-tail', '10:00', '10:23')]);
+    await setRoutines(rules);
+    const draftInput = page.locator('[data-field="dandori-free-title"]');
+    const draftTitle = '途中の "作業" <確認> & 続き';
+    await draftInput.fill(draftTitle);
+    await routineButton.click();
+    equal(await draftInput.inputValue(), draftTitle, '候補追加のsaveAndRender後も入力途中の文字を保持');
+    await page.locator('[data-action="dandori-add-free"]').click();
+    equal(await draftInput.inputValue(), '', '保持した文字も足すと消える');
+    equal((await stored()).blocks.filter(b => b.title === draftTitle).length, 1, '保持した文字で自由追加できる');
+    await setRoutines(rules);
+    equal(await draftInput.inputValue(), '', '追加後の再描画でも入力は空');
+    await draftInput.fill('消す途中');
+    await draftInput.fill('');
+    await setRoutines(rules);
+    equal(await draftInput.inputValue(), '', '手動で空にした後の再描画でも入力は空');
+    await seed([block('free-tail', '10:00', '10:23')]);
+    const freeInput = page.locator('[data-field="dandori-free-title"]');
+    const freeButton = page.locator('[data-action="dandori-add-free"]');
+    await freeInput.fill('  自由な作業  ');
+    await freeInput.dispatchEvent('compositionstart');
+    await freeInput.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, keyCode: 229 });
+    equal((await live()).blocks.length, 1, 'IME変換確定のEnterで追加しない');
+    await freeInput.dispatchEvent('compositionend', { data: '自由な作業' });
+    equal(await freeInput.inputValue(), '  自由な作業  ', 'IME確定で入力を消さない');
+    await freeButton.click();
+    const freeBlock = (await stored()).blocks.find(b => b.title === '自由な作業');
+    equal([freeBlock.date, freeBlock.plannedStartAt, freeBlock.plannedEndAt], [day, `${day}T10:25:00`, `${day}T10:55:00`], '自由追加は今日の末尾・既定見積30分');
+    ok(!freeBlock.recurrenceGroupId, '自由追加に繰り返しの紐付けなし');
+    equal(await freeInput.inputValue(), '', '自由追加後は入力欄を空にする');
+    await freeButton.click();
+    await freeInput.fill('   '); await freeButton.click();
+    equal((await stored()).blocks.length, 2, '空入力と空白だけの追加は何もしない');
+    await page.reload(); await page.locator('.dandori-view').waitFor();
+    equal((await live()).blocks.find(b => b.id === freeBlock.id), { ...freeBlock, copiedFromId: '', isMIT: false, source: '' }, '自由追加Blockは再読込後も残る');
+    await setRoutines(rules);
+    for (const width of [375, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const geometry = await page.locator('.dandori-view').evaluate(root => ({
+        fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        targets: [...root.querySelectorAll('button, input')].every(el => { const r = el.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; }),
+        font: parseFloat(getComputedStyle(root.querySelector('[data-field="dandori-free-title"]')).fontSize)
+      }));
+      ok(geometry.fits, `${width}px 新候補に横はみ出しなし`);
+      ok(geometry.targets, `${width}px 新候補の入力・操作は44px以上`);
+      ok(geometry.font >= 16, `${width}px 自由追加入力は16px以上`);
+      await screenshot(width, 'dandori-b2b1');
+    }
+    const tomorrow = '2026-09-30';
+    await seed([block('old-day'), block('next-day', '08:00', '08:25', { date: tomorrow,
+      plannedStartAt: `${tomorrow}T08:00:00`, plannedEndAt: `${tomorrow}T08:25:00` })]);
+    await page.clock.setSystemTime(new Date(2026, 8, 30, 0, 1));
+    await page.clock.runFor(1000);
+    equal((await live()).selectedDate, tomorrow, '段取りを開いたまま0時跨ぎで選択日は翌日');
+    ok((await page.locator('.dandori-view header').innerText()).includes(`今日 ${tomorrow}`), '日跨ぎで上段の日付も翌日');
+    equal(await order(), ['next-day'], '日跨ぎで今日やるを翌日分へ再描画');
+    const nextTimeline = await page.locator('.dandori-layout .timeline-tower').innerText();
+    ok(nextTimeline.includes('作業 next-day') && !nextTimeline.includes('作業 old-day'), '日跨ぎで下段タイムラインも翌日分へ再描画');
     equal(errors, [], 'ブラウザ例外なし');
     console.log(`PASS dandori-view: ${assertions} assertions`);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
