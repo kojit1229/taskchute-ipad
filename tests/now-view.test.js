@@ -36,9 +36,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
   // 再読込のnormalizeStateは不正日時を空にするため、表示境界へ直接投入する。
   async function seedDisplayBlocks(blocks) {
     await seed([], 'now');
-    await page.evaluate(async blocks => {
+    return page.evaluate(async blocks => {
       (await import('/src/state/store.js')).state.blocks = blocks;
       document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
+      return document.querySelector('.now-beaten').dataset.beaten;
     }, blocks);
   }
   const at = (h, m, s = 0, date = 29) => new Date(2026, 8, date, h, m, s);
@@ -326,7 +327,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     const redraw = () => page.evaluate(async () => {
       document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
     });
-    await seedDisplayBlocks(weekFixtures);
+    const firstBeaten = await seedDisplayBlocks(weekFixtures);
     equal(await bars.evaluateAll(els => els.map(el => el.dataset.date)),
       ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'], 'G4b: 暦週は月〜日の7本');
     equal(await bars.evaluateAll(els => els.map(el => el.getAttribute('aria-label'))),
@@ -339,7 +340,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await ring.locator('circle').count(), 1, 'G4b: SVGの円は1つ');
     ok(Math.abs(await progress() - 1 / 3) < 1e-9, 'G4b: 70分のdasharrayは1/3周');
     equal(await page.locator('.now-yesterday').textContent(), '昨日 1時間05分', 'G4b: 昨日の実績を常に表示');
-    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: 昨日超えの初回描画');
+    equal(firstBeaten, '1', 'G4b: 昨日超えの初回描画');
     await redraw();
     equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '0', 'G4b: 同日の再描画はきらめきを繰り返さない');
     const geometry = await page.locator('.now-tower-frame').evaluate(frame => {
@@ -392,6 +393,9 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await inputDraft.inputValue(), '入力中の宣言', 'G4b: 集計tickでも入力中の宣言を保持');
     ok(await inputDraft.evaluate(el => el === document.activeElement), 'G4b: 集計tickでもIMEのフォーカスを保持');
     await inputDraft.dispatchEvent('compositionend', { data: '入力中の宣言' });
+    await tick();
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: 後続tickでもきらめきの1を保持');
+    await redraw();
     await tick();
     equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '0', 'G4b: 後続tickで演出を再発火しない');
     const pausedStack = await page.locator('.now-stack').innerHTML();

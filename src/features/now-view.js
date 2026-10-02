@@ -148,7 +148,7 @@ function updateStackTick(root, blocks, today) {
   frame.querySelector("strong").textContent = ring.laps;
   const beaten = stack.querySelector(".now-beaten");
   beaten.hidden = !beat.beaten;
-  beaten.dataset.beaten = beatenFlag(beat, today);
+  if (beat.beaten && beatenShownFor !== today) beaten.dataset.beaten = beatenFlag(beat, today);
   stack.querySelector(".now-yesterday").textContent = `昨日 ${durationText(beat.yesterday)}`;
 }
 
