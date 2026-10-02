@@ -371,6 +371,15 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       const frame = el.closest('.now-tower-frame').getBoundingClientRect(), line = el.getBoundingClientRect();
       return line.top >= frame.top && line.bottom <= frame.bottom;
     })), 'G4b: 切り上げた4hの基準線も枠内に見える');
+    await seedDisplayBlocks([ended('tall-sunday', '2026-10-04', '09:00:00', '12:00:00')]);
+    const labelOutsideSunday = await page.locator('.now-tower-frame').evaluate(frame => {
+      const sunday = frame.querySelector('.now-tower[data-date="2026-10-04"]').getBoundingClientRect();
+      const line = [...frame.querySelectorAll('.now-tower-line')].find(el => el.textContent === '2h');
+      const text = document.createRange();
+      text.selectNodeContents(line);
+      return text.getBoundingClientRect().left >= sunday.right;
+    });
+    ok(labelOutsideSunday, 'G4b: 2hの文字の左端は日曜の本の右端以上で重ならない');
     await page.clock.setFixedTime(at(12, 0, 0, 28));
     await seedDisplayBlocks([ended('sunday-yesterday', '2026-09-27', '09:00:00', '10:05:00'),
       ended('monday-today', '2026-09-28', '09:00:00', '09:30:00')]);
