@@ -1,5 +1,9 @@
 let deps;
 let renderedDate = null, tickerId = null;
+let freeTitle = "";
+if (typeof document !== "undefined") document.addEventListener("input", event => {
+  if (event.target?.matches('[data-field="dandori-free-title"]')) freeTitle = event.target.value;
+});
 export function configureDandoriView(value) { deps = value; }
 
 function updateDandoriTick() {
@@ -68,7 +72,8 @@ function routines() {
   return deps.getState().recurrences.filter(r => !r.deleted && ["daily", "weekdays", "weekly", "monthly"].includes(r.kind));
 }
 function routineScheduled(rule, today) {
-  return deps.blocksForDate(today).some(b => b.id === `rec_${rule.id}_${today}` || b.title === rule.title);
+  return deps.blocksForDate(today).some(b => b.id === `rec_${rule.id}_${today}`
+    || (b.title === rule.title && (b.taskId || "") === (rule.taskId || "")));
 }
 function addCandidate(input) {
   const date = deps.todayISO(), plannedStartAt = tailStart(date);
@@ -87,6 +92,7 @@ export function addDandoriFree() {
   const title = input?.value.trim();
   if (!title) return;
   input.value = "";
+  freeTitle = "";
   addCandidate({ title, taskId: deps.getOtherTask()?.id || "", category: deps.getCategoryNames()[0] || "" });
 }
 export function renderDandoriView() {
@@ -108,7 +114,7 @@ export function renderDandoriView() {
         <small>${e(timeFromDateTime(b.plannedStartAt) || "--:--")} ・ 見積 ${resolveEstimateMin(b)}分 ・ ${e(b.category || "未分類")}</small></div>
         <div class="dandori-ops">${button("dandori-move", b.id, "▲", `data-dir="up" aria-label="上へ"${i === 0 ? " disabled" : ""}`)}${button("dandori-move", b.id, "▼", `data-dir="down" aria-label="下へ"${i === blocks.length - 1 ? " disabled" : ""}`)}${button("edit-block", b.id, "直す")}${button("dandori-remove", b.id, "外す")}</div></article>`).join("") || "<p>今日やることを候補から選びましょう。</p>"}
     </section><section class="dandori-candidates"><h3>候補</h3>
-      <div class="dandori-free"><input data-field="dandori-free-title" aria-label="自由追加" placeholder="自由に追加(Block名)" autocomplete="off">${button("dandori-add-free", "", "足す")}</div>
+      <div class="dandori-free"><input data-field="dandori-free-title" value="${e(freeTitle)}" aria-label="自由追加" placeholder="自由に追加(Block名)" autocomplete="off">${button("dandori-add-free", "", "足す")}</div>
       <h4>ルーティン</h4><div class="dandori-options">
       ${routines().map(r => button("dandori-add-routine", r.id, `${e(r.title)}<small>いつも ${e(r.startTime || "--:--")} ・ 見積 ${resolveEstimateMin(r)}分${routineScheduled(r, today) ? " ・ 追加済み" : ""}</small>`, routineScheduled(r, today) ? 'aria-disabled="true"' : "")).join("") || "<p>ルーティンはありません。</p>"}
       </div><h4>昨日の持ち越し</h4><div class="dandori-options">
