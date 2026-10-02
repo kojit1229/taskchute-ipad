@@ -68,6 +68,39 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.goto(`http://localhost:${port}/`);
     await page.locator('[data-action="gate-continue"]').waitFor();
     await passGithubGate(page);
+    await seed([block('draft-a', { estimateMin: 15 }), block('draft-b', { estimateMin: 50 })], 'now');
+    const declaration = page.locator('[data-field="now-declaration"][data-id="draft-a"]');
+    const draft = 'まず <紙> を1枚 & "整理"';
+    await declaration.fill(draft);
+    const declarationNode = await declaration.elementHandle();
+    await declaration.dispatchEvent('compositionstart');
+    await tick();
+    ok(await declarationNode.evaluate(el => el === document.activeElement), '宣言のIME入力中もtickでフォーカスとDOMを保持');
+    await declaration.dispatchEvent('compositionend', { data: draft });
+    equal(await declaration.inputValue(), draft, '宣言欄のクリック・入力で開始しない');
+    equal((await live()).blocks.find(b => b.id === 'draft-a').actualStartAt, '', '宣言下書きは未開始のまま');
+    await page.locator('[data-action="now-estimate"][data-id="draft-b"][data-minutes="25"]').click();
+    equal(await declaration.inputValue(), draft, '別カードの見積で全再描画しても宣言下書きを保持');
+    equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '見積25をBlockへ反映');
+    equal((await stored()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '見積25を既存保存経路で保存');
+    equal(await page.locator('[data-action="now-estimate"][data-id="draft-b"][aria-pressed="true"]').getAttribute('data-minutes'), '25', '保存した見積だけ選択状態');
+    equal((await stored()).declarations.length, 0, 'カードの宣言下書きは宣言ログへ保存しない');
+    await page.locator('[data-action="now-start"][data-id="draft-a"]').click();
+    equal(await page.locator('[data-declare-note]').inputValue(), draft, 'カードの宣言を既存モーダルへそのまま渡す');
+    await page.locator('[data-declare-note]').fill('モーダルで編集');
+    await page.locator('[data-action="declare-confirm"]').click();
+    await page.locator('[data-running-id="draft-a"]').waitFor();
+    equal((await stored()).declarations.find(d => d.blockId === 'draft-a').note, 'モーダルで編集', '宣言の保存はモーダルの編集値を優先');
+    await page.evaluate(async () => {
+      const state = (await import('/src/state/store.js')).state;
+      state.blocks.find(b => b.id === 'draft-a').actualStartAt = '';
+      document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
+    });
+    equal(await declaration.inputValue(), '', '開始後はモジュールの宣言下書きが空');
+    await page.reload();
+    await page.locator('[data-action="now-estimate"][data-id="draft-b"]').first().waitFor();
+    equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '再読込後も見積25を保持');
+    equal(await page.locator('[data-action="now-estimate"][data-id="draft-b"][aria-pressed="true"]').getAttribute('data-minutes'), '25', '再読込後も25分が選択状態');
     const nextDay = '2026-09-30';
     await seed([
       block('previous-candidate'),
@@ -165,6 +198,13 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       block('completed-empty', { completed: true, comment: '時刻なしの一言' }),
       block('completed-past', { date: '2026-09-28', completed: true, actualStartAt: '2026-09-28T09:00:00', comment: '過去の一言' })
     ];
+    for (const invalid of ['2026-09-29T99:99', '2026-00-29T10:00', '2026-13-29T10:00',
+      '2026-09-00T10:00', '2026-09-32T10:00', '2026-09-29T24:00', '2026-09-29T10:60']) {
+      await seedDisplayBlocks([block('range-start', { completed: true, actualStartAt: invalid }),
+        block('range-end', { actualStartAt: `${day}T10:00:00`, actualEndAt: invalid })]);
+      equal(await page.locator('[data-record-id="range-start"] time').textContent(), '時刻不明', `${invalid}: 範囲外の開始は時刻不明`);
+      equal(await page.locator('[data-record-id="range-end"] time').textContent(), '時刻不明', `${invalid}: 範囲外の終了は時刻不明`);
+    }
     await seedDisplayBlocks(incompleteRecords);
     const recordSnapshot = (await live()).blocks;
     for (const id of ['broken-record', 'broken-start', 'broken-end', 'completed-empty']) {
@@ -216,6 +256,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
         }));
         equal(layout.overflow, false, `${theme}/${width}: 横はみ出しなし`);
         ok(layout.buttons, `${theme}/${width}: ボタン44px以上`);
+        ok(await page.locator('[data-field="now-declaration"]').evaluateAll(els => els.length > 0 && els.every(el =>
+          parseFloat(getComputedStyle(el).fontSize) >= 16 && el.getBoundingClientRect().height >= 44)), `${theme}/${width}: 宣言欄16px以上・高さ44px以上`);
+        ok(await page.locator('[data-action="now-estimate"]').evaluateAll(els => els.length === 3 && els.every(el =>
+          el.getBoundingClientRect().width >= 44 && el.getBoundingClientRect().height >= 44)), `${theme}/${width}: 見積3ボタンは縦横44px以上`);
         equal(layout.columns, width === 1280 ? 3 : 1, `${theme}/${width}: 列数`);
         ok(await page.locator('.now-candidates button').evaluate(el =>
           el.getBoundingClientRect().width >= el.parentElement.getBoundingClientRect().width * .9), `${theme}/${width}: 候補1件の幅は親の90%以上`);

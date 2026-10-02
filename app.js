@@ -89,7 +89,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday, renderNow } from "./src/features/today.js";
-import { configureNowView } from "./src/features/now-view.js";
+import { configureNowView, setNowEstimate, withNowDeclaration } from "./src/features/now-view.js";
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriRoutine, addDandoriFree } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
@@ -341,7 +341,7 @@ configureGithubSync({
 });
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
-configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
+configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, saveAndRender });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
   fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast, makeBlock, renderDeferringForFocus, getOtherTask, getCategoryNames });
@@ -1203,7 +1203,7 @@ registerActions({
   "today-add-actual": () => openTodayActualBlock(false),
   "remaining-shift": () => adjustRemainingBlocks(false),
   "remaining-tomorrow": () => adjustRemainingBlocks(true),
-  "start-overlap-choice": ({ target }) => chooseStartOverlap(target.dataset.choice),
+  "start-overlap-choice": ({ target }) => withNowDeclaration(() => chooseStartOverlap(target.dataset.choice)),
   "task-today": ({ id }) => openTaskPlacement(id),
   // --- v354: 「空き時間を補う」シート(TIME COMB「補う」・実行ヘッダ「＋Block」の2導線から開く) ---
   "fill-gap-open": ({ target }) => openFillGapSheet(target.dataset.start, target.dataset.end, target.dataset.date || state.selectedDate, target.dataset.basis),
@@ -1216,7 +1216,8 @@ registerActions({
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
   "toggle-block": ({ id }) => toggleBlock(id),
   "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
-  "now-start": ({ id }) => openDeclareModal(id, "block"),
+  "now-start": ({ id }) => withNowDeclaration(() => openDeclareModal(id, "block")),
+  "now-estimate": ({ id, target }) => setNowEstimate(id, Number(target.dataset.minutes)),
   "now-end": ({ id }) => openReportModal(id, "block"),
   "bulk-approve-planned": () => bulkApproveAsPlanned(),
   "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
@@ -1269,8 +1270,8 @@ registerActions({
     render();
   },
   "complete-pomodoro": () => openReportModal(state.pomodoro.blockId, "pomodoro"),
-  "declare-confirm": () => confirmDeclare(),
-  "declare-skip": () => skipDeclare(),
+  "declare-confirm": () => withNowDeclaration(confirmDeclare),
+  "declare-skip": () => withNowDeclaration(skipDeclare),
   "report-outcome": ({ target }) => {
     const note = modalRoot.querySelector("[data-report-note]")?.value || "";
     finishReport(target.dataset.outcome || "", note);

@@ -1,0 +1,31 @@
+{
+  "version": 421,
+  "date": "2026-10-02",
+  "title": "いまのカードに宣言欄と見積ボタン",
+  "summary": "未着手カードの宣言を開始モーダルへ引き継ぎ、15・25・50分の見積を保存。範囲外の記録時刻と日跨ぎルーティンの見積を修正。",
+  "changedFiles": [
+    "app.js", "src/features/now-view.js", "src/features/dandori-view.js",
+    "src/core/recurrence.js", "styles.css", "sw.js", "releases/v421.json",
+    "tests/now-view.test.js", "tests/dandori-view.test.js", "tests/recurrence-core.test.js",
+    "tests/action-registry-core.test.js", "tests/suite-manifest.json",
+    "docs/code-index.generated.json", "docs/code-index.generated.md", "docs/test-impact-map.generated.md"
+  ],
+  "intent": [
+    "発注36 / 束2b-2。受入条件 spec.md SHA256 216b245f4ce7c9b8d68352df78d783b8f164950db8bdd0cf1b0af4796f6baca6。基準HEAD 2da25807fd950cff2282bc9faab1291e75a800be。"
+  ],
+  "changes": [
+    "カードごとの宣言下書きをモジュールに保持し、既存モーダルへ初期値を渡して開始後に消去",
+    "見積ボタンを既存saveAndRenderと接続し、選択状態を表示",
+    "記録日時の月・日・時・分の範囲外を時刻不明と表示",
+    "段取りの候補とアンカー配置の見積を日跨ぎに対応",
+    "SW CACHE_NAMEをv421へ更新"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["宣言の下書き保持と既存保存経路", "日跨ぎ見積45分", "375pxの入力・ボタン寸法"],
+  "verification": ["発注36の実走結果はreports/b2b2/result.mdとcommand-results.jsonlに記録"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": [
+    "now-view", "dandori-view", "recurrence-core", "mutation-recurrence-e2e",
+    "today-core", "action-registry-core", "track-crud-core", "v258", "v264"
+  ]
+}
