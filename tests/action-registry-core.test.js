@@ -219,7 +219,8 @@ const GOLDEN_CLICK_ACTIONS = [
   "twy-decide-aim", "twy-decide-when", "twy-decide-day", "twy-decide-save",
   "twy-decide-memo", "twy-decide-add-task", "twy-decide-create",
   // v418(束2a 段取り、監督者の契約追随 2026-10-01): 今日やるの並べ替え・候補からの追加・外す
-  "dandori-move", "dandori-add-task", "dandori-remove"
+  "dandori-move", "dandori-add-task", "dandori-remove",
+  "dandori-add-routine", "dandori-add-free"
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
 ];
@@ -402,7 +403,8 @@ const APP_JS_REGISTERED_ACTIONS = [
 ,  // AI feedback request and read-only status/history actions, registered directly in app.js.
   "feedback-regenerate", "feedback-refresh", "feedback-report-refresh", "feedback-report-date", "feedback-version", "feedback-resume", "feedback-retry",
   // v418(束2a 段取り、監督者の契約追随 2026-10-01): 今日やるの並べ替え・候補からの追加・外す
-  "dandori-move", "dandori-add-task", "dandori-remove"
+  "dandori-move", "dandori-add-task", "dandori-remove",
+  "dandori-add-routine", "dandori-add-free"
 ];
 
 const EXPECTED_REMAINING_IF_CHAIN = GOLDEN_CLICK_ACTIONS.filter(

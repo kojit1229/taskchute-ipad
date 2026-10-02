@@ -90,7 +90,7 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday, renderNow } from "./src/features/today.js";
 import { configureNowView } from "./src/features/now-view.js";
-import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask } from "./src/features/dandori-view.js";
+import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriRoutine, addDandoriFree } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
   toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
@@ -344,7 +344,7 @@ configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiv
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
-  fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast });
+  fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast, makeBlock, renderDeferringForFocus, getOtherTask, getCategoryNames });
 configureToday({
   escapeHTML, todayISO, addDays, blocksForDate, minutesOf, timeFromDateTime,
   localDateTimeToMs, resolveEstimateMin,
@@ -728,6 +728,8 @@ registerActions({
   "carry-over": ({ id }) => requestCarryOver(id),
   "dandori-move": ({ id, target }) => moveDandoriBlock(id, target.dataset.dir),
   "dandori-add-task": ({ id }) => addDandoriTask(id),
+  "dandori-add-routine": ({ id }) => addDandoriRoutine(id),
+  "dandori-add-free": () => addDandoriFree(),
   "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); if (state.modal) closeModal(); },
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry
