@@ -10124,7 +10124,7 @@ function toggleTask(id) {
     });
     state.blocks.push(actual);
   }
-  syncHabitStreakForBlock(actual);
+  if (actual.recurrenceGroupId) syncHabitStreakForBlock(actual);  // v419: 繰り返し以外では habitStreaks に触れない(保存の下書きに無い鍵を増やさない)
   // v419: 完了した Task の明日以降の「未着手」予定 Block を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
   const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date > date);

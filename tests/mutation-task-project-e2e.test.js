@@ -17,7 +17,10 @@ const extract = name => {
 const names = ['makeTask', 'addTask', 'addProject', 'deleteProject', 'saveTaskFromModal',
   'saveProjectFromModal', 'toggleTask', 'deleteTask', 'toggleMIT', 'updateTaskField',
   'updateTaskProgress', 'setEntityStatus', 'updateCategoryField', 'deleteFromModal',
-  'fillProgressOnComplete', 'deriveStatusFromProgress'];
+  'fillProgressOnComplete', 'deriveStatusFromProgress',
+  // v419(監督者の契約追随 2026-10-02): toggleTask が完了時に実績 Block を書くため、その書き手(実物)を砂場へ渡す。断言は不変。
+  'makeBlock', 'subtractMinutesFromDateTime', 'timeFromDateTime', 'localDateTimeToMs', 'projectName',
+  'syncHabitStreakForBlock', 'recordHabitStreakDone', 'removeHabitStreakDone', 'dateToISO', 'pad2'];
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00';
 const clone = value => JSON.parse(JSON.stringify(value));
 async function fixture() {
