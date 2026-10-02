@@ -17,7 +17,10 @@ const extract = name => {
 const names = ['makeTask', 'addTask', 'addProject', 'deleteProject', 'saveTaskFromModal',
   'saveProjectFromModal', 'toggleTask', 'deleteTask', 'toggleMIT', 'updateTaskField',
   'updateTaskProgress', 'setEntityStatus', 'updateCategoryField', 'deleteFromModal',
-  'fillProgressOnComplete', 'deriveStatusFromProgress'];
+  'fillProgressOnComplete', 'deriveStatusFromProgress',
+  // v419(監督者の契約追随 2026-10-02): toggleTask が完了時に実績 Block を書くため、その書き手(実物)を砂場へ渡す。断言は不変。
+  'makeBlock', 'subtractMinutesFromDateTime', 'timeFromDateTime', 'localDateTimeToMs', 'projectName',
+  'syncHabitStreakForBlock', 'recordHabitStreakDone', 'removeHabitStreakDone', 'dateToISO', 'pad2'];
 const NOW = '2026-09-10T10:00:00', FUTURE = '2026-09-10T10:05:00';
 const clone = value => JSON.parse(JSON.stringify(value));
 async function fixture() {
@@ -110,7 +113,8 @@ for (const [name, prepare] of operations) test(`16a ${name}: failure restores al
       }
     }
     assert.ok(changed > 0);
-    if (name === 'toggleTask') assert.equal(f.ctx.state.blocks[0].deleted, true);
+    // v419(K承認 2026-10-02): 完了チェックは今日の未着手 Block を削除せず、実績を書いて完了にする(spec 受入2)。
+    if (name === 'toggleTask') { const b0 = f.ctx.state.blocks[0]; assert.equal(b0.deleted, undefined); assert.equal(b0.completed, true); assert.ok(b0.actualStartAt && b0.actualEndAt && b0.actualEndAt > b0.actualStartAt, 'actual recorded'); }
     if (name === 'deleteTask' || name === 'deleteTaskModal') assert.equal(f.ctx.state.blocks[0].taskId, '');
     if (name === 'updateTaskField') assert.equal(f.ctx.state.tasks[0].progressNum, 10);
   });

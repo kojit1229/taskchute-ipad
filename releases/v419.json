@@ -1,0 +1,25 @@
+{
+  "version": 419,
+  "date": "2026-10-01",
+  "title": "作業一覧の完了チェックで実績を記録",
+  "summary": "作業一覧で完了すると、チェック時刻を終了、見積分前を開始として今日の実績を残す。今日の未着手・実行中Blockを優先して再利用し、既存の日報に掲載する。",
+  "changedFiles": [
+    "app.js", "sw.js", "releases/v419.json", "tests/task-complete-actual.test.js",
+    "scripts/test-manifest.js", "tests/impact-regression-map.json", "tests/suite-manifest.json", "docs/test-impact-map.generated.md",
+    "docs/code-index.generated.json", "docs/code-index.generated.md"
+  ],
+  "intent": [
+    "案件 2026-10-01-task-complete-actual 発注01。受入条件 spec.md SHA256 c9be6cfb2b6c7684f64e62385e2c467f230bed498370ed787c9a567a024eef95。K裁定A。基準HEAD 74ee3b71afd1e5f74465c0a930c94ff9e412a171。"
+  ],
+  "changes": [
+    "toggleTaskの既存tasks/blocksトランザクション内で実績を保存。見積なしは15分。実行中の開始は保持する",
+    "今日の未着手Blockは実績へ転用し、削除確認は明日以降の未着手だけに限定",
+    "完了解除後もBlockと実績を保持。0時跨ぎも帰属日は今日。実績時刻をトーストに表示",
+    "SW CACHE_NAMEをv419へ更新。日報生成・保存・同期・normalizeState・日付ヘルパーは変更しない"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["実行中優先・未着手再利用と未来予定の確認", "0時跨ぎ・日報掲載・保存再読込・完了解除"],
+  "verification": ["発注01の実走結果・終了コード・受入根拠はreports/01/result.mdとcommand-results.jsonlに記録"],
+  "knownLimitations": ["iOS Safari実機は未確認", "tests/v48.test.jsは基準ツリーに存在しない"],
+  "relatedSuites": ["task-complete-actual", "daily-report-e2e", "work-list-e2e", "action-registry-core", "track-crud-core", "v258", "v264", "three-screen-flow-e2e"]
+}

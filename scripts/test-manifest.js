@@ -126,6 +126,7 @@ const explicitDomains = {
   "now-view.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
   "dandori-view.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
   "work-list-e2e.test.js": ["planning-execution", "ui-responsive"],
+  "task-complete-actual.test.js": ["planning-execution", "sync-storage", "journal-health", "ui-responsive"],
   "ui-a-layout.test.js": ["planning-execution", "journal-health", "ui-responsive"],
   "detail-draft-e2e.test.js": ["sync-storage", "planning-execution", "ui-responsive"],
   "zero-draft-e2e.test.js": ["sync-storage", "content-ai", "ui-responsive"],

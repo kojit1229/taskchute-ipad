@@ -30,6 +30,10 @@
     "fund-data-contract"
   ],
   "areas": {
+    "task-complete-actual": {
+      "patterns": ["toggleTask|subtractMinutesFromDateTime|fillProgressOnComplete"],
+      "suites": ["task-complete-actual"]
+    },
     "weekly-reviews": {
       "paths": ["^src/features/twelve-week\\.js$", "^src/sync/github\\.js$"],
       "patterns": ["weeklyReviews|WeeklyReview"],

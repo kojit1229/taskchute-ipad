@@ -2415,8 +2415,8 @@
         "planning-execution"
       ],
       "assertionSignals": 66,
-      "assertionHash": "bf9dd1378970d776",
-      "sourceHash": "47abde07a22b60cc",
+      "assertionHash": "0f5625075dc1ab01",
+      "sourceHash": "a1ef0c92e945cfe2",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3473,6 +3473,32 @@
         "fileWrite": false,
         "networkMock": false,
         "clock": false
+      }
+    },
+    {
+      "file": "task-complete-actual.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "sync-storage",
+        "journal-health",
+        "ui-responsive"
+      ],
+      "assertionSignals": 2,
+      "assertionHash": "11e2a081ff96688b",
+      "sourceHash": "af514ccde89458e1",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
       }
     },
     {
