@@ -703,6 +703,7 @@ const APP_SHELL = [
   "./src/core/track.js",
 
   "./src/core/plan.js",
+  "./src/core/tower-week.js",
   "./src/core/week.js",
 
   "./src/core/work-list.js",
