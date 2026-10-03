@@ -165,6 +165,89 @@ test("makeRecurrenceInstance: ルーティンカテゴリはcharge/dischargeを�
   assert.equal(inst.recurrenceGroupId, "r1");
 });
 
+test("B2-30: dailyの日跨ぎ実体は翌日終了・開始日帰属・予定45分", () => {
+  resetState();
+  TODAY = "2026-08-20";
+  currentState.recurrences.push({ id: "night", kind: "daily", anchorDate: TODAY,
+    startTime: "23:30", endTime: "00:15", deleted: false });
+  maintainRecurrences();
+  const inst = currentState.blocks.find(b => b.id === "rec_night_2026-08-20");
+  assert.equal(inst.plannedStartAt, "2026-08-20T23:30");
+  assert.equal(inst.plannedEndAt, "2026-08-21T00:15");
+  assert.equal(inst.date, "2026-08-20");
+  assert.equal((minutesOfDT(inst.plannedEndAt) - minutesOfDT(inst.plannedStartAt) + 1440) % 1440, 45);
+  assert.equal(Object.hasOwn(inst, "estimateMin"), false);
+});
+
+test("B2-30: 通常の06:00〜06:25ルールは同日・既存の見積解決のまま", () => {
+  const inst = makeRecurrenceInstance({ id: "morning", kind: "daily",
+    startTime: "06:00", endTime: "06:25" }, "2026-08-20");
+  assert.equal(inst.id, "rec_morning_2026-08-20");
+  assert.equal(inst.plannedStartAt, "2026-08-20T06:00");
+  assert.equal(inst.plannedEndAt, "2026-08-20T06:25");
+  assert.equal(inst.date, "2026-08-20");
+  assert.equal(Object.hasOwn(inst, "estimateMin"), false);
+});
+
+test("B2-30: 日跨ぎ実体は月末と年末でも翌日終了になる", () => {
+  for (const [date, nextDate] of [["2026-08-31", "2026-09-01"], ["2026-12-31", "2027-01-01"]]) {
+    const inst = makeRecurrenceInstance({ id: "boundary", kind: "daily",
+      startTime: "23:30", endTime: "00:15" }, date);
+    assert.equal(inst.id, `rec_boundary_${date}`);
+    assert.equal(inst.plannedStartAt, `${date}T23:30`);
+    assert.equal(inst.plannedEndAt, `${nextDate}T00:15`);
+    assert.equal(inst.date, date);
+    assert.equal((minutesOfDT(inst.plannedEndAt) - minutesOfDT(inst.plannedStartAt) + 1440) % 1440, 45);
+  }
+});
+
+test("B2-30: 保存済みの日跨ぎ実体は温存し、翌日の新規実体から修正する", () => {
+  resetState();
+  TODAY = "2026-08-20";
+  const rule = { id: "legacy-night", kind: "daily", anchorDate: TODAY,
+    startTime: "23:30", endTime: "00:15", deleted: false };
+  currentState.recurrences.push(rule);
+  const existing = { id: "rec_legacy-night_2026-08-20", recurrenceGroupId: rule.id,
+    date: TODAY, plannedStartAt: `${TODAY}T23:30`, plannedEndAt: `${TODAY}T00:15`,
+    actualStartAt: "", actualEndAt: "", comment: "", completed: false, deleted: false,
+    createdAt: "2026-08-19T09:00", updatedAt: "2026-08-19T09:00" };
+  const snapshot = structuredClone(existing);
+  currentState.blocks.push(existing);
+  maintainRecurrences();
+  maintainRecurrences({ purge: true });
+  assert.equal(currentState.blocks.find(b => b.id === existing.id), existing);
+  assert.deepEqual(existing, snapshot);
+  assert.equal(currentState.blocks.filter(b => b.id === existing.id).length, 1);
+  const next = currentState.blocks.find(b => b.id === "rec_legacy-night_2026-08-21");
+  assert.equal(next.plannedStartAt, "2026-08-21T23:30");
+  assert.equal(next.plannedEndAt, "2026-08-22T00:15");
+  assert.equal(next.date, "2026-08-21");
+  assert.equal((minutesOfDT(next.plannedEndAt) - minutesOfDT(next.plannedStartAt) + 1440) % 1440, 45);
+});
+
+test("B2-34: 秒精度混在・1桁時刻・空や不正な時刻は翌日化しない", () => {
+  for (const [startTime, endTime] of [["06:00:00", "06:00"], ["9:00", "10:00"],
+    ["", "00:15"], ["23:30", ""], ["invalid", "00:15"], ["23:30", "invalid"],
+    ["24:00", "00:15"], ["23:30", "00:60"]]) {
+    const inst = makeRecurrenceInstance({ id: "same-day", startTime, endTime }, "2026-08-20");
+    assert.equal(inst.plannedEndAt, endTime ? `2026-08-20T${endTime}` : "");
+  }
+});
+
+test("B2-34: 23:30:00〜00:15:00は翌日終了になる", () => {
+  const inst = makeRecurrenceInstance({ id: "seconds-night", startTime: "23:30:00",
+    endTime: "00:15:00" }, "2026-08-20");
+  assert.equal(inst.plannedStartAt, "2026-08-20T23:30:00");
+  assert.equal(inst.plannedEndAt, "2026-08-21T00:15:00");
+});
+
+test("B2-44: 23:30:00.000〜00:15:00.000は翌日終了になる", () => {
+  const inst = makeRecurrenceInstance({ id: "fractional-seconds-night", startTime: "23:30:00.000",
+    endTime: "00:15:00.000" }, "2026-08-20");
+  assert.equal(inst.plannedStartAt, "2026-08-20T23:30:00.000");
+  assert.equal(inst.plannedEndAt, "2026-08-21T00:15:00.000");
+});
+
 test("makeRecurrenceInstance: ルーティン以外はcharge/dischargeを0にする", () => {
   const rule = { id: "r2", title: "MTG", category: "仕事", expectedCharge: 5, expectedDischarge: 5 };
   const inst = makeRecurrenceInstance(rule, "2026-08-20");

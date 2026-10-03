@@ -1,0 +1,28 @@
+{
+  "version": 422,
+  "date": "2026-10-02",
+  "title": "日跨ぎルーティンの終了日時を修正",
+  "summary": "23:30〜00:15などの日跨ぎルールから作る新しい予定を翌日終了・見積45分に修正。帰属日は開始日のまま、保存済みの予定は変更しません。",
+  "changedFiles": [
+    "src/core/recurrence.js", "sw.js", "releases/v422.json",
+    "tests/recurrence-core.test.js", "tests/suite-manifest.json",
+    "docs/test-impact-map.generated.md"
+  ],
+  "intent": [
+    "発注47 / B2-30 / v422。受入条件正本: C:/Users/kojit/Documents/ClaudeCode/taskchute/projects/2026-09-28-gamify-dopamine/orders/47-b230-recur-midnight-codex.md。SHA256 fea7fde11b20d862aa95b4296a79b87802fe6c29093e21427ba20d7a6febd609。基準HEAD e27cd93e114e0b08a727433e9b7e4295b49cc190。"
+  ],
+  "changes": [
+    "終了時刻が開始時刻より早い新規実体だけ、既存addDaysで終了日を翌日にする",
+    "日跨ぎ実体のestimateMinを既存の1440分剰余式で設定する",
+    "既存実体・通常ルール・id規約・帰属日・isTouchedBlockは変更しない",
+    "SW CACHE_NAMEをv422へ更新"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["日跨ぎ実体の翌日終了と見積45分", "月末・年末", "保存済み実体の温存"],
+  "verification": ["発注47の実走結果はreports/b230/result.mdとcommand-results.jsonlに記録"],
+  "knownLimitations": ["保存済みの日跨ぎ実体は移行しない", "iOS Safari実機は未確認"],
+  "relatedSuites": [
+    "recurrence-core", "mutation-recurrence-e2e", "dandori-view", "exec-timeline-e2e",
+    "three-screen-flow-e2e", "track-crud-core", "v258", "v264"
+  ]
+}
