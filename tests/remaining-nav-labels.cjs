@@ -39,7 +39,7 @@ module.exports = async function navJapanese() {
   for (const count of [0, 3, 100]) {
     unread = count;
     const html = vm.runInContext('renderMore()', context);
-    assert.equal((html.match(/data-action="nav"/g) || []).length, 10);
+    assert.equal((html.match(/data-action="nav"/g) || []).length, 11); // v425: ルーティンを追加
     assert.doesNotMatch(html, /NAV \d+/);
     if (count) assert.ok(html.includes('<span class="nav-badge">' + (count > 99 ? '99+' : count) + '</span>'));
     else assert.doesNotMatch(html, /nav-badge/);
@@ -80,7 +80,7 @@ module.exports = async function navJapanese() {
         const active = width === 390 ? (id === 'wbs' ? 'wbs' : 'more') : id;
         assert.equal(await page.locator((width === 390 ? '#bottomNav' : '#sidebar') + ' [data-view="' + active + '"].active').count(), 1);
         await more.click(); await page.locator('.more-tower-grid').waitFor();
-        assert.equal(await page.locator('.more-tower-item').count(), 10);
+        assert.equal(await page.locator('.more-tower-item').count(), 11); // v425: ルーティンを追加
       }
       assert.deepEqual(await stored(), baseline, 'all ten round trips preserve user records');
       assert.deepEqual(await page.locator('#bottomNav > button').evaluateAll(nodes => nodes.map(n => n.dataset.view)),

@@ -344,7 +344,7 @@ configureGithubSync({
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render });
-configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, createRecurrenceRule, maintainRecurrences,
+configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
   endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,

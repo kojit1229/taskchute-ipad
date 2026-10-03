@@ -44,7 +44,7 @@ function card(rule) {
 }
 export function renderRoutineView() {
   const rules = activeRules().sort((a, b) => (a.startTime || "99:99").localeCompare(b.startTime || "99:99"));
-  return `<section class="routine-view"><h2>ルーティン</h2>${button("new", "+ 新しいルーティン")}
+  return `${deps.renderHeader ? deps.renderHeader("いつものこと", "ルーティン") : ""}<section class="routine-view"><h2>ルーティン</h2>${button("new", "+ 新しいルーティン")}
     <div class="routine-new">${editingId === "" ? editor() : ""}</div>
     <div class="routine-cards">${rules.map(card).join("") || "<p>ルーティンはまだありません</p>"}</div></section>`;
 }
