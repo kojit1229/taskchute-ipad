@@ -1,0 +1,37 @@
+{
+  "version": 429,
+  "date": "2026-10-04",
+  "title": "いまのルーティンはタップで即完了+持ち越し 5 件",
+  "summary": "いまタブのルーティン枠のカードは 1 タップで完了になり、実績(今−見積〜今)と固定化の記録が付きます。あわせてルール無しの実体で起動が初期状態に落ちる不具合、空の曜日配列、重複見出し、使われない見積処理、時刻だけ直した実体の作り直しを直しました。",
+  "changedFiles": [
+    "app.js",
+    "src/features/now-view.js",
+    "src/features/routine-view.js",
+    "styles.css",
+    "sw.js",
+    "releases/v429.json",
+    "tests/now-view.test.js",
+    "tests/routine-view.test.js",
+    "tests/recurrence-core.test.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md"
+  ],
+  "intent": [
+    "発注93(B2-60+持ち越し L-orphan / days:[] / 見出し二重 / setNowEstimate / L-time-touch)+発注96(fix429)、版v429。基準HEAD 72de57c(v428)。K 指示 2026-10-04 朝。"
+  ],
+  "changes": [
+    "いまタブのルーティン枠(category=ルーティン)のカードは now-routine-complete で即完了。actualStartAt=今−見積(無ければ15分)・actualEndAt=今・completed=true。v419 toggleTask と同じ付け方・既存の保存経路のみ。2 回押しは no-op。recurrenceGroupId があれば固定化ログを同期",
+    "setNowEstimate と登録表 now-estimate、注入引数、.now-estimates CSS を削除(B2-51 の残り)",
+    "L-orphan: 旧形式の移行は recurrences キーの無いデータだけ。isTouchedBlock は起動中の null state を参照しない",
+    "days:[]: weekly 以外は days を保存しない。ルーティン画面の重複見出しを削除",
+    "L-time-touch: 実体の plannedStartAt/plannedEndAt がルールの時刻と違えば編集済み扱い",
+    "SWキャッシュv429"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["即完了の実績時刻と固定化ログ", "起動時の移行条件の変更", "isTouchedBlock の時刻比較"],
+  "verification": ["Codex 発注93/96 の終了コード表は reports/v429/codex-evidence と evidence/96-fix429、Codex レビュー 61/62、Claude 独立検証 61/62(実機相当の Playwright 実験込み)"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["now-view", "routine-view", "recurrence-core", "mutation-recurrence-e2e", "daily-operations-registry", "mutation-task-project-e2e", "action-registry-core", "sw-integration"]
+}
