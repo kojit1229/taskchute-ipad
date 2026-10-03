@@ -18,6 +18,8 @@
 .dandori-view .dandori-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .dandori-view .dandori-card { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; align-items: center; padding: 12px; margin-bottom: 8px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; }
 .dandori-view .dandori-info { min-width: 0; overflow-wrap: anywhere; }
+.dandori-view .dandori-times { display: flex; align-items: center; gap: 4px; }
+.dandori-view .dandori-times input { flex: 1; min-width: 44px; width: 0; min-height: 44px; }
 .dandori-view small { display: block; font-size: 12px; font-weight: normal; }
 .dandori-view .dandori-ops { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
 .dandori-view button { min-width: 44px; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
