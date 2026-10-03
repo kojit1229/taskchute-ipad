@@ -363,6 +363,11 @@ ok(!dandoriSource.includes('dandoriProjectedEndText') && dandoriSource.includes(
     await page.clock.runFor(1000);
     equal(await startInput.evaluate(el => [el === document.activeElement, el.value, el.dataset.tickProbe]),
       [true, '11:10', 'same-node'], 'フォーカス中は日跨ぎtickでも時刻入力とDOMを保持');
+    await startInput.evaluate(el => { el.value = '11:15'; });
+    await startInput.dispatchEvent('change');
+    equal([(await live()).blocks.find(b => b.id === 'inline').plannedStartAt,
+      (await stored()).blocks.find(b => b.id === 'inline').plannedStartAt],
+    [`${day}T11:15`, `${day}T11:15`], '日跨ぎ後のchangeも編集中Blockの日付で開始時刻を保存');
     await page.clock.setSystemTime(new Date(2026, 8, 29, 10, 0));
     await seed([block('no-end', '10:30', '', { plannedEndAt: '', estimateMin: 40 })]);
     equal(await page.locator('[data-field="dandori-end"]').inputValue(), '', '終了未設定の入力は空');

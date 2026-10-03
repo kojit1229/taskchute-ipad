@@ -9,18 +9,18 @@ export function configureDandoriView(value) { deps = value; return { duplicateDa
 if (typeof document !== "undefined") document.addEventListener("change", event => {
   const input = event.target;
   if (!input?.matches('[data-field="dandori-start"], [data-field="dandori-end"]')) return;
-  const today = deps.todayISO(), block = pending(today).find(b => b.id === input.dataset.id);
-  if (!block) return;
+  const block = deps.getState().blocks.find(b => b.id === input.dataset.id);
+  if (!block || block.deleted) return;
   const field = input.dataset.field === "dandori-start" ? "plannedStartAt" : "plannedEndAt";
   const restore = () => { input.value = deps.timeFromDateTime(block[field]) || ""; };
   if (!input.value) { restore(); return; }
   if (input.value === deps.timeFromDateTime(block[field])) return;
-  const value = `${today}T${input.value}`;
+  const value = `${block.date}T${input.value}`;
   const start = field === "plannedStartAt" ? value : block.plannedStartAt;
   let end = field === "plannedEndAt" ? value : block.plannedEndAt;
   const fillEnd = field === "plannedStartAt" && !end;
   if (fillEnd) end = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(start) + deps.resolveEstimateMin(block) * 60000));
-  if (start && end && (end.slice(0, 10) !== today || deps.localDateTimeToMs(end) < deps.localDateTimeToMs(start))) {
+  if (start && end && (end.slice(0, 10) !== block.date || deps.localDateTimeToMs(end) < deps.localDateTimeToMs(start))) {
     restore();
     deps.showToast("終了は開始より後にしてください");
     return;
