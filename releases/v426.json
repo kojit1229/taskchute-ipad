@@ -1,0 +1,14 @@
+{
+  "version": 426,
+  "date": "2026-10-03",
+  "title": "いまのルーティン枠と見積表示の整理",
+  "summary": "カテゴリがルーティンの予定もルーティン枠に表示し、いまカードの見積変更ボタンを外しました。見積の編集は段取り画面で行えます。",
+  "changedFiles": ["src/features/now-view.js", "sw.js", "releases/v426.json", "tests/now-view.test.js", "tests/suite-manifest.json"],
+  "intent": ["発注77 / B2-50・B2-51、版v426。基準HEAD 428e89cda35a72138f8218df7b67fdca855329ec。"],
+  "changes": ["recurrenceGroupIdあり、またはcategoryがルーティンのBlockをルーティン枠へ分類", "いまカードの15/25/50分ボタンを非表示。宣言欄と見積表示、既存アクション登録は維持", "SWキャッシュv426"],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["カテゴリだけのルーティンと通常Blockの分離", "これからの混在表示と宣言開始の維持", "見積変更ボタンの非表示"],
+  "verification": ["発注77の実走終了コードはreports/b250/command-results.jsonl、結果はresult.mdに記録"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["now-view", "today-core", "action-registry-core", "dandori-view"]
+}

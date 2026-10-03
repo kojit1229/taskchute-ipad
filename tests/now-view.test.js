@@ -81,14 +81,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await declaration.dispatchEvent('compositionend', { data: draft });
     equal(await declaration.inputValue(), draft, '宣言欄のクリック・入力で開始しない');
     equal((await live()).blocks.find(b => b.id === 'draft-a').actualStartAt, '', '宣言下書きは未開始のまま');
-    const previousUpdatedAt = (await live()).blocks.find(b => b.id === 'draft-b').updatedAt;
-    await page.clock.setFixedTime(at(12, 1));
-    await page.locator('[data-action="now-estimate"][data-id="draft-b"][data-minutes="25"]').click();
-    ok((await stored()).blocks.find(b => b.id === 'draft-b').updatedAt > previousUpdatedAt, '見積ボタンで保存したBlock.updatedAtが前より新しい');
-    equal(await declaration.inputValue(), draft, '別カードの見積で全再描画しても宣言下書きを保持');
-    equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '見積25をBlockへ反映');
-    equal((await stored()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '見積25を既存保存経路で保存');
-    equal(await page.locator('[data-action="now-estimate"][data-id="draft-b"][aria-pressed="true"]').getAttribute('data-minutes'), '25', '保存した見積だけ選択状態');
     equal((await stored()).declarations.length, 0, 'カードの宣言下書きは宣言ログへ保存しない');
     await page.locator('[data-action="now-start"][data-id="draft-a"]').click();
     equal(await page.locator('[data-declare-note]').inputValue(), draft, 'カードの宣言を既存モーダルへそのまま渡す');
@@ -102,10 +94,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
     });
     equal(await declaration.inputValue(), '', '開始後はモジュールの宣言下書きが空');
-    await page.reload();
-    await page.locator('[data-action="now-estimate"][data-id="draft-b"]').first().waitFor();
-    equal((await live()).blocks.find(b => b.id === 'draft-b').estimateMin, 25, '再読込後も見積25を保持');
-    equal(await page.locator('[data-action="now-estimate"][data-id="draft-b"][aria-pressed="true"]').getAttribute('data-minutes'), '25', '再読込後も25分が選択状態');
     for (const choice of ['end', 'parallel']) {
       await seed([block('overlap-running', { actualStartAt: `${day}T11:55:00` }), block('overlap-draft')], 'now');
       await page.locator('[data-action="nav"][data-view="now"]:visible').click();
@@ -175,7 +163,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-routine h3 button[data-action="nav"][data-view="routine"][type="button"]').innerText(), '編集', '見出しにルーティン画面への編集ボタン(v425)');
     equal(await page.locator('.now-next > p').allTextContents(), [`11:00 作業 ${routineOne.id}`, '12:00 作業 plain-a', `13:00 作業 ${routineTwo.id}`, '14:00 作業 plain-b'], 'これからはBlockとルーティンを混ぜて予定順に表示');
     const routineCard = page.locator('.now-routine .now-candidate').first();
-    equal(await routineCard.locator('[data-action="now-estimate"]').allTextContents(), ['15分', '25分', '50分'], 'ルーティンにも既存の見積ボタン');
+    equal(await page.locator('.now-view .now-estimates, .now-view [data-action="now-estimate"]').count(), 0, 'いまカードに見積ボタンが無い(Block・ルーティン共通)');
     await routineCard.locator('[data-field="now-declaration"]').fill('まずルーティンを始める');
     await routineCard.locator('[data-action="now-start"]').click();
     equal(await page.locator('[data-declare-note]').inputValue(), 'まずルーティンを始める', 'ルーティンの宣言を既存の開始モーダルへ引き継ぐ');
@@ -187,6 +175,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-start [data-kind="block"] > p').innerText(), '未着手の Block はありません。', 'ルーティンのみの日はBlock側に未着手なしの案内');
     equal(await page.getByRole('button', { name: '段取りで決める', exact: true }).count(), 0, 'ルーティン実体がある日は段取り案内を出さない');
     equal(await page.locator('.now-routine [data-action="now-start"]').count(), 1, 'Blockなしでもルーティンカードは表示');
+    await seed([block('category-routine', { category: 'ルーティン', plannedStartAt: `${day}T11:00:00` }), block('plain-only')], 'now');
+    equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => [el.dataset.id, el.closest('[data-kind]').dataset.kind])), [['plain-only', 'block'], ['category-routine', 'routine']], 'categoryルーティン(recurrenceGroupIdなし)もルーティン枠へ分離');
     await seed([block('plain-only')], 'now');
     equal(await page.locator('.now-routine').count(), 0, 'ルーティン0件なら枠ごと非表示');
     await seed([], 'now');
@@ -318,8 +308,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
         ok(layout.buttons, `${theme}/${width}: ボタン44px以上`);
         ok(await page.locator('[data-field="now-declaration"]').evaluateAll(els => els.length > 0 && els.every(el =>
           parseFloat(getComputedStyle(el).fontSize) >= 16 && el.getBoundingClientRect().height >= 44)), `${theme}/${width}: 宣言欄16px以上・高さ44px以上`);
-        ok(await page.locator('[data-action="now-estimate"]').evaluateAll(els => els.length === 3 && els.every(el =>
-          el.getBoundingClientRect().width >= 44 && el.getBoundingClientRect().height >= 44)), `${theme}/${width}: 見積3ボタンは縦横44px以上`);
         equal(layout.columns, width === 1280 ? 3 : 1, `${theme}/${width}: 列数`);
         ok(await page.locator('.now-candidates button').evaluate(el =>
           el.getBoundingClientRect().width >= el.parentElement.getBoundingClientRect().width * .9), `${theme}/${width}: 候補1件の幅は親の90%以上`);
