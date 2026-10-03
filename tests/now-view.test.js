@@ -36,9 +36,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
   // 再読込のnormalizeStateは不正日時を空にするため、表示境界へ直接投入する。
   async function seedDisplayBlocks(blocks) {
     await seed([], 'now');
-    await page.evaluate(async blocks => {
+    return page.evaluate(async blocks => {
       (await import('/src/state/store.js')).state.blocks = blocks;
       document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
+      return document.querySelector('.now-beaten').dataset.beaten;
     }, blocks);
   }
   const at = (h, m, s = 0, date = 29) => new Date(2026, 8, date, h, m, s);
@@ -311,6 +312,149 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await seed(fixtures, 'now', { towerMotion: 'normal' });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     ok(await allMotionStopped(), 'OS reduce-motion: 疑似要素も停止');
+    // 発注50 / G4b: 集計済みの実績を週のタワー・輪へ投影する。
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.setViewportSize({ width: 375, height: 900 });
+    await page.clock.setFixedTime(at(12, 0));
+    const ended = (id, date, start, end) => block(id, { date, completed: true,
+      actualStartAt: `${date}T${start}`, actualEndAt: `${date}T${end}` });
+    const weekFixtures = [ended('monday', '2026-09-28', '09:00:00', '10:05:00'),
+      ended('today-69', day, '09:00:00', '10:09:00'), ended('minimum', day, '11:00:00', '11:00:00'),
+      ended('last-sunday', '2026-09-27', '09:00:00', '12:00:00')];
+    const bars = page.locator('.now-tower');
+    const ring = page.locator('.now-ring-frame');
+    const progress = () => ring.locator('circle').evaluate(el => Number(el.getAttribute('stroke-dasharray').split(/\s+/)[0]));
+    const redraw = () => page.evaluate(async () => {
+      document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
+    });
+    const firstBeaten = await seedDisplayBlocks(weekFixtures);
+    equal(await bars.evaluateAll(els => els.map(el => el.dataset.date)),
+      ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'], 'G4b: 暦週は月〜日の7本');
+    equal(await bars.evaluateAll(els => els.map(el => el.getAttribute('aria-label'))),
+      ['月曜 1時間05分', '火曜 1時間10分', '水曜 0時間00分', '木曜 0時間00分', '金曜 0時間00分', '土曜 0時間00分', '日曜 0時間00分'], 'G4b: 各日の実績合計と各件最低1分・先週除外');
+    equal(await bars.evaluateAll(els => els.map(el => [el.dataset.today, el.dataset.future])),
+      [['0', '0'], ['1', '0'], ['0', '1'], ['0', '1'], ['0', '1'], ['0', '1'], ['0', '1']], 'G4b: 今日と未来の属性');
+    equal(await page.locator('.now-tower-day > span').allTextContents(), ['月', '火', '水', '木', '金', '土', '日'], 'G4b: 本の下に曜日');
+    equal(await ring.getAttribute('aria-label'), '輪 2周と 10分', 'G4b: 70分は2周と10分');
+    equal(await ring.locator('strong').textContent(), '2', 'G4b: 中央は周数');
+    equal(await ring.locator('circle').count(), 1, 'G4b: SVGの円は1つ');
+    ok(Math.abs(await progress() - 1 / 3) < 1e-9, 'G4b: 70分のdasharrayは1/3周');
+    equal(await page.locator('.now-yesterday').textContent(), '昨日 1時間05分', 'G4b: 昨日の実績を常に表示');
+    equal(firstBeaten, '1', 'G4b: 昨日超えの初回描画');
+    await redraw();
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '0', 'G4b: 同日の再描画はきらめきを繰り返さない');
+    const geometry = await page.locator('.now-tower-frame').evaluate(frame => {
+      const rect = frame.getBoundingClientRect();
+      return [...frame.querySelectorAll('.now-tower')].map(el => {
+        const bar = el.getBoundingClientRect();
+        return bar.left >= rect.left && bar.right <= rect.right && bar.width >= 24;
+      });
+    });
+    equal(geometry, Array(7).fill(true), 'G4b: 375pxで7本が枠内・最小幅24px');
+    equal(await page.locator('.now-tower-line').allTextContents(), ['2h'], 'G4b: 2時間未満も基準線1本');
+    await seedDisplayBlocks([]);
+    equal(await page.locator('.now-tower-line').allTextContents(), ['2h'], 'G4b: 実績0も2hの線');
+    equal(await page.locator('.now-yesterday').textContent(), '昨日 0時間00分', 'G4b: 昨日0分も表示');
+    equal(await page.locator('.now-beaten:visible').count(), 0, 'G4b: 今日と昨日が0なら昨日超えなし');
+    await seedDisplayBlocks([ended('two-hours', day, '09:00:00', '11:00:00')]);
+    const twoHourAlignment = await page.locator('.now-tower-frame').evaluate(frame => {
+      const book = frame.querySelector('.now-tower[data-today="1"]').getBoundingClientRect();
+      const line = [...frame.querySelectorAll('.now-tower-line')].find(el => el.textContent === '2h').getBoundingClientRect();
+      return Math.abs(book.top - line.bottom);
+    });
+    ok(twoHourAlignment <= 1, 'G4b: 2時間の本の天面と2h基準線の下辺の差は1px以内');
+    await seedDisplayBlocks([ended('long', day, '09:00:00', '11:30:00')]);
+    equal(await page.locator('.now-tower-line').allTextContents(), ['2h', '4h'], 'G4b: 天井150分なら切り上げ2本');
+    equal(await bars.locator('[data-today="1"]').count(), 0, 'G4b: 本の内部に本を重ねない');
+    equal(await page.locator('.now-tower[data-today="1"]').evaluate(el => el.style.height), '100%', 'G4b: 最大日の本は天井まで');
+    ok(await page.locator('.now-tower-line').evaluateAll(els => els.every(el => {
+      const frame = el.closest('.now-tower-frame').getBoundingClientRect(), line = el.getBoundingClientRect();
+      return line.top >= frame.top && line.bottom <= frame.bottom;
+    })), 'G4b: 切り上げた4hの基準線も枠内に見える');
+    await seedDisplayBlocks([ended('tall-sunday', '2026-10-04', '09:00:00', '12:00:00')]);
+    const labelOutsideSunday = await page.locator('.now-tower-frame').evaluate(frame => {
+      const sunday = frame.querySelector('.now-tower[data-date="2026-10-04"]').getBoundingClientRect();
+      const line = [...frame.querySelectorAll('.now-tower-line')].find(el => el.textContent === '2h');
+      const text = document.createRange();
+      text.selectNodeContents(line);
+      return text.getBoundingClientRect().left >= sunday.right;
+    });
+    ok(labelOutsideSunday, 'G4b: 2hの文字の左端は日曜の本の右端以上で重ならない');
+    await page.clock.setFixedTime(at(12, 0, 0, 28));
+    await seedDisplayBlocks([ended('sunday-yesterday', '2026-09-27', '09:00:00', '10:05:00'),
+      ended('monday-today', '2026-09-28', '09:00:00', '09:30:00')]);
+    equal(await bars.evaluateAll(els => els.map(el => el.getAttribute('aria-label'))),
+      ['月曜 0時間30分', '火曜 0時間00分', '水曜 0時間00分', '木曜 0時間00分', '金曜 0時間00分', '土曜 0時間00分', '日曜 0時間00分'], 'G4b: 月曜日の昨日は前週日曜で今週の本に混ざらない');
+    equal(await page.locator('.now-yesterday').textContent(), '昨日 1時間05分', 'G4b: 週外の昨日も比較には含める');
+    equal(await page.locator('.now-beaten:visible').count(), 0, 'G4b: 今日が昨日未満なら表示なし');
+    await page.clock.setFixedTime(at(12, 0));
+    await seedDisplayBlocks([ended('yesterday-minute', '2026-09-28', '09:00:00', '09:01:00'),
+      block('grow', { actualStartAt: `${day}T11:59:00` }), block('typing')]);
+    equal(await page.locator('.now-beaten:visible').count(), 0, 'G4b: 今日と昨日が同じなら表示なし');
+    const todayBar = page.locator('.now-tower[data-today="1"]');
+    const barNode = await todayBar.elementHandle(), circleNode = await ring.locator('circle').elementHandle();
+    const frameNode = await page.locator('.now-tower-frame').elementHandle();
+    const beforeGrow = { height: await todayBar.evaluate(el => parseFloat(el.style.height)), progress: await progress() };
+    const inputDraft = page.locator('[data-field="now-declaration"][data-id="typing"]');
+    await inputDraft.fill('入力中の宣言');
+    await inputDraft.dispatchEvent('compositionstart');
+    await page.clock.setFixedTime(at(12, 0, 10)); await tick();
+    ok(await todayBar.evaluate(el => parseFloat(el.style.height)) > beforeGrow.height, 'G4b: 走行中の本がtickで伸びる');
+    ok(await progress() > beforeGrow.progress, 'G4b: 走行中の輪がtickで進む');
+    ok(await barNode.evaluate(el => el === document.querySelector('.now-tower[data-today="1"]')), 'G4b: 本のDOMを保持');
+    ok(await circleNode.evaluate(el => el === document.querySelector('.now-ring-frame circle')), 'G4b: 輪のDOMを保持');
+    ok(await frameNode.evaluate(el => el === document.querySelector('.now-tower-frame')), 'G4b: 枠のDOMを保持');
+    equal(await todayBar.getAttribute('aria-label'), '火曜 0時間01分', 'G4b: tick後の実績aria-label');
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: tickで昨日を超えた瞬間のきらめき');
+    equal(await inputDraft.inputValue(), '入力中の宣言', 'G4b: 集計tickでも入力中の宣言を保持');
+    ok(await inputDraft.evaluate(el => el === document.activeElement), 'G4b: 集計tickでもIMEのフォーカスを保持');
+    await inputDraft.dispatchEvent('compositionend', { data: '入力中の宣言' });
+    await tick();
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: 後続tickでもきらめきの1を保持');
+    await redraw();
+    await tick();
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '0', 'G4b: 後続tickで演出を再発火しない');
+    const pausedStack = await page.locator('.now-stack').innerHTML();
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await page.clock.setFixedTime(at(12, 30)); await tick();
+    equal(await page.locator('.now-stack').innerHTML(), pausedStack, 'G4b: hidden中は積み上げのDOMを更新しない');
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); });
+    equal(await ring.getAttribute('aria-label'), '輪 1周と 1分', 'G4b: 復帰すると周数と分が追随');
+    await page.locator('.now-view').evaluate(el => { el.dataset.paused = '1'; });
+    const pausedOnly = await page.locator('.now-stack').innerHTML();
+    await page.clock.setFixedTime(at(13, 0)); await tick();
+    equal(await page.locator('.now-stack').innerHTML(), pausedOnly, 'G4b: data-pausedだけでもtick停止');
+    await seedDisplayBlocks(weekFixtures);
+    await page.locator('.now-stack').evaluate(el => {
+      window.stackMutations = 0;
+      new MutationObserver(records => { window.stackMutations += records.length; })
+        .observe(el, { childList: true, attributes: true, characterData: true, subtree: true });
+    });
+    await page.clock.setFixedTime(at(13, 1)); await tick();
+    equal(await page.evaluate(() => window.stackMutations), 0, 'G4b: 走行中BlockなしならDOM更新なし');
+    await page.clock.setFixedTime(at(23, 59));
+    await seedDisplayBlocks([ended('yesterday-cross', '2026-09-28', '09:00:00', '09:01:00'),
+      block('cross-midnight', { actualStartAt: `${day}T23:57:00` })]);
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: 日跨ぎ前に当日の昨日超え');
+    await page.clock.setFixedTime(at(0, 1, 0, 30));
+    await page.evaluate(async () => (await import('/src/features/today.js')).updateTodayTick());
+    equal(await page.locator('.now-tower[data-today="1"]').getAttribute('data-date'), '2026-09-30', 'G4b: 日跨ぎで今日の本を更新');
+    equal(await page.locator('.now-tower[data-date="2026-09-29"]').getAttribute('aria-label'), '火曜 0時間04分', 'G4b: 日跨ぎの走行中は開始日の本に帰属');
+    equal(await ring.getAttribute('aria-label'), '輪 0周と 0分', 'G4b: 日跨ぎの走行中を今日の輪に混ぜない');
+    await page.evaluate(async () => {
+      (await import('/src/state/store.js')).state.blocks.push({ id: 'new-day', date: '2026-09-30', completed: true,
+        actualStartAt: '2026-09-30T00:00:00', actualEndAt: '2026-09-30T00:05:00' });
+    });
+    await redraw();
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: 翌日の昨日超えは改めて1回');
+    await redraw();
+    equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '0', 'G4b: 翌日も再描画では繰り返さない');
+    await page.clock.setFixedTime(at(12, 0));
+    for (const motion of ['calm', 'off', 'normal']) {
+      await seed(weekFixtures, 'now', { towerMotion: motion });
+      if (motion === 'normal') await page.emulateMedia({ reducedMotion: 'reduce' });
+      ok(await allMotionStopped(), `G4b: ${motion}は昨日超えの演出も抑制`);
+    }
     equal(errors, [], 'ブラウザ例外なし');
     console.log(`now-view: ${assertions} assertions passed`);
   } finally {

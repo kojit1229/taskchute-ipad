@@ -2487,7 +2487,7 @@
       ],
       "assertionSignals": 2,
       "assertionHash": "11e2a081ff96688b",
-      "sourceHash": "d78e4643c54551cb",
+      "sourceHash": "2ecdfdd5b1c32eab",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3757,6 +3757,29 @@
       "assertionSignals": 7,
       "assertionHash": "1cdca5f5c8452300",
       "sourceHash": "45c03dba3d946adb",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "tower-week-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 48,
+      "assertionHash": "2b095cab19463bac",
+      "sourceHash": "b1661db265fb2c6e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
