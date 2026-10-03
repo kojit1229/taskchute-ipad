@@ -90,6 +90,7 @@ import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/tr
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday, renderNow } from "./src/features/today.js";
 import { configureNowView, setNowEstimate, withNowDeclaration } from "./src/features/now-view.js";
+import { configureRoutineView, renderRoutineView, startRoutineEdit, saveRoutine, cancelRoutineEdit, endRoutine } from "./src/features/routine-view.js";
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriFree } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
@@ -268,6 +269,7 @@ function pruneExpiredSuggestedThemes(list) {
 const navItems = [
   { id: "now", label: "いま", mark: "◎" },
   { id: "dandori", label: "段取り", mark: "☰" },
+  { id: "routine", label: "ルーティン", mark: "↻" },
   { id: "today", label: "今日", mark: "▶" },
   { id: "exec", label: "実行", mark: "E" },
   { id: "wbs", label: "作業一覧", mark: "W" },
@@ -342,6 +344,8 @@ configureGithubSync({
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render });
+configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
+  endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast });
 configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
   fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast, makeBlock, renderDeferringForFocus, getOtherTask, getCategoryNames });
@@ -486,6 +490,12 @@ configureTimeline({
 // ため、ハンドラは既存のapp.js関数・module変数をそのまま参照する形で登録する。ロジック自体は
 // if連鎖からの機械的な移動のみで無改変)。
 registerActions({
+  "routine-new": () => startRoutineEdit(""),
+  "routine-edit": ({ target }) => startRoutineEdit(target.dataset.ruleId),
+  "routine-save": ({ target }) => saveRoutine(target.dataset.ruleId),
+  "routine-cancel": () => cancelRoutineEdit(),
+  "routine-end": ({ target }) => endRoutine(target.dataset.ruleId, false),
+  "routine-end-confirm": ({ target }) => endRoutine(target.dataset.ruleId, true),
   // v333: data-mode付きnav(タイムラインrail「開く」等)は遷移と同時に実行ラッパーの
   // モードも合わせる(非永続の表示専用状態、dataModifiedAtは汚さない)。
   "nav": ({ target }) => {
@@ -2291,7 +2301,7 @@ function normalizeState(value) {
     value.settings.dailyReadingRoutineIds = { affirmation: "", visionBoard: "", ...actualSettings.dailyReadingRoutineIds };
   // v230: home撤去後も旧state・未知viewで白画面にしないため、todayへ縮退する。
   const allowedViews = new Set([
-    "now", "dandori", "today", "wbs", "wish", "tasks", "timeline", "exec",
+    "now", "dandori", "routine", "today", "wbs", "wish", "tasks", "timeline", "exec",
     "journal", "zero", "vision", "ai-reports", "settings", "more",
     "iron-log", "instruments", "fund", "twelveweek"
   ]);
@@ -3636,6 +3646,7 @@ function renderMain() {
   if (view === "now") main.innerHTML = renderNow();
   if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
+  if (view === "routine") main.innerHTML = renderRoutineView();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "fund") main.innerHTML = renderFund();
   if (view === "twelveweek") main.innerHTML = renderTwelveWeek();
@@ -8775,6 +8786,7 @@ function renderCategoriesSettings() {
 
 // v230: 群見出しは描画せず、現在地breadcrumb用の分類だけ各項目へ保持する。
 const moreItems = [
+  { id: "routine", label: "ルーティン", mark: "↻", group: "計画" },
   { id: "wbs", label: "作業一覧", mark: "🧩", group: "計画" },
   { id: "wish", label: "やりたいこと", mark: "✦", group: "計画" },
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
