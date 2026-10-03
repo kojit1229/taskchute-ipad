@@ -71,59 +71,13 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await passGithubGate(page);
     await seed([block('draft-a', { estimateMin: 15 }), block('draft-b', { estimateMin: 50, updatedAt: `${day}T11:00:00` })], 'now');
     await page.locator('[data-action="nav"][data-view="now"]:visible').click();
-    const declaration = page.locator('[data-field="now-declaration"][data-id="draft-a"]');
-    const draft = 'まず <紙> を1枚 & "整理"';
-    await declaration.fill(draft);
-    const declarationNode = await declaration.elementHandle();
-    await declaration.dispatchEvent('compositionstart');
-    await tick();
-    ok(await declarationNode.evaluate(el => el === document.activeElement), '宣言のIME入力中もtickでフォーカスとDOMを保持');
-    await declaration.dispatchEvent('compositionend', { data: draft });
-    equal(await declaration.inputValue(), draft, '宣言欄のクリック・入力で開始しない');
-    equal((await live()).blocks.find(b => b.id === 'draft-a').actualStartAt, '', '宣言下書きは未開始のまま');
-    await page.evaluate(async () => {
-      document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
-    });
-    equal(await declaration.inputValue(), draft, '全再描画しても未開始カードの宣言下書きを保持');
-    equal((await stored()).declarations.length, 0, 'カードの宣言下書きは宣言ログへ保存しない');
+    equal(await page.locator('.now-candidate [data-field="now-declaration"]').count(), 0, 'カードに宣言欄が無い');
     await page.locator('[data-action="now-start"][data-id="draft-a"]').click();
-    equal(await page.locator('[data-declare-note]').inputValue(), draft, 'カードの宣言を既存モーダルへそのまま渡す');
+    equal(await page.locator('[data-declare-note]').inputValue(), '', '開始を押すと宣言モーダルが空で開く');
     await page.locator('[data-declare-note]').fill('モーダルで編集');
     await page.locator('[data-action="declare-confirm"]').click();
     await page.locator('[data-running-id="draft-a"]').waitFor();
     equal((await stored()).declarations.find(d => d.blockId === 'draft-a').note, 'モーダルで編集', '宣言の保存はモーダルの編集値を優先');
-    await page.evaluate(async () => {
-      const state = (await import('/src/state/store.js')).state;
-      state.blocks.find(b => b.id === 'draft-a').actualStartAt = '';
-      document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
-    });
-    equal(await declaration.inputValue(), '', '開始後はモジュールの宣言下書きが空');
-    for (const choice of ['end', 'parallel']) {
-      await seed([block('overlap-running', { actualStartAt: `${day}T11:55:00` }), block('overlap-draft')], 'now');
-      await page.locator('[data-action="nav"][data-view="now"]:visible').click();
-      await page.locator('[data-field="now-declaration"][data-id="overlap-draft"]').fill(draft);
-      await page.locator('[data-action="now-start"][data-id="overlap-draft"]').click();
-      await page.locator(`[data-action="start-overlap-choice"][data-choice="${choice}"]`).click();
-      equal(await page.locator('[data-declare-note]').inputValue(), draft, `重複開始の${choice}選択後もカードの宣言をモーダルへ渡す`);
-    }
-    await seed([block('tower-draft')], 'tower');
-    await page.locator('[data-action="nav"][data-view="now"]:visible').click();
-    await page.locator('[data-field="now-declaration"][data-id="tower-draft"]').fill('いま専用の下書き');
-    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
-    await page.locator('.today-tower [data-action="now-start"][data-id="tower-draft"]').click();
-    equal(await page.locator('[data-declare-note]').inputValue(), '', '今日タブTOWERからの開始にはいまの宣言下書きを差し込まない');
-    await page.locator('[data-action="declare-confirm"]').click();
-    equal((await stored()).declarations.find(d => d.blockId === 'tower-draft').note, '', 'TOWERの宣言確定にもいまの下書きを差し込まない');
-    await seed([block('today-skin-draft')], 'now');
-    await page.locator('#app[data-view="today"] [data-field="now-declaration"][data-id="today-skin-draft"]').fill(draft);
-    await page.locator('#app[data-view="today"] [data-action="now-start"][data-id="today-skin-draft"]').click();
-    equal(await page.locator('[data-declare-note]').inputValue(), draft, '今日タブの見た目いまでもカードの宣言をモーダルへ渡す');
-    await seed([block('today-skin-draft')], 'tower');
-    await page.locator('[data-action="nav"][data-view="now"]:visible').click();
-    await page.locator('[data-field="now-declaration"][data-id="today-skin-draft"]').fill(draft);
-    await page.locator('[data-action="nav"][data-view="today"]:visible').click();
-    await page.locator('.today-tower [data-action="now-start"][data-id="today-skin-draft"]').click();
-    equal(await page.locator('[data-declare-note]').inputValue(), '', '同じBlockも今日タブの見た目TOWERではいまタブの宣言を混ぜない');
     await page.clock.setFixedTime(at(12, 0));
     const nextDay = '2026-09-30';
     await seed([
@@ -154,11 +108,11 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       equal((await live()).settings.todaySkin, skin === 'now' ? 'now' : 'tower', `${skin}: normalizeStateの補完`);
       equal(await page.locator(skin === 'now' ? '.now-view' : '.today-tower').count(), 1, `${skin}: スキン描画`);
     }
-    const routineOne = block(`rec_r1_${day}`, { recurrenceGroupId: 'r1', plannedStartAt: `${day}T11:00:00` });
-    const routineTwo = block(`rec_r2_${day}`, { recurrenceGroupId: 'r2', plannedStartAt: `${day}T13:00:00` });
+    const routineOne = block(`rec_r1_${day}`, { recurrenceGroupId: 'r1', category: 'ルーティン', plannedStartAt: `${day}T11:00:00` });
+    const routineTwo = block(`rec_r2_${day}`, { recurrenceGroupId: 'r2', category: 'ルーティン', plannedStartAt: `${day}T13:00:00` });
     const recurrences = [['r1', '11:00', '11:25'], ['r2', '13:00', '13:25']].map(([id, startTime, endTime]) => ({
       id, title: block(`rec_${id}_${day}`).title, kind: 'daily', startTime, endTime, anchorDate: day,
-      category: '', taskId: '', deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00`
+      category: 'ルーティン', taskId: '', deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00`
     }));
     await seed([routineTwo, block('plain-b', { plannedStartAt: `${day}T14:00:00` }), routineOne, block('plain-a')], 'now', {}, recurrences);
     equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['plain-a', 'plain-b'], 'Block枠は通常Block2件だけを予定順に表示');
@@ -168,9 +122,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-next > p').allTextContents(), [`11:00 作業 ${routineOne.id}`, '12:00 作業 plain-a', `13:00 作業 ${routineTwo.id}`, '14:00 作業 plain-b'], 'これからはBlockとルーティンを混ぜて予定順に表示');
     const routineCard = page.locator('.now-routine .now-candidate').first();
     equal(await page.locator('.now-view .now-estimates, .now-view [data-action="now-estimate"]').count(), 0, 'いまカードに見積ボタンが無い(Block・ルーティン共通)');
-    await routineCard.locator('[data-field="now-declaration"]').fill('まずルーティンを始める');
     await routineCard.locator('[data-action="now-start"]').click();
-    equal(await page.locator('[data-declare-note]').inputValue(), 'まずルーティンを始める', 'ルーティンの宣言を既存の開始モーダルへ引き継ぐ');
     await page.locator('[data-action="declare-confirm"]').click();
     await page.locator(`[data-running-id="${routineOne.id}"]`).waitFor();
     ok((await stored()).blocks.find(b => b.id === routineOne.id).actualStartAt, 'ルーティンを開始して実行中に表示・開始時刻を保存');
@@ -179,8 +131,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-start [data-kind="block"] > p').innerText(), '未着手の Block はありません。', 'ルーティンのみの日はBlock側に未着手なしの案内');
     equal(await page.getByRole('button', { name: '段取りで決める', exact: true }).count(), 0, 'ルーティン実体がある日は段取り案内を出さない');
     equal(await page.locator('.now-routine [data-action="now-start"]').count(), 1, 'Blockなしでもルーティンカードは表示');
-    await seed([block('category-routine', { category: 'ルーティン', plannedStartAt: `${day}T11:00:00` }), block('plain-only')], 'now');
-    equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => [el.dataset.id, el.closest('[data-kind]').dataset.kind])), [['plain-only', 'block'], ['category-routine', 'routine']], 'categoryルーティン(recurrenceGroupIdなし)もルーティン枠へ分離');
+    await seed([block('category-routine', { category: 'ルーティン', plannedStartAt: `${day}T11:00:00` }), block(`rec_r3_${day}`, { recurrenceGroupId: 'r3' })], 'now', {}, [{ ...recurrences[0], id: 'r3', category: '', title: block(`rec_r3_${day}`).title, startTime: '12:00', endTime: '12:25' }]);
+    equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => [el.dataset.id, el.closest('[data-kind]').dataset.kind])), [[`rec_r3_${day}`, 'block'], ['category-routine', 'routine']], 'categoryルーティンだけをルーティン枠へ・recurrenceGroupIdありcategoryなしはBlock枠');
     await seed([block('plain-only')], 'now');
     equal(await page.locator('.now-routine').count(), 0, 'ルーティン0件なら枠ごと非表示');
     await seed([], 'now');
@@ -310,8 +262,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
         }));
         equal(layout.overflow, false, `${theme}/${width}: 横はみ出しなし`);
         ok(layout.buttons, `${theme}/${width}: ボタン44px以上`);
-        ok(await page.locator('[data-field="now-declaration"]').evaluateAll(els => els.length > 0 && els.every(el =>
-          parseFloat(getComputedStyle(el).fontSize) >= 16 && el.getBoundingClientRect().height >= 44)), `${theme}/${width}: 宣言欄16px以上・高さ44px以上`);
         equal(layout.columns, width === 1280 ? 3 : 1, `${theme}/${width}: 列数`);
         ok(await page.locator('.now-candidates button').evaluate(el =>
           el.getBoundingClientRect().width >= el.parentElement.getBoundingClientRect().width * .9), `${theme}/${width}: 候補1件の幅は親の90%以上`);
@@ -415,9 +365,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     const barNode = await todayBar.elementHandle(), circleNode = await ring.locator('circle').elementHandle();
     const frameNode = await page.locator('.now-tower-frame').elementHandle();
     const beforeGrow = { height: await todayBar.evaluate(el => parseFloat(el.style.height)), progress: await progress() };
-    const inputDraft = page.locator('[data-field="now-declaration"][data-id="typing"]');
-    await inputDraft.fill('入力中の宣言');
-    await inputDraft.dispatchEvent('compositionstart');
     await page.clock.setFixedTime(at(12, 0, 10)); await tick();
     ok(await todayBar.evaluate(el => parseFloat(el.style.height)) > beforeGrow.height, 'G4b: 走行中の本がtickで伸びる');
     ok(await progress() > beforeGrow.progress, 'G4b: 走行中の輪がtickで進む');
@@ -426,9 +373,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     ok(await frameNode.evaluate(el => el === document.querySelector('.now-tower-frame')), 'G4b: 枠のDOMを保持');
     equal(await todayBar.getAttribute('aria-label'), '火曜 0時間01分', 'G4b: tick後の実績aria-label');
     equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: tickで昨日を超えた瞬間のきらめき');
-    equal(await inputDraft.inputValue(), '入力中の宣言', 'G4b: 集計tickでも入力中の宣言を保持');
-    ok(await inputDraft.evaluate(el => el === document.activeElement), 'G4b: 集計tickでもIMEのフォーカスを保持');
-    await inputDraft.dispatchEvent('compositionend', { data: '入力中の宣言' });
     await tick();
     equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: 後続tickでもきらめきの1を保持');
     await redraw();

@@ -63,7 +63,6 @@ function candidateHTML(block) {
   const id = escapeHTML(block.id), estimate = resolveEstimateMin(block);
   return `<article class="now-candidate">
     <div class="now-candidates"><button type="button" data-action="now-start" data-id="${id}"><strong>${block.isMIT ? "★ " : ""}${escapeHTML(block.title)}</strong><small>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(estimate)}分</small></button></div>
-    <input type="text" data-field="now-declaration" data-id="${id}" aria-label="${escapeHTML(block.title)}の宣言(任意)" placeholder="宣言(任意)" value="${escapeHTML(declarationDrafts.get(String(block.id)) || "")}">
   </article>`;
 }
 
@@ -152,7 +151,7 @@ function updateStackTick(root, blocks, today) {
 }
 
 function isRoutineBlock(b) {
-  return !!b.recurrenceGroupId || b.category === "ルーティン";
+  return b.category === "ルーティン";
 }
 
 export function renderNowView() {
