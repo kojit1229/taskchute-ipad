@@ -346,7 +346,7 @@ configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiv
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
   endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast });
-configureDandoriView({ getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
+const { duplicateDandoriBlock } = configureDandoriView({ updateBlockField, render, getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
   fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast, makeBlock, renderDeferringForFocus, getOtherTask, getCategoryNames });
 configureToday({
@@ -739,6 +739,7 @@ registerActions({
   "dandori-move": ({ id, target }) => moveDandoriBlock(id, target.dataset.dir),
   "dandori-add-task": ({ id }) => addDandoriTask(id),
   "dandori-add-free": () => addDandoriFree(),
+  "dandori-duplicate": ({ id }) => duplicateDandoriBlock(id),
   "dandori-remove": ({ id }) => { openBlockEditor(id); deleteFromModal(); if (state.modal) closeModal(); },
   "migration-ritual-choice": ({ target }) => resolveMigrationRitual(target.dataset.choice),
   // ideal-retry: v230のHome撤去で到達不能化、v292孤児掃除でresolveIdealRetry/idealActiveEntry

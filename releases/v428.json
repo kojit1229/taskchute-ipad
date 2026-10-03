@@ -1,0 +1,33 @@
+{
+  "version": 428,
+  "date": "2026-10-04",
+  "title": "段取りの時刻編集と複製",
+  "summary": "今日やるカードで予定の開始・終了時刻を直接編集でき、複製を今日の末尾に追加できます。",
+  "changedFiles": [
+    "src/features/dandori-view.js",
+    "app.js",
+    "styles.css",
+    "sw.js",
+    "releases/v428.json",
+    "tests/dandori-view.test.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md"
+  ],
+  "intent": [
+    "発注83 / B2-57・59・61、版v428。基準HEAD d6ce25d716807ba53ce03d19d8e93d293e1d27b6。"
+  ],
+  "changes": [
+    "予定開始・終了のtime入力、5分刻み・16px・44px",
+    "既存updateBlockFieldで保存、終了未設定時は見積から補完",
+    "逆転・空値・補完終了の翌日跨ぎを保存せず、入力中のtickを保護",
+    "複製は今日の末尾に追加し、実績・完了・宣言・MITを引き継がない",
+    "SWキャッシュv428"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["時刻変更の保存と再読込", "日跨ぎtick中の入力保護", "複製の元IDと末尾配置"],
+  "verification": ["発注83の実走終了コードはreports/b257/command-results.jsonl、結果はresult.mdに記録"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["dandori-view", "exec-timeline-e2e", "action-registry-core", "mutation-task-project-e2e"]
+}

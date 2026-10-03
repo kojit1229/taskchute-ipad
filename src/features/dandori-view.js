@@ -4,7 +4,31 @@ let freeTitle = "";
 if (typeof document !== "undefined") document.addEventListener("input", event => {
   if (event.target?.matches('[data-field="dandori-free-title"]')) freeTitle = event.target.value;
 });
-export function configureDandoriView(value) { deps = value; }
+export function configureDandoriView(value) { deps = value; return { duplicateDandoriBlock }; }
+
+if (typeof document !== "undefined") document.addEventListener("change", event => {
+  const input = event.target;
+  if (!input?.matches('[data-field="dandori-start"], [data-field="dandori-end"]')) return;
+  const block = deps.getState().blocks.find(b => b.id === input.dataset.id);
+  if (!block || block.deleted) return;
+  const field = input.dataset.field === "dandori-start" ? "plannedStartAt" : "plannedEndAt";
+  const restore = () => { input.value = deps.timeFromDateTime(block[field]) || ""; };
+  if (!input.value) { restore(); return; }
+  if (input.value === deps.timeFromDateTime(block[field])) return;
+  const value = `${block.date}T${input.value}`;
+  const start = field === "plannedStartAt" ? value : block.plannedStartAt;
+  let end = field === "plannedEndAt" ? value : block.plannedEndAt;
+  const fillEnd = field === "plannedStartAt" && !end;
+  if (fillEnd) end = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(start) + deps.resolveEstimateMin(block) * 60000));
+  if (start && end && (end.slice(0, 10) !== block.date || deps.localDateTimeToMs(end) < deps.localDateTimeToMs(start))) {
+    restore();
+    deps.showToast("終了は開始より後にしてください");
+    return;
+  }
+  if (!deps.updateBlockField(block.id, field, value)) return;
+  if (fillEnd && !deps.updateBlockField(block.id, "plannedEndAt", end)) return;
+  deps.render();
+});
 
 function updateDandoriTick() {
   const state = deps.getState();
@@ -14,6 +38,8 @@ function updateDandoriTick() {
     return;
   }
   if (typeof document === "undefined" || document.hidden) return;
+  const container = document.querySelector(".dandori-view");
+  if (container?.contains(document.activeElement)) return;
   const today = deps.todayISO();
   if (renderedDate !== null && today !== renderedDate) {
     renderedDate = today;
@@ -71,9 +97,16 @@ function tailStart(today) {
 function addCandidate(input) {
   const date = deps.todayISO(), plannedStartAt = tailStart(date);
   const block = deps.makeBlock({ ...input, date, plannedStartAt });
+  if (input.copiedFromId) block.copiedFromId = input.copiedFromId;
   block.plannedEndAt = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(plannedStartAt) + deps.resolveEstimateMin(block) * 60000));
   deps.getState().blocks.push(block);
   deps.saveAndRender("今日のBlockに追加しました");
+}
+function duplicateDandoriBlock(id) {
+  const block = pending(deps.todayISO()).find(b => b.id === id);
+  if (!block) return;
+  addCandidate({ title: block.title, category: block.category, estimateMin: deps.resolveEstimateMin(block),
+    taskId: block.taskId, copiedFromId: block.id });
 }
 export function addDandoriFree() {
   const input = document.querySelector('[data-field="dandori-free-title"]');
@@ -99,8 +132,9 @@ export function renderDandoriView() {
     <div class="dandori-columns"><section class="dandori-today"><h3>今日やる</h3>
       ${blocks.map((b, i) => `<article class="dandori-card" data-block-id="${e(b.id)}">
         <span class="dandori-number">${i + 1}</span><div class="dandori-info"><strong>${e(b.title)}</strong>
-        <small>${e(timeFromDateTime(b.plannedStartAt) || "--:--")} ・ 見積 ${resolveEstimateMin(b)}分 ・ ${e(b.category || "未分類")}</small></div>
-        <div class="dandori-ops">${button("dandori-move", b.id, "▲", `data-dir="up" aria-label="上へ"${i === 0 ? " disabled" : ""}`)}${button("dandori-move", b.id, "▼", `data-dir="down" aria-label="下へ"${i === blocks.length - 1 ? " disabled" : ""}`)}${button("edit-block", b.id, "直す")}${button("dandori-remove", b.id, "外す")}</div></article>`).join("") || "<p>今日やることを候補から選びましょう。</p>"}
+        <div class="dandori-times"><input type="time" step="300" data-field="dandori-start" data-id="${e(b.id)}" value="${e(timeFromDateTime(b.plannedStartAt) || "")}" aria-label="予定開始">〜<input type="time" step="300" data-field="dandori-end" data-id="${e(b.id)}" value="${e(timeFromDateTime(b.plannedEndAt) || "")}" aria-label="予定終了"></div>
+        <small>見積 ${resolveEstimateMin(b)}分 ・ ${e(b.category || "未分類")}</small></div>
+        <div class="dandori-ops">${button("dandori-move", b.id, "▲", `data-dir="up" aria-label="上へ"${i === 0 ? " disabled" : ""}`)}${button("dandori-move", b.id, "▼", `data-dir="down" aria-label="下へ"${i === blocks.length - 1 ? " disabled" : ""}`)}${button("edit-block", b.id, "直す")}${button("dandori-duplicate", b.id, "複製")}${button("dandori-remove", b.id, "外す")}</div></article>`).join("") || "<p>今日やることを候補から選びましょう。</p>"}
     </section><section class="dandori-candidates"><h3>候補</h3>
       <div class="dandori-free"><input data-field="dandori-free-title" value="${e(freeTitle)}" aria-label="自由追加" placeholder="自由に追加(Block名)" autocomplete="off">${button("dandori-add-free", "", "足す")}</div>
       <h4>昨日の持ち越し</h4><div class="dandori-options">
