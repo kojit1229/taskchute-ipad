@@ -343,7 +343,7 @@ configureGithubSync({
 });
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
-configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render });
+configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
   endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast });
 const { duplicateDandoriBlock } = configureDandoriView({ updateBlockField, render, getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
@@ -1233,8 +1233,11 @@ registerActions({
     const end = nowDateTime();
     const minutes = Number.isFinite(block.estimateMin) && block.estimateMin > 0 ? block.estimateMin : 15;
     const start = `${subtractMinutesFromDateTime(end, minutes)}:${end.slice(17, 19)}`;
-    return commitBlockChanges(state.blocks.map(b => b.id === id
-      ? { ...b, completed: true, actualStartAt: start, actualEndAt: end } : b), () => render());
+    return draftSaveTransaction.run(() => {
+      const actual = { ...block, completed: true, actualStartAt: start, actualEndAt: end };
+      if (actual.recurrenceGroupId) syncHabitStreakForBlock(actual);
+      return commitBlockChanges(state.blocks.map(b => b.id === id ? actual : b), () => render());
+    }, { kinds: ["blocks", "recurrences", "habitStreaks"] }).ok;
   },
   "now-end": ({ id }) => openReportModal(id, "block"),
   "bulk-approve-planned": () => bulkApproveAsPlanned(),

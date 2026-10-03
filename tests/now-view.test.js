@@ -111,7 +111,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     const routineOne = block(`rec_r1_${day}`, { recurrenceGroupId: 'r1', category: 'ルーティン', plannedStartAt: `${day}T11:00:00` });
     const routineTwo = block(`rec_r2_${day}`, { recurrenceGroupId: 'r2', category: 'ルーティン', plannedStartAt: `${day}T13:00:00` });
     const recurrences = [['r1', '11:00', '11:25'], ['r2', '13:00', '13:25']].map(([id, startTime, endTime]) => ({
-      id, title: block(`rec_${id}_${day}`).title, kind: 'daily', startTime, endTime, anchorDate: day,
+      id, title: block(`rec_${id}_${day}`).title, kind: 'daily', startTime, endTime, anchorDate: day, streakSince: day,
       category: 'ルーティン', taskId: '', deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00`
     }));
     await seed([routineTwo, block('plain-b', { plannedStartAt: `${day}T14:00:00` }), routineOne, block('plain-a')], 'now', {}, recurrences);
@@ -136,6 +136,9 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       button.click();
     });
     const completedRoutine = (await stored()).blocks.find(b => b.id === routineOne.id);
+    const expectedHabitLogs = { [day]: { doneAt: `${day}T12:00:37` } };
+    equal((await stored()).habitStreaks?.r1?.logs, expectedHabitLogs, '固定化dailyの即完了は当日の習慣ログ1件を保存');
+    equal(await page.evaluate(() => window.routineSaveCount), 1, 'Block完了と習慣ログは1回の保存で記録');
     equal([completedRoutine.completed, completedRoutine.actualStartAt, completedRoutine.actualEndAt],
       [true, `${day}T11:35:37`, `${day}T12:00:37`], 'B2-60: 1タップで見積25分の実績を同じBlockへ保存');
     equal((await stored()).blocks.filter(b => b.id === routineOne.id).length, 1, '即完了の実績は1件');
@@ -150,15 +153,24 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       window.routineTapButton.remove();
     });
     equal(await stored(), afterTap, '素早い2回目は完了・時刻・更新印を含めてno-op');
+    equal((await stored()).habitStreaks?.r1?.logs, expectedHabitLogs, '2回目も当日の習慣ログは1件');
     equal(await page.evaluate(() => window.routineSaveCount), savesAfterTap, '2回目は保存もしない');
     equal(await page.locator('.now-routine [data-action="now-routine-complete"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineTwo.id], '完了済みのルーティンは枠から外れる');
     equal(await page.locator('.now-view [data-action="toggle-block"]').count(), 0, 'いまタブに取り消しボタンを追加しない');
     await page.reload();
     await page.locator('.now-done > [data-record-id="' + routineOne.id + '"]').waitFor();
     equal((await live()).blocks.find(b => b.id === routineOne.id).actualEndAt, `${day}T12:00:37`, '再起動後も即完了実績を保持');
+    equal((await stored()).habitStreaks?.r1?.logs, expectedHabitLogs, '再起動後も当日の習慣ログを保持');
     await page.locator('[data-action="nav"][data-view="exec"]:visible').click();
     await page.locator('[data-action="toggle-block"][data-id="' + routineOne.id + '"]').first().click();
     equal((await stored()).blocks.find(b => b.id === routineOne.id).completed, false, '実行タブの従来経路で完了を外せる');
+    equal((await stored()).habitStreaks?.r1?.logs, {}, '従来の完了解除で習慣ログも取り消す');
+    const appSource = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+    const nowSource = fs.readFileSync(path.join(__dirname, '../src/features/now-view.js'), 'utf8');
+    const stylesSource = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
+    const nowConfiguration = appSource.match(/configureNowView\(\{[^\n]+/)[0];
+    ok(!/\b(updateBlockField|render)\b/.test(nowConfiguration) && !/\b(updateBlockField|render|setNowEstimate)\b/.test(nowSource), '見積操作の未使用注入・受け側が無い');
+    ok(!stylesSource.includes('.now-estimates'), '見積操作の未使用CSSが無い');
     await seed([block('fallback-routine', { category: 'ルーティン', estimateMin: null })], 'now');
     await page.locator('[data-action="now-routine-complete"][data-id="fallback-routine"]').click();
     const fallback = (await stored()).blocks.find(b => b.id === 'fallback-routine');
