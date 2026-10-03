@@ -56,6 +56,23 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     const timelineText = await page.locator('.dandori-layout .timeline-tower').innerText();
     ok(timelineText.includes('作業 today-timeline'), '段取りの下のタイムラインに今日の予定');
     ok(!timelineText.includes('作業 past-timeline'), '段取りの下のタイムラインに前日の予定を出さない');
+    await seed([block('normal'), block('repeat-plan', '11:00', '11:40', { category: '', estimateMin: 40 }),
+      block('routine', '12:00', '14:00', { category: 'ルーティン', estimateMin: 120 }),
+      block('carry-normal', '09:00', '09:25', { date: yesterday, plannedStartAt: `${yesterday}T09:00:00`, plannedEndAt: `${yesterday}T09:25:00` }),
+      block('carry-routine', '10:00', '10:25', { category: 'ルーティン', date: yesterday, plannedStartAt: `${yesterday}T10:00:00`, plannedEndAt: `${yesterday}T10:25:00` })]);
+    const timelineBlockIds = () => page.locator('.timeline-tower [data-action="edit-block"][data-id]')
+      .evaluateAll(els => [...new Set(els.map(el => el.dataset.id))].sort());
+    const dandoriTimelineIds = await timelineBlockIds();
+    await page.locator('#bottomNav [data-view="exec"]').click();
+    const execTimelineIds = await timelineBlockIds();
+    await page.locator('#bottomNav [data-view="dandori"]').click();
+    equal({
+      today: await order(),
+      summary: await page.locator('.dandori-view header > p').innerText(),
+      carry: await page.locator('.dandori-view [data-action="carry-over"]').evaluateAll(els => els.map(el => el.dataset.id)),
+      timelineIds: dandoriTimelineIds, timelineMatchesExec: JSON.stringify(dandoriTimelineIds) === JSON.stringify(execTimelineIds)
+    }, { today: ['normal', 'repeat-plan'], summary: '2件 ・ 見積 65分 ・ 見込み終了 11:05', carry: ['carry-normal'], timelineIds: ['normal', 'repeat-plan'], timelineMatchesExec: true },
+    'categoryルーティンは今日やる・件数・見積合計・見込み終了・持ち越しから除外しタイムラインは既存実行画面と一致');
     const initial = [block('b', '10:00', '10:23'), block('a'), block('done', '08:00', '08:25', { completed: true }),
       block('running', '08:30', '08:55', { actualStartAt: `${day}T08:30:00` }), block('deleted', '07:00', '07:25', { deleted: true }),
       block('moved', '07:30', '07:55', { migratedTo: 'elsewhere' })];

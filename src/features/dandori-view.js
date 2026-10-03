@@ -23,7 +23,7 @@ function updateDandoriTick() {
 }
 
 function pending(date) {
-  return deps.blocksForDate(date).filter(b => !b.completed && !b.actualStartAt && !b.migratedTo);
+  return deps.blocksForDate(date).filter(b => !b.completed && !b.actualStartAt && !b.migratedTo && b.category !== "ルーティン");
 }
 function scheduled(taskId, date) {
   return deps.blocksForDate(date).some(b => b.taskId === taskId);
@@ -83,19 +83,33 @@ export function addDandoriFree() {
   freeTitle = "";
   addCandidate({ title, taskId: deps.getOtherTask()?.id || "", category: deps.getCategoryNames()[0] || "" });
 }
+function dandoriProjectedEndText(today) {
+  if (deps.getState().selectedDate !== today) return "";
+  const remaining = deps.blocksForDate(today).filter(b => !b.completed && !b.migratedTo && b.category !== "ルーティン");
+  if (!remaining.length) return "";
+  const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+  const end = remaining.filter(b => !b.oneTap).reduce((sum, b) => {
+    const estimate = deps.resolveEstimateMin(b);
+    if (!b.actualStartAt) return sum + estimate;
+    const [hours, minutes] = deps.timeFromDateTime(b.actualStartAt).split(":").map(Number);
+    return sum + Math.max(0, estimate - Math.max(0, nowMin - (hours * 60 + minutes)));
+  }, nowMin);
+  return `見込み終了 ${end >= 1440 ? "翌" : ""}${String(Math.floor((end % 1440) / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+}
+
 export function renderDandoriView() {
-  const { escapeHTML: e, getState, todayISO, addDays, blocksForDate, timeFromDateTime, resolveEstimateMin, projectedEndText } = deps;
+  const { escapeHTML: e, getState, todayISO, addDays, blocksForDate, timeFromDateTime, resolveEstimateMin } = deps;
   const state = getState(), today = todayISO(), blocks = pending(today);
   renderedDate = today;
   if (tickerId === null && typeof document !== "undefined") tickerId = setInterval(updateDandoriTick, 1000);
-  const carry = blocksForDate(addDays(today, -1)).filter(b => !b.completed && !b.migratedTo);
+  const carry = blocksForDate(addDays(today, -1)).filter(b => !b.completed && !b.migratedTo && b.category !== "ルーティン");
   const pool = deps.fillGapTaskPool(today)
     .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
   const tasks = [...pool.filter(t => !scheduled(t.id, today)).slice(0, 10), ...pool.filter(t => scheduled(t.id, today))];
   const button = (action, id, label, extra = "") => `<button type="button" class="btn" data-action="${action}" data-id="${e(id)}" ${extra}>${label}</button>`;
   return `<section class="dandori-view" aria-label="段取り">
     ${state.selectedDate !== today ? "<p>時間軸は選択日、段取りは今日です</p>" : ""}
-    <header><h2>段取り — 今日 ${e(today)}</h2><p>${blocks.length}件 ・ 見積 ${blocks.reduce((sum, b) => sum + resolveEstimateMin(b), 0)}分 ・ <span class="dandori-end">${e(projectedEndText() || "見込み終了 —")}</span></p></header>
+    <header><h2>段取り — 今日 ${e(today)}</h2><p>${blocks.length}件 ・ 見積 ${blocks.reduce((sum, b) => sum + resolveEstimateMin(b), 0)}分 ・ <span class="dandori-end">${e(dandoriProjectedEndText(today) || "見込み終了 —")}</span></p></header>
     <div class="dandori-columns"><section class="dandori-today"><h3>今日やる</h3>
       ${blocks.map((b, i) => `<article class="dandori-card" data-block-id="${e(b.id)}">
         <span class="dandori-number">${i + 1}</span><div class="dandori-info"><strong>${e(b.title)}</strong>

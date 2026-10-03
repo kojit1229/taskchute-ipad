@@ -1,0 +1,47 @@
+{
+  "version": 427,
+  "date": "2026-10-04",
+  "title": "いまカードと段取りの表示整理",
+  "summary": "いまのルーティン判定をカテゴリだけにし、カードの宣言欄を外して間隔を縮めました。段取りの候補と集計からルーティンを除き、タイムラインは維持します。",
+  "changedFiles": [
+    "src/features/now-view.js",
+    "src/features/dandori-view.js",
+    "styles.css",
+    "sw.js",
+    "releases/v427.json",
+    "tests/now-view.test.js",
+    "tests/dandori-view.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "発注82 / B2-54・55・56・58、版v427。基準HEAD c20c323e744d21417c8fb32a7a63a9efa7b43718。"
+  ],
+  "changes": [
+    "categoryルーティンだけを専用枠へ分類",
+    "カード宣言欄を非表示・開始時の宣言モーダルを維持",
+    "カードpadding 6px・gap 4px、候補間gap 6px、ボタン44px以上を維持",
+    "段取りの今日やる・集計・持ち越しからルーティンを除外",
+    "SWキャッシュv427"
+  ],
+  "uncertainties": [
+    "iOS Safari実機は未確認"
+  ],
+  "reviewFocus": [
+    "recurrenceGroupIdだけのBlockの分類",
+    "空の宣言モーダルで開始",
+    "段取りの見込み終了とタイムラインの維持"
+  ],
+  "verification": [
+    "発注82の実走終了コードはreports/b254/command-results.jsonl、結果はresult.mdに記録"
+  ],
+  "knownLimitations": [
+    "iOS Safari実機は未確認"
+  ],
+  "relatedSuites": [
+    "now-view",
+    "dandori-view",
+    "today-core",
+    "action-registry-core",
+    "exec-timeline-e2e"
+  ]
+}
