@@ -8,6 +8,7 @@ const { STATE_KEY, setViewportAndWaitForStableLayout } = require('./helpers');
 const { setup } = require('./remaining-twelveweek-layout.test');
 
 const entries = [
+  ['routine', 'ルーティン', '計画'], // v425: ルーティンの専用画面(B2-35、K 指示 2026-10-02)
   ['wbs', '作業一覧', '計画'], ['wish', 'やりたいこと', '計画'], ['vision', 'ビジョン', '計画'],
   ['twelveweek', '12週計画', '計画'], ['zero', '0秒思考', '思考'], ['ai-reports', 'AIレポート', '振り返り'],
   ['fund', '資産', '振り返り'], ['instruments', '健康と継続', 'ツール'],
