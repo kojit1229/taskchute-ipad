@@ -81,6 +81,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await declaration.dispatchEvent('compositionend', { data: draft });
     equal(await declaration.inputValue(), draft, '宣言欄のクリック・入力で開始しない');
     equal((await live()).blocks.find(b => b.id === 'draft-a').actualStartAt, '', '宣言下書きは未開始のまま');
+    await page.evaluate(async () => {
+      document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
+    });
+    equal(await declaration.inputValue(), draft, '全再描画しても未開始カードの宣言下書きを保持');
     equal((await stored()).declarations.length, 0, 'カードの宣言下書きは宣言ログへ保存しない');
     await page.locator('[data-action="now-start"][data-id="draft-a"]').click();
     equal(await page.locator('[data-declare-note]').inputValue(), draft, 'カードの宣言を既存モーダルへそのまま渡す');
