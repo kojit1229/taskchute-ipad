@@ -4,6 +4,7 @@ const path = require('node:path');
 const { setViewportAndWaitForStableLayout } = require('./helpers');
 const { nav: openExistingView } = require('./remaining-twelveweek-layout.test');
 const entries = [
+  ['routine', 'ルーティン', 'ルーティン'],
   ['wbs', '作業一覧', '作業一覧'], ['wish', 'やりたいこと', 'やりたいこと'],
   ['vision', 'ビジョン', 'ビジョン'], ['twelveweek', '12週計画', '12週計画'],
   ['zero', '0秒思考', '0秒思考'], ['ai-reports', 'AIレポート', 'AIレポート'],
@@ -19,9 +20,9 @@ module.exports = async function inventory(page, navigate, output) {
     await navigate(page, 'more');
     const actualEntries = await page.locator('.more-tower-item').evaluateAll(nodes => nodes.map(n => [n.dataset.view,
       n.querySelector('strong').textContent.replace(n.querySelector('.more-tower-mark').textContent, '').replace(/\d+\+?$/, '').trim()]));
-    assert.deepEqual(actualEntries, entries.map(([id, label]) => [id, label]), 'all ten Japanese entry labels');
+    assert.deepEqual(actualEntries, entries.map(([id, label]) => [id, label]), 'all eleven Japanese entry labels');
     for (const [id, label, title] of [...entries, ['journal', '日報', '日報']]) {
-      // Journal is not one of the ten More entries. Reuse the existing view opener for its label-only audit.
+      // Journal is not one of the eleven More entries. Reuse the existing view opener for its label-only audit.
       if (id === 'journal') await openExistingView(page, id);
       else await navigate(page, id);
       const screen = await page.locator('#app').evaluate(root => {
@@ -39,7 +40,7 @@ module.exports = async function inventory(page, navigate, output) {
     }
   }
   fs.writeFileSync(path.join(output, 'handover-label-inventory.json'), JSON.stringify({ entries, results, failures }, null, 2), 'utf8');
-  assert.equal(results.length, 22, 'ten entries plus journal at both widths');
+  assert.equal(results.length, 24, 'eleven entries plus journal at both widths');
   assert.deepEqual(failures, [], 'Japanese headings and no legacy code names in main labels');
-  console.log('PASS R4 labels: ten entries and journal, both widths, expected Japanese headings and no old code names');
+  console.log('PASS R4 labels: eleven entries and journal, both widths, expected Japanese headings and no old code names');
 };
