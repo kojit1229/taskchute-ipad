@@ -64,7 +64,6 @@ function candidateHTML(block) {
   return `<article class="now-candidate">
     <div class="now-candidates"><button type="button" data-action="now-start" data-id="${id}"><strong>${block.isMIT ? "★ " : ""}${escapeHTML(block.title)}</strong><small>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(estimate)}分</small></button></div>
     <input type="text" data-field="now-declaration" data-id="${id}" aria-label="${escapeHTML(block.title)}の宣言(任意)" placeholder="宣言(任意)" value="${escapeHTML(declarationDrafts.get(String(block.id)) || "")}">
-    <div class="now-estimates" role="group" aria-label="見積">${[15, 25, 50].map(minutes => `<span><button type="button" data-action="now-estimate" data-id="${id}" data-minutes="${minutes}" aria-pressed="${estimate === minutes}">${minutes}分</button></span>`).join("")}</div>
   </article>`;
 }
 
@@ -152,13 +151,17 @@ function updateStackTick(root, blocks, today) {
   stack.querySelector(".now-yesterday").textContent = `昨日 ${durationText(beat.yesterday)}`;
 }
 
+function isRoutineBlock(b) {
+  return !!b.recurrenceGroupId || b.category === "ルーティン";
+}
+
 export function renderNowView() {
   clearStartedDrafts();
   const state = getState(), today = todayISO(), blocks = blocksForDate(today);
   const pending = blocks.filter(b => !b.completed && !b.actualStartAt && !b.actualEndAt)
     .sort((a, b) => String(a.plannedStartAt || "~").localeCompare(String(b.plannedStartAt || "~")) || (a.orderIndex || 0) - (b.orderIndex || 0));
-  const pendingBlocks = pending.filter(b => !b.recurrenceGroupId);
-  const pendingRoutines = pending.filter(b => b.recurrenceGroupId);
+  const pendingBlocks = pending.filter(b => !isRoutineBlock(b));
+  const pendingRoutines = pending.filter(isRoutineBlock);
   const running = state.blocks.filter(b => !b.deleted && b.actualStartAt && !b.actualEndAt && !b.completed);
   const records = blocks.filter(b => b.completed || (b.actualStartAt && b.actualEndAt));
   const history = state.blocks.filter(b => !b.deleted && b.date < today && (b.completed || (b.actualStartAt && b.actualEndAt)))
