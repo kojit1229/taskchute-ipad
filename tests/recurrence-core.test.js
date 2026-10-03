@@ -501,7 +501,7 @@ function declarations(source, names) {
   }).join("\n");
 }
 const legacyCode = declarations(legacyApp, ["RECURRENCE_KEEP_PAST_DAYS", "RECURRENCE_FUTURE_DAYS",
-  "isTouchedBlock", "removeUntouchedInstances", "archiveHabitPinPeriod", "endRecurrenceSeries",
+  "isTouchedBlock", "localDateTimeToMs", "removeUntouchedInstances", "archiveHabitPinPeriod", "endRecurrenceSeries",
   "deleteBlock", "saveBlockFromModal"])
   + "\n" + declarations(legacySync, ["PRIMARY_SETTINGS_COMPARE_KEYS", "SYNC_CORE_COMPARE_KEYS",
     "mergeCoreKeys", "mergeBlockLists"]);
@@ -517,7 +517,7 @@ function legacyFixture() {
     document: { querySelector: () => null, querySelectorAll: () => [] },
     mergeRecords, mergeByIdPreferNewer, normalizeDataStamp: value => value,
     getByPath: (object, path) => path.split(".").reduce((v, key) => v?.[key], object),
-    maintainRecurrences,
+    maintainRecurrences, makeRecurrenceInstance,
     commitBlockChanges(blocks, effects, recurrences) { state.blocks = blocks; state.recurrences = recurrences; effects(); return true; }
   });
   vm.runInContext(legacyCode, context);
@@ -582,7 +582,7 @@ test("R2-01: ending series preserves touched future and past occurrences", () =>
 });
 test("R2-01: sync excludes remote-only untouched instances outside production window", () => {
   const c = legacyFixture();
-  const row = (id, date, extra = {}) => ({ id, date, title: "朝の読書", recurrenceGroupId: "baseline", ...extra });
+  const row = (id, date, extra = {}) => ({ ...makeRecurrenceInstance(c.state.recurrences[0], date), id, ...extra });
   const merged = c.mergeBlockLists([], [row("old", "2026-08-12"), row("start", "2026-08-13"),
     row("end", "2026-09-03"), row("future", "2026-09-04"), row("edited", "2026-09-04", { comment: "保持" })]);
   assert.deepEqual(Array.from(merged, b => b.id), ["start", "end", "edited"]);
@@ -601,6 +601,21 @@ test("R2-01: recurrence sync unions ids, resolves timestamps and retains tombsto
 
 // ---- 結果出力 ----
 // B19: use the production touched predicate, generator, purge and merge together.
+test("L-time-touch: time edits survive; equivalent seconds, overnight and untimed instances stay untouched", () => {
+  const c = legacyFixture(), rule = c.state.recurrences[0];
+  for (const [startTime, endTime] of [["09:00", "09:30"], ["23:30", "00:15"], ["", ""], ["", "09:30"]]) {
+    Object.assign(rule, { startTime, endTime });
+    const b = makeRecurrenceInstance(rule, "2026-09-04");
+    assert.equal(c.isTouchedBlock(b), false);
+    for (const field of ["plannedStartAt", "plannedEndAt"]) {
+      if (b[field]) assert.equal(c.isTouchedBlock({ ...b, [field]: `${b[field]}:00` }), false);
+      assert.equal(c.isTouchedBlock({ ...b, [field]: "2026-09-04T10:00:00" }), true);
+    }
+  }
+  c.state = null;
+  assert.equal(c.isTouchedBlock({ recurrenceGroupId: "missing-rule" }), false, "startup does not dereference null state");
+});
+
 test("B19: default energy is untouched; explicit edits and orphan energy survive", () => {
   const c = legacyFixture();
   const rule = c.state.recurrences[0];

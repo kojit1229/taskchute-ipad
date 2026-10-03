@@ -89,7 +89,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday, renderNow } from "./src/features/today.js";
-import { configureNowView, setNowEstimate, withNowDeclaration } from "./src/features/now-view.js";
+import { configureNowView, withNowDeclaration } from "./src/features/now-view.js";
 import { configureRoutineView, renderRoutineView, startRoutineEdit, saveRoutine, cancelRoutineEdit, endRoutine } from "./src/features/routine-view.js";
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriFree } from "./src/features/dandori-view.js";
 import {
@@ -1227,7 +1227,15 @@ registerActions({
   "toggle-block": ({ id }) => toggleBlock(id),
   "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
   "now-start": ({ id }) => withNowDeclaration(() => openDeclareModal(id, "block"), id),
-  "now-estimate": ({ id, target }) => setNowEstimate(id, Number(target.dataset.minutes)),
+  "now-routine-complete": ({ id }) => {
+    const block = state.blocks.find(b => b.id === id && !b.deleted);
+    if (!block || block.category !== "ルーティン" || block.completed || block.actualStartAt || block.actualEndAt) return;
+    const end = nowDateTime();
+    const minutes = Number.isFinite(block.estimateMin) && block.estimateMin > 0 ? block.estimateMin : 15;
+    const start = `${subtractMinutesFromDateTime(end, minutes)}:${end.slice(17, 19)}`;
+    return commitBlockChanges(state.blocks.map(b => b.id === id
+      ? { ...b, completed: true, actualStartAt: start, actualEndAt: end } : b), () => render());
+  },
   "now-end": ({ id }) => openReportModal(id, "block"),
   "bulk-approve-planned": () => bulkApproveAsPlanned(),
   "now-conveyor-complete": ({ id }) => nowConveyorComplete(id),
@@ -2837,8 +2845,9 @@ function normalizeState(value) {
   // v109: WBS のカテゴリ絞り込み(UI状態、既定は空文字="すべて")
   if (typeof value.settings.wbsCategoryFilter !== "string") value.settings.wbsCategoryFilter = "";
   // v23: 繰り返しをルール方式へ(旧データは初回のみ自動移行)
+  // 空配列はルール0本の保存値。旧形式の移行はキーのないデータだけに行う。
+  if (!value.recurrences) migrateRecurrencesIfNeeded(value);
   value.recurrences ||= [];
-  migrateRecurrencesIfNeeded(value);
   // v114: 保護系ルーティン(提案F、2026-07-16 K採用)。運動・睡眠・内省・家族時間など「制約
   // (集中力・体力)を保護するメンテナンス工程」は実行率で裁かず、連続欠落日数で見せるための
   // ルール属性。既定false(後方互換。既存ルールは従来どおりの表示・挙動のまま)。
@@ -13398,9 +13407,12 @@ function isTouchedBlock(b) {
   // v37: タイトルがルールから変えられている実体も「編集済み」として保持する
   //      (リネームしただけの未完了インスタンスが期間外パージで消えていた)
   const rule = b.recurrenceGroupId
-    ? (state.recurrences || []).find((r) => r.id === b.recurrenceGroupId)
+    ? (state?.recurrences || []).find((r) => r.id === b.recurrenceGroupId)
     : null;
   const renamed = rule ? b.title !== rule.title : false;
+  const planned = rule ? makeRecurrenceInstance(rule, b.date) : null;
+  const timeChanged = planned && ["plannedStartAt", "plannedEndAt"].some(field =>
+    localDateTimeToMs(b[field]) !== localDateTimeToMs(planned[field]));
   const defaultCharge = rule?.category === "ルーティン" ? (Number(b.expectedCharge) || 0) : 0;
   const defaultDischarge = rule?.category === "ルーティン" ? (Number(b.expectedDischarge) || 0) : 0;
   const energyChanged = rule
@@ -13410,7 +13422,7 @@ function isTouchedBlock(b) {
     b.deleted || b.source === "daily-reading-manual" || b.completed || b.actualStartAt || b.actualEndAt ||
     Number(b.pomodoroCount || 0) > 0 || (b.comment || "").trim() ||
     b.isMIT || energyChanged ||
-    renamed
+    renamed || timeChanged
   );
 }
 

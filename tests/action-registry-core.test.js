@@ -131,7 +131,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
   "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",
-  "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end", "now-estimate",
+  "add-block", "toggle-block", "toggle-task-complete", "now-start", "now-end", "now-routine-complete",
   "bulk-approve-planned", "now-conveyor-complete",
   // v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込)を意図的に追加。
   "block-row-toggle",
@@ -378,7 +378,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // --- v180: Block/Now(6。now-mode-open/now-mode-close/now-conveyor-skipはv87でUI導線を
   //     撤去して以来到達不能化、v292孤児掃除で削除。now-conveyor-completeはsrc/features/
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=低優先度棚卸しK裁定2026-08-29) ---
-  "toggle-block", "toggle-task-complete", "now-start", "now-end", "now-estimate", "bulk-approve-planned",
+  "toggle-block", "toggle-task-complete", "now-start", "now-end", "now-routine-complete", "bulk-approve-planned",
   "now-conveyor-complete",
   // --- v331: 実行タブA-1a「これから」行の展開トグル(表示専用、state非書込) ---
   "block-row-toggle",

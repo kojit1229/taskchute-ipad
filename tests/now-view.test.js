@@ -116,23 +116,68 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     }));
     await seed([routineTwo, block('plain-b', { plannedStartAt: `${day}T14:00:00` }), routineOne, block('plain-a')], 'now', {}, recurrences);
     equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['plain-a', 'plain-b'], 'Block枠は通常Block2件だけを予定順に表示');
-    equal(await page.locator('.now-start [data-kind="routine"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineOne.id, routineTwo.id], 'ルーティン枠は今日の実体2件だけを予定順に表示');
+    equal(await page.locator('.now-start [data-kind="routine"] [data-action="now-routine-complete"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineOne.id, routineTwo.id], 'ルーティン枠は今日の実体2件だけを予定順に表示');
     ok((await page.locator('.now-routine h3').innerText()).includes('ルーティン'), 'ルーティン枠の見出し');
     equal(await page.locator('.now-routine h3 button[data-action="nav"][data-view="routine"][type="button"]').innerText(), '編集', '見出しにルーティン画面への編集ボタン(v425)');
     equal(await page.locator('.now-next > p').allTextContents(), [`11:00 作業 ${routineOne.id}`, '12:00 作業 plain-a', `13:00 作業 ${routineTwo.id}`, '14:00 作業 plain-b'], 'これからはBlockとルーティンを混ぜて予定順に表示');
     const routineCard = page.locator('.now-routine .now-candidate').first();
     equal(await page.locator('.now-view .now-estimates, .now-view [data-action="now-estimate"]').count(), 0, 'いまカードに見積ボタンが無い(Block・ルーティン共通)');
-    await routineCard.locator('[data-action="now-start"]').click();
-    await page.locator('[data-action="declare-confirm"]').click();
-    await page.locator(`[data-running-id="${routineOne.id}"]`).waitFor();
-    ok((await stored()).blocks.find(b => b.id === routineOne.id).actualStartAt, 'ルーティンを開始して実行中に表示・開始時刻を保存');
-    equal(await page.locator('.now-routine [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineTwo.id], '開始済みのルーティンは開始枠から外れる');
+    await page.clock.setFixedTime(at(12, 0, 37));
+    const beforeTap = await stored();
+    await page.evaluate(key => { window.routineStateKey = key; }, STATE_KEY);
+    await routineCard.locator('[data-action="now-routine-complete"]').evaluate(button => {
+      window.routineTapButton = button.cloneNode(true);
+      window.routineSaveCount = 0;
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (key === window.routineStateKey) window.routineSaveCount++;
+        return original.call(this, key, value);
+      };
+      button.click();
+    });
+    const completedRoutine = (await stored()).blocks.find(b => b.id === routineOne.id);
+    equal([completedRoutine.completed, completedRoutine.actualStartAt, completedRoutine.actualEndAt],
+      [true, `${day}T11:35:37`, `${day}T12:00:37`], 'B2-60: 1タップで見積25分の実績を同じBlockへ保存');
+    equal((await stored()).blocks.filter(b => b.id === routineOne.id).length, 1, '即完了の実績は1件');
+    equal((await stored()).declarations, beforeTap.declarations, '即完了は宣言を作らない');
+    equal(await page.locator('[data-declare-note], [data-running-id="' + routineOne.id + '"]').count(), 0, '宣言モーダル・開始状態を経ない');
+    equal(await page.locator('.now-done > [data-record-id="' + routineOne.id + '"]').count(), 1, '今日できたへ移る');
+    const afterTap = await stored();
+    const savesAfterTap = await page.evaluate(() => window.routineSaveCount);
+    await page.evaluate(() => {
+      document.body.append(window.routineTapButton);
+      window.routineTapButton.click();
+      window.routineTapButton.remove();
+    });
+    equal(await stored(), afterTap, '素早い2回目は完了・時刻・更新印を含めてno-op');
+    equal(await page.evaluate(() => window.routineSaveCount), savesAfterTap, '2回目は保存もしない');
+    equal(await page.locator('.now-routine [data-action="now-routine-complete"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineTwo.id], '完了済みのルーティンは枠から外れる');
+    equal(await page.locator('.now-view [data-action="toggle-block"]').count(), 0, 'いまタブに取り消しボタンを追加しない');
+    await page.reload();
+    await page.locator('.now-done > [data-record-id="' + routineOne.id + '"]').waitFor();
+    equal((await live()).blocks.find(b => b.id === routineOne.id).actualEndAt, `${day}T12:00:37`, '再起動後も即完了実績を保持');
+    await page.locator('[data-action="nav"][data-view="exec"]:visible').click();
+    await page.locator('[data-action="toggle-block"][data-id="' + routineOne.id + '"]').first().click();
+    equal((await stored()).blocks.find(b => b.id === routineOne.id).completed, false, '実行タブの従来経路で完了を外せる');
+    await seed([block('fallback-routine', { category: 'ルーティン', estimateMin: null })], 'now');
+    await page.locator('[data-action="now-routine-complete"][data-id="fallback-routine"]').click();
+    const fallback = (await stored()).blocks.find(b => b.id === 'fallback-routine');
+    equal([fallback.actualStartAt, fallback.actualEndAt], [`${day}T11:45:37`, `${day}T12:00:37`], '見積が無ければ15分の実績');
+    await page.clock.setFixedTime(at(12, 0));
     await seed([routineOne], 'now', {}, recurrences.filter(rule => rule.id === 'r1'));
     equal(await page.locator('.now-start [data-kind="block"] > p').innerText(), '未着手の Block はありません。', 'ルーティンのみの日はBlock側に未着手なしの案内');
     equal(await page.getByRole('button', { name: '段取りで決める', exact: true }).count(), 0, 'ルーティン実体がある日は段取り案内を出さない');
-    equal(await page.locator('.now-routine [data-action="now-start"]').count(), 1, 'Blockなしでもルーティンカードは表示');
+    equal(await page.locator('.now-routine [data-action="now-routine-complete"]').count(), 1, 'Blockなしでもルーティンカードは表示');
     await seed([block('category-routine', { category: 'ルーティン', plannedStartAt: `${day}T11:00:00` }), block(`rec_r3_${day}`, { recurrenceGroupId: 'r3' })], 'now', {}, [{ ...recurrences[0], id: 'r3', category: '', title: block(`rec_r3_${day}`).title, startTime: '12:00', endTime: '12:25' }]);
-    equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => [el.dataset.id, el.closest('[data-kind]').dataset.kind])), [[`rec_r3_${day}`, 'block'], ['category-routine', 'routine']], 'categoryルーティンだけをルーティン枠へ・recurrenceGroupIdありcategoryなしはBlock枠');
+    equal(await page.locator('.now-start .now-candidates button').evaluateAll(els => els.map(el => [el.dataset.id, el.closest('[data-kind]').dataset.kind])), [[`rec_r3_${day}`, 'block'], ['category-routine', 'routine']], 'categoryルーティンだけをルーティン枠へ・recurrenceGroupIdありcategoryなしはBlock枠');
+    // C-1 A/D: ルール0本+孤児実体でlocalStorageから再起動する。
+    for (const rules of [[], [{ ...recurrences[0], id: 'unrelated' }]]) {
+      await seed([block('orphan', { recurrenceGroupId: 'missing-rule' })], 'now', {}, rules);
+      equal(await page.locator('[data-action="gate-continue"]').count(), 0, 'L-orphan: 初期ゲートへ落ちない');
+      equal((await live()).blocks.find(b => b.id === 'orphan').recurrenceGroupId, 'missing-rule', '孤児の紐付けを消さない');
+      equal((await live()).recurrences.some(r => r.id === 'missing-rule'), false, '孤児からルールを再作成しない');
+      equal(await page.locator('.now-start [data-kind="block"] [data-id="orphan"]').count(), 1, '孤児は普通のBlockとして表示');
+    }
     await seed([block('plain-only')], 'now');
     equal(await page.locator('.now-routine').count(), 0, 'ルーティン0件なら枠ごと非表示');
     await seed([], 'now');
