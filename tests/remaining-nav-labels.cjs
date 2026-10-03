@@ -30,7 +30,7 @@ module.exports = async function navJapanese() {
   assert.deepEqual(plain('mobileNav.map(({id,label}) => [id,label])'),
     [['now', 'いま'], ['dandori', '段取り'], ['today', '今日'], ['exec', '実行'], ['wbs', '作業一覧'], ['more', 'その他']]); // v418: いま・段取りを独立タブに(K承認 2026-10-01)
   const sidebar = plain('navItems.map(({id,label}) => [id,label])');
-  assert.equal(sidebar.length, 16); // v418: いま・段取りを追加(K承認 2026-10-01)
+  assert.equal(sidebar.length, 17); // v418: いま・段取りを追加(K承認 2026-10-01)/ v425: ルーティンを追加(K 包括承認 2026-10-02)
   assert.deepEqual(sidebar.find(([id]) => id === 'journal'), ['journal', '日報']);
   for (const [id, label, group] of entries) {
     assert.deepEqual(sidebar.find(item => item[0] === id), [id, label]);
