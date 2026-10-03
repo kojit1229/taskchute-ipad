@@ -15783,12 +15783,12 @@ function resolveEstimateMin(block) {
   return 30;
 }
 // 見込み終了(分)= 今 + Σ(残りブロックの残見積)
-function computeProjectedEnd(dateISO, nowMin) {
+function computeProjectedEnd(dateISO, nowMin, { exclude } = {}) {
   let sum = 0;
   // v187: oneTap(ワンタップ計時)Blockは「いまの活動の記録」であり計画ではないため、
   //       着地予定・残り見積の母集合から除外する(設計§2.2。planned=actual同値の30分が
   //       予定作業として上乗せされる誤差を防ぐ)
-  blocksForDate(dateISO).filter((b) => !b.completed && !b.migratedTo && !b.oneTap).forEach((b) => {
+  blocksForDate(dateISO).filter((b) => !b.completed && !b.migratedTo && !b.oneTap && !exclude?.(b)).forEach((b) => {
     const est = resolveEstimateMin(b);
     if (b.actualStartAt) {
       const elapsed = Math.max(0, nowMin - minutesOf(b.actualStartAt));  // 着手中は残りのみ
@@ -15800,13 +15800,13 @@ function computeProjectedEnd(dateISO, nowMin) {
   return nowMin + sum;
 }
 // テキスト部分だけ返す(毎分の textContent 差し替えで使う)。残なし/今日以外は空。
-function projectedEndText() {
+function projectedEndText({ exclude } = {}) {
   const today = todayISO();
   if (state.selectedDate !== today) return "";
-  const remaining = blocksForDate(today).filter((b) => !b.completed && !b.migratedTo);
+  const remaining = blocksForDate(today).filter((b) => !b.completed && !b.migratedTo && !exclude?.(b));
   if (!remaining.length) return "";
   const now = new Date();
-  const end = computeProjectedEnd(today, now.getHours() * 60 + now.getMinutes());
+  const end = computeProjectedEnd(today, now.getHours() * 60 + now.getMinutes(), { exclude });
   const hh = Math.floor((end % 1440) / 60);
   const mm = end % 60;
   const over = end >= 1440 ? "翌" : "";

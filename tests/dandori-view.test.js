@@ -6,6 +6,10 @@ let assertions = 0;
 const equal = (actual, expected, message) => { assert.deepEqual(actual, expected, message); assertions++; console.log('PASS', message); };
 const ok = (value, message) => { assert.ok(value, message); assertions++; console.log('PASS', message); };
 
+const dandoriSource = fs.readFileSync(path.join(__dirname, '../src/features/dandori-view.js'), 'utf8');
+ok(!dandoriSource.includes('dandoriProjectedEndText') && dandoriSource.includes('deps.projectedEndText({ exclude:'),
+  '段取りの見込み終了は除外条件を渡して共通関数に委譲する');
+
 (async () => {
   const server = startServer(randomPort()), browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({ serviceWorkers: 'block', timezoneId: 'Asia/Tokyo', viewport: { width: 375, height: 900 } });
