@@ -20,15 +20,15 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     estimateMin: 25, category: '', comment: '', ...extra });
   const live = () => page.evaluate(async () => JSON.parse(JSON.stringify((await import('/src/state/store.js')).state)));
   const stored = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-  async function seed(blocks, skin, settings = {}) {
-    await page.evaluate(({ key, blocks, skin, settings, day }) => {
+  async function seed(blocks, skin, settings = {}, recurrences = []) {
+    await page.evaluate(({ key, blocks, skin, settings, recurrences, day }) => {
       const s = JSON.parse(localStorage.getItem(key));
-      Object.assign(s, { blocks, tasks: [], projects: [], recurrences: [], singleSchedules: [], declarations: [], currentView: 'today', selectedDate: day });
+      Object.assign(s, { blocks, tasks: [], projects: [], recurrences, singleSchedules: [], declarations: [], currentView: 'today', selectedDate: day });
       Object.assign(s.settings, { todaySkin: skin, autoSync: false, towerMotion: 'normal' }, settings);
       if (skin === 'missing') delete s.settings.todaySkin;
       s.pomodoro.running = false;
       localStorage.setItem(key, JSON.stringify(s));
-    }, { key: STATE_KEY, blocks, skin, settings, day });
+    }, { key: STATE_KEY, blocks, skin, settings, recurrences, day });
     await page.reload();
     await page.locator('#app[data-view="today"] .now-view, #app[data-view="today"] .today-tower').waitFor();
   }
@@ -162,7 +162,35 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       equal((await live()).settings.todaySkin, skin === 'now' ? 'now' : 'tower', `${skin}: normalizeStateの補完`);
       equal(await page.locator(skin === 'now' ? '.now-view' : '.today-tower').count(), 1, `${skin}: スキン描画`);
     }
+    const routineOne = block(`rec_r1_${day}`, { recurrenceGroupId: 'r1', plannedStartAt: `${day}T11:00:00` });
+    const routineTwo = block(`rec_r2_${day}`, { recurrenceGroupId: 'r2', plannedStartAt: `${day}T13:00:00` });
+    const recurrences = [['r1', '11:00', '11:25'], ['r2', '13:00', '13:25']].map(([id, startTime, endTime]) => ({
+      id, title: block(`rec_${id}_${day}`).title, kind: 'daily', startTime, endTime, anchorDate: day,
+      category: '', taskId: '', deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00`
+    }));
+    await seed([routineTwo, block('plain-b', { plannedStartAt: `${day}T14:00:00` }), routineOne, block('plain-a')], 'now', {}, recurrences);
+    equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['plain-a', 'plain-b'], 'Block枠は通常Block2件だけを予定順に表示');
+    equal(await page.locator('.now-start [data-kind="routine"] [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineOne.id, routineTwo.id], 'ルーティン枠は今日の実体2件だけを予定順に表示');
+    ok((await page.locator('.now-routine h3').innerText()).includes('ルーティン'), 'ルーティン枠の見出し');
+    equal(await page.locator('.now-routine h3 button').count(), 0, '見出しに編集ボタンが無い');
+    equal(await page.locator('.now-next > p').allTextContents(), [`11:00 作業 ${routineOne.id}`, '12:00 作業 plain-a', `13:00 作業 ${routineTwo.id}`, '14:00 作業 plain-b'], 'これからはBlockとルーティンを混ぜて予定順に表示');
+    const routineCard = page.locator('.now-routine .now-candidate').first();
+    equal(await routineCard.locator('[data-action="now-estimate"]').allTextContents(), ['15分', '25分', '50分'], 'ルーティンにも既存の見積ボタン');
+    await routineCard.locator('[data-field="now-declaration"]').fill('まずルーティンを始める');
+    await routineCard.locator('[data-action="now-start"]').click();
+    equal(await page.locator('[data-declare-note]').inputValue(), 'まずルーティンを始める', 'ルーティンの宣言を既存の開始モーダルへ引き継ぐ');
+    await page.locator('[data-action="declare-confirm"]').click();
+    await page.locator(`[data-running-id="${routineOne.id}"]`).waitFor();
+    ok((await stored()).blocks.find(b => b.id === routineOne.id).actualStartAt, 'ルーティンを開始して実行中に表示・開始時刻を保存');
+    equal(await page.locator('.now-routine [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineTwo.id], '開始済みのルーティンは開始枠から外れる');
+    await seed([routineOne], 'now', {}, recurrences.filter(rule => rule.id === 'r1'));
+    equal(await page.locator('.now-start [data-kind="block"] > p').innerText(), '未着手の Block はありません。', 'ルーティンのみの日はBlock側に未着手なしの案内');
+    equal(await page.getByRole('button', { name: '段取りで決める', exact: true }).count(), 0, 'ルーティン実体がある日は段取り案内を出さない');
+    equal(await page.locator('.now-routine [data-action="now-start"]').count(), 1, 'Blockなしでもルーティンカードは表示');
+    await seed([block('plain-only')], 'now');
+    equal(await page.locator('.now-routine').count(), 0, 'ルーティン0件なら枠ごと非表示');
     await seed([], 'now');
+    equal(await page.locator('.now-routine').count(), 0, '全件空でもルーティン枠は非表示');
     await page.getByRole('button', { name: '段取りで決める', exact: true }).click();
     await page.locator('#app[data-view="dandori"]').waitFor();
     equal((await live()).currentView, 'dandori', 'Blockなしの案内で段取りタブへ');
