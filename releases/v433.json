@@ -1,0 +1,23 @@
+{
+  "version": 433,
+  "date": "2026-10-04",
+  "title": "ルーティン画面の仕上げ",
+  "summary": "ルーティン画面で作ったものがいまタブのルーティン枠に出るようになり(カテゴリ既定)、何も変えずに保存しても予定が作り直されなくなりました。見積の表示をいまタブと揃え、毎月は日を指定でき、12 週計画由来には印が付き、終了ボタンの連打で消えなくなりました。",
+  "changedFiles": ["app.js", "src/features/routine-view.js", "styles.css", "sw.js", "releases/v433.json", "tests/routine-view.test.js", "tests/mutation-recurrence-e2e.test.js", "tests/suite-manifest.json", "docs/code-index.generated.json", "docs/code-index.generated.md"],
+  "intent": ["発注113(B2-69〜75)+116(fix433)、版v433。基準 41cc4a1(v432)。ドッグフーディング統合 reviews/60 の C-2〜C-7・G-01(K 裁定 2026-10-04 08:3x)。"],
+  "changes": [
+    "B2-69: 新規作成でカテゴリ空なら「ルーティン」を保存(既存ルールは書き換えない)",
+    "B2-70: 無変更の保存は実体を作り直さない(入力欄の生の値で比較)",
+    "B2-71: カードの見積は resolveEstimateMin を注入して同じ値",
+    "B2-72: 12 週計画由来のルールに「12週」の印",
+    "B2-73: 毎月は日(1〜31)を入力。anchorDate 欠落でも一覧が描ける",
+    "B2-74: 曜日未設定の表示と「曜日を 1 つ以上選んでください」",
+    "B2-75: 終了確認は別 action+600ms で連打を無効化",
+    "SWキャッシュv433"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["無変更判定", "毎月の anchorDate 計算", "終了確認の再描画耐性"],
+  "verification": ["Codex 発注113/116 の終了コード表は reports/v433/codex-evidence と *-fix433.log、Codex レビュー 72(中2)→74(解消)、Claude 独立検証 73(PASS)→75(PASS)"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["routine-view", "recurrence-core", "mutation-recurrence-e2e", "now-view", "daily-operations-registry", "action-registry-core", "sw-integration"]
+}

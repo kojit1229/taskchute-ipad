@@ -101,7 +101,7 @@
 | mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 312 | 0 | 0 |
 | mutation-bundle-e2e.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
 | mutation-global-e2e.test.js | e2e | full | sync-storage | 179 | 0 | 0 |
-| mutation-recurrence-e2e.test.js | node | full | legacy-crosscutting | 9 | 0 | 0 |
+| mutation-recurrence-e2e.test.js | node | full | legacy-crosscutting | 15 | 0 | 0 |
 | mutation-stamp-core.test.js | node | full | sync-storage | 34 | 0 | 0 |
 | mutation-task-project-e2e.test.js | e2e | full | planning-execution | 66 | 0 | 0 |
 | mutation-twelve-week-e2e.test.js | node | full | legacy-crosscutting | 21 | 0 | 0 |
