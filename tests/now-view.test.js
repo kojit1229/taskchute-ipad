@@ -20,15 +20,15 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     estimateMin: 25, category: '', comment: '', ...extra });
   const live = () => page.evaluate(async () => JSON.parse(JSON.stringify((await import('/src/state/store.js')).state)));
   const stored = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-  async function seed(blocks, skin, settings = {}, recurrences = []) {
-    await page.evaluate(({ key, blocks, skin, settings, recurrences, day }) => {
+  async function seed(blocks, skin, settings = {}, recurrences = [], tasks = []) {
+    await page.evaluate(({ key, blocks, skin, settings, recurrences, day, tasks }) => {
       const s = JSON.parse(localStorage.getItem(key));
-      Object.assign(s, { blocks, tasks: [], projects: [], recurrences, singleSchedules: [], declarations: [], currentView: 'today', selectedDate: day });
+      Object.assign(s, { blocks, tasks, projects: [], recurrences, singleSchedules: [], declarations: [], currentView: 'today', selectedDate: day });
       Object.assign(s.settings, { todaySkin: skin, autoSync: false, towerMotion: 'normal' }, settings);
       if (skin === 'missing') delete s.settings.todaySkin;
       s.pomodoro.running = false;
       localStorage.setItem(key, JSON.stringify(s));
-    }, { key: STATE_KEY, blocks, skin, settings, recurrences, day });
+    }, { key: STATE_KEY, blocks, skin, settings, recurrences, day, tasks });
     await page.reload();
     await page.locator('#app[data-view="today"] .now-view, #app[data-view="today"] .today-tower').waitFor();
   }
@@ -256,6 +256,10 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     }
     await seed([block('plain-only')], 'now');
     equal(await page.locator('.now-routine').count(), 0, 'ルーティン0件なら枠ごと非表示');
+    await seed([block('rec_twy', { recurrenceGroupId: 'r3', category: 'ルーティン', taskId: 'twy-task', plannedStartAt: `${day}T15:00:00` })], 'now', {}, [],
+      [{ id: 'twy-task', title: '12週のやること', twyPlan: { perWeek: 3, fromWeek: 1, toWeek: 12 }, deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00` }]);
+    equal(await page.locator('.now-routine').count(), 0, 'B2-80: 12週計画由来はルーティン枠に出さない');
+    equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"][data-id="rec_twy"]').count(), 1, 'B2-80: 12週計画由来は Block 枠(開始)に出る');
     await seed([], 'now');
     equal(await page.locator('.now-routine').count(), 0, '全件空でもルーティン枠は非表示');
     await page.getByRole('button', { name: '段取りで決める', exact: true }).click();
@@ -402,6 +406,11 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       ok(await page.locator('.now-candidates button').evaluateAll(els => els.every(el =>
         el.getBoundingClientRect().width >= el.parentElement.getBoundingClientRect().width * .9 && el.getBoundingClientRect().height >= 44)), `${width}: 候補2件も列幅いっぱいで44px以上`);
     }
+    await seed([block('gap-run', { actualStartAt: `${day}T12:00:00` }), block('gap-pend'), ...Array.from({ length: 12 }, (_, i) =>
+      block(`gap-done-${i}`, { actualStartAt: `${day}T0${i % 9}:00:00`, actualEndAt: `${day}T0${i % 9}:10:00`, completed: true }))], 'now');
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    ok(await page.locator('.now-view').evaluate(root => root.querySelector('.now-start').getBoundingClientRect().top
+      - root.querySelector('.now-current').getBoundingClientRect().bottom <= 32), 'B2-79: 1280px で「いま」の直下に「開始」(中央列の高さに引きずられない)');
     await seed(fixtures, 'now', { towerMotion: 'off' });
     ok(await allMotionStopped(), 'motion=off: 本体/全子孫/疑似要素のanimationとtransition停止');
     await seed(fixtures, 'now', { towerMotion: 'normal' });

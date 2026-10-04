@@ -145,8 +145,9 @@ function updateStackTick(root, blocks, today) {
   stack.querySelector(".now-yesterday").textContent = `昨日 ${durationText(beat.yesterday)}`;
 }
 
+// v436 B2-80: 12 週計画由来(taskId のタスクが twyPlan を持つ)はルーティン枠に出さない。
 function isRoutineBlock(b) {
-  return b.category === "ルーティン";
+  return b.category === "ルーティン" && !(b.taskId && getState().tasks.some(t => t.id === b.taskId && !t.deleted && t.twyPlan));
 }
 
 export function renderNowView() {

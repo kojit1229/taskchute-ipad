@@ -131,3 +131,12 @@ assert.equal(JSON.stringify(towers), towersBefore);
 assert.equal(JSON.stringify(blocks), before);
 
 console.log("PASS: tower-week core (week boundaries, actual seconds, towers, scale, ring, yesterday, immutability)");
+
+// v436 B2-81: 同じ日の実績区間の重なりは合算しない(和集合)。時刻不明の完了は従来どおり見積で足す。
+const overlapping = [ended(today, "09:00:00", "09:10:00"), ended(today, "09:05:00", "09:15:00"), ended(today, "09:15:00", "09:20:00"),
+  { date: today, completed: true, estimateMin: 10 }];
+assert.equal(weekTowers(overlapping, today, now, toMs)[2].seconds, 1200 + 600);
+assert.deepEqual(ringState(overlapping, today, now, toMs), { totalSeconds: 1800, laps: 1, lapProgress: 0 });
+assert.equal(beatYesterday(overlapping, today, now, toMs).today, 1800);
+const runningOverlap = [ended(today, "09:50:00", "10:00:00"), { date: today, actualStartAt: `${today}T09:55:00`, actualEndAt: "", completed: false }];
+assert.equal(ringState(runningOverlap, today, now, toMs).totalSeconds, 600);
