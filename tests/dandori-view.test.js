@@ -326,6 +326,43 @@ ok(!dandoriSource.includes('dandoriProjectedEndText') && dandoriSource.includes(
       ok(geometry.font >= 16, `${width}px 自由追加入力は16px以上`);
       await screenshot(width, 'dandori-b2b1');
     }
+    await page.setViewportSize({ width: 375, height: 900 });
+    async function editTime(id, field, value) {
+      const input = page.locator(`[data-field="dandori-${field}"][data-id="${id}"]`);
+      await input.fill(value);
+      await input.dispatchEvent('change');
+    }
+    async function persistedTimes(expected, message) {
+      const times = s => expected.map(([id]) => {
+        const b = s.blocks.find(item => item.id === id);
+        return b && [b.id, b.date, b.plannedStartAt, b.plannedEndAt];
+      });
+      equal(times(await stored()), expected, `${message}: 保存日時`);
+      await page.reload(); await page.locator('.dandori-view').waitFor();
+      const normalized = expected.map(([id, date, start, end]) =>
+        [id, date, start.length === 16 ? `${start}:00` : start, end.length === 16 ? `${end}:00` : end]);
+      equal(times(await live()), normalized, `${message}: 再読込後の日時`);
+      await page.locator('#bottomNav [data-view="exec"]').click();
+      const ids = await timelineBlockIds();
+      ok(expected.every(([id]) => ids.includes(id)), `${message}: 実行タイムラインに描画`);
+      ok(!(await page.locator('#app').innerText()).includes('帰属日と開始日が一致しません'), `${message}: 帰属日の不整合なし`);
+      await page.locator('#bottomNav [data-view="dandori"]').click();
+    }
+    await seed([block('midnight-edit', '23:30', '00:15', { plannedEndAt: '2026-09-30T00:15:00' })]);
+    await editTime('midnight-edit', 'start', '23:45');
+    await persistedTimes([['midnight-edit', day, `${day}T23:45`, '2026-09-30T00:15:00']], 'B2-63: 日跨ぎの開始変更は翌日の終了を維持');
+    await editTime('midnight-edit', 'end', '00:30');
+    await persistedTimes([['midnight-edit', day, `${day}T23:45:00`, '2026-09-30T00:30']], 'B2-63: 終了変更は翌日の日時で保存');
+    await seed([block('shift-edit', '09:00', '10:00', { estimateMin: 25 })]);
+    await editTime('shift-edit', 'start', '11:00');
+    await persistedTimes([['shift-edit', day, `${day}T11:00`, `${day}T12:00:00`]], 'B2-63: 開始を終了より後へ移すと元の60分を維持');
+    await editTime('shift-edit', 'end', '08:30');
+    await persistedTimes([['shift-edit', day, `${day}T11:00:00`, '2026-09-30T08:30']], 'B2-63: 終了が開始より前なら翌日に保存');
+    await seed([block('equal-edit', '09:00', '10:00')]);
+    await editTime('equal-edit', 'start', '10:00');
+    equal((await stored()).blocks[0].plannedEndAt, `${day}T11:00:00`, 'B2-63: 開始を終了と同じにしても元の長さを維持');
+    await editTime('equal-edit', 'end', '10:00');
+    await persistedTimes([['equal-edit', day, `${day}T10:00`, '2026-09-30T10:00']], 'B2-63: 終了が開始と同じなら翌日に保存');
     await seed([block('inline', '10:30', '11:30', { updatedAt: `${day}T08:00:00` })]);
     const startInput = page.locator('[data-field="dandori-start"][data-id="inline"]');
     const endInput = page.locator('[data-field="dandori-end"][data-id="inline"]');
@@ -340,17 +377,11 @@ ok(!dandoriSource.includes('dandoriProjectedEndText') && dandoriSource.includes(
     equal([(await live()).blocks.find(b => b.id === 'inline').plannedStartAt, edited.plannedStartAt,
       await startInput.inputValue(), edited.updatedAt > `${day}T08:00:00`],
     [`${day}T11:00`, `${day}T11:00`, '11:00', true], '開始変更はstate・保存・再描画に反映しupdatedAtを進める');
-    const beforeInvalid = await stored();
-    await endInput.fill('10:55'); await endInput.dispatchEvent('change');
-    await page.getByText('終了は開始より後にしてください', { exact: true }).waitFor();
-    equal([await stored(), (await live()).blocks, await endInput.inputValue()],
-      [beforeInvalid, beforeInvalid.blocks, '11:30'], '終了が開始より前なら保存せず元の値へ戻す');
-    await startInput.fill('11:35'); await startInput.dispatchEvent('change');
-    equal([await stored(), await startInput.inputValue()], [beforeInvalid, '11:00'], '開始を終了より後にしても保存しない');
+    const beforeEmpty = await stored();
     await startInput.fill(''); await startInput.dispatchEvent('change');
     await endInput.fill(''); await endInput.dispatchEvent('change');
     equal([await stored(), await startInput.inputValue(), await endInput.inputValue()],
-      [beforeInvalid, '11:00', '11:30'], '開始・終了を空にしても保存せず元の値へ戻す');
+      [beforeEmpty, '11:00', '11:30'], '開始・終了を空にしても保存せず元の値へ戻す');
     await endInput.fill('11:45'); await endInput.dispatchEvent('change');
     equal([(await live()).blocks.find(b => b.id === 'inline').plannedEndAt, (await stored()).blocks.find(b => b.id === 'inline').plannedEndAt,
       await endInput.inputValue()], [`${day}T11:45`, `${day}T11:45`, '11:45'], '終了変更も既存保存経路と描画に反映');
@@ -376,12 +407,10 @@ ok(!dandoriSource.includes('dandoriProjectedEndText') && dandoriSource.includes(
     equal([(await stored()).blocks[0].plannedEndAt, (await live()).blocks[0].plannedEndAt, await page.locator('[data-field="dandori-end"]').inputValue()],
       [`${day}T11:40:00`, `${day}T11:40:00`, '11:40'], '終了未設定なら開始＋見積で終了も保存');
     await seed([block('late-start', '23:00', '', { plannedEndAt: '', estimateMin: 40 })]);
-    const beforeOverflow = await stored();
     await page.locator('[data-field="dandori-start"]').fill('23:30');
     await page.locator('[data-field="dandori-start"]').dispatchEvent('change');
-    await page.getByText('終了は開始より後にしてください', { exact: true }).waitFor();
-    equal([await stored(), await page.locator('[data-field="dandori-start"]').inputValue()],
-      [beforeOverflow, '23:00'], '見積を足した終了が翌日なら同日の範囲外として保存しない');
+    equal([(await stored()).blocks[0].date, (await stored()).blocks[0].plannedStartAt, (await stored()).blocks[0].plannedEndAt],
+      [day, `${day}T23:30`, '2026-09-30T00:10:00'], 'B2-63: 終了未設定なら開始＋見積が翌日でも開始日に保存');
     await seed([block('original', '10:00', '10:23', { taskId: 'copy-task', estimateMin: 35,
       declaration: '写さない', isMIT: true }), block('last', '11:00', '11:27')], [task('copy-task')]);
     await page.locator('[data-action="dandori-duplicate"][data-id="original"]').click();
@@ -395,6 +424,23 @@ ok(!dandoriSource.includes('dandoriProjectedEndText') && dandoriSource.includes(
       !(await stored()).declarations.some(d => d.blockId === duplicate.id), '複製は新IDで実績・完了・宣言・MITを写さない');
     await page.reload(); await page.locator('.dandori-view').waitFor();
     equal((await live()).blocks.find(b => b.id === duplicate.id), { ...duplicate, isMIT: false, source: '' }, '複製は保存→再読込後も残る');
+    for (const [tailEnd, start, ends] of [
+      ['2026-09-30T00:15:00', '23:55', ['00:30', '00:35', '00:25']],
+      [`${day}T23:58:00`, '23:55', ['00:30', '00:35', '00:25']],
+      [`${day}T23:50:00`, '23:50', ['00:25', '00:30', '00:20']]
+    ]) {
+      const actions = ['dandori-duplicate', 'dandori-add-task', 'dandori-add-free'];
+      for (const [index, action] of actions.entries()) {
+        await seed([block('midnight-tail', '23:40', '23:58', { plannedEndAt: tailEnd, estimateMin: 35 })],
+          [task('midnight-task', day, { estimateMin: 40 })]);
+        if (action === 'dandori-add-free') await page.locator('[data-field="dandori-free-title"]').fill('深夜の自由追加');
+        await page.locator(`[data-action="${action}"]`).click();
+        const added = (await stored()).blocks.find(b => b.id !== 'midnight-tail');
+        await persistedTimes([
+          [added.id, day, `${day}T${start}:00`, `2026-09-30T${ends[index]}:00`]
+        ], `B2-64: 末尾${tailEnd}の${action}は当日${start}開始・見積ぶんの終了`);
+      }
+    }
     const tomorrow = '2026-09-30';
     await seed([block('old-day'), block('next-day', '08:00', '08:25', { date: tomorrow,
       plannedStartAt: `${tomorrow}T08:00:00`, plannedEndAt: `${tomorrow}T08:25:00` })]);

@@ -1,0 +1,19 @@
+{
+  "version": 431,
+  "date": "2026-10-04",
+  "title": "段取りの日跨ぎ編集と末尾",
+  "summary": "段取りタブで日をまたぐ予定(23:30〜翌 0:15 など)の時刻をその場で直せるようになり、開始を終了より後ろに直しても終了が自動でずれます。複製・候補追加で予定が翌日にはみ出すこともなくなりました。",
+  "changedFiles": ["src/features/dandori-view.js", "sw.js", "releases/v431.json", "tests/dandori-view.test.js", "tests/suite-manifest.json", "docs/code-index.generated.json", "docs/code-index.generated.md"],
+  "intent": ["発注106(B2-63/64)、版v431。基準 540522b(v430)。ドッグフーディング統合 reviews/60 の H2・H4(K 裁定 2026-10-04 08:3x)。"],
+  "changes": [
+    "B2-63: 時刻その場編集で終了が開始以下なら翌日の終了として保存(B2-30 の形)。開始を終了以上に直したら終了を新しい開始+元の長さ(無ければ見積)へずらす。同日の範囲外を拒否する条件を削除",
+    "B2-64: 末尾(tailStart)が 24:00 以上なら当日 23:55 開始。候補追加・複製は見積ぶんの終了を同時に作る。plannedStartAt が翌日になる Block を作らない",
+    "既存テストの約束変更: dandori-view.test.js の保存拒否の断言 3 件を受入どおり保存へ(K 包括承認)",
+    "SWキャッシュv431"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["翌日判定と開始同時編集の整合", "tailStart の 23:55 丸めと翌日終了", "v428 複製との整合"],
+  "verification": ["Codex 発注106 の終了コード表は reports/v431/codex-evidence、Codex レビュー 68(指摘なし)、Claude 独立検証 69(PASS、実機相当 Playwright 実験 a〜h)"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["dandori-view", "exec-timeline-e2e", "action-registry-core", "mutation-task-project-e2e", "daily-start-end-e2e", "sw-integration"]
+}

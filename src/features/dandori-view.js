@@ -15,18 +15,21 @@ if (typeof document !== "undefined") document.addEventListener("change", event =
   const restore = () => { input.value = deps.timeFromDateTime(block[field]) || ""; };
   if (!input.value) { restore(); return; }
   if (input.value === deps.timeFromDateTime(block[field])) return;
-  const value = `${block.date}T${input.value}`;
+  let value = `${block.date}T${input.value}`;
   const start = field === "plannedStartAt" ? value : block.plannedStartAt;
+  if (field === "plannedEndAt" && start && deps.localDateTimeToMs(value) <= deps.localDateTimeToMs(start)) {
+    value = `${deps.addDays(block.date, 1)}T${input.value}`;
+  }
   let end = field === "plannedEndAt" ? value : block.plannedEndAt;
-  const fillEnd = field === "plannedStartAt" && !end;
-  if (fillEnd) end = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(start) + deps.resolveEstimateMin(block) * 60000));
-  if (start && end && (end.slice(0, 10) !== block.date || deps.localDateTimeToMs(end) < deps.localDateTimeToMs(start))) {
-    restore();
-    deps.showToast("終了は開始より後にしてください");
-    return;
+  const shiftEnd = field === "plannedStartAt" && (!end || deps.localDateTimeToMs(end) <= deps.localDateTimeToMs(start));
+  if (shiftEnd) {
+    const duration = block.plannedStartAt && block.plannedEndAt
+      ? deps.localDateTimeToMs(block.plannedEndAt) - deps.localDateTimeToMs(block.plannedStartAt) : 0;
+    end = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(start) +
+      (duration > 0 ? duration : deps.resolveEstimateMin(block) * 60000)));
   }
   if (!deps.updateBlockField(block.id, field, value)) return;
-  if (fillEnd && !deps.updateBlockField(block.id, "plannedEndAt", end)) return;
+  if (shiftEnd && !deps.updateBlockField(block.id, "plannedEndAt", end)) return;
   deps.render();
 });
 
@@ -78,7 +81,9 @@ export function addDandoriTask(id) {
   const task = deps.fillGapTaskPool(today).find(t => t.id === id);
   if (!task || scheduled(id, today)) return;
   const plannedStartAt = tailStart(today);
-  const block = deps.createBlockFromTask(id, { plannedStartAt, estimateMin: deps.resolveEstimateMin(task), silent: true });
+  const estimateMin = deps.resolveEstimateMin(task);
+  const plannedEndAt = deps.dateToLocalDateTime(new Date(deps.localDateTimeToMs(plannedStartAt) + estimateMin * 60000));
+  const block = deps.createBlockFromTask(id, { plannedStartAt, plannedEndAt, estimateMin, silent: true });
   if (!block) return;
   block.date = today;
   deps.saveAndRender("今日のBlockに追加しました");
@@ -92,7 +97,7 @@ function tailStart(today) {
     const date = deps.addDays(match[1], Math.floor(minutes / 1440));
     plannedStartAt = `${date}T${String(Math.floor(minutes % 1440 / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
   }
-  return plannedStartAt;
+  return plannedStartAt >= `${today}T23:55` ? `${today}T23:55:00` : plannedStartAt;
 }
 function addCandidate(input) {
   const date = deps.todayISO(), plannedStartAt = tailStart(date);
