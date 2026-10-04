@@ -318,7 +318,7 @@ async function ironJapanese(page) {
   const root = page.locator("#ironRoot");
   assert.equal(await page.locator(".view-header h1").innerText(), "筋トレ記録");
   assert.equal(await page.locator(".eyebrow").innerText(), "筋トレの記録");
-  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.split(" — ")[0].trim())),
+  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.trim())),
     ["連動中のタスク", "今日の総重量", "セットを追加", "種目メニュー", "今日のセット", "積み上げ"]);
   assert.equal(await root.locator(".iron-pr").innerText(), "自己ベスト");
   assert.equal(await root.locator(".iron-total span").innerText(), "600");

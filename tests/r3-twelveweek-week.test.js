@@ -1,4 +1,5 @@
 // Order 79 / M2: one scroll page, weekly counts, folded review and responsive placement.
+// playwright-core browser and startServer() are provided by shared setup().
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
 const { setup, nav } = require("./remaining-twelveweek-layout.test");
@@ -49,16 +50,53 @@ const { STATE_KEY, fixedClock, setViewportAndWaitForStableLayout } = require("./
     await review.locator(":scope > summary").click();
     console.log("PASS M2-4: review closed by default, all existing sections retained");
     // M2-5 / M2-7
-    const before = await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state));
-    for (const width of [375,768,1280]) {
-      await setViewportAndWaitForStableLayout(page, {width,height:1000}, ".twy-tower > *");
-      const bounds = await root.evaluate(el => ({ scroll:document.documentElement.scrollWidth, width:innerWidth, decide:el.querySelector(".twy-decide").getBoundingClientRect().toJSON(), stack:el.querySelector(".twy-stack").getBoundingClientRect().toJSON(), lower:[".twy-done",".twy-review-fold",".twy-cycle-fold"].map(selector=>el.querySelector(selector).getBoundingClientRect().toJSON()) }));
-      assert.ok(bounds.scroll <= width, `${width}: no overflow`);
-      if (width === 1280) { assert.ok(bounds.stack.left >= bounds.decide.right); assert.equal(bounds.stack.top,bounds.decide.top); assert.ok(bounds.lower.every(box=>box.top >= Math.max(bounds.decide.bottom,bounds.stack.bottom)), "M2-5: done/review/cycle below decide and stack"); }
-      else assert.ok(bounds.stack.top >= bounds.decide.bottom);
+    for (const committed of [true, false]) {
+      const label = committed ? "通常週" : "未確定週";
+      const before = await page.evaluate(async ({ key, week, saturday, committed }) => {
+        const { state } = await import("/src/state/store.js");
+        const stamp = `${saturday}T08:00:00`;
+        state.weeklyCommitments = committed ? [{ id:`wcw_${week}`, recordType:"week", weekStart:week,
+          cycleStartDate:saturday, committedAt:stamp, createdAt:stamp, updatedAt:stamp, deleted:false }] : [];
+        localStorage.setItem(key, JSON.stringify(state));
+        window.__m2SetItemCalls = [];
+        window.__m2OriginalSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) {
+          if (this === localStorage) window.__m2SetItemCalls.push(k);
+          return window.__m2OriginalSetItem.call(this, k, v);
+        };
+        return { state:JSON.stringify(state), storage:JSON.stringify(Object.entries(localStorage).sort()) };
+      }, { key:STATE_KEY, week, saturday, committed });
+      try {
+        await page.evaluate(async () => {
+          document.querySelector(".twy-tower").outerHTML = (await import("/src/features/twelve-week.js")).renderTwelveWeek();
+        });
+        assert.equal(await review.getAttribute("open"), null);
+        await review.locator(":scope > summary").click();
+        assert.equal(await review.locator(".twy-review-score").isVisible(), true);
+        await review.locator(":scope > summary").click();
+        assert.equal(await review.getAttribute("open"), null);
+        for (const width of [375,768,1280]) {
+          await setViewportAndWaitForStableLayout(page, {width,height:1000}, ".twy-tower > *");
+          const bounds = await root.evaluate(el => ({ scroll:document.documentElement.scrollWidth, width:innerWidth, decide:el.querySelector(".twy-decide").getBoundingClientRect().toJSON(), stack:el.querySelector(".twy-stack").getBoundingClientRect().toJSON(), lower:[".twy-done",".twy-review-fold",".twy-cycle-fold"].map(selector=>el.querySelector(selector).getBoundingClientRect().toJSON()) }));
+          assert.ok(bounds.scroll <= width, `${width}: no overflow`);
+          if (width === 1280) { assert.ok(bounds.stack.left >= bounds.decide.right); assert.equal(bounds.stack.top,bounds.decide.top); assert.ok(bounds.lower.every(box=>box.top >= Math.max(bounds.decide.bottom,bounds.stack.bottom)), "M2-5: done/review/cycle below decide and stack"); }
+          else assert.ok(bounds.stack.top >= bounds.decide.bottom);
+        }
+        const after = await page.evaluate(async () => ({
+          state:JSON.stringify((await import("/src/state/store.js")).state),
+          storage:JSON.stringify(Object.entries(localStorage).sort()), writes:window.__m2SetItemCalls
+        }));
+        assert.equal(after.state, before.state, `${label}: 描画・開閉・リサイズでstate不変`);
+        assert.equal(after.storage, before.storage, `${label}: 保存領域不変`);
+        assert.deepEqual(after.writes, [], `${label}: localStorage.setItem呼出なし`);
+      } finally {
+        await page.evaluate(() => {
+          Storage.prototype.setItem = window.__m2OriginalSetItem;
+          delete window.__m2OriginalSetItem; delete window.__m2SetItemCalls;
+        });
+      }
+      console.log(`PASS M2-5 / M2-7: ${label}, responsive placement, no state/storage writes`);
     }
-    assert.equal(await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state)), before);
-    console.log("PASS M2-5 / M2-7: responsive placement, no state writes");
     // M2-6
     const source = fs.readFileSync(path.join(__dirname,"../src/features/twelve-week.js"),"utf8");
     assert.doesNotMatch(source, /twyWeek(?:FaceHTML|TodayHTML|MissedHTML|ScoreHTML|ProjectTag|ThemeCardHTML)|twy-face-select|twyDefaultFace|_twyActiveFace|TWY_FACES/);

@@ -2725,23 +2725,23 @@
     },
     {
       "file": "r3-twelveweek-week.test.js",
-      "kind": "node",
+      "kind": "e2e",
       "tier": "full",
       "domains": [
         "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 21,
-      "assertionHash": "81592e81d30831c7",
-      "sourceHash": "f1d68d684d0a7a91",
+      "assertionSignals": 26,
+      "assertionHash": "7326a6f8881b86b4",
+      "sourceHash": "19328f1417666bc7",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
-        "browser": false,
-        "server": false,
+        "browser": true,
+        "server": true,
         "fileWrite": false,
         "networkMock": false,
         "clock": true
@@ -2851,8 +2851,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 117,
-      "assertionHash": "a94465e7782fda8a",
-      "sourceHash": "02ed3eae20064d33",
+      "assertionHash": "ceb45dd693fc1163",
+      "sourceHash": "8231b35098824d5a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
