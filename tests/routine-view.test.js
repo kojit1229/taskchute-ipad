@@ -37,6 +37,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.reload();
     await page.locator('#sidebar [data-action="nav"][data-view="routine"]').click();
     await page.locator('#app[data-view="routine"] .routine-card').first().waitFor();
+    equal(await page.getByRole('heading', { name: 'ルーティン', exact: true }).count(), 1, 'ルーティン見出しは1つ');
     equal(await page.locator('.routine-card').evaluateAll(nodes => nodes.map(node => node.dataset.ruleId)), ['morning', 'weekly', 'night', 'untimed'], '有効ルールを時刻順、時刻なしは末尾');
     ok((await card('morning').innerText()).includes('見積 25 分'), '毎日06:00〜06:25は25分');
     ok((await card('weekly').innerText()).includes('曜日 月・水'), '曜日ラベル');
@@ -66,6 +67,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     let s = await live(), added = s.recurrences.find(item => item.title === '夜の読書');
     equal(s.recurrences.length, beforeCount + 1, 'ルール1件追加');
     equal([added.kind, added.startTime, added.endTime, added.category], ['daily', '21:00', '21:30', '読書'], '新規ルールの保存項目');
+    equal(Object.hasOwn((await stored()).recurrences.find(item => item.id === added.id), 'days'), false, '非weeklyの新規保存はdaysキー無し');
     ok(s.blocks.some(item => item.id === `rec_${added.id}_${day}`), '今日の実体を生成');
     await page.reload();
     await page.locator('#app[data-view="routine"] .routine-card').first().waitFor();
@@ -141,6 +143,31 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.locator('[name="title"]').fill('取り消す変更');
     await click('cancel');
     equal((await live()).recurrences.find(item => item.id === 'weekly').title, 'weekly', 'やめるで変更破棄');
+    for (const kind of ['daily', 'weekdays', 'monthly']) {
+      await click('edit', 'weekly');
+      await page.locator('[name="kind"]').selectOption(kind);
+      await click('save', 'weekly');
+      equal(Object.hasOwn((await stored()).recurrences.find(item => item.id === 'weekly'), 'days'), false, `${kind}: 非weeklyへの編集でもdaysを除去`);
+    }
+    // 時刻だけ編集した実体はルール編集と終了の両方から守る。
+    const timeEdits = await page.evaluate(async ({ id, day }) => {
+      const s = (await import('/src/state/store.js')).state;
+      const { makeRecurrenceInstance } = await import('/src/core/recurrence.js');
+      const r = s.recurrences.find(item => item.id === id);
+      const start = makeRecurrenceInstance(r, day), end = makeRecurrenceInstance(r, '2026-10-04');
+      start.plannedStartAt = `${day}T20:55:00`;
+      end.plannedEndAt = '2026-10-04T21:40:00';
+      s.blocks = s.blocks.filter(b => ![start.id, end.id].includes(b.id));
+      s.blocks.push(start, end);
+      return [start, end];
+    }, { id: added.id, day });
+    await click('edit', added.id);
+    await page.locator('[name="category"]').fill('読書分類を編集');
+    await click('save', added.id);
+    equal((await stored()).blocks.filter(b => timeEdits.some(item => item.id === b.id)), timeEdits, 'L-time-touch: 開始のみ・終了のみの変更をルール編集時に保持');
+    await click('end', added.id);
+    await click('end-confirm', added.id);
+    equal((await stored()).blocks.filter(b => timeEdits.some(item => item.id === b.id)), timeEdits, 'L-time-touch: 時刻だけ変えた実体をルール終了時も保持');
     equal(errors, [], 'ブラウザ例外なし');
     console.log(`routine-view: ${assertions} assertions passed`);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
