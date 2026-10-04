@@ -5,6 +5,7 @@ const { commitCandidate, setCommitGuard } = require('../src/core/commit.js');
 const { mergeWeeklyCommitments } = require('../src/core/merge.js');
 const { activeTrackForProject, isProjectInCurrentCycle } = require('../src/core/track.js');
 const { deepCommitGuard, expectRestored } = require('./helpers');
+const { buildBlockDetailDraft } = require('../src/features/block-detail.js');
 setCommitGuard(deepCommitGuard);
 const state = { selectedDate: '2026-09-10', blocks: [{ id: 'b', date: '2026-09-10', title: 'before' }] };
 let commits = 0, saves = 0, schedules = 0;
@@ -17,7 +18,7 @@ const deps = { state, now: () => '2026-09-10T12:00:00',
     actualStartAt: '2026-09-10T09:00:00', actualEndAt: '' }] };
   const before = structuredClone(running);
   let endRequests = 0;
-  const result = run('daily-plan-complete', { kind: 'block', id: 'running', desiredCompleted: true }, {
+  const result = run('daily-plan-complete', { kind: 'block', id: 'running', desiredCompleted: true, fillActual: true }, {
     state: running, commitCandidate, now: () => '2026-09-10T12:00:37',
     persist: () => assert.fail('開始済みBlockは終了報告の確定まで保存しない'),
     requestPlanEnd: block => { assert.equal(block.id, 'running'); endRequests++; }
@@ -36,13 +37,27 @@ for (const [estimateMin, actualStartAt, actualEndAt, expectedStart, expectedEnd]
   let completionSaves = 0;
   const completionDeps = { state: completionState, commitCandidate, now: () => '2026-09-10T12:00:37',
     persist: () => { completionSaves++; return true; } };
-  const input = { kind: 'block', id: 'completion', desiredCompleted: true };
+  const input = { kind: 'block', id: 'completion', desiredCompleted: true, fillActual: true };
   assert.equal(run('daily-plan-complete', input, completionDeps).ok, true);
   const completed = completionState.blocks[0];
   assert.deepEqual([completed.completed, completed.actualStartAt, completed.actualEndAt], [true, expectedStart, expectedEnd]);
   assert.equal(completionSaves, 1, '完了と実績を1回で保存');
   assert.equal(run('daily-plan-complete', input, completionDeps).unchanged, true);
   assert.equal(completionSaves, 1, '再実行は追加保存しない');
+}
+// 発注102: 編集シートのBlock完了・Task同時完了は空の実績を補完しない。
+for (const taskCompleted of [false, true]) {
+  const before = { id: 'detail', taskId: 'detail-task', date: '2026-09-10', title: '編集完了',
+    completed: false, estimateMin: 25, plannedStartAt: '', plannedEndAt: '', actualStartAt: '', actualEndAt: '' };
+  const detailState = { blocks: [before], tasks: [{ id: 'detail-task', status: 'active' }], declarations: [] };
+  const draft = buildBlockDetailDraft(detailState, before, { ...before, completed: !taskCompleted },
+    { completionTaskId: before.taskId, taskCompleted }, { now: () => '2026-09-10T12:00:37',
+      completedTask: task => ({ ...task, status: 'completed' }) });
+  assert.deepEqual([draft.block.completed, draft.block.actualStartAt, draft.block.actualEndAt],
+    [true, '', ''], taskCompleted ? 'Task同時完了でも実績は空' : 'Block完了でも実績は空');
+  const saved = { ...detailState, blocks: [draft.block] };
+  draft.apply(saved);
+  assert.equal(saved.tasks[0].status, taskCompleted ? 'completed' : 'active');
 }
 // S-B2b/3段-10(監督者の契約追随 2026-09-12 20:35): 内部登録行 daily-reading-record(記録は旗で無効)を save-tower-journal と同じ扱いで追加。design/CHANGELOG.md
 const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record',

@@ -10626,7 +10626,7 @@ function toggleBlock(id) {
   if (!block) return false;
   if (!block.completed) {
     const result = runDailyOperation("daily-plan-complete", {
-      kind: "block", id, desiredCompleted: true
+      kind: "block", id, desiredCompleted: true, fillActual: true
     }, dailyOperationDeps);
     if (!result.ok) showToast(result.error?.message || "予定完了を保存できませんでした");
     return result.ok;

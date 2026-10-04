@@ -15,7 +15,7 @@ const DAY = '2026-09-10', NEXT = '2026-09-11';
     completed: false, actualStartAt: '', actualEndAt: '', estimateMin: 25 }];
   const deps = { state, commitCandidate, now: () => `${DAY}T12:00:37`, persist: () => true,
     captureReport: (source, date) => captureReportInput(source, date, deriveReportValues), buildReport: buildReportMarkdown };
-  assert(run('daily-plan-complete', { kind: 'block', id: 'checked', desiredCompleted: true }, deps).ok);
+  assert(run('daily-plan-complete', { kind: 'block', id: 'checked', desiredCompleted: true, fillActual: true }, deps).ok);
   const result = require('../src/core/daily-report.js').buildDailyReport(state, { reportDate: DAY }, deps);
   assert.equal(result.pending, false);
   assert(result.report.includes(`| checked | ${DAY} | ${DAY}T11:35:37 | ${DAY}T12:00:37 | 25分 | 未完了 |`));

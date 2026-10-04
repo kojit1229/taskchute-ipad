@@ -14,7 +14,7 @@ export function buildPlanCompletion(state, input, deps) {
   if (completed && block.actualStartAt && !block.actualEndAt)
     return { records: [], block, confirmEnd: true };
   const after = { ...block, completed };
-  if (completed && !block.actualStartAt && !block.actualEndAt) {
+  if (input.fillActual === true && completed && !block.actualStartAt && !block.actualEndAt) {
     const end = typeof deps.now === "function" ? deps.now() : deps.now;
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(end || "");
     if (!match) throw invalid("完了時刻を確認してください");
