@@ -509,9 +509,9 @@
       "domains": [
         "content-ai"
       ],
-      "assertionSignals": 45,
-      "assertionHash": "3a71f16f043a1967",
-      "sourceHash": "f773dd00fcbb6e5b",
+      "assertionSignals": 57,
+      "assertionHash": "db01bc158e31b28b",
+      "sourceHash": "c3c2386e1e47a42e",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -768,9 +768,9 @@
         "journal-health",
         "content-ai"
       ],
-      "assertionSignals": 30,
-      "assertionHash": "66d9fe952994ceb0",
-      "sourceHash": "700aa91c40a9b332",
+      "assertionSignals": 34,
+      "assertionHash": "8bf6dd3134148282",
+      "sourceHash": "e63a7de499c0e16d",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1145,9 +1145,9 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 9,
-      "assertionHash": "49b3d2bbb3a41a3f",
-      "sourceHash": "c9f4a099e8659844",
+      "assertionSignals": 10,
+      "assertionHash": "5d8275a12c7e50a2",
+      "sourceHash": "13667448429be747",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2300,8 +2300,8 @@
         "content-ai"
       ],
       "assertionSignals": 312,
-      "assertionHash": "357ec242a7c2eda5",
-      "sourceHash": "b32c3bf58f334be3",
+      "assertionHash": "ec22bd4c8322f40c",
+      "sourceHash": "2e65a82fff68a4d3",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2487,7 +2487,7 @@
       ],
       "assertionSignals": 2,
       "assertionHash": "11e2a081ff96688b",
-      "sourceHash": "749f4a115ea7f953",
+      "sourceHash": "4a625496e0de8677",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -5115,8 +5115,8 @@
         "planning-execution"
       ],
       "assertionSignals": 63,
-      "assertionHash": "230797d6f40360bf",
-      "sourceHash": "2a31f1e21ace030a",
+      "assertionHash": "9ef946d9b52810a1",
+      "sourceHash": "d51824b7020bd14a",
       "waits": {
         "fixedCount": 16,
         "numericMilliseconds": 4100,
@@ -6003,8 +6003,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 35,
-      "assertionHash": "824e993d17d741ae",
-      "sourceHash": "4a376853b23f9912",
+      "assertionHash": "ec96b80945c76f38",
+      "sourceHash": "9c39a06171696d06",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

@@ -24,7 +24,7 @@
 | daily-detail-frame.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
 | daily-draft-e2e.test.js | e2e | full | content-ai | 50 | 0 | 0 |
 | daily-mock-adapter.test.js | node | full | content-ai | 78 | 0 | 0 |
-| daily-operations-registry.test.js | node | full | content-ai | 45 | 0 | 0 |
+| daily-operations-registry.test.js | node | full | content-ai | 57 | 0 | 0 |
 | daily-order-core.test.js | node | full | content-ai | 20 | 0 | 0 |
 | daily-parts-contract.test.js | node | full | sync-storage, content-ai, ui-responsive | 40 | 0 | 0 |
 | daily-parts-isolation-e2e.test.js | e2e | full | sync-storage, content-ai, ui-responsive | 47 | 0 | 0 |
@@ -35,7 +35,7 @@
 | daily-reading-core.test.js | node | full | content-ai | 91 | 0 | 0 |
 | daily-reading-e2e.test.js | e2e | full | content-ai | 34 | 0 | 0 |
 | daily-reading-sync.test.js | e2e | full | sync-storage, content-ai | 46 | 0 | 0 |
-| daily-report-e2e.test.js | e2e | full | journal-health, content-ai | 30 | 0 | 0 |
+| daily-report-e2e.test.js | e2e | full | journal-health, content-ai | 34 | 0 | 0 |
 | daily-search-e2e.test.js | e2e | full | content-ai | 35 | 0 | 0 |
 | daily-stamp-e2e.test.js | node | full | content-ai | 14 | 0 | 0 |
 | daily-start-end-e2e.test.js | e2e | full | content-ai | 154 | 0 | 0 |
@@ -51,7 +51,7 @@
 | draft-save-transaction.test.js | node | full | legacy-crosscutting | 83 | 0 | 0 |
 | exec-layout-media.test.js | node | full | planning-execution, ui-responsive | 34 | 0 | 0 |
 | exec-timeline-e2e.test.js | e2e | full | planning-execution | 25 | 0 | 0 |
-| f2-plan-completion-e2e.test.js | e2e | full | planning-execution | 9 | 0 | 0 |
+| f2-plan-completion-e2e.test.js | e2e | full | planning-execution | 10 | 0 | 0 |
 | f2-pomodoro-expiry-e2e.test.js | e2e | full | planning-execution | 24 | 0 | 0 |
 | f6-today-layout.test.js | e2e | full | ui-responsive | 23 | 0 | 0 |
 | feedback-busy-boundary.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 21 | 0 | 0 |
@@ -511,7 +511,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | fixed-date | 5 | tests/v267.test.js | 111, 114, 118, 281, 285 |
 | missing-timezone | 1 | tests/v274.test.js | 82 |
 | missing-timezone | 1 | tests/v275.test.js | 63 |
-| fixed-date | 3 | tests/v276.test.js | 77, 201, 276 |
+| fixed-date | 3 | tests/v276.test.js | 77, 199, 274 |
 | missing-timezone | 1 | tests/v277.test.js | 18 |
 | missing-timezone | 1 | tests/v278.test.js | 31 |
 | missing-timezone | 1 | tests/v280.test.js | 74 |

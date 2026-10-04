@@ -10620,7 +10620,7 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
 // 完了解除のたびに巻き戻してしまわないための安全策)。
 let _quickCompleteSnapshots = {};
 
-// F2-1: ✓は詳細と同じ予定完了。実績は専用ボタンから登録する。
+// F2-1: ✓は予定完了+実績の補完(v430 B2-62: 実績が無ければ 今−見積〜今 を書く。編集シートからの完了は補完しない)。
 function toggleBlock(id) {
   const block = state.blocks.find(row => row.id === id && !row.deleted);
   if (!block) return false;
