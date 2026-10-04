@@ -236,16 +236,16 @@ function check(name, cond, extra = "") {
       s.bodyScans.length === 1 && s.bodyScans[0].pomodoroBlockId === "r4" && s.bodyScans[0].fatigue === 3 && s.bodyScans[0].part === "目",
       JSON.stringify(s.bodyScans));
 
-    console.log("[5] now-conveyor-complete(TOWER GATE「▶ 次へ」・ポモドーロ非実行)はtoggleBlockへ委譲され実績なしの予定完了になり、身体スキャンは開かない");
-    // D-1裁定(2026-09-14): 旧ルーティンGATE入口も✓と同じ「実績なしの予定完了」に統一。0分実績で埋めない。
+    console.log("[5] now-conveyor-complete(TOWER GATE「▶ 次へ」・ポモドーロ非実行)はtoggleBlockへ委譲され実績付きの完了(v430 B2-62)になり、身体スキャンは開かない");
+    // D-1裁定(2026-09-14): 旧ルーティンGATE入口も✓と同じ扱い。v430 B2-62: ✓ は実績(今−見積〜今)を補完する。
     await seed({ blocks: [makeBlock({ id: "r5", title: "対象5", startMin: 13 * 60 })] });
     await clickAction("now-conveyor-complete", { id: "r5" });  // TOWER GATE選定条件のため合成注入を維持
     await page.waitForFunction(({ KEY, id }) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === id)?.completed === true, { KEY, id: "r5" });
     check("身体スキャンモーダルは開かない", await bodyScanOpen() === 0);
     s = await stateNow();
     const r5 = s.blocks.find((b) => b.id === "r5");
-    check("完了はするが実績は空・bodyScansは追加されない",
-      r5?.completed === true && r5.actualStartAt === "" && r5.actualEndAt === "" && s.bodyScans.length === 0, JSON.stringify(s.bodyScans));
+    check("完了し実績が補完される・bodyScansは追加されない",
+      r5?.completed === true && r5.actualStartAt !== "" && r5.actualEndAt !== "" && r5.actualStartAt < r5.actualEndAt && s.bodyScans.length === 0, JSON.stringify([r5?.actualStartAt, r5?.actualEndAt, s.bodyScans]));
 
     // ============================================================
     // (b) ガード負例
