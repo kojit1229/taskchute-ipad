@@ -184,7 +184,6 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-start [data-kind="routine"] [data-action="now-routine-complete"]').evaluateAll(els => els.map(el => el.dataset.id)), [routineOne.id, routineTwo.id], 'ルーティン枠は今日の実体2件だけを予定順に表示');
     ok((await page.locator('.now-routine h3').innerText()).includes('ルーティン'), 'ルーティン枠の見出し');
     equal(await page.locator('.now-routine h3 button[data-action="nav"][data-view="routine"][type="button"]').innerText(), '編集', '見出しにルーティン画面への編集ボタン(v425)');
-    equal(await page.locator('.now-next > p').allTextContents(), [`11:00 作業 ${routineOne.id}`, '12:00 作業 plain-a', `13:00 作業 ${routineTwo.id}`, '14:00 作業 plain-b'], 'これからはBlockとルーティンを混ぜて予定順に表示');
     const routineCard = page.locator('.now-routine .now-candidate').first();
     equal(await page.locator('.now-view .now-estimates, .now-view [data-action="now-estimate"]').count(), 0, 'いまカードに見積ボタンが無い(Block・ルーティン共通)');
     await page.clock.setFixedTime(at(12, 0, 37));
@@ -265,11 +264,13 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await seed([block('b', { plannedStartAt: `${day}T13:00:00` }), block('a', { isMIT: true })], 'now');
     equal(await page.locator('.now-start [data-action="now-start"]').evaluateAll(els => els.map(el => el.dataset.id)), ['a', 'b'], '未着手は予定順');
     ok((await page.locator('.now-start').textContent()).includes('★'), '主役に★');
-    equal(await page.locator('.now-view > section > h2').allTextContents(), ['開始', 'いま', '今日できた', '積み上げ', 'これから'], 'DOM順序');
+    equal(await page.locator('.now-view > section > h2').allTextContents(), ['開始', 'いま', '今日できた', '積み上げ'], 'DOM順序(B2-77: これからは無い)');
     await start('a');
     const card = await page.locator('[data-running-id="a"]').elementHandle();
-    equal(await page.locator('.now-view > section > h2').allTextContents(), ['いま', '開始', '今日できた', '積み上げ', 'これから'], 'B2-76: 実行中は「いま」が先頭(スクロールなしで見える)');
+    equal(await page.locator('.now-view > section > h2').allTextContents(), ['いま', '開始', '今日できた', '積み上げ'], 'B2-76: 実行中は「いま」が先頭(スクロールなしで見える)');
     equal(await page.locator('.now-view').getAttribute('data-running'), '1', 'B2-76: 実行中の印');
+    equal(await page.locator('.now-done button[data-action="nav"][data-view="journal"]').innerText(), '日報を書く ›', 'B2-78: 今日できたから日報へ');
+    equal(await page.locator('.now-next').count(), 0, 'B2-77: これから節が無い');
     const elapsed = page.locator('[data-elapsed-id="a"]');
     equal(await elapsed.textContent(), '0:00', '開始時の経過');
     await page.clock.setFixedTime(at(12, 0, 3)); await tick();

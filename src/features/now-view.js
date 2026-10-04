@@ -167,9 +167,9 @@ export function renderNowView() {
   return `<div class="now-view" data-running="${running.length ? "1" : "0"}" data-motion="${escapeHTML(state.settings.towerMotion || "normal")}" data-paused="${document.hidden ? "1" : "0"}">
     ${running.length ? currentSection + startSection : startSection + currentSection}
     <section class="now-done"><h2>今日できた</h2>${records.map(recordHTML).join("") || '<p>終えたことが、ここに残ります。</p>'}
-      ${history.length ? `<details><summary>これまでの履歴</summary>${history.slice(0, 30).map(b => `<div><small>${escapeHTML(b.date)}</small>${recordHTML(b)}</div>`).join("")}${history.length > 30 ? '<p>ほかの記録は実行タブの実績で見られます</p>' : ""}</details>` : ""}</section>
+      ${history.length ? `<details><summary>これまでの履歴</summary>${history.slice(0, 30).map(b => `<div><small>${escapeHTML(b.date)}</small>${recordHTML(b)}</div>`).join("")}${history.length > 30 ? '<p>ほかの記録は実行タブの実績で見られます</p>' : ""}</details>` : ""}
+      <p class="now-journal-link"><button type="button" data-action="nav" data-view="journal">日報を書く ›</button></p></section>
     <section class="now-stack"><h2>積み上げ</h2>${stackHTML(state.blocks, today)}</section>
-    <section class="now-next"><h2>これから</h2>${pending.map(b => `<p>${escapeHTML(timeFromDateTime(b.plannedStartAt))} ${escapeHTML(b.title)}</p>`).join("") || '<p>ひと息ついて、次のことへ。</p>'}</section>
   </div>`;
 }
 

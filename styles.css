@@ -6339,7 +6339,6 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-skin="now"] .now-elapsed { font-size:38px; font-weight:800; font-variant-numeric:tabular-nums; }
 #app[data-skin="now"] .now-record { border:1px solid var(--line); border-left:4px solid var(--green); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--panel); color:var(--text); }
 #app[data-skin="now"] .now-comment { color:var(--green-text); white-space:pre-wrap; }
-#app[data-skin="now"] .now-next { color:var(--orange-text); }
 #app[data-skin="now"] .now-tower-frame { height:240px; border:1px solid var(--line); border-radius:12px; display:flex; align-items:flex-end; padding:24px 8px 28px; color:var(--muted); }
 #app[data-skin="now"] .now-tower-plot { position:relative; width:100%; margin-right:28px; display:grid; grid-template-columns:repeat(7,minmax(24px,1fr)); gap:4px; }
 #app[data-skin="now"] .now-tower-day { position:relative; height:100%; display:flex; align-items:flex-end; }
@@ -6364,13 +6363,12 @@ details.settings-row > .fold-summary.settings-row-summary {
 @keyframes now-view-breathe { to { opacity:.25; } }
 @media (max-width:767px) { #app[data-skin="now"] .now-running::before { animation:none; } }
 @media (min-width:1280px) {
-  #app[data-skin="now"] .now-view { grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-areas:"start done stack" "current done stack" "next done stack"; align-items:start; }
-  #app[data-skin="now"] .now-view[data-running="1"] { grid-template-areas:"current done stack" "start done stack" "next done stack"; }
+  #app[data-skin="now"] .now-view { grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-areas:"start done stack" "current done stack"; align-items:start; }
+  #app[data-skin="now"] .now-view[data-running="1"] { grid-template-areas:"current done stack" "start done stack"; }
   #app[data-skin="now"] .now-start { grid-area:start; }
   #app[data-skin="now"] .now-current { grid-area:current; }
   #app[data-skin="now"] .now-done { grid-area:done; }
   #app[data-skin="now"] .now-stack { grid-area:stack; }
-  #app[data-skin="now"] .now-next { grid-area:next; }
 }
 @media (prefers-reduced-motion:reduce) {
   #app[data-skin="now"] .now-view,
