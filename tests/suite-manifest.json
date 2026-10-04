@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "5626615641cf357b",
+      "sourceHash": "208cd26eb359917c",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2660,8 +2660,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 83,
-      "assertionHash": "99aabc715f600e90",
-      "sourceHash": "a5bdc88043a31c4a",
+      "assertionHash": "4d154bdbe5b74425",
+      "sourceHash": "db6348546f4c5bfc",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2683,9 +2683,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 81,
-      "assertionHash": "80cfbd901cf3cad0",
-      "sourceHash": "170177378370f0c9",
+      "assertionSignals": 80,
+      "assertionHash": "10c97e16bc374f67",
+      "sourceHash": "39abb2e57929c271",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2728,13 +2728,12 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "sync-storage",
-        "planning-execution",
+        "journal-health",
         "ui-responsive"
       ],
-      "assertionSignals": 66,
-      "assertionHash": "41d1d0875fd52298",
-      "sourceHash": "ae5e09916487b0c3",
+      "assertionSignals": 28,
+      "assertionHash": "addd4f6ff40b0463",
+      "sourceHash": "fdb977f38ffc0ba9",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2744,7 +2743,7 @@
         "browser": true,
         "server": true,
         "fileWrite": false,
-        "networkMock": true,
+        "networkMock": false,
         "clock": true
       }
     },
@@ -2851,9 +2850,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 119,
-      "assertionHash": "dcb169c593cf07c0",
-      "sourceHash": "6e0a62971b83d321",
+      "assertionSignals": 117,
+      "assertionHash": "ceb45dd693fc1163",
+      "sourceHash": "8231b35098824d5a",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2875,9 +2874,9 @@
         "content-ai",
         "ui-responsive"
       ],
-      "assertionSignals": 11,
-      "assertionHash": "23f8e9e49fce41d9",
-      "sourceHash": "882465d7a348a96e",
+      "assertionSignals": 12,
+      "assertionHash": "cdf46d1df524eec6",
+      "sourceHash": "d1fbfba553e23579",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3967,7 +3966,7 @@
       ],
       "assertionSignals": 103,
       "assertionHash": "dd582943e376fa27",
-      "sourceHash": "66c382896b3f71df",
+      "sourceHash": "704e778a64cfede0",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3990,7 +3989,7 @@
       ],
       "assertionSignals": 2,
       "assertionHash": "12988683045ce8bf",
-      "sourceHash": "309e7b6a77ba7ce1",
+      "sourceHash": "3fca038e096145f4",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4002,6 +4001,29 @@
         "fileWrite": true,
         "networkMock": false,
         "clock": true
+      }
+    },
+    {
+      "file": "twy-stack-core.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 6,
+      "assertionHash": "23b32378a6f79e0f",
+      "sourceHash": "23100f94b5dc0e71",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
       }
     },
     {

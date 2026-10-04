@@ -40,11 +40,11 @@ async function nodeChecks() {
     render: () => {}, saveAndRender: () => { saves++; } });
   for (const date of ["2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"]) {
     clock = date;
-    ok(feature.renderTwelveWeek().includes('data-twy-face="week"'), `${date}: default today face`);
+    ok(feature.renderTwelveWeek().includes('class="twy-review-fold" '), `${date}: review remains folded on the page`);
   }
   clock = today;
   const before = JSON.stringify(store.state), html = feature.renderTwelveWeek();
-  ok(html.includes('data-twy-face="review"'), "Saturday defaults to review");
+  ok(html.includes('class="twy-review-fold" >'), "Saturday review is closed by default");
   eq(JSON.stringify(store.state), before, "render does not save or mutate state");
   ok(html.includes("① W8を見る"), "previous week number, not current week");
   ok(html.includes("25%"), "score is 1/4; excused/life/deleted/other week excluded");
@@ -52,11 +52,11 @@ async function nodeChecks() {
   ok(html.includes("金曜が各2回"), "weekday bias is calculated from missed items");
   ok(!html.includes("予定life") && !html.includes("予定deleted") && !html.includes("予定otherWeek"));
   store.state.twyWeeklyReviews[0].reviewedAt = today;
-  ok(feature.renderTwelveWeek().includes('data-twy-face="plan"'), "reviewed Saturday defaults to plan");
+  ok(!feature.renderTwelveWeek().includes('(未記録)'), "reviewed Saturday has no reminder");
   store.state.twyWeeklyReviews[0].deleted = true;
-  ok(feature.renderTwelveWeek().includes('data-twy-face="review"'), "deleted review does not mark finished");
+  ok(feature.renderTwelveWeek().includes('(未記録)'), "deleted review does not mark finished");
   store.state.twyWeeklyReviews[0] = { ...savedReview, reviewedAt: "2026-09-04" };
-  ok(feature.renderTwelveWeek().includes('data-twy-face="review"'), "last week's confirmation does not mark this week");
+  ok(feature.renderTwelveWeek().includes('(未記録)'), "last week's confirmation does not mark this week");
   for (const [fixture, expected] of [[[], "—"], [[records[0], records[5]], "—"]]) {
     store.state.weeklyCommitments = fixture;
     ok(feature.renderTwelveWeek().includes(`twy-week-score-big">${expected}</div>`), "empty/all-excused is not zero percent");
@@ -67,7 +67,7 @@ async function nodeChecks() {
   dispatchAction("twy-review-finish", { target: { closest: () => ({ dataset: { reviewWeek: week } }) } });
   eq(saves, 1, "finish uses existing save path once");
   eq(store.state.twyWeeklyReviews[0], { ...savedReview, reviewedAt: `${clock}T10:00:00`, updatedAt: `${clock}T10:00:00` });
-  ok(feature.renderTwelveWeek().includes('data-twy-face="plan"'));
+  ok(feature.renderTwelveWeek().includes('class="twy-decide"'));
   eq(store.state.weeklyCommitments, records, "finishing never edits commitments");
   store.state.twyWeeklyReviews[0].deleted = true;
   dispatchAction("twy-review-finish", { target: { closest: () => ({ dataset: { reviewWeek: week } }) } });
@@ -97,15 +97,15 @@ async function browserChecks() {
       localStorage.setItem(key, JSON.stringify(s));
     }, { key: STATE_KEY, records, projects, savedReview, cycle });
     await page.reload();
-    await page.waitForSelector('.twy-tower[data-twy-face="review"]');
+    await page.waitForSelector('.twy-tower');
     const seeded = await page.evaluate(async () => {
       const s = (await import("/src/state/store.js")).state;
       return { records: s.weeklyCommitments, reviews: s.twyWeeklyReviews, date: new Date().toString() };
     });
     eq(seeded.records.map(r => r.id).sort(), records.map(r => r.id).sort(), JSON.stringify(seeded));
-    eq(await page.locator(".twy-face-segmented button").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent)),
-      ["今週を決める", "今日やる", "ふりかえる"]);
-    eq(await page.locator(".twy-face-segmented button:disabled").count(), 0);
+    eq(await page.locator(".twy-face-segmented, [data-face]").count(), 0);
+    eq(await page.locator(".twy-review-fold").getAttribute("open"), null);
+    await page.locator(".twy-review-fold > summary").click();
     eq(await page.locator(".twy-review-score .twy-week-score-big").innerText(), "25%", JSON.stringify(seeded));
     ok((await page.locator(".twy-review-score").innerText()).includes("予定 5回のうち できた 1 · まだ 3 · 点数に含めない 1"));
     ok((await page.locator('[data-review-project="p1"]').innerText()).includes("まだ物差しが無い"));
@@ -126,7 +126,8 @@ async function browserChecks() {
       s.trackMeasurements = [{ id: "done-measurement", trackId: "done", value: 27, observedAt: `${today}T09:00:00`, deleted: false },
         { id: "weight-measurement", trackId: "weight", value: 72.8, observedAt: `${today}T09:00:00`, deleted: false }];
     }, { cycle, today });
-    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    await nav(page, "twelveweek");
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     eq(await page.locator("[data-review-project]").count(), 3, "one group per goal");
     eq(await page.locator('[data-review-project="p1"] [data-review-track]').count(), 2, "one active plus achieved closed track");
     eq(await page.locator('[data-review-project="p3"] [data-twy-track-id="milestone"]').count(), 1, "milestone uses existing readonly renderer");
@@ -137,14 +138,14 @@ async function browserChecks() {
     await page.locator('.twy-review-notes summary').click();
     for (const width of [1280, 390]) {
       await setViewportAndWaitForStableLayout(page, { width, height: 1000 }, ".twy-tower");
-      const metrics = await page.locator(".twy-tower").evaluate(root => ({
+      const metrics = await page.locator("[data-review-week]").evaluate(root => ({
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
         targets: [...root.querySelectorAll("button,summary")].filter(el => el.getClientRects().length)
           .map(el => ({ text: el.textContent, width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height })),
         inputs: [...root.querySelectorAll("input,select,textarea")].map(el => ({ font: parseFloat(getComputedStyle(el).fontSize), width: el.getBoundingClientRect().width }))
       }));
       eq(metrics.overflow, false, `${width}: no horizontal overflow`);
-      eq(metrics.targets.length, 17, `${width}: chips, finish, 4 recording actions, 3 visible editors, 3 additions, 2 summaries`);
+      eq(metrics.targets.length, 14, `${width}: finish, 4 recording actions, 3 visible editors, 3 additions, 3 summaries`);
       ok(metrics.targets.every(m => m.width >= 44 && m.height >= 44), JSON.stringify(metrics.targets));
       eq(metrics.inputs.length, 8, "two number fields and two note fields per goal");
       ok(metrics.inputs.every(m => m.font >= 16 && m.width >= 120), `${width}: ${JSON.stringify(metrics.inputs)}`);
@@ -186,14 +187,20 @@ async function browserChecks() {
     eq(await well.inputValue(), "朝に3回できた <継続>", "change saves without replacing the focused form");
     eq((await snapshot()).twyWeeklyReviews[0].wentWell, "朝に3回できた <継続>");
     eq((await snapshot()).twyWeeklyReviews[0].obstacles, "雨で移動が大変");
-    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    const beforeReviewNav = await well.elementHandle();
+    // nav() uses a DOM click: leave the editor so navigation renders immediately.
+    await well.evaluate(el => el.blur());
+    await nav(page, "twelveweek");
+    eq(await beforeReviewNav.evaluate(el => el.isConnected), false, "navigation completes its redraw before recording");
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     await page.locator('.twy-review-notes summary').click();
     eq(await well.inputValue(), "朝に3回できた <継続>");
     eq(await obstacles.inputValue(), "雨で移動が大変");
     await row("weight").locator("input").fill("72");
     await row("weight").locator('[data-action="twy-review-record"]').click();
     eq(await row("weight").locator("input").inputValue(), "72", "record only patches its row");
-    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    await nav(page, "twelveweek");
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     eq(await row("weight").locator("input").count(), 0, "decreasing goal is achieved on next render");
     ok((await row("weight").innerText()).includes(`✓ 達成(${today})`));
     await row("milestone").locator('[data-action="twy-review-edit"]').click();
@@ -234,7 +241,7 @@ async function browserChecks() {
     eq(await well.inputValue(), "朝に3回できた <継続>", "goal notes remain independent");
     const before = await snapshot();
     await page.locator('[data-action="twy-review-finish"]').click();
-    await page.waitForSelector('.twy-tower[data-twy-face="plan"]');
+    await page.waitForSelector('.twy-tower');
     const after = await snapshot();
     eq(after.twyWeeklyReviews[0], { ...savedReview, wentWell: "朝に3回できた <継続>", obstacles: "雨で移動が大変", reviewedAt: `${today}T10:00:00`, updatedAt: "2026-09-05T10:00:00" });
     for (const key of ["tracks", "trackMeasurements", "weeklyCommitments", "projects", "tasks", "blocks"])
@@ -242,11 +249,12 @@ async function browserChecks() {
     await page.waitForFunction(({ key, today }) => JSON.parse(localStorage.getItem(key)).twyWeeklyReviews[0].reviewedAt === `${today}T10:00:00`,
       { key: STATE_KEY, today });
     await page.reload();
-    await page.waitForSelector('.twy-tower[data-twy-face="plan"]');
+    await page.waitForSelector('.twy-tower');
     eq(await page.locator(".twy-cycle-fold").getAttribute("open"), null);
     await page.locator(".twy-cycle-fold > summary").click();
     ok(await page.locator(".twy-vision-panel").isVisible(), "old cycle remains reachable inside plan");
-    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    await nav(page, "twelveweek");
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     ok((await page.locator(".twy-review-finish").innerText()).includes("✓ ふりかえり済み"));
     eq(await well.inputValue(), "朝に3回できた <継続>", "prose survives reload");
     eq(await obstacles.inputValue(), "雨で移動が大変", "obstacles survive reload");
@@ -257,18 +265,21 @@ async function browserChecks() {
     await page.evaluate(async () => {
       (await import("/src/state/store.js")).state.trackMeasurements.find(m => m.id === "done-measurement").observedAt = "2026-09-04T09:00:00";
     });
-    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    await nav(page, "twelveweek");
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     eq(await row("done").evaluate(el => el.tagName), "DETAILS", "achievements from the previous week fold");
     eq(await row("done").getAttribute("open"), null);
     ok((await row("done").locator("summary").innerText()).includes("✓ 達成(2026-09-04)"));
     eq(await row("done").locator("input").count(), 0);
     await page.clock.setFixedTime(new Date(2026, 8, 11, 23, 59));
-    await page.locator('.twy-face-segmented [data-face="review"]').click();
+    await nav(page, "twelveweek");
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     eq(await page.locator('[data-review-week]').getAttribute('data-review-week'), week);
     await page.clock.setFixedTime(new Date(2026, 8, 12, 0, 1));
     // 日跨ぎ再描画(A3-H2)が入力の途中で走らないよう、時計を進めた直後に分 tick を先に消化してから操作する(独立検証 67 med 1)
     await page.clock.runFor(61_000);
-    await page.locator('[data-review-week]').waitFor();
+    await page.locator('[data-review-week]').waitFor({ state: "attached" });
+    if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     // 再描画後に画面が示している週(土曜 0 時を越えたので次の週の「先週」)を読み、操作はその週へ保存されることを確かめる(裁定 R2-3: 操作時の today ではなく表示中の週)
     const shownWeek = await page.locator('[data-review-week]').getAttribute('data-review-week');
     await row("num2").locator('[data-action="twy-review-same"]').click();
@@ -281,8 +292,8 @@ async function browserChecks() {
     eq(rollover.twyWeeklyReviews.filter(r => r.weekStart !== week && r.weekStart !== shownWeek).length, 0, "same/note/finish never write to a week other than the displayed one");
     await page.clock.setFixedTime(new Date(2026, 8, 7, 10));
     await page.reload();
-    await page.waitForSelector('.twy-tower[data-twy-face="week"]');
-    eq(await page.locator('.twy-face-segmented button.active').getAttribute("data-face"), "week");
+    await page.waitForSelector('.twy-tower');
+    eq(await page.locator(".twy-review-fold").getAttribute("open"), null);
     eq(errors, []);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }

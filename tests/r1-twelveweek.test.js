@@ -104,9 +104,9 @@ async function writeSeedOnce(page, values) {
 async function openCycleWhenTwelveWeek(page) {
   await page.waitForSelector('[data-action="nav"]', { state: "attached" });
   if (!await page.locator(".twy-tower").count()) return;
-  await page.click('.twy-face-segmented [data-face="plan"]');
-  await page.click(".twy-cycle-fold > summary");
-  const cycleLink = page.locator('.twy-plan-link-edit[data-face="cycle"]');
+  await renderOnePage(page);
+  await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
+  const cycleLink = page.locator('.twy-plan-link-edit[data-action="twy-cycle-open"]');
   if (await cycleLink.count()) await cycleLink.click();
 
 }
@@ -244,8 +244,8 @@ async function seed(page, values) {
 
     // LOW-1(R1)+R2でPLANを有効化: 初期表示はCYCLEだけactive・PLANは有効(disabledでない)・
     // WEEKは束Wで有効化、REVIEWだけdisabledのまま(spec受入1)。
-    check("面チップ: activeは1件(今週を決める)", await page.locator(".twy-face-segmented button.active").count() === 1);
-    check("面チップ: 3面すべて有効", await page.locator(".twy-face-segmented button:disabled").count() === 0);
+    check("M2: 今週を決めるは常に表示", await page.locator(".twy-decide").isVisible());
+    check("M2: 面チップとdata-faceは廃止", await page.locator(".twy-face-segmented, [data-face]").count() === 0);
 
     // ============================================================
     // [2] S2 GLASSがcomputedで効く
@@ -292,10 +292,10 @@ async function seed(page, values) {
     // 「0回書き込み」を厳密に検証する(旧実装はforce+.catchの空クリックだけで自明に0回
     // だったため、実際にhover/クリックを当てるバー操作を追加した)。
     await resetSetItemLog(page);
-    await page.click('.twy-face-segmented [data-face="review"]');
+    await page.click(".twy-review-fold > summary");
     check("ふりかえる面が開く", await page.locator(".twy-review-score").isVisible());
-    await page.click('.twy-face-segmented [data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     const firstWeekBar = page.locator(".twy-week").first();
     if (await firstWeekBar.count()) {
       await firstWeekBar.hover();
@@ -636,8 +636,8 @@ async function seed(page, values) {
     });
     await seed(page, { projects: [pWed], tasks: [tWed], currentView: "twelveweek" });
     const wedStateBefore = await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state));
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     check("M2: PLAN面でも非土曜開始は丸め後の経過日数基準でW3が当週列になる",
       await page.locator(".twy-plan-grid thead th[data-current=\"1\"]").count() === 1
@@ -715,3 +715,9 @@ async function seed(page, values) {
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((error) => { console.error(error); process.exit(1); });
+
+// Explicit read-only redraw for fixtures formerly refreshed by the plan face button.
+async function renderOnePage(page) {
+  await page.locator(".twy-tower").waitFor();
+  await page.evaluate(async () => { document.querySelector(".twy-tower").outerHTML = (await import("/src/features/twelve-week.js")).renderTwelveWeek(); });
+}

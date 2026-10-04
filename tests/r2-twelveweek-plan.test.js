@@ -226,22 +226,18 @@ async function seed(page, values) {
     await seed(page, { settings: { twelveWeekStartDate: CYCLE_START, twelveWeekScoreTarget: 85 }, currentView: "twelveweek" });
 
     // ============================================================
-    // [1] PLANチップで面が切り替わる(非永続)
-    // ============================================================
-    console.log("[1] PLANチップで面が切り替わる(非永続)");
-    check("土曜の初期表示はふりかえる面(data-twy-face=review)", await page.locator('.twy-tower[data-twy-face="review"]').count() === 1);
-    check("PLANチップはdisabledではない", await page.locator('.twy-face-segmented button[data-face="plan"]').isDisabled() === false);
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.waitForSelector(".twy-plan-link-panel", { state: "attached" });
-    check("PLANチップクリックでPLAN面へ切り替わる(data-twy-face=plan)", await page.locator('.twy-tower[data-twy-face="plan"]').count() === 1);
-    check("PLANチップがactiveになる", await page.locator('.twy-face-segmented button[data-face="plan"].active').count() === 1);
+    // [1] M2: one page with a closed review, no face switch.
+    console.log("[1] 1枚化と折りたたみ(非永続)");
+    check("面切替は無い", await page.locator(".twy-face-segmented, [data-face]").count() === 0);
+    check("今週を決めるは常に表示", await page.locator(".twy-decide").isVisible());
+    check("ふりかえるは既定で閉じる", await page.locator(".twy-review-fold").getAttribute("open") === null);
     check("PLAN内のCYCLE折りたたみは既定で閉じている", await page.locator(".twy-cycle-fold").getAttribute("open") === null);
     check("CYCLEのVISIONパネルは折りたたみ内に1件", await page.locator(".twy-cycle-fold .twy-vision-panel").count() === 1);
     await page.reload();
     await page.waitForSelector('[data-action="nav"]', { state: "attached" });
-    check("非永続: reloadすると土曜はふりかえる面に戻る", await page.locator('.twy-tower[data-twy-face="review"]').count() === 1);
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    check("非永続: reloadするとふりかえるは閉じている", await page.locator(".twy-review-fold").getAttribute("open") === null);
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-link-panel");
 
     // ============================================================
@@ -263,8 +259,8 @@ async function seed(page, values) {
     check("週次コミットの導線が既存WEEKLY COMMITシートを開く", await page.locator(".twy-commit-sheet").count() === 1);
     await page.click('[data-action="modal-close"]');
     await page.waitForSelector(".twy-commit-sheet", { state: "detached" });
-    check("5つ目のノードはCYCLE面へ戻る導線(twy-face-select)", await page.locator('.twy-plan-link-node').nth(4)
-      .locator('[data-action="twy-face-select"][data-face="cycle"]').count() === 1);
+    check("5つ目のノードはCYCLE面へ戻る導線(twy-cycle-open)", await page.locator('.twy-plan-link-node').nth(4)
+      .locator('[data-action="twy-cycle-open"]').count() === 1);
 
     // ============================================================
     // [3] グリッド: 行(Projectグループ・目安>0のみ)・列12・各statusのセル色/文言
@@ -353,16 +349,16 @@ async function seed(page, values) {
     // ============================================================
     console.log("[5] 0件誘導: 対象の12WYプロジェクトが無い場合の誘導1行");
     await seed(page, { projects: [], tasks: [], currentView: "twelveweek" });
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-link-panel");
     check("0件誘導が出る(LINKは出したまま)", (await page.locator(".twy-plan-grid-panel .twy-plan-guide").textContent()).includes("対象の12週のプロジェクトがありません"));
     check("グリッドは無い(タスク行0)", await page.locator(".twy-plan-task-row").count() === 0);
 
     // cycleStartDate未設定時はPLAN面自体が誘導のみ(design §2.1b・R1のMEDIUM-7と同じ扱い)。
     await seed(page, { settings: { twelveWeekStartDate: "" }, currentView: "twelveweek" });
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForFunction(() => document.querySelector(".twy-plan-link-panel"));
     check("cycleStartDate未設定はPLAN面も誘導1行のみ(LINKグリッドなし)",
       await page.locator(".twy-plan-grid-panel").count() === 0
@@ -372,8 +368,8 @@ async function seed(page, values) {
       projects: [p1], tasks: [t1, t2, t3, t4], weeklyCommitments,
       currentView: "twelveweek"
     });
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
 
     // ============================================================
@@ -387,8 +383,8 @@ async function seed(page, values) {
     await page.waitForSelector('[data-action="nav"]', { state: "attached" });
     await resetSetItemLog(page);
     const beforePlan = await memoryState(page);
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     await page.click('.twy-plan-link-node >> nth=3 >> [data-action="twy-open-commit"]');
     await page.waitForSelector(".twy-commit-sheet");
@@ -398,10 +394,10 @@ async function seed(page, values) {
     await page.waitForSelector('[data-modal-field="title"]');
     await page.click('[data-action="modal-close"]');
     await page.waitForSelector('[data-modal-field="title"]', { state: "detached" });
-    await page.click('.twy-plan-link-edit[data-face="cycle"]');
+    await page.click('.twy-plan-link-edit[data-action="twy-cycle-open"]');
     await page.waitForSelector(".twy-vision-panel");
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     const firstCell = page.locator(".twy-plan-cell").first();
     await firstCell.hover();
@@ -419,8 +415,8 @@ async function seed(page, values) {
     ]) {
       await page.clock.setFixedTime(new Date(2026, 6, day, 10, 0, 0));
       await seed(page, { settings: { twelveWeekStartDate: CYCLE_START }, projects: [p1], tasks: [t1], weeklyCommitments: commitments, currentView: "twelveweek" });
-      await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+      await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
       const row = page.locator('.twy-plan-task-row[data-task-id="t1"]');
       check(`${label}: current header`, await page.locator('.twy-plan-grid th[data-current="1"]').count() === (current ? 1 : 0));
       check(`${label}: W1header`, await page.locator('.twy-plan-grid th[data-current]').first().getAttribute("data-current") === (current ? "1" : "0"));
@@ -442,8 +438,8 @@ async function seed(page, values) {
       await page.evaluate(async () => { delete (await import("/src/state/store.js")).state.tasks.find((t) => t.id === "missing-plan").twyPlan; });
       const beforeEdge = await memoryState(page);
       await resetSetItemLog(page);
-      await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+      await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
       check(`${cycleStart}: W12 Friday 10-02 rounds to 09-26 (+77) and is included`, await page.locator('.twy-plan-task-row[data-task-id="w12-task"]').count() === 1);
       check(`${cycleStart}: W13 first day 10-03 (+84) is excluded`, await page.locator('.twy-plan-task-row[data-task-id="w13-task"]').count() === 0);
       check(`${cycleStart}: W13 Sunday 10-04 rounds to +84 and is excluded`, await page.locator('.twy-plan-task-row[data-task-id="w13sun-task"]').count() === 0);
@@ -459,8 +455,8 @@ async function seed(page, values) {
     console.log("[8] H1: W13(振り返り週)中はPLANグリッドのW1〜W12が過去週のまま評価される");
     await page.clock.setFixedTime(new Date(2026, 9, 5, 10, 0, 0)); // 2026-10-05: 経過86日→W13(振り返り週)
     await seed(page, { selectedDate: "2026-10-05", currentView: "twelveweek" });
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     const t1RowW13 = page.locator('.twy-plan-task-row[data-task-id="t1"]');
     const t1StatusW13 = await t1RowW13.locator(".twy-plan-cell").evaluateAll((els) => els.map((el) => el.dataset.status));
@@ -476,8 +472,8 @@ async function seed(page, values) {
     check("H1: W13中は残りコマ数が0(未来週が無い)", t1RemainingW13 === "残0", t1RemainingW13);
     await page.clock.setFixedTime(FIXED_NOW);
     await seed(page, { selectedDate: TODAY, currentView: "twelveweek" });
-    await page.click('.twy-face-segmented button[data-face="plan"]');
-    await page.click(".twy-cycle-fold > summary");
+    await renderOnePage(page);
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
 
     // ============================================================
@@ -526,3 +522,9 @@ async function seed(page, values) {
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((error) => { console.error(error); process.exit(1); });
+
+// Explicit read-only redraw for fixtures formerly refreshed by the plan face button.
+async function renderOnePage(page) {
+  await page.locator(".twy-tower").waitFor();
+  await page.evaluate(async () => { document.querySelector(".twy-tower").outerHTML = (await import("/src/features/twelve-week.js")).renderTwelveWeek(); });
+}

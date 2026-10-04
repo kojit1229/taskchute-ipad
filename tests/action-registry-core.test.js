@@ -64,7 +64,7 @@ const FEATURE_MODULE_PATHS = [
   // v356: FUNDタブの再取得(fund-refresh)。fund.jsはモジュール読み込み時点で
   // トップレベルのregisterActions({...})を1回呼ぶため、importするだけで登録が実測できる。
   path.join(ROOT, "src", "features", "fund.js"),
-  // review-r2-claude-a L4: twelve-week.js(R1のtwy-vision-open/-save+R2のtwy-face-select)が
+  // review-r2-claude-a L4: twelve-week.js(R1のtwy-vision-open/-save+R2のtwy-cycle-open)が
   // FEATURE_MODULE_PATHSに未登録のまま保存則テストの対象外だった穴を塞ぐ。
   // モジュールtop-levelでregisterActionsを呼ぶため、importするだけで登録が実測できる。
   path.join(ROOT, "src", "features", "twelve-week.js")
@@ -216,7 +216,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "fund-select", "fund-report-open", "fund-report-engine", "fund-report-family", "fund-report-previous", "fund-report-next", "fund-report-refresh", "fund-report-back",
   "fund-refresh",  // v356: FUNDタブの手動再取得ボタンの意図的追加
   // v360(R1/R2、review-r2-claude-a L4): 12WYタブ VISION編集+PLAN/CYCLE面切替の意図的追加
-  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
+  "twy-vision-open", "twy-vision-save", "twy-cycle-open", "twy-review-finish",
   "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
   "twy-decide-aim", "twy-decide-day", "twy-decide-save", "twy-decide-time",
   "twy-decide-edit", "twy-decide-create", "twy-decide-move", "twy-decide-remove", "twy-decide-candidate", "twy-decide-pool",
@@ -264,7 +264,7 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   "fund-refresh",
   // v360(R1/R2、review-r2-claude-a L4): src/features/twelve-week.js。top-level
   // registerActionsのため、importするだけで登録される。
-  "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
+  "twy-vision-open", "twy-vision-save", "twy-cycle-open", "twy-review-finish",
   "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
   "twy-decide-aim", "twy-decide-day", "twy-decide-save", "twy-decide-time",
   "twy-decide-edit", "twy-decide-create", "twy-decide-move", "twy-decide-remove", "twy-decide-candidate", "twy-decide-pool"
