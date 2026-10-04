@@ -13,6 +13,19 @@ function toMs(value) {
 
 const today = "2026-09-30";
 const now = toMs(`${today}T10:00:00`);
+// 発注110/B2-68: 完了のみ予定→見積→15分で積み上げる。実績ありは実績優先。
+const unmeasured = [
+  { date: today, completed: true, plannedStartAt: `${today}T08:00`, plannedEndAt: `${today}T08:20`, estimateMin: 90 },
+  { date: today, completed: true, estimateMin: 10 },
+  { date: today, completed: true },
+  { date: today, completed: false, estimateMin: 60 },
+  { date: today, completed: true, deleted: true, estimateMin: 60 },
+  { date: '2026-09-29', completed: true, estimateMin: 30 }
+];
+assert.deepEqual(unmeasured.slice(0, 4).map(b => blockActualSeconds(b, now, toMs)), [1200, 600, 900, 0]);
+assert.equal(weekTowers(unmeasured, today, now, toMs)[2].seconds, 2700);
+assert.deepEqual(ringState(unmeasured, today, now, toMs), { totalSeconds: 2700, laps: 1, lapProgress: 0.5 });
+assert.deepEqual(beatYesterday(unmeasured, today, now, toMs), { today: 2700, yesterday: 1800, beaten: true });
 function ended(date, start = "09:00:00", end = "09:10:00", extra = {}) {
   return { date, actualStartAt: `${date}T${start}`, actualEndAt: `${date}T${end}`, completed: true, ...extra };
 }

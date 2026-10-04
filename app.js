@@ -10139,12 +10139,14 @@ function toggleTask(id) {
   // 既存の減算ヘルパーは分までを返すので、チェック時刻の秒を保つ。
   const start = `${subtractMinutesFromDateTime(end, minutes)}:${end.slice(17, 19)}`;
   const todayBlocks = state.blocks.filter((b) => !b.deleted && b.taskId === id && b.date === date && !b.completed);
+  const completedActual = state.blocks.some((b) => !b.deleted && b.taskId === id && b.date === date
+    && b.completed && b.actualStartAt && b.actualEndAt);
   let actual = todayBlocks.find((b) => b.actualStartAt && !b.actualEndAt)
     || todayBlocks.find((b) => !b.actualStartAt);
   if (actual) {
     actual = { ...actual, actualStartAt: actual.actualStartAt || start, actualEndAt: end, completed: true };
     state.blocks = state.blocks.map((b) => b.id === actual.id ? actual : b);
-  } else {
+  } else if (!completedActual) {
     actual = makeBlock({
       taskId: id, date, title: task.title, category: task.category || projectName(task.projectId),
       estimateMin: minutes, plannedStartAt: start, plannedEndAt: end,
@@ -10152,7 +10154,7 @@ function toggleTask(id) {
     });
     state.blocks.push(actual);
   }
-  if (actual.recurrenceGroupId) syncHabitStreakForBlock(actual);  // v419: 繰り返し以外では habitStreaks に触れない(保存の下書きに無い鍵を増やさない)
+  if (actual?.recurrenceGroupId) syncHabitStreakForBlock(actual);  // v419: 繰り返し以外では habitStreaks に触れない(保存の下書きに無い鍵を増やさない)
   // v419: 完了した Task の明日以降の「未着手」予定 Block を確認つきで整理。
   //      完了済みはもちろん、着手済み(actualStartAt あり)も実績なので対象外。
   const stale = state.blocks.filter((b) => !b.deleted && b.taskId === id && !b.completed && !b.actualStartAt && b.date > date);
@@ -10160,7 +10162,7 @@ function toggleTask(id) {
     const ids = new Set(stale.map((b) => b.id));
     state.blocks = state.blocks.map((b) => ids.has(b.id) ? { ...b, deleted: true } : b);
   }
-  saveAndRender(`完了して実績を記録しました(${timeFromDateTime(actual.actualStartAt)}〜${timeFromDateTime(end)})`);
+  saveAndRender(actual ? `完了して実績を記録しました(${timeFromDateTime(actual.actualStartAt)}〜${timeFromDateTime(end)})` : "Taskを完了しました");
   maybeQueueNextAiStep(id, task.status);  // v198(第3弾3e): 完了6経路#1(WBS/一覧のチェックボタン)
 }
 

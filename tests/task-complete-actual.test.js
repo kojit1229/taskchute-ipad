@@ -78,6 +78,26 @@ const block = (id, extra = {}) => ({ id, taskId: 'task', title: '完了実績の
     const times = b => [b.actualStartAt, b.actualEndAt, b.completed];
     const headings = report => report.split('\n').filter(line => /^#{1,6} /.test(line));
 
+    // 発注110/B2-67: 完了実績が今日にあれば追加せず、未着手・実行中は従来優先。
+    const completed = block('already-done', { completed: true, actualStartAt: `${DAY}T08:00:00`, actualEndAt: `${DAY}T08:25:00` });
+    await seed(25, [completed]);
+    const doneBefore = (await stored()).blocks;
+    let deduplicated = await toggle();
+    equal(deduplicated.blocks, doneBefore, 'B2-67: 完了済み実績の時刻・更新印を変えずBlockを増やさない');
+    equal([deduplicated.tasks[0].status, deduplicated.tasks[0].progressNum], ['completed', 10], 'B2-67: Taskだけ完了・進捗を保存');
+    await toggle('doing'); deduplicated = await toggle();
+    equal(deduplicated.blocks, doneBefore, 'B2-67: 解除して再完了しても二重にならない');
+    for (const extra of [block('pending'), block('running', { actualStartAt: `${DAY}T09:50:00` })]) {
+      await seed(25, [completed, extra]); deduplicated = await toggle();
+      equal(deduplicated.blocks.length, 2, 'B2-67: 既存の未完了候補があれば再利用');
+      equal(times(deduplicated.blocks.find(b => b.id === extra.id)),
+        [extra.actualStartAt || `${DAY}T09:35:00`, `${DAY}T10:00:00`, true], 'B2-67: 未着手・実行中の従来規則を保持');
+    }
+    for (const extra of [{ date: PREV }, { deleted: true }, { taskId: 'other' }, { actualEndAt: '' }, { actualStartAt: '' }]) {
+      await seed(25, [{ ...completed, ...extra }]); deduplicated = await toggle();
+      equal(deduplicated.blocks.length, 2, 'B2-67: 別日・削除・別Task・片側実績は重複判定しない');
+    }
+
     await seed(25, [block('report-reference', { completed: true, actualStartAt: `${DAY}T09:35:00`, actualEndAt: `${DAY}T10:00:00` })]);
     const originalHeadings = headings(await report());
     await seed(25);

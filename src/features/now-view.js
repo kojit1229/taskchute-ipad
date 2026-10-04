@@ -57,6 +57,7 @@ function candidateHTML(block) {
   const id = escapeHTML(block.id), estimate = resolveEstimateMin(block);
   return `<article class="now-candidate">
     <div class="now-candidates"><button type="button" data-action="${isRoutineBlock(block) ? "now-routine-complete" : "now-start"}" data-id="${id}"><strong>${block.isMIT ? "★ " : ""}${escapeHTML(block.title)}</strong><small>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(estimate)}分</small></button></div>
+    <button type="button" class="now-actual-button" data-action="complete-block-with-actual" data-id="${id}">実績付きで完了</button>
   </article>`;
 }
 
@@ -80,7 +81,7 @@ function recordTimeText(block) {
 
 function recordHTML(block) {
   return `<article class="now-record" data-record-id="${escapeHTML(block.id)}">
-    <strong>${escapeHTML(block.title)}</strong><p><time>${escapeHTML(recordTimeText(block))}</time></p>
+    <div class="now-record-heading"><strong>${escapeHTML(block.title)}</strong><button type="button" data-action="edit-block" data-id="${escapeHTML(block.id)}">編集</button></div><p><time>${escapeHTML(recordTimeText(block))}</time></p>
     <p class="now-comment">${escapeHTML(block.comment || "")}</p></article>`;
 }
 
