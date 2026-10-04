@@ -260,6 +260,9 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       [{ id: 'twy-task', title: '12週のやること', twyPlan: { perWeek: 3, fromWeek: 1, toWeek: 12 }, deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00` }]);
     equal(await page.locator('.now-routine').count(), 0, 'B2-80: 12週計画由来はルーティン枠に出さない');
     equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"][data-id="rec_twy"]').count(), 1, 'B2-80: 12週計画由来は Block 枠(開始)に出る');
+    await seed([block('rec_plain', { recurrenceGroupId: 'r4', category: 'ルーティン', taskId: 'plain-task', plannedStartAt: `${day}T15:00:00` })], 'now', {}, [],
+      [{ id: 'plain-task', title: '普通のやること', twyPlan: { perWeek: 0, fromWeek: 1, toWeek: 12 }, deleted: false, createdAt: `${day}T00:00`, updatedAt: `${day}T00:00` }]);
+    equal(await page.locator('.now-routine [data-action="now-routine-complete"][data-id="rec_plain"]').count(), 1, 'fix436: taskId があっても perWeek 0(正規化の既定値)はルーティン枠');
     await seed([], 'now');
     equal(await page.locator('.now-routine').count(), 0, '全件空でもルーティン枠は非表示');
     await page.getByRole('button', { name: '段取りで決める', exact: true }).click();

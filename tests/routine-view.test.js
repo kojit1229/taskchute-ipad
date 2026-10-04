@@ -225,7 +225,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.evaluate(async ({ id, day }) => {
       const s = (await import('/src/state/store.js')).state;
       const r = s.recurrences.find(r => r.id === id);
-      r.taskId = 'twy-task'; s.tasks.push({ id: 'twy-task', twyPlan: { week: 1 } });
+      r.taskId = 'twy-task'; s.tasks.push({ id: 'twy-task', twyPlan: { perWeek: 3, fromWeek: 1, toWeek: 12 } });
+      s.recurrences.find(r => r.id === 'night').taskId = 'plain-task'; s.tasks.push({ id: 'plain-task', twyPlan: { perWeek: 0, fromWeek: 1, toWeek: 12 } });
       s.blocks.find(b => b.recurrenceGroupId === id && b.date === day).estimateMin = 47;
       s.blocks.push({ id: 'past-night', recurrenceGroupId: 'night', completed: true, actualStartAt: '2026-10-01T23:30:00', actualEndAt: '2026-10-01T23:50:00' });
       s.recurrences.find(r => r.id === 'night').deleted = false;
@@ -234,7 +235,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     ok((await card(water.id).innerText()).includes('見積 47 分'), 'B2-71: 今日の実体の明示見積を共通関数で表示');
     ok((await card('night').innerText()).includes('見積 20 分'), 'B2-71: 実体なしでもルールの過去実績中央値を表示');
     ok((await card(water.id).innerText()).includes('12週'), 'B2-72: twyPlanを持つタスク由来に12週表示');
-    ok(!(await card('night').innerText()).includes('12週'), 'B2-72: 通常ルールには12週表示なし');
+    ok(!(await card('night').innerText()).includes('12週'), 'B2-72/fix436: taskId があっても perWeek 0(正規化の既定値)なら12週表示なし');
     await click('new');
     await page.locator('[name="title"]').fill('月末確認');
     await page.locator('[name="kind"]').selectOption('monthly');

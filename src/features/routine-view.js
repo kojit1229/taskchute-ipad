@@ -45,7 +45,7 @@ function card(rule) {
   const estimate = `${deps.resolveEstimateMin(instance || { ...rule, recurrenceGroupId: rule.id })} 分`;
   const kind = rule.kind === "monthly" ? (rule.anchorDate ? `毎月 ${Number(rule.anchorDate.slice(8, 10))} 日` : "毎月")
     : rule.kind === "weekly" && !rule.days?.length ? "曜日未設定" : isWeekend(rule) ? "週末" : kinds[rule.kind] || rule.kind;
-  const twy = state.tasks.some(task => task.id === rule.taskId && task.twyPlan);
+  const twy = state.tasks.some(task => task.id === rule.taskId && Number(task.twyPlan?.perWeek) > 0);  // fix436: 正規化で全タスクに twyPlan が付く
   return `<article class="routine-card" data-rule-id="${escape(rule.id)}"><h3>${escape(rule.title)}${twy ? ' <span>12週</span>' : ""}</h3>
     <p>${escape(kind)}${rule.kind === "weekly" && !isWeekend(rule) ? ` ${escape((rule.days || []).map(day => weekdays[day]).join("・"))}` : ""}</p>
     <p>${escape(rule.startTime || "—")}〜${escape(rule.endTime || "—")} / 見積 ${estimate}</p><p>カテゴリ: ${escape(rule.category || "—")}</p>

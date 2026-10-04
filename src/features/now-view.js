@@ -145,9 +145,9 @@ function updateStackTick(root, blocks, today) {
   stack.querySelector(".now-yesterday").textContent = `昨日 ${durationText(beat.yesterday)}`;
 }
 
-// v436 B2-80: 12 週計画由来(taskId のタスクが twyPlan を持つ)はルーティン枠に出さない。
+// v436 B2-80: 12 週計画由来(taskId のタスクの twyPlan.perWeek > 0。正規化で全タスクに twyPlan が付くため真偽では判定しない)はルーティン枠に出さない。
 function isRoutineBlock(b) {
-  return b.category === "ルーティン" && !(b.taskId && getState().tasks.some(t => t.id === b.taskId && !t.deleted && t.twyPlan));
+  return b.category === "ルーティン" && !(b.taskId && getState().tasks.some(t => t.id === b.taskId && !t.deleted && Number(t.twyPlan?.perWeek) > 0));
 }
 
 export function renderNowView() {
