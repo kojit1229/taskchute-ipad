@@ -6390,6 +6390,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .routine-view :is(input, select, textarea) { font-size: 16px; min-height: 44px; min-width: 44px; max-width: 100%; width: 100%; }
 .routine-days { display: flex; flex-wrap: wrap; gap: 8px; }
 .routine-days[hidden] { display: none; }
+.routine-month-day[hidden] { display: none; }
 .routine-days label { display: flex; align-items: center; min-height: 44px; }
 .routine-days input { width: 44px; margin: 0; }
 .routine-ops { display: flex; flex-wrap: wrap; gap: 8px; }

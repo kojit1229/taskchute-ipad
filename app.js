@@ -345,7 +345,7 @@ configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiv
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
-  endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast });
+  endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast, resolveEstimateMin });
 const { duplicateDandoriBlock } = configureDandoriView({ updateBlockField, render, getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
   resolveEstimateMin, createBlockFromTask, defaultPlannedTimes, saveAndRender, projectedEndText,
   fillGapTaskPool, localDateTimeToMs, dateToLocalDateTime, showToast, makeBlock, renderDeferringForFocus, getOtherTask, getCategoryNames });
