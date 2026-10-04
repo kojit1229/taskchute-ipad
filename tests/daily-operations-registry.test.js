@@ -11,6 +11,39 @@ let commits = 0, saves = 0, schedules = 0;
 const deps = { state, now: () => '2026-09-10T12:00:00',
   commitCandidate: options => { commits++; return commitCandidate(options); },
   persist: () => { saves++; return true; }, scheduleSync: () => schedules++, legacy: {} };
+// 発注99/B2-62: 既存の保存経路で見積実績を作り、既存実績を保持する。
+{
+  const running = { blocks: [{ id: 'running', completed: false,
+    actualStartAt: '2026-09-10T09:00:00', actualEndAt: '' }] };
+  const before = structuredClone(running);
+  let endRequests = 0;
+  const result = run('daily-plan-complete', { kind: 'block', id: 'running', desiredCompleted: true }, {
+    state: running, commitCandidate, now: () => '2026-09-10T12:00:37',
+    persist: () => assert.fail('開始済みBlockは終了報告の確定まで保存しない'),
+    requestPlanEnd: block => { assert.equal(block.id, 'running'); endRequests++; }
+  });
+  assert(result.ok && result.confirmEnd);
+  assert.deepEqual(running, before);
+  assert.equal(endRequests, 1);
+}
+for (const [estimateMin, actualStartAt, actualEndAt, expectedStart, expectedEnd] of [
+  [25, '', '', '2026-09-10T11:35:37', '2026-09-10T12:00:37'],
+  [null, '', '', '2026-09-10T11:45:37', '2026-09-10T12:00:37'],
+  [25, '2026-09-10T09:00:00', '2026-09-10T09:30:00', '2026-09-10T09:00:00', '2026-09-10T09:30:00']
+]) {
+  const completionState = { blocks: [{ id: 'completion', date: '2026-09-10', title: '見積実績',
+    completed: false, estimateMin, actualStartAt, actualEndAt }] };
+  let completionSaves = 0;
+  const completionDeps = { state: completionState, commitCandidate, now: () => '2026-09-10T12:00:37',
+    persist: () => { completionSaves++; return true; } };
+  const input = { kind: 'block', id: 'completion', desiredCompleted: true };
+  assert.equal(run('daily-plan-complete', input, completionDeps).ok, true);
+  const completed = completionState.blocks[0];
+  assert.deepEqual([completed.completed, completed.actualStartAt, completed.actualEndAt], [true, expectedStart, expectedEnd]);
+  assert.equal(completionSaves, 1, '完了と実績を1回で保存');
+  assert.equal(run('daily-plan-complete', input, completionDeps).unchanged, true);
+  assert.equal(completionSaves, 1, '再実行は追加保存しない');
+}
 // S-B2b/3段-10(監督者の契約追随 2026-09-12 20:35): 内部登録行 daily-reading-record(記録は旗で無効)を save-tower-journal と同じ扱いで追加。design/CHANGELOG.md
 const expectedActions = [...DAILY_ACTIONS, 'save-tower-journal', 'daily-reading-record',
   'daily-series-add', 'daily-series-convert', 'daily-series-bulk',
