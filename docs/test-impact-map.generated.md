@@ -161,7 +161,7 @@
 | topband-core.test.js | node | full | sync-storage, planning-execution, journal-health | 50 | 0 | 0 |
 | tower-core.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 167 | 0 | 0 |
 | tower-model-core.test.js | node | full | legacy-crosscutting | 7 | 0 | 0 |
-| tower-week-core.test.js | node | full | legacy-crosscutting | 52 | 0 | 0 |
+| tower-week-core.test.js | node | full | legacy-crosscutting | 56 | 0 | 0 |
 | track-commit-core.test.js | node | full | planning-execution, journal-health | 51 | 0 | 0 |
 | track-core.test.js | node | full | planning-execution, journal-health | 51 | 0 | 0 |
 | track-crud-core.test.js | node | full | planning-execution, sync-storage | 38 | 0 | 0 |
