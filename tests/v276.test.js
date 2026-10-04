@@ -184,7 +184,7 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
       `${TODAY}T07:01:02`, `${TODAY}T07:31:32`, `${TODAY}T07:06:07`, `${TODAY}T07:26:27`
     ]), JSON.stringify(untouched));
 
-    console.log("[5] toggle-blockの通常ルーティン: 描画後の押下時刻でstart=end、日報は予定へフォールバック");
+    console.log("[5] toggle-blockの通常ルーティン: 押下時刻を終了として15分の実績を保存");
     await seed([
       block("routine-tap", { category: "ルーティン", plannedStartAt: `${TODAY}T06:00:00`, plannedEndAt: `${TODAY}T07:00:00` }),
       block("foreign-onetap", { category: "仕事", oneTap: true, plannedStartAt: "", plannedEndAt: "" }),
@@ -195,16 +195,14 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     ], "today");
     await page.locator('.tower-gate[data-id="routine-tap"]').waitFor();
     check("非ルーティンoneTapはGATE DOMへ混入しない", await page.locator('.tower-gate[data-id="foreign-onetap"]').count() === 0);
-    // D-1裁定(2026-09-14): 旧ルーティンGATE入口(toggle-block)も✓と同じ「実績なしの予定完了」に
-    // 統一された。0分実績で埋めなくなったため、FLIGHT LOGには出ない。日報の時間実行は
-    // reportDurationMinutesがcompletedかつ実績空でも予定所要へ落ちるため1h/1hのまま維持される。
+    // fix430: toggle-blockは見積なしなら今−15分から今の実績を補完する。
     await page.clock.setFixedTime(new Date(Date.UTC(2026, 7, 27, 1, 3, 45)));
     await dispatch("toggle-block", "routine-tap");
     await page.waitForFunction(({ KEY }) => JSON.parse(localStorage.getItem(KEY)).blocks.find((entry) => entry.id === "routine-tap")?.completed, { KEY });
     saved = await storedBlock("routine-tap");
-    check("未開始ルーティンは実績なしの予定完了(actualStart/Endは空)", saved.completed === true && saved.actualStartAt === "" && saved.actualEndAt === "", JSON.stringify(saved));
+    check("未開始ルーティンは今−15分から今の実績付き完了", saved.completed === true && saved.actualStartAt === `${TODAY}T09:48:45` && saved.actualEndAt === `${TODAY}T10:03:45`, JSON.stringify(saved));
     check("完了はsaveState経由で永続化", saved.updatedAt >= `${TODAY}T10:03:45`, JSON.stringify(saved));
-    check("FLIGHT LOGには出ない(実績が無いため)", await page.locator('.tower-log-row[data-id="routine-tap"]').count() === 0);
+    check("補完した実績がFLIGHT LOGに出る", await page.locator('.tower-log-row[data-id="routine-tap"]').count() === 1);
     // foreign-onetapは未完了のまま残るため、日報生成前に理由チップをスキップする。
     await dispatch("generate-report");
     await page.locator('.modal-title', { hasText: "できなかった理由" }).waitFor().catch(() => {});
@@ -213,7 +211,7 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     }
     await page.waitForFunction(({ KEY, TODAY }) => Boolean(JSON.parse(localStorage.getItem(KEY)).reports[TODAY]), { KEY, TODAY });
     const report = await page.evaluate(({ KEY, TODAY }) => JSON.parse(localStorage.getItem(KEY)).reports[TODAY], { KEY, TODAY });
-    check("0分実績の日報時間実行は予定へフォールバック", /\| 時間実行 \| 1h \/ 1h \(100%\) \|/.test(report) && !/NaN|Infinity/.test(report), report);
+    check("補完した15分実績を日報時間実行に集計", /\| 時間実行 \| 0h15m \/ 1h \(25%\) \|/.test(report) && !/NaN|Infinity/.test(report), report);
     check("予定なし0分Blockは0分のまま", /- 予定なし: 0h/.test(report), report);
     await dispatch("nav", "", { view: "instruments" });
     await page.locator(".instr-view").waitFor();
@@ -232,17 +230,17 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     await dispatch("toggle-block", "routine-deleted");
     const oneTapSaved = await storedBlock("routine-onetap");
     const deletedSaved = await storedBlock("routine-deleted");
-    check("oneTapルーティンは完了するが実績は補完されない", oneTapSaved.completed === true
-      && oneTapSaved.actualStartAt === "" && oneTapSaved.actualEndAt === "", JSON.stringify(oneTapSaved));
+    check("oneTapルーティンは今−15分から今の実績付き完了(fix430)", oneTapSaved.completed === true
+      && oneTapSaved.actualStartAt === `${TODAY}T09:48:45` && oneTapSaved.actualEndAt === `${TODAY}T10:03:45`, JSON.stringify(oneTapSaved));
     check("削除済みルーティンはtoggle-blockの対象にならない(未完了・実績も空のまま)", deletedSaved.completed === false
       && deletedSaved.actualStartAt === "" && deletedSaved.actualEndAt === "", JSON.stringify(deletedSaved));
 
-    console.log("[7] 非ルーティンNOW HUD・開始済みルーティンも同様に実績を補完しない");
+    console.log("[7] 非ルーティンNOW HUD も ✓ と同じく実績を補完(開始済みルーティンは従来どおり)");
     await seed([block("ordinary", { plannedStartAt: `${TODAY}T09:00:00`, plannedEndAt: `${TODAY}T09:30:00` })], "timeline");
     await dispatch("now-conveyor-complete", "ordinary");
     saved = await storedBlock("ordinary");
-    check("非ルーティン即完了も実績なしの予定完了", saved.completed === true
-      && saved.actualStartAt === "" && saved.actualEndAt === "", JSON.stringify(saved));
+    check("非ルーティン即完了も今−15分から今の実績付き完了(fix430)", saved.completed === true
+      && saved.actualStartAt === `${TODAY}T09:48:45` && saved.actualEndAt === `${TODAY}T10:03:45`, JSON.stringify(saved));
 
     // 実行中(actualStartAtあり・actualEndAtなし)のルーティンは設計03の「実行中なら終了確認へ
     // 進める」に沿って先に終了報告モーダルを開く(v331と同じ契約)。
@@ -261,8 +259,8 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     })], "today");
     await dispatch("now-conveyor-complete", "routine-unplanned");
     saved = await storedBlock("routine-unplanned");
-    check("予定なしルーティンも実績を補完せず完了する", saved.completed === true
-      && saved.actualStartAt === "" && saved.actualEndAt === "", JSON.stringify(saved));
+    check("予定なしルーティンも15分の実績を補完して完了する", saved.completed === true
+      && saved.actualStartAt === `${TODAY}T09:48:45` && saved.actualEndAt === `${TODAY}T10:03:45`, JSON.stringify(saved));
 
     await seed([block("routine-ended", {
       category: "ルーティン", actualEndAt: `${TODAY}T09:59:11`
@@ -271,13 +269,13 @@ check("丸めヘルパーにnew Dateが混入しない", !/new\s+Date\s*\(/.test
     saved = await storedBlock("routine-ended");
     check("既存actualEndAtは変わらず、actualStartAtも補完されない", saved.completed === true
       && saved.actualStartAt === "" && saved.actualEndAt === `${TODAY}T09:59:11`, JSON.stringify(saved));
-    console.log("[9] 23:58:45の境界でも実績なしで完了し、日付を維持する");
+    console.log("[9] 23:58:45の境界でも15分の実績で完了し、日付を維持する");
     await seed([block("routine-boundary", { category: "ルーティン" })], "today");
     await page.clock.setFixedTime(new Date(Date.UTC(2026, 7, 27, 14, 58, 45)));
     await dispatch("now-conveyor-complete", "routine-boundary");
     saved = await storedBlock("routine-boundary");
     check("23:58:45でも完了する", saved.completed === true, JSON.stringify(saved));
-    check("23:58:45でも実績は空のまま", saved.actualStartAt === "" && saved.actualEndAt === "", JSON.stringify(saved));
+    check("23:58:45でも今−15分から今の実績", saved.actualStartAt === `${TODAY}T23:43:45` && saved.actualEndAt === `${TODAY}T23:58:45`, JSON.stringify(saved));
     check("23:58:45でもdateは変わらない", saved.date === TODAY, JSON.stringify(saved));
   } finally {
     await browser.close();
