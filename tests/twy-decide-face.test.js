@@ -7,6 +7,19 @@ const plan = page => page.locator('.twy-face-segmented [data-face="plan"]').clic
 const card = (page, id = 'card-a') => page.locator(`[data-decide-task="${id}"]`);
 const day = (page, d, id) => card(page, id).locator(`[data-action="twy-decide-day"][data-day="${d}"]`).click();
 const reload = async page => { await page.reload(); await plan(page); return snapshot(page); };
+async function assertFailedCardSave(page, act, checkDisplay) {
+  const before = await snapshot(page), persisted = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
+  await page.evaluate(key => { window.restoreCardStorage = Storage.prototype.setItem; Storage.prototype.setItem = function(k,v) { if (k === key) throw new Error('76 storage failure'); return window.restoreCardStorage.call(this,k,v); }; }, STATE_KEY);
+  try {
+    await act();
+    const failed = await snapshot(page);
+    for (const kind of ['tasks','recurrences','blocks']) assert.deepEqual(failed[kind],before[kind],`failed save restores ${kind}`);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), STATE_KEY),persisted);
+    await checkDisplay();
+  } finally {
+    await page.evaluate(() => { Storage.prototype.setItem = window.restoreCardStorage; delete window.restoreCardStorage; });
+  }
+}
 async function choose(page, days, time, id) {
   for (const d of [0, 1, 2, 3, 4, 5, 6]) {
     const b = card(page, id).locator(`[data-action="twy-decide-day"][data-day="${d}"]`);
@@ -110,6 +123,9 @@ async function runCardAcceptance(page, n) {
     assert.equal(live(s)[0].plannedStartAt,`${week}T09:00:00`); assert.equal(live(s)[0].plannedEndAt,`${week}T09:25:00`);
   }
   if (n === 4) {
+    await assertFailedCardSave(page,
+      () => card(page).locator('[data-action="twy-decide-move"][data-dir="1"]').click(),
+      async () => assert.deepEqual(await page.locator('[data-decide-project="goal-a"] [data-decide-task]').evaluateAll(els=>els.map(el=>el.dataset.decideTask)),['card-a','card-b']));
     assert.ok(await card(page).locator('[data-action="twy-decide-move"][data-dir="-1"]').isDisabled());
     assert.ok(await card(page,'card-b').locator('[data-action="twy-decide-move"][data-dir="1"]').isDisabled());
     const before=await snapshot(page);
@@ -118,6 +134,9 @@ async function runCardAcceptance(page, n) {
     assert.deepEqual(await page.locator('[data-decide-project="goal-a"] [data-decide-task]').evaluateAll(els=>els.map(el=>el.dataset.decideTask)),['card-b','card-a']);
     assert.ok(s.tasks.find(t=>t.id==='card-b').order<s.tasks.find(t=>t.id==='card-a').order);
     assert.deepEqual(s.tasks.find(t=>t.id==='card-c'),before.tasks.find(t=>t.id==='card-c'));
+    await assertFailedCardSave(page,
+      () => card(page).locator('[data-action="twy-decide-move"][data-dir="-1"]').click(),
+      async () => assert.deepEqual(await page.locator('[data-decide-project="goal-a"] [data-decide-task]').evaluateAll(els=>els.map(el=>el.dataset.decideTask)),['card-b','card-a']));
     await card(page).locator('[data-action="twy-decide-move"][data-dir="-1"]').click(); await reload(page);
     assert.equal(await page.locator('[data-decide-project="goal-a"] [data-decide-task]').first().getAttribute('data-decide-task'),'card-a');
   }
@@ -189,6 +208,9 @@ async function runCardAcceptance(page, n) {
   }
   if (n === 8) {
     const add=page.locator('[data-action="twy-decide-candidate"][data-id="miss"]');
+    await assertFailedCardSave(page, () => add.click(), async () => {
+      assert.ok(await add.isEnabled()); assert.doesNotMatch(await add.innerText(),/追加済み/);
+    });
     const before=await snapshot(page); await add.click(); let s=await reload(page);
     assert.equal(live(s).length,1); assert.equal(live(s)[0].date,week); assert.equal(live(s)[0].plannedStartAt,`${week}T09:00:00`);
     assert.ok(await add.isDisabled()); assert.match(await add.innerText(),/追加済み/);
@@ -203,6 +225,32 @@ async function runCardAcceptance(page, n) {
   if (n === 9) {
     assert.match(await page.locator('.twy-decide-total').innerText(),/3 件.*週 0 回.*約 0 時間.*確定済み/s);
     await day(page,6); assert.match(await page.locator('.twy-decide-total').innerText(),/週 1 回.*約 0.4 時間.*確定後に変更あり/s);
+    for (const changedKind of ['recurrences','blocks']) {
+      await page.evaluate(({key,week}) => {
+        const s=JSON.parse(localStorage.getItem(key)), old=`${week}T08:00:00`, committed=`${week}T09:00:00`;
+        for (const values of Object.values(s)) if (Array.isArray(values)) for (const record of values) {
+          if (record && typeof record === 'object') record.updatedAt=old;
+        }
+        s.weeklyCommitments.find(r=>r.recordType==='week'&&r.weekStart===week).committedAt=committed;
+        const block=s.blocks.find(b=>b.taskId==='card-a'&&b.date===week);
+        block.deleted=true;
+        localStorage.setItem(key,JSON.stringify(s));
+      },{key:STATE_KEY,week});
+      await reload(page);
+      assert.match(await page.locator('.twy-decide-total').innerText(),/確定済み/);
+      await page.evaluate(({key,week,changedKind}) => {
+        const s=JSON.parse(localStorage.getItem(key));
+        const record=changedKind==='recurrences' ? s.recurrences.find(r=>r.taskId==='card-a'&&!r.deleted)
+          : s.blocks.find(b=>b.taskId==='card-a'&&b.date===week&&b.deleted);
+        record.updatedAt=`${week}T10:00:00`;
+        localStorage.setItem(key,JSON.stringify(s));
+      },{key:STATE_KEY,week,changedKind});
+      const isolated=await reload(page);
+      for (const kind of ['tasks','recurrences','blocks']) {
+        assert.equal(isolated[kind].filter(r=>r.updatedAt>`${week}T09:00:00`).length,kind===changedKind?1:0,`${changedKind}: isolated update`);
+      }
+      assert.match(await page.locator('.twy-decide-total').innerText(),/確定後に変更あり/,`${changedKind} alone marks changed`);
+    }
     assert.match(await page.locator('.twy-decide [data-action="twy-open-commit"]').innerText(),/これで決める/);
     await page.evaluate(async week=>{ const s=(await import('/src/state/store.js')).state; for(let i=0;i<6;i++) s.blocks.push({id:`crowd-${i}`,taskId:'card-a',date:week}); },week);
     await plan(page); assert.match(await page.locator('.twy-decide-total').innerText(),/5 回を超える日があります\(土\)/);
