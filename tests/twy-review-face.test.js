@@ -187,7 +187,11 @@ async function browserChecks() {
     eq(await well.inputValue(), "朝に3回できた <継続>", "change saves without replacing the focused form");
     eq((await snapshot()).twyWeeklyReviews[0].wentWell, "朝に3回できた <継続>");
     eq((await snapshot()).twyWeeklyReviews[0].obstacles, "雨で移動が大変");
+    const beforeReviewNav = await well.elementHandle();
+    // nav() uses a DOM click: leave the editor so navigation renders immediately.
+    await well.evaluate(el => el.blur());
     await nav(page, "twelveweek");
+    eq(await beforeReviewNav.evaluate(el => el.isConnected), false, "navigation completes its redraw before recording");
     if (!await page.locator(".twy-review-fold").evaluate(el => el.open)) await page.locator(".twy-review-fold > summary").click();
     await page.locator('.twy-review-notes summary').click();
     eq(await well.inputValue(), "朝に3回できた <継続>");
