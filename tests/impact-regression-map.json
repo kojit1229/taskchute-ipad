@@ -661,6 +661,15 @@
         "r3-twelveweek-week"
       ]
     },
+    "twelve-week-stack-core": {
+      "paths": [
+        "^src/core/twy-stack\\.js$"
+      ],
+      "suites": [
+        "twy-stack-core",
+        "r3-twelveweek-week"
+      ]
+    },
     "remaining-integrated-features": {
       "paths": [
         "^src/(?:features|core|sync)/(?:karada|health|placement|iron-log|vision)"
