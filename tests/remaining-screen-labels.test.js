@@ -6,22 +6,18 @@ async function twelveWeek(page) {
   const root = page.locator(".twy-tower");
   assert.ok((await root.innerText()).includes("12週間実行サイクル"));
   assert.equal(await root.locator("h1").innerText(), "12週計画");
-  assert.equal(await root.locator(".twy-face-segmented").getAttribute("aria-label"), "12週計画の面切替");
-  assert.deepEqual(await root.locator(".twy-face-segmented button").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent)),
-    ["今週を決める", "今日やる", "ふりかえる"]);
-  // 発注53: 3面を有効化。旧CYCLE部品はPLAN内の折りたたみで引き続き検証。
-  assert.deepEqual(await root.locator(".twy-face-segmented button:disabled small").allTextContents(), []);
-  await root.locator('.twy-face-segmented [data-face="plan"]').click();
+  assert.equal(await root.locator(".twy-face-segmented, [data-face]").count(), 0);
+  assert.deepEqual(await root.locator(":scope > section > h2, :scope > details > summary > h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.split(" — ")[0].trim())),
+    ["今週を決める", "今週のできた", "積み上げ", "ふりかえる", "12週の目標と進み具合"]);
   await root.locator(".twy-cycle-fold > summary").click();
   const cycle = root.locator(".twy-cycle-fold");
   assert.deepEqual(await cycle.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent)),
-    ["ビジョン", "12週の目標", "12週と振り返り週", "計画と記録のつながり", "12週の計画", "目安なし"]);
+    ["12週の目標と進み具合", "ビジョン", "12週の目標", "12週と振り返り週", "計画と記録のつながり", "12週の計画", "目安なし"]);
   assert.equal(await root.locator(".twy-goal-no-track").innerText(), "進捗の記録が未設定");
   assert.ok((await root.locator(".twy-goal-act").innerText()).includes("★ 重要な行動: 毎週の作業"));
   assert.deepEqual(await root.locator(".twy-week-lab").allTextContents(), Array.from({ length: 13 }, (_, i) => `${i + 1}週`));
   assert.ok((await root.locator(".twy-week-lab").last().getAttribute("title")).startsWith("13週・振り返り("));
-  assert.equal(await root.locator('.twy-face-segmented [data-action="twy-face-select"]').count(), 3);
-  assert.equal(await root.locator(".twy-face-segmented button:disabled").count(), 0);
+  assert.equal(await root.locator("h2").count(), 15);
   for (const [action, text] of [["twy-vision-open", "架空の3年ビジョン"], ["twy-open-commit", "今週を確定"]]) {
     assert.ok((await cycle.locator('[data-action="' + action + '"]').first().innerText()).includes(text));
   }
@@ -36,8 +32,7 @@ async function twelveWeek(page) {
   assert.ok(await page.getByText(/^今週の確定分 /).isVisible());
   assert.equal(await page.locator(".twy-commit-meta").innerText(), "今週の12週のプロジェクトに確定できる予定がありません。");
   await page.locator('[data-action="modal-close"]').first().click();
-  await root.locator('[data-action="twy-face-select"][data-face="plan"]').click();
-  await root.locator(".twy-cycle-fold > summary").click();
+  if (!await cycle.evaluate(el => el.open)) await cycle.locator(":scope > summary").click();
   assert.deepEqual(await root.locator(".twy-cycle-fold .twy-plan-link-panel h2,.twy-cycle-fold .twy-plan-grid-panel h2,.twy-cycle-fold .twy-plan-none-panel h2").allTextContents(), ["計画と記録のつながり", "12週の計画", "目安なし"]);
   assert.equal(await root.locator(".twy-decide h2").count(), 2);
   assert.deepEqual(await root.locator(".twy-plan-link-label").allTextContents(),
@@ -52,7 +47,7 @@ async function twelveWeek(page) {
     ['.twy-plan-link-edit[data-action="nav"][data-view="wbs"]', 2],
     ['.twy-plan-link-edit[data-action="nav"][data-view="timeline"]', 1],
     ['.twy-plan-link-edit[data-action="twy-open-commit"]', 1],
-    ['.twy-plan-link-edit[data-action="twy-face-select"][data-face="cycle"]', 1]
+    ['.twy-plan-link-edit[data-action="twy-cycle-open"]', 1]
   ]) assert.equal(await root.locator(selector).count(), count);
   assert.equal(await root.locator(".twy-plan-grid th").count(), 14);
   assert.equal(await root.locator(".twy-plan-cell").count(), 12);
@@ -323,7 +318,7 @@ async function ironJapanese(page) {
   const root = page.locator("#ironRoot");
   assert.equal(await page.locator(".view-header h1").innerText(), "筋トレ記録");
   assert.equal(await page.locator(".eyebrow").innerText(), "筋トレの記録");
-  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.trim())),
+  assert.deepEqual(await root.locator("h2").evaluateAll(nodes => nodes.map(n => n.firstChild.textContent.split(" — ")[0].trim())),
     ["連動中のタスク", "今日の総重量", "セットを追加", "種目メニュー", "今日のセット", "積み上げ"]);
   assert.equal(await root.locator(".iron-pr").innerText(), "自己ベスト");
   assert.equal(await root.locator(".iron-total span").innerText(), "600");

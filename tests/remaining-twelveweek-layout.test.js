@@ -109,20 +109,22 @@ async function run() {
       await nav(page, "twelveweek");
       const faces = [];
       for (const face of ["cycle", "plan"]) {
-        if (face === "cycle") { await page.locator('.twy-face-segmented [data-face="plan"]').click(); await page.locator(".twy-cycle-fold > summary").click(); }
-        await page.locator('[data-action="twy-face-select"][data-face="' + face + '"]').first().click();
-        if (face === "plan") await page.locator(".twy-cycle-fold > summary").click();
+        const fold = page.locator(".twy-cycle-fold");
+        if (!await fold.evaluate(el => el.open)) await fold.locator(":scope > summary").click();
         await setViewportAndWaitForStableLayout(page, { width, height: 1000 }, ".twy-tower > *");
         const m = await measure(page);
         faces.push({ face, ...m });
         fs.writeFileSync(path.join(evidence, width + "-" + face + ".json"), JSON.stringify(m, null, 2), "utf8");
         await page.screenshot({ path: path.join(evidence, width + "-" + face + ".png"), fullPage: true });
         assert.ok(m.children.length >= 3);
-        for (let i = 0; i < m.children.length - 1; i++)
-          assert.ok(m.children[i].rect.bottom <= m.children[i + 1].rect.top + 1, width + "/" + face + ": vertical order " + i);
-        const available = m.root.clientWidth - parseFloat(m.root.css.paddingLeft) - parseFloat(m.root.css.paddingRight);
-        for (const child of m.children.slice(2))
-          assert.ok(Math.abs(child.rect.width + parseFloat(child.css.marginLeft) + parseFloat(child.css.marginRight) - available) <= 2, width + "/" + face + ": full-width body");
+        if (width < 1280) {
+          for (let i = 0; i < m.children.length - 1; i++)
+            assert.ok(m.children[i].rect.bottom <= m.children[i + 1].rect.top + 1, width + ": vertical order " + i);
+        } else {
+          const decide = m.children.find(c => c.class.includes("twy-decide")), stack = m.children.find(c => c.class.includes("twy-stack"));
+          assert.ok(stack.rect.left >= decide.rect.right, width + ": stack right of decide");
+          assert.equal(stack.rect.top, decide.rect.top);
+        }
         assert.ok(m.document.scrollWidth <= m.document.clientWidth + 1, width + "/" + face + ": no page overflow");
         if (face === "plan") {
           assert.ok(m.wrap.rect.left >= m.root.rect.left && m.wrap.rect.right <= m.root.rect.right);

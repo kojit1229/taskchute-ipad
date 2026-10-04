@@ -3,7 +3,10 @@ const assert = require('node:assert/strict');
 const { setup } = require('./remaining-twelveweek-layout.test');
 const { STATE_KEY, fixedClock, setViewportAndWaitForStableLayout } = require('./helpers');
 const snapshot = page => page.evaluate(async () => JSON.parse(JSON.stringify((await import('/src/state/store.js')).state)));
-const plan = page => page.locator('.twy-face-segmented [data-face="plan"]').click();
+const plan = async page => {
+  await page.locator(".twy-decide").waitFor();
+  await page.evaluate(async () => { document.querySelector(".twy-tower").outerHTML = (await import("/src/features/twelve-week.js")).renderTwelveWeek(); });
+};
 const card = (page, id = 'card-a') => page.locator(`[data-decide-task="${id}"]`);
 const day = (page, d, id) => card(page, id).locator(`[data-action="twy-decide-day"][data-day="${d}"]`).click();
 const reload = async page => { await page.reload(); await plan(page); return snapshot(page); };
