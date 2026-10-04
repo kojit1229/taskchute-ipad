@@ -1,0 +1,18 @@
+{
+  "version": 435,
+  "date": "2026-10-04",
+  "title": "いまタブ 「これから」を外し、日報への入口を足す",
+  "summary": "いまタブから「これから」の一覧を外しました(開始候補と段取りの「今日やる」と三重だったため)。「今日できた」の下に「日報を書く ›」を置き、いまタブからも日報へ行けます。",
+  "changedFiles": ["src/features/now-view.js", "styles.css", "sw.js", "releases/v435.json", "tests/now-view.test.js", "tests/suite-manifest.json"],
+  "intent": ["K 指示 5 回目(2026-10-04 17:0x)3 画面の役割分担 R-1/R-2 の最初の版。版v435。基準 0ae863f(v434)。spec「v435 の裁定」B2-77/78。"],
+  "changes": [
+    "B2-77: いまタブの「これから」節を廃止。1280px の 3 列は 2 行構成に",
+    "B2-78: 「今日できた」節の末尾に「日報を書く ›」(nav → journal)",
+    "SWキャッシュv435"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["now-next の掃除漏れ", "1280px の grid-template-areas"],
+  "verification": ["now-view.test.js: 断言 1 本削除(B2-77、節自体が無くなる)+追加 2 本。直す前に赤・直した後に緑。Codex レビュー 78、Claude 独立検証 79"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["now-view", "tower-core", "today-core", "action-registry-core", "ui-a-layout"]
+}
