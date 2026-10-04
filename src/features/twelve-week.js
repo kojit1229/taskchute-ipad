@@ -365,18 +365,22 @@ function twyDecideCreate(id, target) {
   if (!createTwyTask({ title, projectId: id, estimateMin: 25, twyPerWeek: 0, twyKeystone: false }, (task) => applyTwyDecideSchedule(task.id, []))) root.querySelector("[data-decide-message]").textContent = "追加できませんでした";
 }
 function twyDecideMove(id, direction) {
-  const task = state.tasks.find((t) => t.id === id); if (!task) return;
-  const tasks = twyDecideTasks(task.projectId), index = tasks.indexOf(task), other = tasks[index + direction]; if (!other) return;
-  tasks.forEach((t, i) => { t.order = i; t.updatedAt = nowDateTime(); });
-  [task.order, other.order] = [other.order, task.order]; saveAndRender();
+  return runRecurrenceChange(() => {
+    const task = state.tasks.find((t) => t.id === id); if (!task) return;
+    const tasks = twyDecideTasks(task.projectId), index = tasks.indexOf(task), other = tasks[index + direction]; if (!other) return;
+    tasks.forEach((t, i) => { t.order = i; t.updatedAt = nowDateTime(); });
+    [task.order, other.order] = [other.order, task.order]; saveAndRender();
+  });
 }
 function twyDecideAdd(id) {
-  const block = state.blocks.find((b) => b.id === id && !b.deleted); if (!block) return;
-  const date = addDaysISO(block.date, 7), task = state.tasks.find((t) => t.id === block.taskId), rule = task && twyDecideRule(task);
-  if (twyDecideBlocks(block.taskId, twyDecideWeek()).some((b) => b.date === date)) return;
-  const start = rule?.startTime || block.plannedStartAt?.slice(11, 16), end = rule?.endTime || block.plannedEndAt?.slice(11, 16);
-  state.blocks.push(makeBlock({ taskId: block.taskId, title: block.title, category: block.category || "", date,
-    plannedStartAt: start ? `${date}T${start}` : "", plannedEndAt: end ? `${end < start ? addDaysISO(date, 1) : date}T${end}` : "" })); saveAndRender();
+  return runRecurrenceChange(() => {
+    const block = state.blocks.find((b) => b.id === id && !b.deleted); if (!block) return;
+    const date = addDaysISO(block.date, 7), task = state.tasks.find((t) => t.id === block.taskId), rule = task && twyDecideRule(task);
+    if (twyDecideBlocks(block.taskId, twyDecideWeek()).some((b) => b.date === date)) return;
+    const start = rule?.startTime || block.plannedStartAt?.slice(11, 16), end = rule?.endTime || block.plannedEndAt?.slice(11, 16);
+    state.blocks.push(makeBlock({ taskId: block.taskId, title: block.title, category: block.category || "", date,
+      plannedStartAt: start ? `${date}T${start}` : "", plannedEndAt: end ? `${end < start ? addDaysISO(date, 1) : date}T${end}` : "" })); saveAndRender();
+  });
 }
 
 function twyReviewResultsHTML(cycleStart, weekStart) {
