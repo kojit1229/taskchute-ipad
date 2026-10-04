@@ -1,0 +1,19 @@
+{
+  "version": 436,
+  "date": "2026-10-04",
+  "title": "いまタブ 空白の解消・12週計画はルーティンに含めない・積み上げの重なりを数えない",
+  "summary": "PC 幅で「いま」と「開始」の間に空いていた大きな空白を無くしました。12 週計画のやることはルーティン枠に出さず開始の枠に出し、ルーティン画面の「12週」印も正しい物だけに付くようにしました。積み上げの棒と輪は、同じ時間帯に重なった実績を二重に数えません。",
+  "changedFiles": ["src/core/tower-week.js", "src/features/now-view.js", "src/features/routine-view.js", "styles.css", "sw.js", "releases/v436.json", "tests/now-view.test.js", "tests/tower-week-core.test.js", "tests/routine-view.test.js", "tests/suite-manifest.json"],
+  "intent": ["K 指示 6 回目(2026-10-04 18:4x)1〜3。版v436。基準 e9de207(v435)。spec「v436 の裁定」B2-79/80/81・補足・補足 2。"],
+  "changes": [
+    "B2-79: 1280px の左列を grid-template-rows:auto 1fr(中央列の高さに引きずられない)",
+    "B2-80: いまタブのルーティン判定から 12 週由来(taskId のタスクの twyPlan.perWeek > 0)を除外。ルーティン画面の「12週」印も同じ判定に(正規化で全タスクに twyPlan が付くため真偽値では誤判定)",
+    "B2-81: 積み上げの棒・輪・昨日超えは実績区間の和集合(重なりを合算しない)。時刻不明の完了は見積で加算",
+    "SWキャッシュv436"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認", "K の「集計がおかしい」が重なりの二重計上の意味か要確認"],
+  "reviewFocus": ["区間の和集合(隣接・走行中・日跨ぎ)", "perWeek > 0 判定の両画面一致"],
+  "verification": ["tower-week-core 和集合 5 断言・now-view 4 断言・routine-view 1 断言(直す前に赤)。Codex 80(中1)→82 解消、Claude 81 PASS→83 PASS"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["tower-week-core", "now-view", "routine-view", "tower-core", "today-core", "action-registry-core"]
+}

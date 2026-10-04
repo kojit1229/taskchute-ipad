@@ -41,9 +41,28 @@ export function blockActualSeconds(block, nowMs, toMs) {
   return Math.max(60, (end - start) / 1000);
 }
 
+// v436 B2-81: 実績区間の重なりは合算しない(和集合)。時刻不明の完了(実績なし)は見積で足す。
 function secondsOnDate(blocks, date, nowMs, toMs) {
-  return blocks.reduce((sum, block) => sum + (block && !block.deleted && block.date === date
-    ? blockActualSeconds(block, nowMs, toMs) : 0), 0);
+  const intervals = [];
+  let unmeasured = 0;
+  for (const block of blocks) {
+    if (!block || block.deleted || block.date !== date) continue;
+    const seconds = blockActualSeconds(block, nowMs, toMs);
+    if (!seconds) continue;
+    if (block.completed && !block.actualStartAt) { unmeasured += seconds; continue; }
+    const start = toMs(block.actualStartAt);
+    intervals.push([start, start + seconds * 1000]);
+  }
+  intervals.sort((a, b) => a[0] - b[0]);
+  let merged = 0, curStart = null, curEnd = null;
+  for (const [start, end] of intervals) {
+    if (curEnd === null || start > curEnd) {
+      if (curEnd !== null) merged += curEnd - curStart;
+      curStart = start; curEnd = end;
+    } else if (end > curEnd) curEnd = end;
+  }
+  if (curEnd !== null) merged += curEnd - curStart;
+  return merged / 1000 + unmeasured;
 }
 
 export function weekTowers(blocks, todayISO, nowMs, toMs) {
