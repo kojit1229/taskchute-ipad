@@ -43,7 +43,7 @@ function card(rule) {
   const state = deps.getState();
   const instance = state.blocks.find(block => !block.deleted && block.recurrenceGroupId === rule.id && block.date === deps.todayISO());
   const estimate = `${deps.resolveEstimateMin(instance || { ...rule, recurrenceGroupId: rule.id })} 分`;
-  const kind = rule.kind === "monthly" ? `毎月 ${Number(rule.anchorDate.slice(8, 10))} 日`
+  const kind = rule.kind === "monthly" ? (rule.anchorDate ? `毎月 ${Number(rule.anchorDate.slice(8, 10))} 日` : "毎月")
     : rule.kind === "weekly" && !rule.days?.length ? "曜日未設定" : isWeekend(rule) ? "週末" : kinds[rule.kind] || rule.kind;
   const twy = state.tasks.some(task => task.id === rule.taskId && task.twyPlan);
   return `<article class="routine-card" data-rule-id="${escape(rule.id)}"><h3>${escape(rule.title)}${twy ? ' <span>12週</span>' : ""}</h3>
@@ -76,7 +76,7 @@ export function cancelRoutineEdit() {
 export function saveRoutine(id) {
   if (editingId !== id) return;
   rememberDraft();
-  const title = draft.title.trim(), category = draft.category.trim() || "ルーティン", start = draft.startTime, end = draft.endTime;
+  const title = draft.title.trim(), category = draft.category.trim() || (id ? "" : "ルーティン"), start = draft.startTime, end = draft.endTime;
   const kind = draft.kind === "weekend" ? "weekly" : draft.kind;
   const days = draft.kind === "weekend" ? [0, 6] : draft.days;
   if (kind === "weekly" && !days.length) { deps.showToast("曜日を 1 つ以上選んでください"); return; }
@@ -86,10 +86,10 @@ export function saveRoutine(id) {
     deps.showToast("日を 1〜31 で入力してください"); return;
   }
   const existing = id ? activeRules().find(item => item.id === id) : null;
-  const unchanged = existing && title === existing.title && category === existing.category && kind === existing.kind
+  const unchanged = existing && title === existing.title && draft.category === existing.category && kind === existing.kind
     && start === (existing.startTime || "").slice(0, 5) && end === (existing.endTime || "").slice(0, 5)
     && (kind !== "weekly" || [...days].sort().join() === [...(existing.days || [])].sort().join())
-    && (kind !== "monthly" || monthDay === Number(existing.anchorDate.slice(8, 10)));
+    && (kind !== "monthly" || (existing.anchorDate && monthDay === Number(existing.anchorDate.slice(8, 10))));
   if (unchanged) { cancelRoutineEdit(); return; }
   return deps.runRecurrenceChange(() => {
     if (id && findActiveDuplicateRecurrenceRule(title, start, undefined, { excludeId: id })) {
@@ -104,7 +104,7 @@ export function saveRoutine(id) {
     if (id) deps.removeUntouchedInstances(id, { fromDate: date });
     Object.assign(rule, { title, kind, startTime: start, endTime: end, category, updatedAt: deps.nowDateTime() });
     if (kind === "monthly") {
-      const [year, month] = rule.anchorDate.split("-").map(Number);
+      const [year, month] = (rule.anchorDate || date).split("-").map(Number);
       let monthIndex = month - 1, anchor = new Date(year, monthIndex, monthDay);
       // Keep the requested day even when the anchor month is shorter (e.g. February 31).
       while (anchor.getDate() !== monthDay) anchor = new Date(year, ++monthIndex, monthDay);

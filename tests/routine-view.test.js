@@ -201,7 +201,27 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await click('edit', water.id);
     await page.locator('[name="category"]').fill('');
     await click('save', water.id);
-    equal((await stored()).recurrences.find(r => r.id === water.id).category, 'ルーティン', 'B2-69: 編集でも空欄はルーティン');
+    equal((await stored()).recurrences.find(r => r.id === water.id).category, '', 'B2-69補足: 既存ルールのカテゴリは空に変更できる');
+    for (const taskId of ['', 'twy-empty-category']) {
+      const before = await page.evaluate(async ({ id, taskId }) => {
+        const s = (await import('/src/state/store.js')).state;
+        s.recurrences.find(r => r.id === id).taskId = taskId;
+        if (taskId) s.tasks.push({ id: taskId, twyPlan: { week: 1 } });
+        return JSON.parse(JSON.stringify({ recurrences: s.recurrences, blocks: s.blocks }));
+      }, { id: water.id, taskId });
+      const persisted = await stored();
+      await click('edit', water.id);
+      equal(await page.locator('[name="category"]').inputValue(), '', 'B2-69補足: 既存の空カテゴリを復元');
+      await click('save', water.id);
+      const after = await live();
+      equal({ recurrences: after.recurrences, blocks: after.blocks }, before, `B2-69補足: ${taskId || '通常'}の無変更保存でルール・全実体を保持`);
+      equal(await stored(), persisted, 'B2-69補足: 無変更保存は永続化もしない');
+      equal(await card(water.id).locator('.routine-form').count(), 0, 'B2-69補足: 無変更保存で編集を終了');
+    }
+    await click('edit', water.id);
+    await page.locator('[name="category"]').fill('朝の習慣');
+    await click('save', water.id);
+    equal((await stored()).recurrences.find(r => r.id === water.id).category, '朝の習慣', 'B2-69補足: 既存の空カテゴリに入力した値を保存');
     await page.evaluate(async ({ id, day }) => {
       const s = (await import('/src/state/store.js')).state;
       const r = s.recurrences.find(r => r.id === id);
@@ -229,6 +249,19 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.locator('[name="monthDay"]').fill('15');
     await click('save', monthly.id);
     equal((await stored()).recurrences.find(r => r.id === monthly.id).anchorDate, '2026-10-15', 'B2-73: 毎月の日を編集');
+    for (const anchorDate of ['', undefined]) {
+      await page.evaluate(async ({ id, anchorDate }) => {
+        const s = (await import('/src/state/store.js')).state;
+        const r = s.recurrences.find(r => r.id === id);
+        if (anchorDate === undefined) delete r.anchorDate; else r.anchorDate = anchorDate;
+        document.querySelector('.routine-view').outerHTML = (await import('/src/features/routine-view.js')).renderRoutineView();
+      }, { id: monthly.id, anchorDate });
+      equal(await card(monthly.id).locator('p').first().innerText(), '毎月', 'B2-73補足: anchorDateが空・未定義でも一覧を表示');
+      await click('edit', monthly.id);
+      equal(await page.locator('[name="monthDay"]').inputValue(), '3', 'B2-73補足: anchorDate欠落時の日は今日');
+      await click('save', monthly.id);
+      equal((await stored()).recurrences.find(r => r.id === monthly.id).anchorDate, day, 'B2-73補足: 無操作保存でも欠落anchorDateを作成');
+    }
     await page.evaluate(async () => {
       const s = (await import('/src/state/store.js')).state;
       Object.assign(s.recurrences.find(r => r.id === 'weekly'), { kind: 'weekly', days: [] });

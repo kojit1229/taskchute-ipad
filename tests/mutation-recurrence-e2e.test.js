@@ -69,8 +69,7 @@ test('113 B2-69/70: routine save transaction preserves unchanged instances and r
     routine.startRoutineEdit('r'); routine.saveRoutine('r');
     assert.deepEqual(state, before, 'no-op includes seconds normalization and unordered weekend days');
     assert.deepEqual([removed, maintained, writes], [0, 0, 0], 'no regeneration or transaction write for unchanged save');
-    routine.startRoutineEdit('r'); values.category = ''; routine.saveRoutine('r');
-    assert.deepEqual(state, before, 'empty category resolves to existing default without regeneration');
+    // B2-69 補足(fix433): 既存ルールの欄を空にするのは「変更」(既定の補完は新規作成だけ)。空欄→無変更の検査は routine-view.test.js へ
     routine.startRoutineEdit('r'); values.title = 'changed'; routine.saveRoutine('r');
     assert.deepEqual([removed, maintained, writes], [1, 1, 1], 'changed save still rebuilds and persists through transaction');
     assert.equal(state.recurrences[0].title, 'changed');
