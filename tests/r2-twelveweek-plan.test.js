@@ -506,7 +506,10 @@ async function seed(page, values) {
     });
     console.log("390px measurements", JSON.stringify(dimensions));
     check("390px: columns >=44px and text >=11px", dimensions.minColumn >= 44 && dimensions.minText >= 11);
-    check("390px: controls >=44px", dimensions.controls.length > 0 && dimensions.controls.every((r) => r.width >= 44 && r.height >= 44), JSON.stringify(dimensions.controls));
+    const dayControls = dimensions.controls.filter((r) => r.action === "twy-decide-day");
+    const otherControls = dimensions.controls.filter((r) => r.action !== "twy-decide-day");
+    check("390px: existing controls >=44px", otherControls.length > 0 && otherControls.every((r) => r.width >= 44 && r.height >= 44), JSON.stringify(otherControls));
+    check("390px: new card weekdays >=40px (73c acceptance 10)", dayControls.length > 0 && dayControls.every((r) => r.width >= 40 && r.height >= 40), JSON.stringify(dayControls));
     check("390px: actual internal scrolling", dimensions.scroll > 0 && Math.abs(dimensions.scroll - dimensions.maxScroll) <= 1);
     await page.click('.twy-plan-none-list [data-action="edit-task"][data-id="t4"]');
     const inputSizes = await page.locator('[data-modal-field="twyPerWeek"], [data-modal-field="twyFromWeek"], [data-modal-field="twyToWeek"]').evaluateAll((els) => els.map((el) => ({ field: el.dataset.modalField, font: parseFloat(getComputedStyle(el).fontSize) })));

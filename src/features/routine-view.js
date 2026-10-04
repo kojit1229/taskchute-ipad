@@ -116,19 +116,20 @@ export function saveRoutine(id) {
     deps.saveAndRender("ルーティンを保存しました");
   });
 }
-export function endRoutine(id, confirmed) {
+export function endRoutine(id, confirmed, options = {}) {
   if (!confirmed) {
-    const target = [...document.querySelectorAll('[data-action="routine-end"]')].find(node => node.dataset.ruleId === id);
+    const target = options.target || [...document.querySelectorAll('[data-action="routine-end"]')].find(node => node.dataset.ruleId === id);
     if (target) {
-      target.dataset.action = "routine-end-confirm"; target.dataset.confirmAfter = String(Date.now() + 600);
+      if (!options.target) target.dataset.action = "routine-end-confirm"; target.dataset.confirmAfter = String(Date.now() + 600);
       target.textContent = "本当に終了";
     }
     return;
   }
-  const target = [...document.querySelectorAll('[data-action="routine-end-confirm"]')].find(node => node.dataset.ruleId === id);
-  if (!target || !Number.isFinite(Number(target.dataset.confirmAfter)) || Date.now() < Number(target.dataset.confirmAfter)) return;
-  return deps.runRecurrenceChange(() => {
-    if (!deps.endRecurrenceSeries(id)) return;
+  const target = options.target || [...document.querySelectorAll('[data-action="routine-end-confirm"]')].find(node => node.dataset.ruleId === id);
+  if (!options.immediate && (!target || !Number.isFinite(Number(target.dataset.confirmAfter)) || Date.now() < Number(target.dataset.confirmAfter))) return;
+  return (options.runChange || deps.runRecurrenceChange)(() => {
+    if (id && !deps.endRecurrenceSeries(id, { fromDate: options.fromDate })) return;
+    options.onEnd?.();
     if (editingId === id) { editingId = null; draft = null; }
     deps.saveAndRender("ルーティンを終了しました");
   });

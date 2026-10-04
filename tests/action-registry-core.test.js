@@ -218,8 +218,8 @@ const GOLDEN_CLICK_ACTIONS = [
   // v360(R1/R2、review-r2-claude-a L4): 12WYタブ VISION編集+PLAN/CYCLE面切替の意図的追加
   "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
   "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
-  "twy-decide-aim", "twy-decide-when", "twy-decide-day", "twy-decide-save",
-  "twy-decide-memo", "twy-decide-add-task", "twy-decide-create",
+  "twy-decide-aim", "twy-decide-day", "twy-decide-save", "twy-decide-time",
+  "twy-decide-edit", "twy-decide-create", "twy-decide-move", "twy-decide-remove", "twy-decide-candidate", "twy-decide-pool",
   // v418(束2a 段取り、監督者の契約追随 2026-10-01): 今日やるの並べ替え・候補からの追加・外す
   "dandori-move", "dandori-add-task", "dandori-remove",
   "dandori-add-free", "dandori-duplicate"
@@ -266,8 +266,8 @@ const MIGRATED_TO_REGISTRY_ACTIONS = [
   // registerActionsのため、importするだけで登録される。
   "twy-vision-open", "twy-vision-save", "twy-face-select", "twy-review-finish",
   "twy-review-record", "twy-review-same", "twy-review-note", "twy-review-edit", "twy-review-add",
-  "twy-decide-aim", "twy-decide-when", "twy-decide-day", "twy-decide-save",
-  "twy-decide-memo", "twy-decide-add-task", "twy-decide-create"
+  "twy-decide-aim", "twy-decide-day", "twy-decide-save", "twy-decide-time",
+  "twy-decide-edit", "twy-decide-create", "twy-decide-move", "twy-decide-remove", "twy-decide-candidate", "twy-decide-pool"
 ];
 
 // v174: 段階5-3で以下20件(settings 11 + sync 8 + core/nav 1)を、app.js自身が呼ぶ

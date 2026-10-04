@@ -417,7 +417,8 @@ configureTwelveWeek({
     const task = state.tasks.find((t) => !ids.has(t.id));
     if (!task || !schedule(task)) throw Object.assign(new Error("Invalid task schedule"), { invalid: true });
   }, { kinds: ["tasks", "recurrences", "blocks"] }).ok,
-  makeBlock, isTouchedBlock, createRecurrenceRule, maintainRecurrences,
+  makeBlock, isTouchedBlock, createRecurrenceRule, maintainRecurrences, endRoutine,
+  runRecurrenceChange: (work) => draftSaveTransaction.active ? work() : draftSaveTransaction.run(work, { kinds: ["tasks", "recurrences", "blocks", "chainRuns", "habitPinHistory"] }),
   recordTrackMeasurement, saveState, openProjectEditor,
   escapeHTML, renderHeader, todayISO, weekRange, renderTwyTrackReadOnly, candidateBlocksForWeek, nowDateTime,
   modalHeaderHTML, renderModal, saveAndRender, closeModal, twyTrackIsDone,
@@ -1961,7 +1962,7 @@ document.addEventListener("change", (event) => {
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
-  if (target.matches('select[data-action],textarea[data-action="twy-review-note"],input[data-action="twy-decide-aim"],input[data-action="twy-decide-memo"]')
+  if (target.matches('select[data-action],textarea[data-action="twy-review-note"],input[data-action="twy-decide-aim"],input[data-action="twy-decide-time"]')
     && dispatchAction(target.dataset.action, { event, target, id: target.dataset.id })) return;
   // v294: 「書く瞑想」の深掘りセルフトーク。changeイベント=blur時かつ値が変わった場合のみ発火
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。
@@ -13459,14 +13460,14 @@ function archiveHabitPinPeriod(rule) {
 
 // v229: Block編集の「__end__」とGATE削除が共有するシリーズ終了本体。
 // GATE側はendGateRecurrence()からこの既存分岐相当だけを呼ぶ薄いラッパーにする。
-function endRecurrenceSeries(ruleId, { excludeId = "" } = {}) {
+function endRecurrenceSeries(ruleId, { excludeId = "", fromDate = todayISO() } = {}) {
   const activeRule = (state.recurrences || []).find((rule) => rule.id === ruleId && !rule.deleted);
   if (!activeRule) return false;
   archiveHabitPinPeriod(activeRule);
   state.recurrences = state.recurrences.map((rule) => rule.id === ruleId
     ? { ...rule, deleted: true, updatedAt: nowDateTime() }
     : rule);
-  removeUntouchedInstances(ruleId, { fromDate: todayISO(), excludeId });
+  removeUntouchedInstances(ruleId, { fromDate, excludeId });
   return true;
 }
 
