@@ -105,7 +105,7 @@ async function openCycleWhenTwelveWeek(page) {
   await page.waitForSelector('[data-action="nav"]', { state: "attached" });
   if (!await page.locator(".twy-tower").count()) return;
   await renderOnePage(page);
-  await page.click(".twy-cycle-fold > summary");
+  await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
   const cycleLink = page.locator('.twy-plan-link-edit[data-action="twy-cycle-open"]');
   if (await cycleLink.count()) await cycleLink.click();
 
@@ -295,7 +295,7 @@ async function seed(page, values) {
     await page.click(".twy-review-fold > summary");
     check("ふりかえる面が開く", await page.locator(".twy-review-score").isVisible());
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     const firstWeekBar = page.locator(".twy-week").first();
     if (await firstWeekBar.count()) {
       await firstWeekBar.hover();
@@ -637,7 +637,7 @@ async function seed(page, values) {
     await seed(page, { projects: [pWed], tasks: [tWed], currentView: "twelveweek" });
     const wedStateBefore = await page.evaluate(async () => JSON.stringify((await import("/src/state/store.js")).state));
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     check("M2: PLAN面でも非土曜開始は丸め後の経過日数基準でW3が当週列になる",
       await page.locator(".twy-plan-grid thead th[data-current=\"1\"]").count() === 1

@@ -237,7 +237,7 @@ async function seed(page, values) {
     await page.waitForSelector('[data-action="nav"]', { state: "attached" });
     check("非永続: reloadするとふりかえるは閉じている", await page.locator(".twy-review-fold").getAttribute("open") === null);
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-link-panel");
 
     // ============================================================
@@ -350,7 +350,7 @@ async function seed(page, values) {
     console.log("[5] 0件誘導: 対象の12WYプロジェクトが無い場合の誘導1行");
     await seed(page, { projects: [], tasks: [], currentView: "twelveweek" });
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-link-panel");
     check("0件誘導が出る(LINKは出したまま)", (await page.locator(".twy-plan-grid-panel .twy-plan-guide").textContent()).includes("対象の12週のプロジェクトがありません"));
     check("グリッドは無い(タスク行0)", await page.locator(".twy-plan-task-row").count() === 0);
@@ -358,7 +358,7 @@ async function seed(page, values) {
     // cycleStartDate未設定時はPLAN面自体が誘導のみ(design §2.1b・R1のMEDIUM-7と同じ扱い)。
     await seed(page, { settings: { twelveWeekStartDate: "" }, currentView: "twelveweek" });
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForFunction(() => document.querySelector(".twy-plan-link-panel"));
     check("cycleStartDate未設定はPLAN面も誘導1行のみ(LINKグリッドなし)",
       await page.locator(".twy-plan-grid-panel").count() === 0
@@ -369,7 +369,7 @@ async function seed(page, values) {
       currentView: "twelveweek"
     });
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
 
     // ============================================================
@@ -384,7 +384,7 @@ async function seed(page, values) {
     await resetSetItemLog(page);
     const beforePlan = await memoryState(page);
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     await page.click('.twy-plan-link-node >> nth=3 >> [data-action="twy-open-commit"]');
     await page.waitForSelector(".twy-commit-sheet");
@@ -397,7 +397,7 @@ async function seed(page, values) {
     await page.click('.twy-plan-link-edit[data-action="twy-cycle-open"]');
     await page.waitForSelector(".twy-vision-panel");
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     const firstCell = page.locator(".twy-plan-cell").first();
     await firstCell.hover();
@@ -416,7 +416,7 @@ async function seed(page, values) {
       await page.clock.setFixedTime(new Date(2026, 6, day, 10, 0, 0));
       await seed(page, { settings: { twelveWeekStartDate: CYCLE_START }, projects: [p1], tasks: [t1], weeklyCommitments: commitments, currentView: "twelveweek" });
       await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
       const row = page.locator('.twy-plan-task-row[data-task-id="t1"]');
       check(`${label}: current header`, await page.locator('.twy-plan-grid th[data-current="1"]').count() === (current ? 1 : 0));
       check(`${label}: W1header`, await page.locator('.twy-plan-grid th[data-current]').first().getAttribute("data-current") === (current ? "1" : "0"));
@@ -439,7 +439,7 @@ async function seed(page, values) {
       const beforeEdge = await memoryState(page);
       await resetSetItemLog(page);
       await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
       check(`${cycleStart}: W12 Friday 10-02 rounds to 09-26 (+77) and is included`, await page.locator('.twy-plan-task-row[data-task-id="w12-task"]').count() === 1);
       check(`${cycleStart}: W13 first day 10-03 (+84) is excluded`, await page.locator('.twy-plan-task-row[data-task-id="w13-task"]').count() === 0);
       check(`${cycleStart}: W13 Sunday 10-04 rounds to +84 and is excluded`, await page.locator('.twy-plan-task-row[data-task-id="w13sun-task"]').count() === 0);
@@ -456,7 +456,7 @@ async function seed(page, values) {
     await page.clock.setFixedTime(new Date(2026, 9, 5, 10, 0, 0)); // 2026-10-05: 経過86日→W13(振り返り週)
     await seed(page, { selectedDate: "2026-10-05", currentView: "twelveweek" });
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
     const t1RowW13 = page.locator('.twy-plan-task-row[data-task-id="t1"]');
     const t1StatusW13 = await t1RowW13.locator(".twy-plan-cell").evaluateAll((els) => els.map((el) => el.dataset.status));
@@ -473,7 +473,7 @@ async function seed(page, values) {
     await page.clock.setFixedTime(FIXED_NOW);
     await seed(page, { selectedDate: TODAY, currentView: "twelveweek" });
     await renderOnePage(page);
-    await page.click(".twy-cycle-fold > summary");
+    await page.evaluate(() => { const fold = document.querySelector(".twy-cycle-fold"); if (fold && !fold.open) fold.open = true; }); // M2-9: 開いていれば開いたまま(summary のクリックは切替になる)
     await page.waitForSelector(".twy-plan-task-row");
 
     // ============================================================

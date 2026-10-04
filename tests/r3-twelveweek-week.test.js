@@ -49,6 +49,16 @@ const { STATE_KEY, fixedClock, setViewportAndWaitForStableLayout } = require("./
     for (const selector of [".twy-review-score", ".twy-review-results", ".twy-review-finish"]) assert.equal(await review.locator(selector).isVisible(), true);
     await review.locator(":scope > summary").click();
     console.log("PASS M2-4: review closed by default, all existing sections retained");
+    // M2-9: cycle starts closed and preserves its open state across rendering.
+    const cycle = root.locator(".twy-cycle-fold");
+    assert.equal(await cycle.getAttribute("open"), null);
+    await cycle.locator(":scope > summary").click();
+    await page.evaluate(async () => {
+      document.querySelector(".twy-tower").outerHTML = (await import("/src/features/twelve-week.js")).renderTwelveWeek();
+    });
+    assert.equal(await cycle.evaluate(el => el.open), true);
+    await cycle.locator(":scope > summary").click();
+    console.log("PASS M2-9: cycle initially closed, stays open after rendering");
     // M2-5 / M2-7
     for (const committed of [true, false]) {
       const label = committed ? "通常週" : "未確定週";

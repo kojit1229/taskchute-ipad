@@ -214,13 +214,14 @@ function renderTwelveWeek() {
   const ended = Boolean(summary?.cycleEnded); // A-M1: W13末を過ぎたら「サイクル総括(終了)」にする。
   const headline = ended ? "サイクル総括(終了)" : inReview ? "サイクル総括" : "12週間実行サイクル";
   const reviewOpen = typeof document !== "undefined" && document.querySelector(".twy-review-fold")?.open;
+  const cycleOpen = typeof document !== "undefined" && document.querySelector(".twy-cycle-fold")?.open;
   const unrecorded = !twyReviewFinished(weekStart) && todayISO() >= addDaysISO(weekStart, -1);
   return `<div class="today-tower twy-tower">
     ${renderHeader(headline, "12週計画")}
     ${twyDecideFaceHTML(cycleStart)}${twyDoneHTML(cycleStart)}${twyStackHTML()}
     <details class="twy-review-fold" ${reviewOpen ? "open" : ""}><summary><h2>ふりかえる${unrecorded ? " <small>(未記録)</small>" : ""}</h2></summary>
       ${twyReviewFaceHTML(cycleStart, weekStart)}</details>
-    <details class="twy-cycle-fold"><summary class="btn"><h2>12週の目標と進み具合</h2></summary>
+    <details class="twy-cycle-fold" ${cycleOpen ? "open" : ""}><summary class="btn"><h2>12週の目標と進み具合</h2></summary>
       ${twyCycleFaceHTML(cycleStart, weekStart, inReview, summary)}${twyPlanFaceHTML(cycleStart, summary)}</details>
   </div>`;
 }
