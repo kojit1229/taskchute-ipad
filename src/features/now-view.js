@@ -103,8 +103,12 @@ function beatenFlag(beat, today) {
   return "1";
 }
 
+function ringTotalText(ring) {
+  return ring.totalSeconds === 0 ? "0分" : durationText(ring.totalSeconds);
+}
+
 function ringLabel(ring) {
-  return `輪 ${ring.laps}周と ${Math.floor(ring.lapProgress * 30)}分`;
+  return `輪 ${ring.laps}周と ${Math.floor(ring.lapProgress * 30)}分・合計 ${ringTotalText(ring)}`;
 }
 
 function stackHTML(blocks, today) {
@@ -112,7 +116,7 @@ function stackHTML(blocks, today) {
   return `<div class="now-tower-frame" aria-label="今週の実績"><div class="now-tower-plot" style="height:${scale.ceilingSeconds / scale.lines.at(-1) * 100}%">
     <div class="now-tower-lines">${scale.lines.map(seconds => `<div class="now-tower-line" style="bottom:${seconds / scale.ceilingSeconds * 100}%">${seconds / 3600}h</div>`).join("")}</div>
     ${towers.map((tower, index) => `<div class="now-tower-day"><div class="now-tower" role="img" data-date="${tower.date}" data-today="${tower.isToday ? "1" : "0"}" data-future="${tower.isFuture ? "1" : "0"}" style="height:${tower.seconds / scale.ceilingSeconds * 100}%" aria-label="${towerDays[index]}曜 ${durationText(tower.seconds)}"></div><span>${towerDays[index]}</span></div>`).join("")}</div></div>
-    <div class="now-ring-frame" role="img" aria-label="${ringLabel(ring)}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="42" pathLength="1" stroke-dasharray="${ring.lapProgress} 1" /></svg><strong>${ring.laps}</strong></div>
+    <div class="now-ring-frame" role="img" aria-label="${ringLabel(ring)}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="now-ring-full" cx="50" cy="50" r="42" pathLength="1" stroke-dasharray="1 1" style="display:${ring.laps ? "inline" : "none"}" /><circle class="now-ring-progress" cx="50" cy="50" r="42" pathLength="1" stroke-dasharray="${ring.lapProgress} 1" /></svg><span class="now-ring-text"><strong>${ringTotalText(ring)}</strong><small${ring.laps ? "" : " hidden"}>${ring.laps}周</small></span></div>
     <p class="now-beaten" data-beaten="${beatenFlag(beat, today)}"${beat.beaten ? "" : " hidden"}>昨日を超えた</p><small class="now-yesterday">昨日 ${durationText(beat.yesterday)}</small>`;
 }
 
@@ -137,8 +141,12 @@ function updateStackTick(root, blocks, today) {
   });
   const frame = stack.querySelector(".now-ring-frame");
   frame.setAttribute("aria-label", ringLabel(ring));
-  frame.querySelector("circle").setAttribute("stroke-dasharray", `${ring.lapProgress} 1`);
-  frame.querySelector("strong").textContent = ring.laps;
+  frame.querySelector(".now-ring-full").style.display = ring.laps ? "inline" : "none";
+  frame.querySelector(".now-ring-progress").setAttribute("stroke-dasharray", `${ring.lapProgress} 1`);
+  frame.querySelector("strong").textContent = ringTotalText(ring);
+  const laps = frame.querySelector("small");
+  laps.hidden = ring.laps === 0;
+  laps.textContent = `${ring.laps}周`;
   const beaten = stack.querySelector(".now-beaten");
   beaten.hidden = !beat.beaten;
   if (beat.beaten && beatenShownFor !== today) beaten.dataset.beaten = beatenFlag(beat, today);
