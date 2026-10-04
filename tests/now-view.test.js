@@ -430,7 +430,18 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       ended('last-sunday', '2026-09-27', '09:00:00', '12:00:00')];
     const bars = page.locator('.now-tower');
     const ring = page.locator('.now-ring-frame');
-    const progress = () => ring.locator('circle').evaluate(el => Number(el.getAttribute('stroke-dasharray').split(/\s+/)[0]));
+    const progress = () => ring.locator('.now-ring-progress').evaluate(el => Number(el.getAttribute('stroke-dasharray').split(/\s+/)[0]));
+    // 発注127 / B2-82: 初回描画とtickで同じ表示契約を確認する。
+    const ringDisplay = () => ring.evaluate(frame => ({
+      label: frame.getAttribute('aria-label'), total: frame.querySelector('strong').textContent,
+      laps: [...frame.querySelectorAll('small')].filter(el => !el.hidden).map(el => el.textContent),
+      arcs: [...frame.querySelectorAll('circle')].filter(el => getComputedStyle(el).display !== 'none')
+        .map(el => [el.getAttribute('pathLength'), el.getAttribute('stroke-dasharray')])
+    }));
+    const expectedRing = (total, laps, remainder) => ({
+      label: `輪 ${laps}周と ${remainder}分・合計 ${total}`, total, laps: laps ? [`${laps}周`] : [],
+      arcs: [...(laps ? [['1', '1 1']] : []), ['1', `${remainder / 30} 1`]]
+    });
     const redraw = () => page.evaluate(async () => {
       document.querySelector('.now-view').outerHTML = (await import('/src/features/now-view.js')).renderNowView();
     });
@@ -442,9 +453,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await bars.evaluateAll(els => els.map(el => [el.dataset.today, el.dataset.future])),
       [['0', '0'], ['1', '0'], ['0', '1'], ['0', '1'], ['0', '1'], ['0', '1'], ['0', '1']], 'G4b: 今日と未来の属性');
     equal(await page.locator('.now-tower-day > span').allTextContents(), ['月', '火', '水', '木', '金', '土', '日'], 'G4b: 本の下に曜日');
-    equal(await ring.getAttribute('aria-label'), '輪 2周と 10分', 'G4b: 70分は2周と10分');
-    equal(await ring.locator('strong').textContent(), '2', 'G4b: 中央は周数');
-    equal(await ring.locator('circle').count(), 1, 'G4b: SVGの円は1つ');
+    equal(await ringDisplay(), expectedRing('1時間10分', 2, 10), 'G4b: 70分は全周の上に進みの弧・合計時間・小さな2周');
     ok(Math.abs(await progress() - 1 / 3) < 1e-9, 'G4b: 70分のdasharrayは1/3周');
     equal(await page.locator('.now-yesterday').textContent(), '昨日 1時間05分', 'G4b: 昨日の実績を常に表示');
     equal(firstBeaten, '1', 'G4b: 昨日超えの初回描画');
@@ -459,7 +468,33 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     });
     equal(geometry, Array(7).fill(true), 'G4b: 375pxで7本が枠内・最小幅24px');
     equal(await page.locator('.now-tower-line').allTextContents(), ['2h'], 'G4b: 2時間未満も基準線1本');
+    await seedDisplayBlocks([ended('ten-minutes', day, '09:00:00', '09:10:00')]);
+    equal(await ringDisplay(), expectedRing('0時間10分', 0, 10), 'G4b: 10分は進みの弧と合計時間のみ');
+    await seedDisplayBlocks([ended('ring-label-width', day, '06:00:00', '11:13:00')]);
+    equal(await ring.locator('strong').textContent(), '5時間13分', 'G4b: 長い合計時間も表示');
+    ok(await ring.evaluate(frame => {
+      const bounds = frame.getBoundingClientRect(), strong = frame.querySelector('strong'), small = frame.querySelector('small');
+      return bounds.width === 96 && getComputedStyle(strong).fontSize === '15px' && getComputedStyle(small).fontSize === '11px'
+        && [strong, small].every(el => {
+          const range = document.createRange(); range.selectNodeContents(el);
+          const text = range.getBoundingClientRect();
+          return text.left >= bounds.left && text.right <= bounds.right && text.top >= bounds.top && text.bottom <= bounds.bottom;
+        }) && strong.getBoundingClientRect().bottom <= small.getBoundingClientRect().top;
+    }), 'G4b: 375pxで合計時間と周回が96pxの輪の枠内に収まり上下に並ぶ');
+    await seedDisplayBlocks([block('ring-tick', { actualStartAt: `${day}T11:50:01` })]);
+    const ringNodes = await ring.evaluateHandle(frame => [frame, ...frame.querySelectorAll('circle, strong, small')]);
+    for (const [h, m, total, laps, remainder] of [[12, 0, '0時間10分', 0, 10], [12, 20, '0時間30分', 1, 0], [13, 0, '1時間10分', 2, 10]]) {
+      await page.clock.setFixedTime(at(h, m)); await tick();
+      await page.clock.setFixedTime(at(h, m, 1)); await tick();
+      equal(await ringDisplay(), expectedRing(total, laps, remainder), `G4b: 1秒tickで${total}の弧・文字・aria-labelが追随`);
+      ok(await ringNodes.evaluate(nodes => {
+        const frame = document.querySelector('.now-ring-frame'), current = [frame, ...frame.querySelectorAll('circle, strong, small')];
+        return nodes.length === current.length && nodes.every((node, index) => node === current[index]);
+      }), 'G4b: 周回境界でも輪と弧・文字のDOMを保持');
+    }
+    await page.clock.setFixedTime(at(12, 0));
     await seedDisplayBlocks([]);
+    equal(await ringDisplay(), expectedRing('0分', 0, 0), 'G4b: 実績0は0分・全周と周回表示なし');
     equal(await page.locator('.now-tower-line').allTextContents(), ['2h'], 'G4b: 実績0も2hの線');
     equal(await page.locator('.now-yesterday').textContent(), '昨日 0時間00分', 'G4b: 昨日0分も表示');
     equal(await page.locator('.now-beaten:visible').count(), 0, 'G4b: 今日と昨日が0なら昨日超えなし');
@@ -499,14 +534,14 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       block('grow', { actualStartAt: `${day}T11:59:00` }), block('typing')]);
     equal(await page.locator('.now-beaten:visible').count(), 0, 'G4b: 今日と昨日が同じなら表示なし');
     const todayBar = page.locator('.now-tower[data-today="1"]');
-    const barNode = await todayBar.elementHandle(), circleNode = await ring.locator('circle').elementHandle();
+    const barNode = await todayBar.elementHandle(), circleNode = await ring.locator('.now-ring-progress').elementHandle();
     const frameNode = await page.locator('.now-tower-frame').elementHandle();
     const beforeGrow = { height: await todayBar.evaluate(el => parseFloat(el.style.height)), progress: await progress() };
     await page.clock.setFixedTime(at(12, 0, 10)); await tick();
     ok(await todayBar.evaluate(el => parseFloat(el.style.height)) > beforeGrow.height, 'G4b: 走行中の本がtickで伸びる');
     ok(await progress() > beforeGrow.progress, 'G4b: 走行中の輪がtickで進む');
     ok(await barNode.evaluate(el => el === document.querySelector('.now-tower[data-today="1"]')), 'G4b: 本のDOMを保持');
-    ok(await circleNode.evaluate(el => el === document.querySelector('.now-ring-frame circle')), 'G4b: 輪のDOMを保持');
+    ok(await circleNode.evaluate(el => el === document.querySelector('.now-ring-frame .now-ring-progress')), 'G4b: 輪のDOMを保持');
     ok(await frameNode.evaluate(el => el === document.querySelector('.now-tower-frame')), 'G4b: 枠のDOMを保持');
     equal(await todayBar.getAttribute('aria-label'), '火曜 0時間01分', 'G4b: tick後の実績aria-label');
     equal(await page.locator('.now-beaten').getAttribute('data-beaten'), '1', 'G4b: tickで昨日を超えた瞬間のきらめき');
@@ -520,7 +555,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.clock.setFixedTime(at(12, 30)); await tick();
     equal(await page.locator('.now-stack').innerHTML(), pausedStack, 'G4b: hidden中は積み上げのDOMを更新しない');
     await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); });
-    equal(await ring.getAttribute('aria-label'), '輪 1周と 1分', 'G4b: 復帰すると周数と分が追随');
+    equal(await ring.getAttribute('aria-label'), '輪 1周と 1分・合計 0時間31分', 'G4b: 復帰すると周数と分と合計時間が追随');
     await page.locator('.now-view').evaluate(el => { el.dataset.paused = '1'; });
     const pausedOnly = await page.locator('.now-stack').innerHTML();
     await page.clock.setFixedTime(at(13, 0)); await tick();
@@ -541,7 +576,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.evaluate(async () => (await import('/src/features/today.js')).updateTodayTick());
     equal(await page.locator('.now-tower[data-today="1"]').getAttribute('data-date'), '2026-09-30', 'G4b: 日跨ぎで今日の本を更新');
     equal(await page.locator('.now-tower[data-date="2026-09-29"]').getAttribute('aria-label'), '火曜 0時間04分', 'G4b: 日跨ぎの走行中は開始日の本に帰属');
-    equal(await ring.getAttribute('aria-label'), '輪 0周と 0分', 'G4b: 日跨ぎの走行中を今日の輪に混ぜない');
+    equal(await ring.getAttribute('aria-label'), '輪 0周と 0分・合計 0分', 'G4b: 日跨ぎの走行中を今日の輪に混ぜない');
     await page.evaluate(async () => {
       (await import('/src/state/store.js')).state.blocks.push({ id: 'new-day', date: '2026-09-30', completed: true,
         actualStartAt: '2026-09-30T00:00:00', actualEndAt: '2026-09-30T00:05:00' });
