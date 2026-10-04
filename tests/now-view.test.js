@@ -268,6 +268,8 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     equal(await page.locator('.now-view > section > h2').allTextContents(), ['開始', 'いま', '今日できた', '積み上げ', 'これから'], 'DOM順序');
     await start('a');
     const card = await page.locator('[data-running-id="a"]').elementHandle();
+    equal(await page.locator('.now-view > section > h2').allTextContents(), ['いま', '開始', '今日できた', '積み上げ', 'これから'], 'B2-76: 実行中は「いま」が先頭(スクロールなしで見える)');
+    equal(await page.locator('.now-view').getAttribute('data-running'), '1', 'B2-76: 実行中の印');
     const elapsed = page.locator('[data-elapsed-id="a"]');
     equal(await elapsed.textContent(), '0:00', '開始時の経過');
     await page.clock.setFixedTime(at(12, 0, 3)); await tick();

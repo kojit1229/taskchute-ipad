@@ -1,0 +1,18 @@
+{
+  "version": 434,
+  "date": "2026-10-04",
+  "title": "いまタブ 実行中のカードを最上段へ",
+  "summary": "いまタブで何かを実行中のとき、経過時間と終了報告のカードを開始候補の上に出すようにしました。スクロールしなくても見えます。実行中が無いときは今までどおりです。",
+  "changedFiles": ["src/features/now-view.js", "styles.css", "sw.js", "releases/v434.json", "tests/now-view.test.js", "tests/suite-manifest.json"],
+  "intent": ["K 直接指示(2026-10-04 16:1x)「いまタブの実行中カードがスクロールしないと見えない」、版v434。基準 aeece8b(v433)。spec「v434 の裁定」B2-76。"],
+  "changes": [
+    "B2-76: 実行中の Block があるとき「いま」節を「開始」節より先に描く(DOM 順)。.now-view に data-running",
+    "B2-76: 1280px の 3 列は data-running=1 で grid-template-areas を入れ替え(いまが左列最上段)",
+    "SWキャッシュv434"
+  ],
+  "uncertainties": ["iOS Safari実機は未確認"],
+  "reviewFocus": ["節の入れ替えでテンプレート内容が同一か", "実行中カードの DOM 同一性"],
+  "verification": ["now-view.test.js に断言 2 本追加(直す前に赤・直した後に緑)、Codex レビュー 76、Claude 独立検証 77"],
+  "knownLimitations": ["iOS Safari実機は未確認"],
+  "relatedSuites": ["now-view", "tower-core", "today-core", "action-registry-core", "ui-a-layout"]
+}

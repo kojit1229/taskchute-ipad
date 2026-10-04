@@ -6365,6 +6365,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 @media (max-width:767px) { #app[data-skin="now"] .now-running::before { animation:none; } }
 @media (min-width:1280px) {
   #app[data-skin="now"] .now-view { grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-areas:"start done stack" "current done stack" "next done stack"; align-items:start; }
+  #app[data-skin="now"] .now-view[data-running="1"] { grid-template-areas:"current done stack" "start done stack" "next done stack"; }
   #app[data-skin="now"] .now-start { grid-area:start; }
   #app[data-skin="now"] .now-current { grid-area:current; }
   #app[data-skin="now"] .now-done { grid-area:done; }
