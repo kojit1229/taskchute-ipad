@@ -961,13 +961,14 @@ for (const [name, prepare] of lifecycle) test(`${name}: Block failure prevents l
   });
 });
 
-test('plan completion keeps actuals empty; failed undo retains completion for retry', async () => {
+test('plan completion fills actuals; failed undo retains completion for retry', async () => {
   const f = await lifecycleFixture();
+  f.ctx.state.blocks[0].estimateMin = 25;
   f.ctx.toggleBlock('b');
   const completed = clone(f.ctx.state.blocks[0]);
   assert.equal(completed.completed, true);
-  assert.equal(completed.actualStartAt, '');
-  assert.equal(completed.actualEndAt, '');
+  assert.equal(completed.actualStartAt, `${DATE}T09:35:00`);
+  assert.equal(completed.actualEndAt, NOW);
   assert.equal(f.ctx._quickCompleteSnapshots.b, undefined);
   await withLocalSaveFailure(async fail => {
     f.fail(fail);
@@ -977,8 +978,8 @@ test('plan completion keeps actuals empty; failed undo retains completion for re
     f.fail(null);
     f.ctx.toggleBlock('b');
     assert.equal(f.ctx.state.blocks[0].completed, false);
-    assert.equal(f.ctx.state.blocks[0].actualStartAt, '');
-    assert.equal(f.ctx.state.blocks[0].actualEndAt, '');
+    assert.equal(f.ctx.state.blocks[0].actualStartAt, completed.actualStartAt);
+    assert.equal(f.ctx.state.blocks[0].actualEndAt, completed.actualEndAt);
     assert.ok(f.ctx.state.blocks[0].updatedAt > completed.updatedAt);
   });
 });

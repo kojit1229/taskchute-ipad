@@ -309,10 +309,10 @@ async function checkHooks() {
       JSON.stringify({ lastDate, lastReport: String(lastReport).slice(0, 80) }));
     if (expectedSaveCalls === "plan") {
       const savedBlock = lastWrite?.blocks.find(entry => entry.id === blockId);
-      // D-2(2026-09-14 裁定): 実績なしの予定完了でも当日の日報は同じ候補保存で再生成される
-      check(`${label}: 予定完了は実績空のまま、日報込みで候補保存1回`,
+      // D-2(2026-09-14 裁定): 当日の日報は同じ候補保存で再生成される。v430 B2-62: ✓ は実績(今−見積〜今)を補完する
+      check(`${label}: 予定完了は実績を補完(v430 B2-62)し、日報込みで候補保存1回`,
         spies.saves.length === 1 && spies.writes.length === 1
-        && savedBlock?.completed === true && savedBlock.actualStartAt === "" && savedBlock.actualEndAt === ""
+        && savedBlock?.completed === true && savedBlock.actualStartAt !== "" && savedBlock.actualEndAt !== "" && savedBlock.actualStartAt < savedBlock.actualEndAt
         && typeof lastReport === "string" && lastReport.length > 0 && lastReport !== "日報更新待ち"
         && lastWrite.weeklyCommitments.find(entry => entry.id === record.id)?.completedChangedAt === record.completedChangedAt,
         JSON.stringify(spies));

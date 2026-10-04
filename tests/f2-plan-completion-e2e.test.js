@@ -44,8 +44,9 @@ const { chromium, launchOptions, defaultContextOptions, startServer, randomPort,
     await page.reload();
     const plan = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.find(b => b.id === "plan"), STATE_KEY);
     assert.equal(plan.completed, true);
-    assert.equal(plan.actualStartAt, ""); assert.equal(plan.actualEndAt, ""); assert.equal(plan.everStartedAt, "");
-    console.log("PASS F2-1 ✓は実績なしの予定完了・再読込保持");
+    assert.equal(plan.actualStartAt, "2026-09-14T09:45:00"); assert.equal(plan.actualEndAt, "2026-09-14T10:00:00");
+    assert.equal(plan.everStartedAt, "2026-09-14T09:45:00");
+    console.log("PASS F2-1 ✓は見積なしなら今−15分から今の実績を保存・再読込保持");
     await actualButton.click();
     await page.locator('#modalRoot [data-modal-field="actualStartAt"]').fill("2026-09-14T09:30");
     await page.locator('#modalRoot [data-modal-field="actualEndAt"]').fill("2026-09-14T10:00");

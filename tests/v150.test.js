@@ -1,7 +1,7 @@
 // v150 検証: UI改善計画Phase4b(残る構造課題、K指定2026-07-27)。CHANGES_v150.md参照。
 // 2系統レビュー対応(初回実装後)の検証も本ファイルに追加している(A8〜A11、C1〜C4刷新、D3)。
 //
-// (A) fixV404/F2: ✓は実績なしの予定完了。実績付き完了で補完・身体スキャン・保存通知を検査。
+// (A) fix430: ✓は今−見積から今の実績を保存。実績付き完了で補完・身体スキャン・保存通知を検査。
 //     取消・手入力保持・トースト消滅の検査も維持する。
 // (B) タイポ・余白トークン(S4): :root に --text-xs/sm/md/lg と --space-1〜5 が定義され、
 //     ホーム/今日タブ・ジャーナルCSSの一部(段階移行の第1弾)がそれを参照している。
@@ -129,8 +129,8 @@ function check(name, cond, extra = "") {
     let st = await stateNow();
     let b = st.blocks.find((x) => x.id === "block-hd");
     check("予定完了でcompletedになる", b.completed === true);
-    check("予定完了は実績開始を補完しない", b.actualStartAt === "");
-    check("予定完了は実績終了を補完しない", b.actualEndAt === "");
+    check("見積なしの✓は今−15分を実績開始に補完", b.actualStartAt === `${TODAY}T17:45:00`);
+    check("✓は今を実績終了に補完", b.actualEndAt === `${TODAY}T18:00:00`);
     check("予定開始は変更しない", b.plannedStartAt === plannedStartAtNormalized);
     check("予定完了は充放電を補完しない", b.charge === 0 && b.discharge === 0);
     check("予定完了のトーストに実績編集ボタンは出ない",
@@ -143,7 +143,7 @@ function check(name, cond, extra = "") {
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-flow");
     check("ながれのチェックも即完了する", b.completed === true);
-    check("ながれの予定完了も実績は空", b.actualStartAt === "" && b.actualEndAt === "");
+    check("ながれの✓も15分の実績", b.actualStartAt === `${TODAY}T17:45:00` && b.actualEndAt === `${TODAY}T18:00:00`);
 
     console.log("[A3] タスクシュート画面: ✓(checkbox-button)も同様に即完了する");
     await seed({
@@ -160,7 +160,7 @@ function check(name, cond, extra = "") {
     b = st.blocks.find((x) => x.id === "block-tc");
     check("タスクシュートの✓も即完了する", b.completed === true);
     check("タスクシュートの予定完了は身体スキャンなし", await page.locator(".modal-card").count() === 0);
-    check("タスクシュートの予定完了は実績空", b.actualStartAt === "" && b.actualEndAt === "");
+    check("タスクシュートの✓も15分の実績", b.actualStartAt === `${TODAY}T17:45:00` && b.actualEndAt === `${TODAY}T18:00:00`);
 
     console.log("[A4] タイムライン(予定モード): ○(tl-complete-btn)も同様に即完了する");
     await seed({
@@ -173,7 +173,7 @@ function check(name, cond, extra = "") {
     b = st.blocks.find((x) => x.id === "block-tl");
     check("タイムラインの○も即完了する", b.completed === true);
     check("タイムラインの予定完了は身体スキャンなし", await page.locator(".modal-card").count() === 0);
-    check("タイムラインの予定完了も実績空", b.actualStartAt === "" && b.actualEndAt === "");
+    check("タイムラインの✓も15分の実績", b.actualStartAt === `${TODAY}T17:45:00` && b.actualEndAt === `${TODAY}T18:00:00`);
 
     console.log("[A5] 一覧の実績付き完了から補完した実績を保存し、身体スキャンと通知を開く");
     await seed({ view: "tasks", blocks: [planBlock({ id: "block-actual", title: "実績付き完了確認", startMin: 13 * 60, minutes: 20 })] });
@@ -268,7 +268,7 @@ function check(name, cond, extra = "") {
     check("手入力の充電(2)がprefillEnergyの中央値(4)で上書きされない", b.charge === 2, String(b.charge));
     check("手入力の放電(3)がprefillEnergyの中央値(1)で上書きされない", b.discharge === 3, String(b.discharge));
 
-    console.log("[A10] 予定完了と完了解除(同セッション)を通じて実績空・充放電0を保持する");
+    console.log("[A10] ✓完了と完了解除(同セッション)を通じて補完実績・充放電0を保持する");
     const snapEnergyTitle = "v150スナップショット確認Block";
     const pastSnapEnergyBlocks = [10, 20, 30].map((n, i) => planBlock({
       id: `snap-energy-past-${i}`, date: addDaysISO(TODAY, -n), title: snapEnergyTitle, startMin: 9 * 60, minutes: 20,
@@ -283,7 +283,7 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-snap");
-    check("(準備)予定完了では実績・充放電を補完しない", b.completed === true && b.actualStartAt === "" && b.actualEndAt === "" && b.charge === 0 && b.discharge === 0);
+    check("(準備)✓は15分の実績を補完し充放電は変えない", b.completed === true && b.actualStartAt === `${TODAY}T17:45:00` && b.actualEndAt === `${TODAY}T18:00:00` && b.charge === 0 && b.discharge === 0);
     check("予定完了後も身体スキャンは開いていない", await page.locator(".modal-card").count() === 0);
     // 同セッション内で完了解除する(toggle-block再クリック)
     await page.locator('.checkbox-button[data-action="toggle-block"][data-id="block-snap"]').click();
@@ -291,8 +291,8 @@ function check(name, cond, extra = "") {
     st = await stateNow();
     b = st.blocks.find((x) => x.id === "block-snap");
     check("完了解除でcompleted:falseに戻る", b.completed === false);
-    check("補完されない実績開始時刻が元(空)へ復元される", b.actualStartAt === "", JSON.stringify(b.actualStartAt));
-    check("補完されない実績終了時刻が元(空)へ復元される", b.actualEndAt === "", JSON.stringify(b.actualEndAt));
+    check("完了解除でも補完した実績開始を保持", b.actualStartAt === `${TODAY}T17:45:00`, JSON.stringify(b.actualStartAt));
+    check("完了解除でも補完した実績終了を保持", b.actualEndAt === `${TODAY}T18:00:00`, JSON.stringify(b.actualEndAt));
     check("補完されない充電が元(0)へ復元される", b.charge === 0, String(b.charge));
     check("補完されない放電が元(0)へ復元される", b.discharge === 0, String(b.discharge));
 

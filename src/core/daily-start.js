@@ -37,7 +37,7 @@ export function buildBlockStart(state, input, deps) {
     if (pomodoro?.running && pomodoro.blockId === other.id) pomodoro = { ...pomodoro,
       running: false, blockId: "", startedAt: "", endsAt: "", mode: "focus", paused: false, pausedRemainMs: 0 };
   }
-  if (input.timer === true || (state.settings?.focusTimerAuto && !pomodoro?.running))
+  if (input.timer === true || (input.autoTimer !== false && state.settings?.focusTimerAuto && !pomodoro?.running))
     pomodoro = deps.pomodoroForStart(at, block.id);
   if (pomodoro !== state.pomodoro) values.push({ kind: null, key: "pomodoro", before: state.pomodoro, after: pomodoro });
   if (state.settings?.twelveWeekStartDate) {

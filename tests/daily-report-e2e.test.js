@@ -8,6 +8,19 @@ const { runDailyOperation: run, DAILY_OPERATIONS } = require('../src/features/da
 const { commitCandidate } = require('../src/core/commit.js');
 const { chromium, launchOptions, startServer, randomPort, STATE_KEY, passGithubGate } = require('./helpers');
 const DAY = '2026-09-10', NEXT = '2026-09-11';
+// 発注99/B2-62: ✓の実績が既存の日報生成だけで計測欄に載る。
+{
+  const state = fixture();
+  state.blocks = [{ id: 'checked', title: 'チェック実績', date: DAY, taskId: '',
+    completed: false, actualStartAt: '', actualEndAt: '', estimateMin: 25 }];
+  const deps = { state, commitCandidate, now: () => `${DAY}T12:00:37`, persist: () => true,
+    captureReport: (source, date) => captureReportInput(source, date, deriveReportValues), buildReport: buildReportMarkdown };
+  assert(run('daily-plan-complete', { kind: 'block', id: 'checked', desiredCompleted: true, fillActual: true }, deps).ok);
+  const result = require('../src/core/daily-report.js').buildDailyReport(state, { reportDate: DAY }, deps);
+  assert.equal(result.pending, false);
+  assert(result.report.includes(`| checked | ${DAY} | ${DAY}T11:35:37 | ${DAY}T12:00:37 | 25分 | 未完了 |`));
+  assert(result.report.includes('計測合計: 25分'));
+}
 function fixture() {
   const b = (id, start, end, completed) => ({ id, title: id, taskId: 'task', date: DAY, completed, deleted: false,
     plannedStartAt: `${DAY}T09:00:00`, plannedEndAt: `${DAY}T09:30:00`, actualStartAt: start, actualEndAt: end });

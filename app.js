@@ -1226,7 +1226,8 @@ registerActions({
   //     today-tower.js(TOWER UI)から現役で発行されるため残置=監査の見落としを現物確認で訂正) ---
   "toggle-block": ({ id }) => toggleBlock(id),
   "toggle-task-complete": ({ id }) => toggleTaskCompleteFromBlock(id),
-  "now-start": ({ id }) => withNowDeclaration(() => openDeclareModal(id, "block"), id),
+  "now-start": ({ id }) => withNowDeclaration(() => openDeclareModal(id, "block", false,
+    state.currentView !== "now" && !(state.currentView === "today" && state.settings.todaySkin === "now")), id),
   "now-routine-complete": ({ id }) => {
     const block = state.blocks.find(b => b.id === id && !b.deleted);
     if (!block || block.category !== "ルーティン" || block.completed || block.actualStartAt || block.actualEndAt) return;
@@ -10619,13 +10620,13 @@ function transferIronLogToCompletedBlock(blockId, { suppressEmptyToast = false }
 // 完了解除のたびに巻き戻してしまわないための安全策)。
 let _quickCompleteSnapshots = {};
 
-// F2-1: ✓は詳細と同じ予定完了。実績は専用ボタンから登録する。
+// F2-1: ✓は予定完了+実績の補完(v430 B2-62: 実績が無ければ 今−見積〜今 を書く。編集シートからの完了は補完しない)。
 function toggleBlock(id) {
   const block = state.blocks.find(row => row.id === id && !row.deleted);
   if (!block) return false;
   if (!block.completed) {
     const result = runDailyOperation("daily-plan-complete", {
-      kind: "block", id, desiredCompleted: true
+      kind: "block", id, desiredCompleted: true, fillActual: true
     }, dailyOperationDeps);
     if (!result.ok) showToast(result.error?.message || "予定完了を保存できませんでした");
     return result.ok;
@@ -12611,20 +12612,20 @@ function chooseStartOverlap(choice) {
     }
   }
   _pendingStartChoice = null;
-  if (pending.declareNext) { openDeclareModal(pending.ctx.blockId, pending.ctx.kind, true); return; }
+  if (pending.declareNext) { openDeclareModal(pending.ctx.blockId, pending.ctx.kind, true, pending.ctx.autoTimer); return; }
   if (resumeLifecycleStart({ ...pending.ctx, parallel: true })?.ok) { _pendingLifecycleCtx = null; closeModal(); }
 }
 
-function openDeclareModal(blockId, kind, parallel = false) {
-  if (offerStartOverlap({ blockId, kind, parallel }, true)) return;
+function openDeclareModal(blockId, kind, parallel = false, autoTimer = true) {
+  if (offerStartOverlap({ blockId, kind, parallel, autoTimer }, true)) return;
   const block = state.blocks.find((b) => b.id === blockId && !b.deleted);
   if (!block) {
     // Blockが見つからない(空id等)場合は宣言をスキップし従来どおり即実行
-    resumeLifecycleStart({ blockId, kind });
+    resumeLifecycleStart({ blockId, kind, autoTimer });
     return;
   }
-  if (block.actualStartAt) return resumeLifecycleStart({ blockId, kind });
-  _pendingLifecycleCtx = { blockId, phase: "declare", kind, parallel };
+  if (block.actualStartAt) return resumeLifecycleStart({ blockId, kind, autoTimer });
+  _pendingLifecycleCtx = { blockId, phase: "declare", kind, parallel, autoTimer };
   state.modal = { type: "declare", id: blockId };
   renderModal(buildDeclareModal(block, estimateMinutesForBlock(block, kind)));
 }
@@ -12655,7 +12656,7 @@ function resumeLifecycleStart(ctx) {
   }
   const result = runDailyOperation("daily-block-start", { kind: "block", id: ctx.blockId,
     declare: ctx.declare === true, note: ctx.note, estimateMin: ctx.estimateMin,
-    timer: ctx.kind === "pomodoro" }, dailyOperationDeps);
+    timer: ctx.kind === "pomodoro", autoTimer: ctx.autoTimer }, dailyOperationDeps);
   if (!result.ok) showToast("開始を保存できませんでした。入力を残しています");
   return result;
 }

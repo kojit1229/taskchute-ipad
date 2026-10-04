@@ -69,6 +69,29 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.goto(`http://localhost:${port}/`);
     await page.locator('[data-action="gate-continue"]').waitFor();
     await passGithubGate(page);
+    // 発注99/B2-61: 宣言の有無によらず、いまの開始ではタイマーを起動しない。
+    for (const action of ['declare-confirm', 'declare-skip']) {
+      await page.clock.install({ time: at(12, 0) });
+      await seed([block('no-auto-timer', { estimateMin: 60 })], 'now', { focusTimerAuto: true });
+      await page.locator('[data-action="nav"][data-view="now"]:visible').click();
+      const beforeTimer = (await live()).pomodoro;
+      await page.locator('[data-action="now-start"][data-id="no-auto-timer"]').click();
+      await page.locator(`[data-action="${action}"]`).click();
+      await page.locator('[data-running-id="no-auto-timer"]').waitFor();
+      equal((await live()).pomodoro, beforeTimer, `${action}: タイマー項目は無効のまま`);
+      equal((await stored()).pomodoro, beforeTimer, `${action}: 保存したタイマーも無効のまま`);
+      ok(!(await page.locator('#toast').innerText()).includes('ポモドーロを開始しました'), `${action}: 自動起動トーストなし`);
+      await page.clock.fastForward(26 * 60 * 1000);
+      equal((await live()).blocks.find(b => b.id === 'no-auto-timer').actualEndAt, '', `${action}: 26分後もBlockを終了しない`);
+      equal((await live()).pomodoro.running, false, `${action}: 26分後もタイマーは無効`);
+    }
+    await page.clock.setFixedTime(at(12, 0));
+    await seed([block('exec-auto-timer')], 'now', { focusTimerAuto: true });
+    await page.locator('[data-action="nav"][data-view="exec"]:visible').click();
+    await page.locator('.exec-start-btn[data-action="now-start"][data-id="exec-auto-timer"]').click();
+    await page.locator('[data-action="declare-confirm"]').click();
+    equal((await live()).pomodoro.running, true, 'B2-61: 実行タブの開始は自動起動を維持');
+    equal((await stored()).pomodoro.blockId, 'exec-auto-timer', '実行タブのタイマーは開始Blockを保存');
     await seed([block('draft-a', { estimateMin: 15 }), block('draft-b', { estimateMin: 50, updatedAt: `${day}T11:00:00` })], 'now');
     await page.locator('[data-action="nav"][data-view="now"]:visible').click();
     equal(await page.locator('.now-candidate [data-field="now-declaration"]').count(), 0, 'カードに宣言欄が無い');
