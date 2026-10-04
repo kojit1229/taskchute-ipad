@@ -1,13 +1,23 @@
 .twy-decide { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
-.twy-decide-task { padding: 12px 0; border-bottom: 1px solid var(--line); }
-.twy-decide-task summary { min-height: 44px; min-width: 44px; cursor: pointer; }
+.twy-decide-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.twy-decide-columns > *, .twy-decide-task > * { min-width: 0; }
+.twy-decide-goal { padding: 8px; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; }
+.twy-decide-goal h4 { margin: 4px 0 8px; }
+.twy-decide-task { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px; padding: 6px; margin: 8px 0; border: 1px solid var(--line); border-radius: 12px; }
+.twy-decide-task strong, .twy-decide-task small { display: block; }
+.twy-decide-time, .twy-decide-add { display: flex; gap: 4px; align-items: center; }
+.twy-decide-time input, .twy-decide-add input { flex: 1; width: 0; }
+.twy-decide-ops { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.twy-decide-candidates .btn { display: block; width: 100%; margin-bottom: 8px; }
+@media (min-width: 768px) { .twy-decide-columns { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
 .twy-decide-task [data-decide-memo-preview] { color: var(--muted); font-weight: normal; }
 .twy-decide-sheet .twy-decide-key { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .twy-decide-sheet .twy-decide-key input { width: 44px; height: 44px; }
 .twy-decide-dialog [data-action="modal-close"] { min-width: 44px; min-height: 44px; }
 .twy-decide .btn, .twy-decide-sheet .btn, .twy-cycle-fold .btn { min-height: 44px; min-width: 44px; max-width: 100%; white-space: normal; }
 .twy-decide input, .twy-decide-sheet input, .twy-decide-sheet select { font-size: 16px; min-height: 44px; min-width: 0; width: 100%; box-sizing: border-box; }
-.twy-decide-days { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+.twy-decide-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; margin: 6px 0; }
+.twy-decide-days .btn { min-width: 40px; min-height: 40px; padding: 0; }
 .twy-decide-days [aria-pressed="true"] { background: var(--accent); color: var(--bg); }
 .dandori-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .dandori-layout > * { min-width: 0; }

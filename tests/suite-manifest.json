@@ -15,7 +15,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "62a3789070e26349",
-      "sourceHash": "690a6f1ec73681b8",
+      "sourceHash": "5626615641cf357b",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2437,9 +2437,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 21,
-      "assertionHash": "d7380a38ae7d6b95",
-      "sourceHash": "3c9b29f7942f64a9",
+      "assertionSignals": 26,
+      "assertionHash": "8a2d470d3c41e29e",
+      "sourceHash": "1ce0aff816f63241",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2683,9 +2683,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 80,
-      "assertionHash": "0e753ca770be2745",
-      "sourceHash": "57e30c51a902af16",
+      "assertionSignals": 81,
+      "assertionHash": "80cfbd901cf3cad0",
+      "sourceHash": "170177378370f0c9",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -2734,7 +2734,7 @@
       ],
       "assertionSignals": 66,
       "assertionHash": "41d1d0875fd52298",
-      "sourceHash": "bcfdd53f0e235cfa",
+      "sourceHash": "ae5e09916487b0c3",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3963,11 +3963,11 @@
       "kind": "node",
       "tier": "full",
       "domains": [
-        "planning-execution"
+        "legacy-crosscutting"
       ],
-      "assertionSignals": 3,
-      "assertionHash": "483be92e198d2fcf",
-      "sourceHash": "eb762b16230fc29f",
+      "assertionSignals": 94,
+      "assertionHash": "b1ccb2d596a9cb0d",
+      "sourceHash": "4cdda4867e6d6616",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3976,8 +3976,8 @@
       "sideEffects": {
         "browser": false,
         "server": false,
-        "fileWrite": true,
-        "networkMock": true,
+        "fileWrite": false,
+        "networkMock": false,
         "clock": true
       }
     },

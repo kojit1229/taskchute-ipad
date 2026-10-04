@@ -14,6 +14,41 @@ const names = ['autoCommitWeekIfNeeded', 'stampCommitmentCompletion', 'trackOnBl
 const code = names.map(name => { const node = ast.body.find(n => n.type === 'FunctionDeclaration' && n.id.name === name);
   assert.ok(node); return source.slice(node.start, node.end); }).join('\n');
 
+// Order 73b / M1-2: an unscheduled card has no active rule, including after
+// ending a rule. Persisted task targets must not turn into selected weekdays.
+for (const endedRule of [false, true]) {
+  test(`73b M1-2: ${endedRule ? 'ended rule' : 'no rule'} reload shows an unscheduled card`, async () => {
+    const { weekStartOfISO, addDaysISO, normalizeTwyPlan } = await moduleAt('src/core/plan.js');
+    const { daysBetween } = await moduleAt('src/core/track.js');
+    const clock = fixedClock(Date.now());
+    const today = new Date(clock());
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const week = weekStartOfISO(date);
+    const state = JSON.parse(JSON.stringify({ projects: [{ id: 'p', title: '目標' }],
+      tasks: [{ id: 't', projectId: 'p', title: 'やること', status: 'todo', twyPlan: { perWeek: 5 } }],
+      recurrences: endedRule ? [{ id: 'r', taskId: 't', kind: 'weekly', days: [6], anchorDate: week,
+        startTime: '09:00', endTime: '09:25', deleted: true }] : [],
+      blocks: [], weeklyCommitments: [], twyWeeklyReviews: [], tracks: [] }));
+    const feature = fs.readFileSync(path.join(__dirname, '../src/features/twelve-week.js'), 'utf8');
+    const featureAst = acorn.parse(feature, { ecmaVersion: 'latest', sourceType: 'module' });
+    const decideCode = featureAst.body.filter(n => n.type === 'FunctionDeclaration'
+      && /^twyDecide/.test(n.id.name)).map(n => feature.slice(n.start, n.end)).join('\n');
+    const ctx = vm.createContext({ state, weekStartOfISO, addDaysISO, daysBetween, normalizeTwyPlan,
+      todayISO: () => week, escapeHTML: value => String(value),
+      twyDayNames: ['日', '月', '火', '水', '木', '金', '土'],
+      twyGoalCandidates: () => state.projects, twyPlanTaskList: () => state.tasks,
+      projectWeekScore: () => ({ done: 0, total: 0 }), renderTwyTrackReadOnly: () => '' });
+    vm.runInContext(decideCode, ctx);
+    const before = JSON.stringify(state), html = ctx.twyDecideFaceHTML(week);
+    assert.equal((html.match(/data-action="twy-decide-day"/g) || []).length, 7,
+      'acceptance 1/2/7: the persisted task remains a card with seven weekday controls');
+    assert.equal((html.match(/aria-pressed="false"/g) || []).length, 7);
+    assert.match(html, /週 0 回/, 'no active rule means zero scheduled weekdays, regardless of stale perWeek');
+    assert.match(html, /type="time"[^>]*value="07:30"/, 'an unscheduled card starts at 07:30');
+    assert.equal(JSON.stringify(state), before, 'render never creates or revives a rule');
+  });
+}
+
 test('212 nested track edit: milestone and parent advance together above future child clocks', async () => {
   const { prepareRelatedStamps } = await moduleAt('src/features/twelve-week-save.js');
   const { createDraftSaveTransaction } = await moduleAt('src/features/draft-save.js');
@@ -76,3 +111,10 @@ test('212 twelve week: actual old entry restores weekly records and suppresses t
   assert.equal(ctx.unexcuseCommitmentItem(item.id).ok, false);
   assert.equal(ctx.state.weeklyCommitments.find(row => row.id === item.id), excused);
 });
+
+// Order 73c: real persistence and reload for every data-changing acceptance.
+for (const n of [2, 3, 4, 5, 6, 7, 8]) {
+  test(`73c acceptance ${n}: card operation survives reload`, async () => {
+    await require('./twy-decide-face.test').browserChecks([n]);
+  });
+}

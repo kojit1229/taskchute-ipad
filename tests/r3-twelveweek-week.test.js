@@ -218,6 +218,7 @@ async function snapshot(page) {
     const source = fs.readFileSync(path.join(__dirname, '../src/features/twelve-week.js'), 'utf8');
     assert.ok(!/new Date\(/.test(source));
     console.log("PASS 完了・全件免除・サイクル未設定・pageerror 0");
+    for (let n = 1; n <= 10; n++) await require("./twy-decide-face.test").runCardAcceptance(page, n);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
