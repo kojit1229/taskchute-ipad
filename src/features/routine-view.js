@@ -44,7 +44,7 @@ function card(rule) {
 }
 export function renderRoutineView() {
   const rules = activeRules().sort((a, b) => (a.startTime || "99:99").localeCompare(b.startTime || "99:99"));
-  return `${deps.renderHeader ? deps.renderHeader("いつものこと", "ルーティン") : ""}<section class="routine-view"><h2>ルーティン</h2>${button("new", "+ 新しいルーティン")}
+  return `${deps.renderHeader ? deps.renderHeader("いつものこと", "ルーティン") : ""}<section class="routine-view">${button("new", "+ 新しいルーティン")}
     <div class="routine-new">${editingId === "" ? editor() : ""}</div>
     <div class="routine-cards">${rules.map(card).join("") || "<p>ルーティンはまだありません</p>"}</div></section>`;
 }
@@ -78,9 +78,10 @@ export function saveRoutine(id) {
     let rule = id ? activeRules().find(item => item.id === id) : deps.createRecurrenceRule({ title, date, category, taskId: "",
       plannedStartAt: start ? `${date}T${start}` : "", plannedEndAt: end ? `${date}T${end}` : "" }, kind);
     if (!rule) return;
-    // isTouchedBlock compares titles against the old rule; classify instances before changing it.
+    // Compare titles and planned times against the old rule before changing it.
     if (id) deps.removeUntouchedInstances(id, { fromDate: date });
-    Object.assign(rule, { title, kind, days: kind === "weekly" ? days : [], startTime: start, endTime: end, category, updatedAt: deps.nowDateTime() });
+    Object.assign(rule, { title, kind, startTime: start, endTime: end, category, updatedAt: deps.nowDateTime() });
+    if (kind === "weekly") rule.days = days; else delete rule.days;
     deps.maintainRecurrences();
     editingId = null; draft = null;
     deps.saveAndRender("ルーティンを保存しました");

@@ -1,6 +1,6 @@
 import { weekTowers, towerScale, ringState, beatYesterday } from "../core/tower-week.js";
 
-let getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render;
+let getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin;
 let beatenShownFor = null;
 const towerDays = ["月", "火", "水", "木", "金", "土", "日"];
 let visibilityBound = false;
@@ -11,7 +11,7 @@ if (typeof document !== "undefined") document.addEventListener("input", event =>
 });
 
 export function configureNowView(deps) {
-  ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, updateBlockField, render } = deps);
+  ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin } = deps);
   if (!visibilityBound && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       const root = document.querySelector(".now-view");
@@ -53,16 +53,10 @@ export function withNowDeclaration(action, startId) {
   return result;
 }
 
-export function setNowEstimate(id, minutes) {
-  const block = getState().blocks.find(b => String(b.id) === id && !b.deleted);
-  if (!block || block.completed || block.actualStartAt || block.actualEndAt || ![15, 25, 50].includes(minutes)) return;
-  if (updateBlockField(block.id, "estimateMin", minutes)) render();
-}
-
 function candidateHTML(block) {
   const id = escapeHTML(block.id), estimate = resolveEstimateMin(block);
   return `<article class="now-candidate">
-    <div class="now-candidates"><button type="button" data-action="now-start" data-id="${id}"><strong>${block.isMIT ? "★ " : ""}${escapeHTML(block.title)}</strong><small>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(estimate)}分</small></button></div>
+    <div class="now-candidates"><button type="button" data-action="${isRoutineBlock(block) ? "now-routine-complete" : "now-start"}" data-id="${id}"><strong>${block.isMIT ? "★ " : ""}${escapeHTML(block.title)}</strong><small>${escapeHTML(timeFromDateTime(block.plannedStartAt) || "時刻未定")} · 見積 ${escapeHTML(estimate)}分</small></button></div>
   </article>`;
 }
 
