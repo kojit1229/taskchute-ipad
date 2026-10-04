@@ -6352,7 +6352,10 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-skin="now"] .now-ring-frame::before { content:""; position:absolute; inset:4px; border:8px solid var(--line); border-radius:50%; }
 #app[data-skin="now"] .now-ring-frame svg { position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); }
 #app[data-skin="now"] .now-ring-frame circle { fill:none; stroke:var(--accent); stroke-width:8; }
-#app[data-skin="now"] .now-ring-frame strong { font-size:24px; }
+#app[data-skin="now"] .now-ring-full { opacity:.45; }
+#app[data-skin="now"] .now-ring-text { display:flex; flex-direction:column; align-items:center; white-space:nowrap; }
+#app[data-skin="now"] .now-ring-frame strong { font-size:15px; line-height:1.4; }
+#app[data-skin="now"] .now-ring-frame small { font-size:11px; line-height:1.4; }
 #app[data-skin="now"] .now-beaten { text-align:center; color:var(--green-text); }
 #app[data-skin="now"] .now-beaten[data-beaten="1"] { animation:now-beaten-spark .7s ease-out; }
 @keyframes now-beaten-spark { 50% { text-shadow:0 0 12px var(--accent); opacity:.55; } }
