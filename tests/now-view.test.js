@@ -69,6 +69,48 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
     await page.goto(`http://localhost:${port}/`);
     await page.locator('[data-action="gate-continue"]').waitFor();
     await passGithubGate(page);
+    // 発注110: 登録表の既存操作を砂場で呼び、表示からも同じシートへ到達する。
+    {
+      const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+      const calls = [];
+      const sandbox = { openBlockEditor: id => calls.push(['edit', id]),
+        completeBlockWithActual: id => calls.push(['actual', id]) };
+      for (const action of ['edit-block', 'complete-block-with-actual']) {
+        const handler = source.match(new RegExp(`"${action}": (\\([^\\n]+?\\) => (?:\\{[\\s\\S]*?\\n  \\}|[^\\n]+?)),?\\r?\\n`));
+        ok(handler, `${action}: 既存登録を抽出`);
+        require('node:vm').runInNewContext(`(${handler[1]})`, sandbox)({ id: 'target',
+          event: { stopPropagation: () => calls.push(['stop']) } });
+      }
+      equal(calls, [['edit', 'target'], ['stop'], ['actual', 'target']], '既存編集と実績登録を呼び、実績ボタンは伝播を止める');
+      for (const category of ['', 'ルーティン']) {
+        await seed([block('actual-entry', { category })], 'now');
+        const before = (await live()).blocks;
+        await page.locator('.now-candidate [data-action="complete-block-with-actual"][data-id="actual-entry"]').click();
+        const after = await live();
+        equal(after.modal.id, 'actual-entry', `${category || 'Block'}: 既存実績モーダルへ`);
+        equal(after.blocks, before, `${category || 'Block'}: ボタンで開始・即完了しない`);
+        equal(await page.locator('[data-declare-note]').count(), 0, '開始カードの操作へ伝播しない');
+      }
+      await seed([block('edit-entry', { completed: true, actualStartAt: `${day}T11:00:00`, actualEndAt: `${day}T11:25:00` })], 'now');
+      await page.locator('.now-done [data-action="edit-block"][data-id="edit-entry"]').click();
+      equal([(await live()).modal.type, (await live()).modal.id], ['block', 'edit-entry'], '今日できたから既存Block編集シートへ');
+      for (const count of [0, 40]) {
+        await seed(Array.from({ length: count }, (_, i) => block(`many-${i}`, {
+          title: '長い題名の表示確認'.repeat(8), completed: i % 3 === 0, category: i % 3 === 1 ? 'ルーティン' : ''
+        })), 'now');
+        equal(await page.locator('.now-done [data-action="edit-block"]').count(), Math.ceil(count / 3), '0件・多数件: 全完了行に編集');
+        equal(await page.locator('.now-start [data-action="complete-block-with-actual"]').count(), count - Math.ceil(count / 3), '0件・多数件: 両開始枠の全カードに実績登録');
+        ok(await page.locator('.now-view').evaluate(root => {
+          const bounds = root.getBoundingClientRect();
+          return [...root.querySelectorAll('.now-candidate, .now-record, button')].every(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.left >= bounds.left && rect.right <= bounds.right &&
+              (!el.matches('[data-action="edit-block"], [data-action="complete-block-with-actual"]') ||
+                (rect.height >= 44 && parseFloat(getComputedStyle(el).fontSize) >= 16));
+          });
+        }), '0件・多数件: 375px枠内、追加ボタン44px・16px');
+      }
+    }
     // 発注99/B2-61: 宣言の有無によらず、いまの開始ではタイマーを起動しない。
     for (const action of ['declare-confirm', 'declare-skip']) {
       await page.clock.install({ time: at(12, 0) });
@@ -211,7 +253,7 @@ const ok = (value, message) => { assert.ok(value, message); assertions++; consol
       equal(await page.locator('[data-action="gate-continue"]').count(), 0, 'L-orphan: 初期ゲートへ落ちない');
       equal((await live()).blocks.find(b => b.id === 'orphan').recurrenceGroupId, 'missing-rule', '孤児の紐付けを消さない');
       equal((await live()).recurrences.some(r => r.id === 'missing-rule'), false, '孤児からルールを再作成しない');
-      equal(await page.locator('.now-start [data-kind="block"] [data-id="orphan"]').count(), 1, '孤児は普通のBlockとして表示');
+      equal(await page.locator('.now-start [data-kind="block"] [data-action="now-start"][data-id="orphan"]').count(), 1, '孤児は普通のBlockとして表示');
     }
     await seed([block('plain-only')], 'now');
     equal(await page.locator('.now-routine').count(), 0, 'ルーティン0件なら枠ごと非表示');

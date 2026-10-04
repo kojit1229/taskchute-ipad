@@ -25,6 +25,13 @@ function validDateTime(value) {
 }
 
 export function blockActualSeconds(block, nowMs, toMs) {
+  if (block?.completed && !block.actualStartAt) {
+    if (validDateTime(block.plannedStartAt) && validDateTime(block.plannedEndAt)) {
+      const seconds = (toMs(block.plannedEndAt) - toMs(block.plannedStartAt)) / 1000;
+      if (Number.isFinite(seconds)) return Math.max(60, seconds);
+    }
+    return (Number.isFinite(block.estimateMin) && block.estimateMin > 0 ? block.estimateMin : 15) * 60;
+  }
   if (!block || !validDateTime(block.actualStartAt)) return 0;
   const hasEnd = Boolean(block.actualEndAt);
   if (hasEnd ? !validDateTime(block.actualEndAt) : block.completed) return 0;

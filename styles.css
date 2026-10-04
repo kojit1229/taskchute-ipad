@@ -6326,7 +6326,10 @@ details.settings-row > .fold-summary.settings-row-summary {
 #app[data-skin="now"] .now-view summary { min-height:44px; padding:12px 0; cursor:pointer; }
 #app[data-skin="now"] :is(.now-candidate-list,.now-candidates) { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; }
 #app[data-skin="now"] .now-candidates button { text-align:left; border-left:4px solid var(--accent); }
-#app[data-skin="now"] .now-candidate { display:grid; gap:4px; padding:6px; border:1px solid var(--line); border-radius:12px; }
+#app[data-skin="now"] .now-candidate { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px; padding:6px; border:1px solid var(--line); border-radius:12px; }
+#app[data-skin="now"] .now-view :is(.now-actual-button,.now-record-heading button) { min-height:44px; font-size:16px; align-self:center; }
+#app[data-skin="now"] .now-record-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+#app[data-skin="now"] .now-record-heading button { flex-shrink:0; }
 #app[data-skin="now"] .now-routine { margin-top:16px; padding-top:8px; border-top:1px solid var(--line); }
 #app[data-skin="now"] .now-routine h3 { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 #app[data-skin="now"] .now-candidates > button { width:100%; }
