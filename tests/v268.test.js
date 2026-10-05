@@ -94,8 +94,12 @@ function check(name, condition, extra = "") {
       pace: await countdown.locator(".t-pace").textContent(),
       cls: await countdown.locator(".t-pace").getAttribute("class")
     }, countdownSaveCalls: await page.evaluate(() => window.__v268SaveCalls || 0) };
-    await page.locator('.nav-button[data-view="wbs"]').click();
-    const wbs = page.locator(`.twy-row[data-twy-track-id="${track.id}"]`);
+    await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').evaluate(el => el.click());
+    await page.locator(`[data-action="wbs-select-project"][data-id="${track.ownerId}"]`).click();
+    check('作業一覧のProject箱は12週計画の週を表示', /12週計画 第\d+週/.test(await page.locator(`[data-work-group="${track.ownerId}"] > summary`).textContent()));
+    await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').evaluate(el => el.click());
+    if (await page.locator('.twy-cycle-fold:not([open])').count()) await page.locator('.twy-cycle-fold > summary').click();
+    const wbs = page.locator(`.twy-goals-panel .twy-row[data-twy-track-id="${track.id}"]`);
     await wbs.waitFor();
     await page.evaluate(() => { window.__v268SaveCalls = 0; });
     result.wbs = {
@@ -116,7 +120,7 @@ function check(name, condition, extra = "") {
     const stale = numericTrack("stale", "p-stale");
     await seed(stale, "2026-08-16T09:00:00", 3.5);
     const staleView = await readBoth(stale);
-    check("未更新numericはCOUNTDOWN=不明、WBS=ペース不明で具体差を出さない",
+    check("未更新numericはCOUNTDOWN=不明、12週計画=ペース不明で具体差を出さない",
       staleView.countdown.state === "未更新" && staleView.countdown.pace === "不明"
       && staleView.wbs.state === "未更新" && staleView.wbs.pace === "ペース不明"
       && !/[+-]\d/.test(staleView.countdown.pace), JSON.stringify(staleView));

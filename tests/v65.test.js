@@ -25,13 +25,9 @@ function check(name, cond, extra = "") {
   else { failures++; console.log(`  ❌ ${name} ${extra}`); }
 }
 
-// v329で導入された行メニュー化(wbs-row-menu-toggle)に追随: WBS行の副操作(edit-task等)は
-// 「…」トグルで開く<details>相当のパネル配下にある。既に開いている場合は再クリックで閉じて
-// しまうため、aria-expandedを見てから必要な時だけ開く。他行(WBSの「全部見る」導線等)にも
-// 同名トグルがあるため、対象タスクのタイトルを含むaria-labelで一意に絞り込む。
-async function openWbsRowMenuIfClosed(page, taskTitle) {
-  const toggle = page.locator(`.wbs-row-menu-toggle[aria-label="${taskTitle}の副操作"]`);
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+// 題名ボタンがTask詳細への入口。
+async function waitForWbsTitle(page, taskTitle) {
+  await page.locator('[data-work-list="wbs"] [data-action="edit-task"]').filter({ hasText: taskTitle }).waitFor();
 }
 
 (async () => {
@@ -154,8 +150,8 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       projects: [testProject()],
       view: "wbs"
     });
-    await openWbsRowMenuIfClosed(page, "leverageType保存検証Task");  // v329: 行メニュー(…)を開いてからedit-task
-    await page.click('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-lev1"]');
+    await waitForWbsTitle(page, "leverageType保存検証Task");  // v329: 行メニュー(…)を開いてからedit-task
+    await page.click('[data-work-list="wbs"] .work-list-title[data-action="edit-task"][data-id="task-lev1"]');
     await page.waitForTimeout(200);
     check("Task編集モーダルにレバレッジselectがある", await page.locator('[data-modal-field="leverageType"]').count() === 1);
     await page.selectOption('[data-modal-field="leverageType"]', "asset");
@@ -194,8 +190,8 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
       projects: [testProject()],
       view: "wbs"
     });
-    await openWbsRowMenuIfClosed(page, "10秒判定検証Task");  // v329: 行メニュー(…)を開いてからedit-task
-    await page.click('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-lev2"]');
+    await waitForWbsTitle(page, "10秒判定検証Task");  // v329: 行メニュー(…)を開いてからedit-task
+    await page.click('[data-work-list="wbs"] .work-list-title[data-action="edit-task"][data-id="task-lev2"]');
     await page.waitForTimeout(200);
     check("10秒判定ヘルプ(details)がある", await page.locator(".lev-helper").count() === 1);
     await page.click(".lev-helper summary");  // 開く(details既定は閉じているため)
@@ -209,7 +205,7 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     await page.locator('dialog[open] [data-action="draft-leave-discard"]').click();
     await page.waitForSelector('dialog[open]', { state: "detached" });
     await page.waitForTimeout(150);
-    await page.click('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
+    await page.click('[data-work-list="wbs"] .work-list-title[data-action="edit-task"][data-id="task-lev2"]');  // 開き直す
     await page.waitForTimeout(150);
     const selValAfterCancel = await page.locator('[data-modal-field="leverageType"]').inputValue();
     check("保存せずキャンセルすると判定結果は反映されない(強制しない)", selValAfterCancel === "", selValAfterCancel);
@@ -286,13 +282,16 @@ async function openWbsRowMenuIfClosed(page, taskTitle) {
     // listRow()(.work-list-row、行キーdata-work-key="task:<id>"、開くボタンはdata-action="edit-task")
     // へ描画元が変わっている(旧セレクタは0件になり保証内容と無関係にタイムアウトしていた)。
     // 保証内容(⚙資産マークが1件出る)は変えず、現行DOMのセレクタへ追随させるだけ。
-    const wbsMarks = page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:task-mark1"] .lev-mark');
-    check("WBS一覧のTask行(renderTaskRow)に⚙資産マークが1件出る", await wbsMarks.count() === 1);
-    // v374: Task行のマーク文字サイズは(実行タブのTask行が無くなったため)WBS一覧のTask行で検査する。
-    const taskMarkFontSize = await wbsMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    check("「タスク」行(WBS)の.lev-markは11px以上", taskMarkFontSize >= 11, String(taskMarkFontSize));
-    const wbsMarkFontSize = await wbsMarks.first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    check("WBS行の.lev-markは11px以上", wbsMarkFontSize >= 11, String(wbsMarkFontSize));
+    const wbsRow = page.locator('[data-work-key="task:task-mark1"]');
+    check("WBSでは資産Taskも題名・情報・期日見積の3列", await wbsRow.locator(':scope > div').count() === 3);
+    await wbsRow.locator('[data-action="edit-task"]').click();
+    const leverage = page.locator('[data-modal-field="leverageType"]');
+    check("資産指定を同じTaskの詳細で保持", await leverage.inputValue() === 'asset');
+    const taskMarkFontSize = await leverage.evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+    check("Task詳細の資産入力は16px以上", taskMarkFontSize >= 16, String(taskMarkFontSize));
+    await page.locator('#modalRoot [data-action="modal-close"]').first().click();
+    const wbsMarkFontSize = await wbsRow.locator('.work-list-title').evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+    check("WBSのTask題名は11px以上", wbsMarkFontSize >= 11, String(wbsMarkFontSize));
 
     // v335(§C追随): 旧timelineへの直接navは無くなったため、execへ遷移して実績モードへ切替える。
     await page.click('[data-action="nav"][data-view="exec"]');

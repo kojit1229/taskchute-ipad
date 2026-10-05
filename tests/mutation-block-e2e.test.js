@@ -228,7 +228,7 @@ test('F5-7 body scan displays the latest earlier-day record without changing inp
   });
 });
 
-test('F5-6 WIP shows one count line by default and disclosure never saves display state', async () => {
+test('F5-6 Project chips and group disclosure never save display state', async () => {
   await f5Browser(async page => {
     await page.evaluate(() => {
       const api = window.__f5, s = api.getState();
@@ -237,16 +237,18 @@ test('F5-6 WIP shows one count line by default and disclosure never saves displa
       s.currentView = 'wbs'; api.render(); window.__f5Save.writes = 0;
     });
     const before = await page.evaluate(() => JSON.stringify(window.__f5.getState()));
-    const details = page.locator('details.wip-banner'), summary = details.locator('summary');
-    assert.equal(await details.getAttribute('open'), null);
-    assert.match(await summary.innerText(), /進行中 24件\(目安 3件まで\)/);
-    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), false);
+    const root = page.locator('[data-work-list="wbs"]');
+    assert.equal(await root.locator('.wip-banner').count(), 0);
+    assert.equal(await root.locator('[data-action="wbs-select-project"][data-id]:not([data-id=""])').count(), 24);
+    const details = root.locator('[data-work-group="p0"]'), summary = details.locator('summary');
+    assert.equal(await details.getAttribute('open'), '');
+    assert.match(await summary.innerText(), /進行中案件0.*1\/1件/);
+    assert.equal(await root.locator('[data-wbs-row-id]').count(), 24);
     assert.ok((await summary.boundingBox()).height >= 44);
     await summary.click();
-    assert.equal(await details.locator('.wip-banner-row').count(), 24);
-    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), true);
+    assert.equal(await details.locator('[data-wbs-row-id="tp0"]').isVisible(), false);
     await summary.click();
-    assert.equal(await details.locator('.wip-banner-row').first().isVisible(), false);
+    assert.equal(await details.locator('[data-wbs-row-id="tp0"]').isVisible(), true);
     assert.equal(await page.evaluate(() => JSON.stringify(window.__f5.getState())), before);
     assert.equal(await page.evaluate(() => window.__f5Save.writes), 0);
   });

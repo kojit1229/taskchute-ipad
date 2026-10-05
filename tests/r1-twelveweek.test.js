@@ -388,11 +388,21 @@ async function seed(page, values) {
     await page.click('#sidebar [data-action="nav"][data-view="wbs"]');
     await page.waitForFunction(() => document.querySelector("#app")?.dataset.view === "wbs");
     await page.click('[data-action="wbs-select-project"][data-id="p1"]');
-    await page.waitForSelector('[data-wbs-detail-id="p1"]');
-    const wbsChipText = await page.locator('[data-wbs-detail-id="p1"] .twy-row .t-state').first().textContent();
-    check("WBS側チップが取得できている", wbsChipText !== "", wbsChipText);
-    check("トラック状態チップがWBS側の既存digestと一致する(新しい判定を作らない)",
-      wbsChipText === twyChipText, `${twyChipText} / ${wbsChipText}`);
+    const group = page.locator('[data-work-group="p1"]');
+    check("Project箱は12週計画の週を見出しに表示", /12週計画 第\d+週/.test(await group.locator('summary').textContent()));
+    check("Project箱にはトラック編集を重複表示しない", await group.locator('[data-twy-track-id]').count() === 0);
+    await page.click('#sidebar [data-action="nav"][data-view="twelveweek"]');
+    await openCycleWhenTwelveWeek(page);
+    const digestLabel = await page.evaluate(async () => {
+      const { state } = await import('/src/state/store.js');
+      const { latestMeasurement, paceNumeric, trackStatus } = await import('/src/core/track.js');
+      const track = state.tracks.find(t => t.id === 'tr1'), measurement = latestMeasurement(state.trackMeasurements || [], track.id);
+      const now = new Date(), today = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
+      const value = measurement ? Number(measurement.value) : Number(track.baselineValue);
+      return trackStatus(track, paceNumeric(track, value, today), value, measurement ? measurement.observedAt.slice(0,10) : track.startDate, today).label;
+    });
+    const restoredChip = await page.locator('.twy-goal .twy-row .t-state').first().textContent();
+    check("12週計画の状態チップは既存digestと一致", restoredChip === digestLabel && restoredChip === twyChipText, `${restoredChip} / ${digestLabel}`);
     await seed(page, { currentView: "twelveweek" });
 
     // ============================================================

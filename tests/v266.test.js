@@ -473,9 +473,13 @@ async function toggleLifeScore(page) {
       tracks: [numericTrack("same-status", "p-wbs")], trackMeasurements: [measurement("same-status", 0)] });
     await toggleLifeScore(page);
     const countdownStatusCount = await mobile().locator(".twy-track-line .t-state").count();
-    await page.locator('.nav-button[data-view="wbs"]').click();
-    await page.waitForSelector('.twy-row[data-twy-track-id="same-status"]');
-    const wbsStatus = await page.locator('.twy-row[data-twy-track-id="same-status"] .t-state').textContent();
+    await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').evaluate(el => el.click());
+    await page.locator('[data-action="wbs-select-project"][data-id="p-wbs"]').click();
+    check('作業一覧のProject箱は12週計画の週を表示', /12週計画 第\d+週/.test(await page.locator('[data-work-group="p-wbs"] > summary').textContent()));
+    await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').evaluate(el => el.click());
+    if (await page.locator('.twy-cycle-fold:not([open])').count()) await page.locator('.twy-cycle-fold > summary').click();
+    await page.waitForSelector('.twy-goals-panel .twy-row[data-twy-track-id="same-status"]');
+    const wbsStatus = await page.locator('.twy-goals-panel .twy-row[data-twy-track-id="same-status"] .t-state').textContent();
     check("#9 WBSの管理判定は維持し、LIFE BANDだけ判定ラベルを省略", countdownStatusCount === 0 && wbsStatus === "要注意");
   } catch (error) {
     failures++;

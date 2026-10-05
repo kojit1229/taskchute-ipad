@@ -398,7 +398,10 @@ class FakeToast {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, cycle: CYCLE, now: NOW });
     await page.reload();
-    await page.waitForSelector('.twy-row[data-twy-track-id="track-e2e"]');
+    check('作業一覧はProject箱に12週計画の週を表示', /12週計画 第\d+週/.test(await page.locator('[data-work-group] > summary').first().textContent()));
+    await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').evaluate(el => el.click());
+    await page.locator('.twy-cycle-fold > summary').click();
+    await page.waitForSelector('.twy-goals-panel .twy-row[data-twy-track-id="track-e2e"]');
     const toggle = () => page.evaluate(() => {
       const button = document.createElement("button");
       button.dataset.action = "toggle-block";
@@ -427,7 +430,7 @@ class FakeToast {
     check("1タップで絶対値12・blockId付きmeasurementを永続化", recorded?.value === 12
       && recorded.blockId === "block-e2e" && recorded.trackId === "track-e2e");
     check("saveAndRender後にWBS現在値が12/20章へ更新", (await page.locator(
-      '.twy-row[data-twy-track-id="track-e2e"] .twy-val').innerText()).replace(/\s/g, "") === "12/20章");
+      '.twy-goals-panel .twy-row[data-twy-track-id="track-e2e"] .twy-val').innerText()).replace(/\s/g, "") === "12/20章");
     await toggle();
     await toggle();
     await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).blocks

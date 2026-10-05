@@ -4,7 +4,7 @@ const path = require("path");
 const vm = require("vm");
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault,
-  passGithubGate, randomPort, STATE_KEY
+  passGithubGate, randomPort, STATE_KEY, dispatchRegisteredAction
 } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
@@ -171,9 +171,11 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     // v328(既存): toggle-wbs-editは単独ボタンと「表示 ▾」ポップオーバー内の2箇所にあり、
     // 後者は既定非表示のためvisible待ちだと詰まる。ここではクリックせず存在確認だけなので
     // attachedで待つ(セレクタ追随・assert不変)
-    await page.reload(); await page.waitForSelector('[data-action="toggle-wbs-edit"]', { state: "attached" });
+    await page.reload(); await page.waitForSelector('[data-work-list="wbs"]');
     if (cycleStart) await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
-    if (cycleStart) await page.waitForSelector('button[data-action="twy-open-commit"]', { state: "attached" });
+    if (cycleStart) check("Project箱には第2週を表示", (await page.locator('[data-work-group="p1"] > summary').textContent()).includes('12週計画 第2週'));
+    if (cycleStart) await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').click();
+    if (await page.locator('.twy-cycle-fold:not([open])').count()) await page.locator('.twy-cycle-fold > summary').click();
   }
   async function resetSaveProbe() {
     await page.evaluate((key) => {
@@ -188,16 +190,16 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
   // p1/p2とも12WY projectのため行ごとに同じボタンが2件出る。twy-open-commitはproject非依存の
   // グローバルシートを開くためどちらでもよく、.first()で明示する(v329とは無関係の既存事象・
   // セレクタ追随・assert不変)
-  const openSheet = () => page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').first().click();
+  const openSheet = () => page.locator('.twy-goals-panel [data-action="twy-open-commit"]').first().click();
   const group = (taskId) => page.locator(`.twy-commit-row[data-twy-task-id="${taskId.replaceAll('"', '\\"')}"]`);
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 25, 10, 0, 0));
     await page.goto(`http://localhost:${PORT}/`); await passGithubGate(page); await seed({ projects: base().projects.map((entry) => ({ ...entry, twelveWeekStartDate: "" })) }, "");
-    check("12WY未設定ならWBS入口を表示しない", await page.locator('[data-action="twy-open-commit"]').count() === 0);
+    check("12WY未設定なら作業一覧の確定入口を表示しない", await page.locator('[data-action="twy-open-commit"]').count() === 0);
     await seed();
 
     await resetSaveProbe(); await openSheet();
-    check("#1 WBS入口から当週pre-commitを開き既定全チェック", await page.locator(".twy-commit-row").count() === 2
+    check("#1 12週計画入口から当週pre-commitを開き既定全チェック", await page.locator(".twy-commit-row").count() === 2
       && await page.locator('.twy-commit-row input[type="checkbox"]:checked').count() === 2
       && (await page.locator("[data-twy-commit-count]").textContent()).includes("選択中 3コマ"));
     check("集約・recurrence・単発Block×1・時刻表示", (await group("t1").textContent()).includes("平日のみ")
@@ -268,12 +270,13 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
       && await page.locator('[data-twy-commit-item]').count() === 2
       && await page.locator('[data-action="twy-commit-week"]').count() === 0);
     await page.locator('#modalRoot [data-action="modal-close"]').first().click();
+    await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').click();
     const entryCounts = [];
     for (const id of ['p1', 'p2']) {
       await page.locator(`[data-action="wbs-select-project"][data-id="${id}"]`).click();
-      entryCounts.push(await page.locator(`[data-wbs-detail-id="${id}"] [data-action="twy-open-commit"]`).count());
+      entryCounts.push((await page.locator(`[data-work-group="${id}"] > summary`).textContent()).includes('12週計画 第2週'));
     }
-    check("saveAndRender後も各12WY ProjectのWBS入口に退行なし", JSON.stringify(entryCounts) === '[1,1]');
+    check("確定後も各Project箱の12週計画見出しに退行なし", JSON.stringify(entryCounts) === '[true,true]');
 
     await seed(); await openSheet();
     for (const checkbox of await page.locator('.twy-commit-row input[data-action="twy-commit-toggle-group"]').all()) await checkbox.click();
@@ -297,15 +300,13 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     await seed();
     // v329: 行の副操作は…メニュー(排他)の中。reload直後は必ず閉じているため先に開く
     // (セレクタ追随・assert不変)
-    await page.click('[data-action="wbs-select-project"][data-id="p1"]');
-    await page.waitForTimeout(150);
-    await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
+    await dispatchRegisteredAction(page, "edit-project", { id: "p1" });
     await page.locator('[data-modal-field="title"]').fill("Project saved"); await page.locator('[data-action="modal-save"]').click();
     saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     check("既存projectモーダル開閉保存に退行なし", saved.projects.find((entry) => entry.id === "p1")?.title === "Project saved");
     // v329: task行も同様に…メニュー内。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="t1"] [data-action="wbs-row-menu-toggle"]');
-    await page.waitForTimeout(150);
+    await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').click();
+    await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
     await page.locator('[data-action="edit-task"][data-id="t1"]').first().click();
     await page.locator('[data-modal-field="title"]').fill("Task saved"); await page.locator('[data-action="modal-save"]').click();
     saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
@@ -316,6 +317,8 @@ check("週跨ぎ送信はデータ不変・偽成功なしで当週シートへ�
     saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     check("既存blockモーダル開閉保存に退行なし", saved.blocks.find((entry) => entry.id === "b1")?.title === "Block saved");
 
+    await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').click();
+    if (await page.locator('.twy-cycle-fold:not([open])').count()) await page.locator('.twy-cycle-fold > summary').click();
     await page.setViewportSize({ width: 390, height: 844 }); await openSheet();
     check("390pxでWBS/確定シートに横スクロールなし", await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
   } catch (error) {

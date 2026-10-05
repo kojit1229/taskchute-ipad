@@ -43,50 +43,59 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     for (const scope of ['today', 'exec', 'wbs']) {
       if (scope !== 'today') await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();
       if (scope === 'wbs') await page.locator('[data-action="wbs-select-project"][data-id="search-project"]').click();
-      const root = page.locator(`[data-work-list="${scope === 'wbs' ? 'wbs-tasks-search-project' : scope}"]`);
+      const root = page.locator(`[data-work-list="${scope}"]`);
       await root.waitFor();
       const query = root.locator('[data-work-filter="query"]'), rows = root.locator('[data-work-list-rows]');
       const stored = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
       await query.fill('検索対象');
       assert.equal(await rows.locator('[data-work-key]').count(), 60);
-      const countBefore = await root.locator('.work-list-count').textContent();
-      await query.evaluate(el => {
+      const countLabel = root.locator(scope === 'wbs' ? '[data-work-group="search-project"] > summary span' : '.work-list-count');
+      const countBefore = await countLabel.textContent();
+      await query.evaluate((el, scope) => {
         window.__searchInput = el;
         el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
-        el.value = '日本語の固有メモ'; el.setSelectionRange(1, 3);
+        el.value = scope === 'wbs' ? '検索対象 59' : '日本語の固有メモ'; el.setSelectionRange(1, 3);
         el.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
-      });
+      }, scope);
       await page.clock.runFor(1100);
       assert.equal(await rows.locator('[data-work-key]').count(), 60);
-      assert.equal(await root.locator('.work-list-count').textContent(), countBefore);
+      assert.equal(await countLabel.textContent(), countBefore);
       assert(await query.evaluate(el => el === window.__searchInput && document.activeElement === el
         && el.selectionStart === 1 && el.selectionEnd === 3));
       await query.evaluate(el => el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
       assert.equal(await rows.locator('[data-work-key]').count(), 1);
-      assert((await root.locator('.work-list-count').textContent()).startsWith('1 / '));
+      assert(scope === 'wbs' ? /1\/1件/.test(await countLabel.textContent()) : (await countLabel.textContent()).startsWith('1 / '));
       assert(await query.evaluate(el => el === window.__searchInput && document.activeElement === el));
       pass(scope + ' IME / input identity / count');
 
       await query.fill('<img src=x onerror=alert(1)>');
       assert.equal(await rows.locator('[data-work-key]').count(), 0);
       assert.equal(await rows.locator('img').count(), 0);
-      assert.equal(await rows.locator('.work-list-empty').textContent(), '条件に一致する項目はありません。');
-      await root.locator('[data-action="work-list-clear"]').click();
+      assert.equal(await rows.locator(scope === 'wbs' ? '[data-work-group] > p' : '.work-list-empty').textContent(), scope === 'wbs' ? '該当するタスクはありません。' : '条件に一致する項目はありません。');
+      if (scope === 'wbs') await query.fill('');
+      else await root.locator('[data-action="work-list-clear"]').click();
       assert(await query.evaluate(el => el === window.__searchInput));
       if (scope === 'today') await root.locator('.daily-table-filters > summary').click();
-      await root.locator('[data-work-filter="status"]').selectOption('completed');
+      if (scope === 'wbs') {
+        assert.equal(await root.locator('[data-work-filter="status"]').count(), 0);
+        await query.fill('検索対象 59');
+      } else await root.locator('[data-work-filter="status"]').selectOption('completed');
       assert.equal(await rows.locator('[data-work-key]').count(), 1);
       assert.equal(await page.evaluate(key => localStorage.getItem(key), STATE_KEY), stored,
         'search and filters do not save primary data');
-      await root.locator('[data-action="work-list-clear"]').click();
+      if (scope === 'wbs') await query.fill('');
+      else await root.locator('[data-action="work-list-clear"]').click();
       await query.fill('検索対象');
-      if (scope === 'wbs') await page.locator('[data-action="wbs-select-project"][data-id="search-project"]').click();
-      else await root.locator('[data-work-filter="project"]').selectOption('search-project');
-      await rows.evaluate(el => { el.scrollTop = el.scrollHeight; });
-      const top = await rows.evaluate(el => el.scrollTop);
+      if (scope === 'wbs') {
+        await page.locator('[data-action="wbs-select-project"][data-id=""]').click();
+        await page.locator('[data-action="wbs-select-project"][data-id="search-project"]').click();
+      } else await root.locator('[data-work-filter="project"]').selectOption('search-project');
+      const scrollRoot = scope === 'wbs' ? page.locator('html') : rows;
+      await scrollRoot.evaluate(el => { el.scrollTop = el.scrollHeight; });
+      const top = await scrollRoot.evaluate(el => el.scrollTop);
       assert(top > 0, 'fixture exercises a scrolled result');
       await query.evaluate(el => el.dispatchEvent(new Event('change', { bubbles: true })));
-      assert.equal(await rows.evaluate(el => el.scrollTop), top);
+      assert.equal(await scrollRoot.evaluate(el => el.scrollTop), top);
       const id = scope === 'wbs' ? 'task:search-task-59' : 'block:search-block-59';
       const row = rows.locator(`[data-work-key="${id}"]`);
       assert.equal(await row.count(), 1, scope + ' filtered target row exists');
@@ -102,14 +111,14 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       }
       // Expansion adds controls below the title; measure after Edit is in view.
       await button.scrollIntoViewIfNeeded();
-      const detailTop = await rows.evaluate(el => el.scrollTop);
+      const detailTop = await scrollRoot.evaluate(el => el.scrollTop);
       assert(detailTop > 0, 'detail opens from a scrolled result');
       await button.click();
       await page.locator('[data-action="modal-close"]').first().click();
       await page.waitForFunction(key => document.activeElement?.closest('[data-work-key]')?.dataset.workKey === key, id);
       assert.equal(await query.inputValue(), '検索対象');
-      assert.equal(scope === 'wbs' ? await page.locator('.wbs-project-choice.selected').getAttribute('data-id') : await root.locator('[data-work-filter="project"]').inputValue(), 'search-project');
-      assert(Math.abs(await rows.evaluate(el => el.scrollTop) - detailTop) < 3);
+      assert.equal(scope === 'wbs' ? await page.locator('[data-action="wbs-select-project"][aria-pressed="true"]').getAttribute('data-id') : await root.locator('[data-work-filter="project"]').inputValue(), 'search-project');
+      assert(Math.abs(await scrollRoot.evaluate(el => el.scrollTop) - detailTop) < 3);
       assert(await button.evaluate(el => el === document.activeElement));
       pass(scope + ' filters / no save / detail return / scroll');
     }
@@ -149,8 +158,8 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     pass('invalid contracts / injected rendering failure / escaped text / shared composition guard');
     for (const width of [390, 768, 1024]) {
       await setViewportAndWaitForStableLayout(page, { width, height: 844 },
-        '[data-work-list="wbs-tasks-search-project"] input,[data-work-list="wbs-tasks-search-project"] select');
-      const layout = await page.locator('[data-work-list="wbs-tasks-search-project"]').evaluate(root => ({
+        '[data-work-list="wbs"] input,[data-work-list="wbs"] select');
+      const layout = await page.locator('[data-work-list="wbs"]').evaluate(root => ({
         inputSizes: [...root.querySelectorAll('input,select')].map(el => parseFloat(getComputedStyle(el).fontSize)),
         width: root.getBoundingClientRect().width, viewport: innerWidth, pageWidth: document.documentElement.scrollWidth
       }));
