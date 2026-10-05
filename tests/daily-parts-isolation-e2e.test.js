@@ -359,6 +359,7 @@ async function run() {
     const databasesBefore = await productPage.evaluate(() => indexedDB.databases());
     await operations(mockPage);
     await measure(mockPage, 'mock', '[data-daily-field="start"]');
+    if (await productPage.locator('[data-work-list="today"] .daily-table-search:not([open]) > summary').count()) await productPage.locator('[data-work-list="today"] .daily-table-search:not([open]) > summary').click();  // v441 T2-4
     await measure(productPage, 'product', '[data-work-filter="query"]');
     await mockObserver.settled(); await productObserver.settled();
     await collectMockAudit();

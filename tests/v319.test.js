@@ -154,8 +154,8 @@ function check(name, condition, extra = "") {
     // v410: 未着手カードの日本語見出し、本文と停止ポモの不在を現契約で検査する。
     check("日本語見出し・併記・日報への導線を描画",
       todayHeadings.runway.includes("次にやること")
-      && todayHeadings.arrivals === `今日の予定・実績 今日 ${TODAY}`
-      && todayHeadings.log.includes("やったこと") && todayHeadings.log.includes("本日の終了実績")
+      && /^今日の予定・実績 \d+件 · 見積 /.test(todayHeadings.arrivals)  // v441 T2-1: 見出しは件数・見積合計
+      && todayHeadings.log.includes("実績の簡易一覧") && todayHeadings.log.includes("終了時刻がある")  // v441 T2-6
       && todayHeadings.gate.includes("ルーティン") && todayHeadings.body === ""
       && todayHeadings.journal === ""
       && todayHeadings.free === "" && todayHeadings.aiCount === 0
