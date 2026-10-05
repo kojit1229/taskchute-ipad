@@ -17,8 +17,6 @@ function managedTasks() {
 }
 function undecidedCount() { return collapseSeries(managedTasks().filter(t => !deps.dueDate(t))).length; }
 function suggestDue(task, today) {
-  const parent = state.tasks.find(t => !t.deleted && t.projectId === task.projectId && t.id === task.parentTaskId);
-  if (parent?.dueDate) return { date: parent.dueDate, reason: "親と同じ期日" };
   const project = state.projects.find(p => !p.deleted && p.id === task.projectId);
   const cycleDay = project?.twelveWeekStartDate ? deps.daysBetween(project.twelveWeekStartDate, today) : -1;
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);

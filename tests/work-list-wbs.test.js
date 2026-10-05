@@ -61,6 +61,20 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       await kids.click(); assert.equal(await taskRow('child').count(),0); assert.equal(await kids.textContent(),'▸');
       await kids.click(); assert.equal(await taskRow('child').count(),1);
       assert.equal(await taskRow('kid1').count(),1); assert.equal(await taskRow('kid2').count(),0);
+      // A-1: entering a filter opens children once; manual toggles remain effective.
+      const query = root.locator('[data-work-filter="query"]');
+      await kids.click();
+      await query.fill('子だけ'); assert.equal(await taskRow('child').count(),1);
+      await kids.click(); assert.equal(await taskRow('child').count(),0);
+      await query.fill('子だけ検索'); assert.equal(await taskRow('child').count(),0);
+      await kids.click(); assert.equal(await taskRow('child').count(),1);
+      await kids.click(); await query.fill(''); assert.equal(await taskRow('child').count(),0);
+      const none = root.locator('[data-kind="due"][data-value="none"]');
+      await none.click(); assert.equal(await taskRow('child').count(),1);
+      await kids.click(); assert.equal(await taskRow('child').count(),0);
+      await none.click(); assert.equal(await taskRow('child').count(),0);
+      await kids.click();
+
       assert((await summary.textContent()).includes('仕事')); assert(/\d+\/\d+件/.test(await summary.textContent()));
       await summary.click(); assert.equal(await group.getAttribute('open'),null); await summary.click(); assert.notEqual(await group.getAttribute('open'),null);
     });

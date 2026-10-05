@@ -46,8 +46,8 @@ const {chromium,launchOptions,startServer,randomPort,STATE_KEY,passGithubGate}=r
    };
    await browseSource();
    console.log('STEP source '+source);
-   if(source==='wbs') await page.locator('[data-action="wbs-select-project"][data-id="p"]').click();
-   const action=source==='wish'?'wish-subtask-to-tasks':'task-today';
+   if(source==='wbs') await page.locator('[data-action="work-list-toggle"][data-kind="project"][data-value="p"]').click();
+   const action=source==='wish'?'wish-subtask-to-tasks':'placement-add-today';
    const open=async (id, entryAction=action)=>{await page.locator(`[data-action="${entryAction}"][data-id="${id}"]`).click();await page.locator("#modalRoot").evaluate(async root=>{await Promise.all(root.getAnimations({subtree:true}).map(animation=>animation.finished));});};
    if(source==='wbs') {
     for(const suffix of ['a','b','c']) {

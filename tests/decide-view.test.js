@@ -69,6 +69,7 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
         document.querySelector('[data-decide-view]').outerHTML=(await import('/src/features/decide-view.js')).renderDecideView();
         return old;
       });
+      assert.equal(await root.locator('[data-nudge-id="child"]').count(),0,'A-4: inherited parent due excludes child even with fewer than five candidates');
       assert.equal(await root.locator('[data-nudge-id="new"]').getAttribute('data-suggestion'),fixture.recent);
       assert((await root.locator('[data-nudge-id="new"]').textContent()).includes('作成から2週間'));
       const friday = await page.evaluate(async () => {

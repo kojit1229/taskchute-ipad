@@ -1,4 +1,4 @@
-// v330: 旧Project詳細ペインの回帰。週パネルの検査は発注02で撤去。
+// v330 / A-3: Projectチップ・Project箱・表示切替の回帰。
 const {
   chromium, launchOptions, startServer, blockGithubApiByDefault,
   passGithubGate, randomPort, STATE_KEY
@@ -99,15 +99,13 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
     await page.waitForSelector('[data-work-list="wbs"]');
     check("週パネルは作業一覧に表示しない", await page.locator('.wbs-week-panel').count() === 0);
 
-    console.log("[3] PC 2ペイン・12WY優先の既定選択・選択は非永続");
-    check("1280pxは一覧/選択詳細が1:2の2列", await page.locator(".wbs-projects.is-desktop").isVisible()
-      && await page.locator(".wbs-project-list").evaluate((element) => Math.abs(element.getBoundingClientRect().width * 2 - document.querySelector(".wbs-project-detail").getBoundingClientRect().width) < 1 && element.getBoundingClientRect().width > 0)
-      && await page.locator('[data-wbs-detail-id="p-cycle"]').isVisible());
-    check("既定選択は配列順ではなく12WY優先(先頭は!Alpha)", await page.locator('.wbs-project-choice').first().textContent()
-      .then((text) => text.includes("!Alpha")) && await page.locator('[data-wbs-detail-id="p-cycle"]').isVisible());
-
-    // v330修正(レビュー対応): fixture保存直後の値を基準に、選択・ビューポート切替を挟んでも
-    // 内容が変わるsetItemが0回であることを検証する(以前は選択クリック前後だけの比較だった)。
+    console.log("[3] A-3: Project chips and boxes, non-persistent selection");
+    const root = page.locator('[data-work-list="wbs"]');
+    const chip = id => root.locator(`[data-kind="project"][data-value="${id}"]`);
+    const box = id => root.locator(`[data-work-group="${id}"]`);
+    check("既定はすべてのProject", await chip('').getAttribute('aria-pressed') === 'true'
+      && await box('p-other').isVisible() && await box('p-cycle').isVisible());
+    check("12週計画情報をProject箱に表示", (await box('p-cycle').locator('summary').textContent()).includes('12週計画 第3週'));
     const stableValue = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     await page.evaluate((key) => {
       window.__v330StateWrites = 0;
@@ -117,44 +115,38 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
         return original.call(this, name, value);
       };
     }, STATE_KEY);
-    await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
-    check("選択で右ペインが切り替わる", await page.locator('[data-wbs-detail-id="p-other"]').isVisible());
-    await page.setViewportSize({ width: 1279, height: 900 });
-    await page.waitForFunction(() => { const a=document.querySelector('.wbs-project-list').getBoundingClientRect(), b=document.querySelector('.wbs-project-detail').getBoundingClientRect(); return b.top >= a.bottom; });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(50);
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.waitForSelector(".wbs-projects.is-desktop");
+    await chip('p-other').click();
+    check("チップ選択で該当Project箱だけ残る", await box('p-other').isVisible() && await box('p-cycle').count() === 0);
+    for (const width of [1279, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      check(`${width}pxでも選択・題名検索・Projectチップを保持`, await chip('p-other').getAttribute('aria-pressed') === 'true'
+        && await box('p-other').isVisible() && await root.locator('[data-work-filter="query"]').isVisible()
+        && await root.locator('[data-kind="project"]').count() === await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.filter(p => !p.deleted).length + 1, STATE_KEY));
+      check(`${width}pxで操作列と一覧が重ならない`, await root.evaluate(el => {
+        const a = el.querySelector('.work-decide-sidebar').getBoundingClientRect(), b = el.querySelector('.work-decide-groups').getBoundingClientRect();
+        return b.left >= a.right || b.top >= a.bottom;
+      }));
+    }
     check("選択・ビューポート切替を通じstate/localStorageの内容が変わらない",
       await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === stableValue
         && await page.evaluate(() => window.__v330StateWrites) === 0);
+    console.log("[5] A-3: 中断Projectは表示設定に従う");
+    // The old pane is gone; retain the existing delegated action's persistence contract.
+    const projectAction = action => page.evaluate(action => {
+      const button = document.createElement('button'); button.dataset.action = action; button.dataset.id = 'p-other';
+      document.body.append(button); button.click(); button.remove();
+    }, action);
+    await projectAction('suspend-project');
+    check("既存中断actionがProject状態を保存", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.find(p => p.id === 'p-other').status, STATE_KEY) === 'paused');
+    const suspended = root.locator('[data-action="toggle-show-suspended"]');
+    check("中断表示ONで中断Projectの行が見える", await root.locator('[data-work-key="task:t-other-due"]').count() === 1);
+    await suspended.evaluate(el => el.closest('details').open = true); await suspended.click();
+    check("中断表示OFFで行が消える", await root.locator('[data-work-key="task:t-other-due"]').count() === 0);
+    await suspended.evaluate(el => el.closest('details').open = true); await suspended.click();
+    check("中断表示ONで行が戻る", await root.locator('[data-work-key="task:t-other-due"]').count() === 1);
+    await projectAction('resume-project');
+    check("既存再開actionがProject状態を保存", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.find(p => p.id === 'p-other').status, STATE_KEY) === 'active');
 
-    console.log("[4] 1279pxはProject選択とTask検索を縦置き");
-    await page.setViewportSize({ width: 1279, height: 900 });
-    await page.waitForFunction(() => { const a=document.querySelector('.wbs-project-list').getBoundingClientRect(), b=document.querySelector('.wbs-project-detail').getBoundingClientRect(); return b.top >= a.bottom; });
-    const mobileLayout2 = { panes: await page.locator(".wbs-project-list, .wbs-project-detail").count(),
-      choices: await page.locator('[data-action="wbs-select-project"]').count(),
-      projects: await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.filter(p => !p.deleted).length, STATE_KEY) };
-    check("1279pxは選択Projectを保持し独立検索2枠と全Project/なし選択肢を縦に表示", mobileLayout2.panes === 2
-      && mobileLayout2.choices === mobileLayout2.projects + 1
-      && await page.locator('[data-wbs-detail-id="p-other"]').isVisible()
-      && await page.locator('#wbs-projects-query').isVisible()
-      && await page.locator('#wbs-tasks-p-other-query').isVisible(), JSON.stringify(mobileLayout2));
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.waitForSelector(".wbs-projects.is-desktop");
-
-    console.log("[5] 右ペインの操作チップは既存actionを再利用");
-    await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
-    await page.waitForSelector('[data-wbs-detail-id="p-other"]');
-    check("中断前は「中断」チップ", await page.locator('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]').isVisible());
-    await page.locator('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]').click();
-    await page.waitForSelector('[data-wbs-detail-id="p-other"] [data-action="resume-project"]');
-    check("suspend-project実行後は既存状態(中断)に反映され「再開」チップへ切り替わる",
-      await page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).projects.find((p) => p.id === id).status === "paused",
-        { key: STATE_KEY, id: other.id }));
-    // 後片付け: 以降のテストに影響しないよう再開しておく。
-    await page.locator('[data-wbs-detail-id="p-other"] [data-action="resume-project"]').click();
-    await page.waitForSelector('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]');
 
     console.log("[8] レスポンシブ品質");
     async function noOverflow(width) {
