@@ -39,13 +39,80 @@ const shots = process.env.F6_SHOTS_DIR;
     const ordered = ['.daily-today-clock', '.tower-runway', '.life-band', '.so-row', '#dailyTodayPlans', '.daily-today-records'];
     const domOrder = await page.evaluate(selectors => selectors.map(selector => document.querySelector('[data-daily-view="today"] ' + selector)).every((node, index, nodes) => node && (!index || Boolean(nodes[index - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING))), ordered);
     check('上部帯・カード・LIFE BAND・信条・予定・記録の順', domOrder);
-    check('表の5列', JSON.stringify(await page.locator('[role="columnheader"]').allTextContents()) === JSON.stringify(['時刻', 'タスク', 'プロジェクト', '見積', '状態']));
+    check('表の3列', JSON.stringify(await page.locator('[role="columnheader"]').allTextContents()) === JSON.stringify(['時刻', 'タスク', '見積']));
     check('MIT独立枠なし・カードの作業名に★', await page.locator('.tower-mit').count() === 0 && (await page.locator('.tower-now-title').innerText()).includes('★'));
     check('MITの予定時刻・見積は予定行に残る', /14:00[\s\S]*読書ノートをまとめる[\s\S]*30/.test(await page.locator('[data-work-key="block:f6-0"] summary').innerText()));
     check('生年月日未設定は年齢2枠とも未設定', JSON.stringify(await page.locator('.life-unset').allTextContents()) === JSON.stringify(['未設定', '未設定']));
     check('記録群はルーティン/実績一覧の2つ・からだの帯/きろくなし', await page.locator('.tower-condition').count() === 0 && await page.locator('.sec-bodymind').count() === 0
-      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']));
+      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.matches('.sec-log') ? 'actuals-panel' : 'other'))) === JSON.stringify(['gates', 'actuals-panel']));
     const root = page.locator('[data-work-list="today"]');
+    // T2-1..6: one screen-result check for each acceptance condition.
+    const t2row = page.locator('[data-work-key="block:f6-0"]');
+    check('T2-1 3列・札・MIT・件数と見積合計',
+      JSON.stringify(await page.locator('[role="columnheader"]').allTextContents()) === JSON.stringify(['時刻', 'タスク', '見積'])
+      && await t2row.locator('summary [role="cell"]').count() === 3
+      && await t2row.locator('.daily-table-tag').textContent() === '読書'
+      && await t2row.locator('.mit-star').count() === 1
+      && (await root.locator('h2').textContent()).includes('8件 · 見積 4時間0分'));
+    const t2running = await t2row.evaluate(el => ({ state: el.dataset.rowState, background: getComputedStyle(el).backgroundColor }));
+    const t2runningButtons = await root.locator('[data-action="today-pick-next"]').count();
+    const t2snapshot = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
+    await page.evaluate(key => {
+      const s = JSON.parse(localStorage.getItem(key)); s.blocks[0].actualStartAt = '';
+      s.blocks[6].category = 'ルーティン'; s.blocks[7].category = 'ルーティン'; s.blocks[7].isMIT = true;
+      localStorage.setItem(key, JSON.stringify(s));
+    }, STATE_KEY);
+    await page.reload(); await root.waitFor();
+    const t2styles = await page.evaluate(() => {
+      const late = document.querySelector('[data-work-key="block:f6-0"]');
+      const done = document.querySelector('[data-work-key="block:f6-7"]');
+      return { state: late.dataset.rowState, opacity: Number(getComputedStyle(late).opacity), text: late.textContent,
+        doneState: done.dataset.rowState, decoration: getComputedStyle(done.querySelector('.work-list-title')).textDecorationLine };
+    });
+    check('T2-2 遅れ・実行中・完了の見た目', t2styles.state === 'late' && t2styles.opacity < 1 && t2styles.text.includes('遅れ')
+      && t2running.state === 'running' && !['transparent', 'rgba(0, 0, 0, 0)'].includes(t2running.background)
+      && t2styles.doneState === 'done' && t2styles.decoration.includes('line-through'));
+    const t2pick = root.locator('[data-action="today-pick-next"][data-id="f6-2"]');
+    let t2picked = false, t2touch = false, t2desktop = false;
+    if (await t2pick.count()) {
+      await page.mouse.move(0, 0);
+      const hidden = await t2pick.evaluate(el => getComputedStyle(el).opacity === '0');
+      await t2pick.focus();
+      t2desktop = hidden && await t2pick.evaluate(el => getComputedStyle(el).opacity === '1');
+      const before = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
+      await t2pick.click();
+      t2picked = (await page.locator('.today-now-card .tower-now-title').textContent()).includes('来週の予定を立てる')
+        && await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === before;
+      await setViewportAndWaitForStableLayout(page, { width: 390, height: 1080 }, '.daily-today-clock button');
+      t2touch = await t2pick.evaluate(el => getComputedStyle(el).opacity === '1' && el.getBoundingClientRect().height >= 44);
+      await setViewportAndWaitForStableLayout(page, { width: 1440, height: 1080 }, '.daily-today-clock button');
+    }
+    check('T2-3 行から次候補を保存せず選択・PC/携帯の表示', t2picked && t2touch && t2desktop && t2runningButtons === 0
+      && await page.locator('.tower-arrival-select').count() === 0 && await root.locator('[data-row-state="done"] [data-action="today-pick-next"]').count() === 0);
+    const t2tools = root.locator('.daily-table-tools');
+    const t2search = root.locator('.daily-table-search');
+    let t2searchOpened = false;
+    if (await t2search.count()) {
+      const closed = await t2search.getAttribute('open') === null;
+      await t2search.locator(':scope > summary').click();
+      t2searchOpened = closed && await root.locator('input[type="search"]').isVisible();
+    }
+    check('T2-4 道具の順序・検索開閉・実行への導線', t2searchOpened
+      && JSON.stringify(await t2tools.locator(':scope > button, :scope > details > summary').allTextContents()) === JSON.stringify(['＋ 割り込み', '＋ 実績だけ', '検索・絞り込み ▸', '時間軸で見る ›'])
+      && await t2tools.locator('[data-action="nav"][data-view="exec"]').count() === 1
+      && await root.getByRole('button', { name: '予定へ', exact: true }).count() === 0);
+    check('T2-5 完了を含むルーティンチップと見出し', await page.locator('#towerGateStrip .tower-gate').count() === 3
+      && await page.locator('#towerGateStrip').evaluate(el => getComputedStyle(el).display === 'flex' && getComputedStyle(el).flexWrap === 'wrap')
+      && await page.locator('.tower-gate[data-id="f6-7"] strong').evaluate(el => getComputedStyle(el).textDecorationLine.includes('line-through'))
+      && (await page.locator('.sec-gates h2').textContent()).includes('未完了2 · 完了1') && await page.locator('.tower-gate-showdone').count() === 0);
+    check('T2-6 実績の枠・開始時刻/名前/分・MIT・日報への導線', await page.locator('.daily-today-records details').count() === 0
+      && (await page.locator('.sec-log h2').textContent()).includes('実績の簡易一覧 終了時刻がある 1件')
+      && JSON.stringify(await page.locator('.tower-log-row time').allTextContents()) === JSON.stringify(['08:00'])
+      && await page.locator('.tower-log-title .mit-star').count() === 1
+      && (await page.locator('.tower-log-dur').textContent()) === '30分' && await page.locator('.tower-log-state').count() === 0
+      && await page.locator('.sec-log [data-action="nav"][data-view="journal"]').textContent() === '日報を書く ›');
+    await page.evaluate(({key, snapshot}) => localStorage.setItem(key, snapshot), {key: STATE_KEY, snapshot: t2snapshot});
+    await page.reload(); await root.waitFor();
     check('次の予定7件、やったこと1件', JSON.stringify(await root.locator('[role="tab"]').allTextContents()) === JSON.stringify(['次の予定 7', 'やったこと 1']));
     await root.locator('[data-tab="actuals"]').click();
     check('実績タブの切替', await root.locator('[data-today-table-group="actuals"]').isVisible() && !await root.locator('[data-today-table-group="plans"]').isVisible());

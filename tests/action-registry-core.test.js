@@ -118,7 +118,7 @@ const GOLDEN_CLICK_ACTIONS = [
   "modal-save",
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
   "today-plans-jump", "today-journal-jump", "today-section-jump",  // fixF6d: 4つの切替のスクロール導線を意図的に追加
-  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
+  "early-bird-check", "tower-gate-edit-toggle", "today-pick-next", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "date-prev", "date-next", "today",
   "set-morning", "toggle-meds", "set-capacity", "set-evening-mood",
   "add-gym-entry", "delete-gym-entry",
@@ -293,7 +293,7 @@ const APP_JS_REGISTERED_ACTIONS = [
   // v425: B2-45 contract update (order 62): direct +6, total +6.
   "routine-new", "routine-edit", "routine-save", "routine-cancel", "routine-end", "routine-end-confirm",
   "nav", "sync-banner-dismiss", "open-iron-log", "instruments-open-iron-log", "save-tower-journal",
-  "early-bird-check", "tower-gate-edit-toggle", "tower-gate-showdone-toggle", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
+  "early-bird-check", "tower-gate-edit-toggle", "today-pick-next", "tower-bodymind-toggle", "tower-gate-add", "tower-gate-delete", "tower-gate-move", "tower-gate-streak-toggle",
   "toggle-show-suspended", "toggle-wbs-hide-done", "toggle-wbs-hide-done-projects",
   "toggle-wbs-active-only", "toggle-wbs-compact", "toggle-tasks-show-future",
   "toggle-wbs-edit", "wbs-collapse-all",

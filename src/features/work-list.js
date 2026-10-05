@@ -52,6 +52,8 @@ function placementActions(row, scope) {
 }
 function listRow(row, scope) {
   if (scope === "today") return renderTodayTableRow(row, { escapeHTML,
+    running: state.blocks.some(b => b.date === todayISO() && !b.deleted && !b.migratedTo && b.actualStartAt && !b.actualEndAt),
+    nowTime: `${todayISO()}T${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}:${String(new Date().getSeconds()).padStart(2, "0")}`,
     estimate: row.kind === "block" ? resolveEstimateMin(row.item) : row.item.estimateMin,
     detailsHTML: row.kind === "block" && dailyBlockDetails ? dailyBlockDetails(row.item, isTodayActual(row), false) : "" });
   if (scope.startsWith("exec") && row.kind === "block") return `<div data-work-key="${escapeHTML(row.key)}"><div class="work-list-date">${escapeHTML(row.date)}</div>${renderBlock(row.item)}</div>`;
@@ -61,7 +63,6 @@ function listRow(row, scope) {
   return `<div class="work-list-row" data-work-key="${escapeHTML(row.key)}">
     <button type="button" class="btn ghost work-list-title" data-action="edit-${row.kind}" data-id="${escapeHTML(row.id)}">${row.kind === "block" && row.item.isMIT === true ? '<span class="mit-star" aria-label="MIT">★</span> ' : ""}${escapeHTML(row.title || "（名称なし）")}</button>
     <div class="work-list-meta">${escapeHTML([row.kind === "block" ? row.date + " " + (row.time.slice(11, 16) || "時刻未定") : row.kind === "project" ? "Project" : "Task", row.project?.title, row.category, estimate ? `見積${estimate}分` : "", row.due ? `作業期限 ${row.due}` : "期限なし", externalDue && externalDue !== row.due ? `外部期限 ${externalDue}` : "", status].filter(Boolean).join(" ・ "))}${row.kind === "task" && leverageTypeMarkHTML ? leverageTypeMarkHTML(row.item.leverageType) : ""}</div>
-    ${scope === "today" && row.kind === "block" && dailyBlockDetails ? dailyBlockDetails(row.item, Boolean(row.item.completed || row.item.actualEndAt), false) : ""}
     ${placementActions(row, scope)}
     ${scope === "wbs" && row.project && !row.project.deleted ? `<button class="btn ghost search-hit" data-action="wbs-search-jump" data-kind="${row.kind}" data-id="${escapeHTML(row.id)}"><span class="search-kind">${row.kind === "task" ? "Task" : "Project"}</span> <span class="search-date">${escapeHTML(row.category || "未分類")}</span> <span class="search-snippet">${escapeHTML(row.title)}</span> — ツリーで見る</button>` : ""}
   </div>`;
@@ -87,17 +88,25 @@ function searchModel(scope, model, composing = false) {
 }
 function renderWorkList(scope) {
   const model = rowsFor(scope);
+  if (scope === "today") {
+    const minutes = model.rows.reduce((sum, row) => sum + (Number(row.kind === "block" ? resolveEstimateMin(row.item) : row.item.estimateMin) || 0), 0);
+    const search = renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), compact: true, clearAction: "work-list-clear", queryId: "work-search-today" });
+    const split = search.indexOf('<p class="work-list-count"');
+    return `<section class="work-list tower-panel-box sec-arrivals" data-work-list="today">
+      <h2>今日の予定・実績 <span>${model.rows.length}件 · 見積 ${minutes >= 60 ? `${Math.floor(minutes / 60)}時間` : ""}${minutes % 60}分</span></h2>
+      ${todayTabs(model)}${renderScheduleSection(state, model.date, escapeHTML)}${search.slice(split)}
+      <div class="daily-table-tools"><button class="btn" data-action="today-add-interruption">＋ 割り込み</button><button class="btn" data-action="today-add-actual">＋ 実績だけ</button>
+        <details class="daily-table-search"><summary>検索・絞り込み ▸</summary>${search.slice(0, split)}</details><button class="btn" data-action="nav" data-view="exec">時間軸で見る ›</button></div>
+    </section>`;
+  }
   if (scope.startsWith("wbs-")) return `<section data-work-list="${escapeHTML(scope)}">${renderSearchFrame(searchModel(scope, model), {
     escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear",
     filterKeys: scope === "wbs-projects" ? [] : ["status", "category", "due"],
     queryLabel: scope === "wbs-projects" ? "Projectの名前・説明を検索" : "選択ProjectのTaskを検索", queryId: scope + "-query"
   })}</section>`;
-  return `<section class="work-list tower-panel-box${scope === "today" ? " sec-arrivals" : scope === "exec-actual" ? " exec-done-section" : ""}" data-work-list="${scope}">
-    <h2>${scope === "wbs" ? "Project / Task を探す" : scope === "today" ? "今日の予定・実績" : scope === "exec-candidates" ? "追加候補（今日へ追加）" : scope === "exec-actual" ? "やったこと" : "予定一覧"}${scope === "wbs" ? "" : ` <span>${scope === "today" ? "今日" : "選択日"} ${escapeHTML(model.date)}</span>`}</h2>
-    ${scope === "today" ? '<div class="row"><button class="btn" style="min-height:44px" data-action="today-add-interruption">＋ 割り込み</button><button class="btn" style="min-height:44px" data-action="today-add-actual">＋ 実績だけ</button></div>' : ""}
-    ${scope === "today" ? todayTabs(model) + renderScheduleSection(state, model.date, escapeHTML) : ""}
-    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), compact: scope === "today", clearAction: "work-list-clear", queryId: scope === "wbs" ? "wbs-search-input" : "work-search-" + scope })}
-    ${scope === "today" ? '<p><button class="btn" data-action="nav" data-view="exec">予定へ</button><button class="btn" data-action="nav" data-view="journal">記録へ</button></p>' : ""}
+  return `<section class="work-list tower-panel-box${scope === "exec-actual" ? " exec-done-section" : ""}" data-work-list="${scope}">
+    <h2>${scope === "wbs" ? "Project / Task を探す" : scope === "exec-candidates" ? "追加候補（今日へ追加）" : scope === "exec-actual" ? "やったこと" : "予定一覧"}${scope === "wbs" ? "" : ` <span>選択日 ${escapeHTML(model.date)}</span>`}</h2>
+    ${renderSearchFrame(searchModel(scope, model), { escapeHTML, resultsHTML: rowsHTML(model, scope), clearAction: "work-list-clear", queryId: scope === "wbs" ? "wbs-search-input" : "work-search-" + scope })}
     ${scope === "exec" ? '<p class="muted">Taskは <button class="btn ghost" data-action="nav" data-view="wbs">作業一覧で見る</button></p>' : ""}
   </section>`;
 }

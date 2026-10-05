@@ -54,7 +54,7 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
       sections:selectors.map(selector=>({selector,count:tower.querySelectorAll(selector).length,visible:!!tower.querySelector(selector)?.getClientRects().length})),
       life:rect('.life-band'),so:rect('.so-row'),plansBox:rect('#dailyTodayPlans'),records:rect('.daily-today-records'),journalCount:tower.querySelectorAll('.tower-journal').length,
       // T1a: 日報は上部リンクへ移し、右列はルーティンと実績一覧を保つ。
-      recordOrder:[...tower.querySelector('.daily-today-records').children].map(el=>el.matches('.sec-gates')?'gates':el.matches('.sec-bodymind')?'body':el.tagName==='DETAILS'?'actuals-details':'other'),
+      recordOrder:[...tower.querySelector('.daily-today-records').children].map(el=>el.matches('.sec-gates')?'gates':el.matches('.sec-bodymind')?'body':el.matches('.sec-log')?'actuals-panel':'other'),
       recordGaps:[...tower.querySelector('.daily-today-records').children].slice(1).map(el=>el.getBoundingClientRect().top-el.previousElementSibling.getBoundingClientRect().bottom)};
     },STATE_KEY);
    results.push({width,mode,...metrics});
@@ -71,7 +71,7 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
      assert.equal(metrics.creeds,3);assert.deepEqual(metrics.subtitles,['決めた一つを100%やり切る','実行率より、進んだ量','朝は集中、夜は充電']);
      assert.equal(metrics.sections.length,7);assert(metrics.sections.every(s=>s.count===1&&s.visible),'seven retained sections remain visible with old focus settings');assert.equal(metrics.journalCount,0,'journal input absent from today');
      // 右列の2枠の件数・順序と、からだのきろく不在を検査する。
-     assert.deepEqual(metrics.recordOrder,['gates','actuals-details']);
+     assert.deepEqual(metrics.recordOrder,['gates','actuals-panel']);
      assert.equal(await page.locator('[data-daily-view="today"] .sec-bodymind').count(),0);
      assert(metrics.recordGaps.every(gap=>gap>=8),'record panels separated by at least 8px');
      if(width>=1280) {
@@ -86,6 +86,7 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
    if(out && ['ready','running','empty','long','focus','alert'].includes(mode)) {fs.mkdirSync(out,{recursive:true});await page.screenshot({path:path.join(out,`${baseline?'before':'after'}-${width}-${mode}.png`),fullPage:true});}
   }
   await page.setViewportSize({width:390,height:844});await seed('running');
+  await page.locator('.daily-table-search > summary').click();
   const input=page.locator('#work-search-today');await input.evaluate(el=>el.scrollIntoView());await input.fill('編集中の日本語を残す');
   await input.evaluate(el=>{window.__uiInput=el;window.__uiScroll=document.querySelector('#app').scrollTop;el.dispatchEvent(new CompositionEvent('compositionstart',{data:'にほんご',bubbles:true}));});
   await page.clock.runFor(1200);
@@ -95,6 +96,7 @@ function block(id, extra={}) { return {id,title:'記録を整理する '+id,date
   const resizeChecks=[];
   for(const mode of ['ready','focus']) {
    await seed(mode);
+   await page.locator('.daily-table-search > summary').click();
    await page.locator('#work-search-today').fill('記録を整理する');
     await page.evaluate(()=>{window.__band=document.querySelector('.tower-runway');});
    for(const width of [1280,390]) {

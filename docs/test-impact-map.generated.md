@@ -53,7 +53,7 @@
 | exec-timeline-e2e.test.js | e2e | full | planning-execution | 25 | 0 | 0 |
 | f2-plan-completion-e2e.test.js | e2e | full | planning-execution | 10 | 0 | 0 |
 | f2-pomodoro-expiry-e2e.test.js | e2e | full | planning-execution | 24 | 0 | 0 |
-| f6-today-layout.test.js | e2e | full | ui-responsive | 23 | 0 | 0 |
+| f6-today-layout.test.js | e2e | full | ui-responsive | 29 | 0 | 0 |
 | feedback-busy-boundary.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 21 | 0 | 0 |
 | feedback-busy-coordinator.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 3 | 0 | 0 |
 | feedback-canonical-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 2 | 0 | 0 |
@@ -151,7 +151,7 @@
 | sync-load-confirm-snapshot.test.js | e2e | full | sync-storage | 32 | 10 | 4550 |
 | task-complete-actual.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 2 | 0 | 0 |
 | test-manifest-generator.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
-| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 146 | 0 | 0 |
+| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 147 | 0 | 0 |
 | three-screen-flow-e2e.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 82 | 0 | 0 |
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
