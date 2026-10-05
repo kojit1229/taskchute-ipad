@@ -26,26 +26,28 @@ check("候補はARRIVALS表示窓のBlock便かつ未実行3状態", towerSource
   && towerSource.includes('flight.kind !== "task-plan"') && towerSource.includes("!isStaleBlock("));
 check("既定queue先頭と消滅時フォールバックを維持", towerSource.includes("const fallback = queueBlocksOf(blocks)[0] || null")
   && towerSource.includes("|| fallback"));
-check("ラベルは時刻+タイトル", /flightTime\(flight\.plannedMin\)\}\s+\$\{escapeHTML\(flight\.title\)\}/.test(towerSource));
+check("行の候補ボタンは未開始の予定行だけに出る(v441: select廃止)", read("src/ui/daily-parts/today-table.js").includes('data-action="today-pick-next"') && !towerSource.includes("tower-arrival-select"));
 check("タイトル編集とnow-startは同じ選択idを使う", towerSource.includes('data-action="edit-block" data-id="${id}"')
   && towerSource.includes('data-action="now-start" data-id="${id}"'));
-check("change配線はsetter+renderだけで保存しない", /if \(target\.matches\("\[data-tower-arrival-select\]"\)\) \{\s*setTowerArrivalSelection\(target\.value\);\s*render\(\);\s*\}/.test(appSource));
-// FUND共有日付picker追加後も、今日の選択欄を含む完全な保護selectorを検査する。
-check("selectフォーカス中の全体renderをfocusoutまで保留", appSource.includes('document.activeElement?.matches?.("[data-tower-arrival-select], [data-fund-report-date]")')
-  && appSource.includes("_deferredRenderPending = true"));
+const pickNextHandler = appSource.match(/registerActions\(\{(?:(?!\n\}\);)[\s\S])*?"today-pick-next":\s*\(\{ target, event \}\) => \{([^}]*)\}/)?.[1];
+check("today-pick-next配線は選択setterを呼び保存しない", !!pickNextHandler
+  && /setTowerArrivalSelection\(target\.dataset\.id\)/.test(pickNextHandler)
+  && !/saveState|saveAndRender/.test(pickNextHandler));
+check("廃止selectのrender保留条件は残さない", !appSource.includes("data-tower-arrival-select"));
+check("FUND日付入力のフォーカス中は全体renderを保留する契約を維持", /if \(document\.activeElement\?\.matches\?\.\("\[data-fund-report-date\]"\)\) \{\s*if \(!_deferredRenderPending\) _deferredRenderPendingSince = Date\.now\(\);\s*_deferredRenderPending = true;/.test(appSource));
 
 console.log("[2] FLIGHT LOGは既存edit-blockを使う44px button");
 check("行はbutton+edit-block", /<button type="button" class="tower-log-row[\s\S]*?data-action="edit-block"/.test(towerSource));
 check("buttonを閉じる", towerSource.includes("</button>`;"));
 check("44px以上・buttonリセット・focus-visible", /\.tower-log-row \{[^}]*min-height: 44px;[^}]*border: 0;[^}]*font: inherit;[^}]*background: transparent;/.test(stylesSource)
   && stylesSource.includes(".tower-log-row:focus-visible"));
-check("selectは16px・44px", /\.tower-arrival-select \{[^}]*min-height: 44px;[^}]*font-size: 16px;/.test(stylesSource));
+check("行の次候補ボタンは44px以上", /\.daily-table-pick \{[^}]*min-height: 44px;/.test(stylesSource));
 
 console.log("[3] 回帰テストとService Worker版を更新する");
 check("tower-coreは選択・保存0回・フォールバック・行タップを実DOM検証",
   towerTestSource.includes("選択操作はstate保存0回")
   && towerTestSource.includes("declare-confirm後のactualStartAtは選択Blockだけに付く")
-  && towerTestSource.includes("tick窓移動でselectもw6..w11へ追従し、窓外選択w5はqueue先頭w0へ戻る")
+  && towerTestSource.includes("時計の候補窓が移動しても行から選んだ便を保持")
   && towerTestSource.includes("選択候補が削除されたら既定の次便へフォールバック")
   && towerTestSource.includes("完了済み「やったこと」行タップでも対象Block編集モーダルを開く"));
 check(`CACHE_NAMEはreleases最大版v${maxRelease}`, new RegExp(

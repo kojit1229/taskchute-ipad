@@ -1,0 +1,70 @@
+{
+  "version": 441,
+  "date": "2026-10-05",
+  "title": "今日タブ 束T2 一覧と右列(3列表・遅れ印・「▶ これを次に」・道具の行・ルーティンのチップ・実績の簡易一覧の枠)",
+  "summary": "今日タブの左の一覧を「時刻・名前・見積」の3列にし、過ぎた予定は薄く「遅れ」印、実行中は琥珀、完了は取り消し線で示します。行の「▶ これを次に」で「次にやること」カードを差し替えられます(保存しない表示上の一時値)。候補の選択リストは廃止。一覧の下に「＋割り込み / ＋実績だけ / 検索・絞り込み(折りたたみ) / 時間軸で見る ›」。右列はルーティンをチップ表示(完了は取り消し線で同じ並び、表示/隠す切替は廃止)、実績の簡易一覧は常時表示の枠にして「日報を書く ›」を置きました。保存・同期・日付処理は変えていません。",
+  "changedFiles": [
+    "app.js",
+    "src/features/today-tower.js",
+    "src/features/work-list.js",
+    "src/ui/daily-parts/today-table.js",
+    "styles.css",
+    "sw.js",
+    "releases/v441.json",
+    "tests/f6-today-layout.test.js",
+    "tests/tower-core.test.js",
+    "tests/ui-a-layout.test.js",
+    "tests/v241.test.js",
+    "tests/v271.test.js",
+    "tests/v310.test.js",
+    "tests/v320.test.js",
+    "tests/daily-actuals-e2e.test.js",
+    "tests/three-screen-connection-e2e.test.js",
+    "tests/action-registry-core.test.js",
+    "tests/suite-manifest.json"
+  ],
+  "intent": [
+    "K 裁定の順 T2 → T3 → 束P → B1 → 落下演出(2026-10-05 08:5x)。K 承認: 裁定H・I「両方消す」(09:5x)。基準 9f350e7(main v440)。spec: projects/2026-09-27-today-tab-redesign/spec.md「束 T2 の受入条件」T2-1〜T2-8・裁定 H〜N。"
+  ],
+  "changes": [
+    "T2-1: 今日の一覧を 時刻・名前(★・プロジェクト札)・見積 の3列に。見出しに件数・見積合計",
+    "T2-2: 行の状態を data-row-state(late/running/done)で示す(薄く+遅れ印/琥珀/取り消し線)",
+    "T2-3: 「▶ これを次に」(today-pick-next)で次にやることカードを差し替え(保存しない)。候補 select 廃止(裁定H)",
+    "T2-4: 道具の行(＋割り込み/＋実績だけ/検索・絞り込み details/時間軸で見る ›)。下部の予定へ/記録へ重複を削除",
+    "T2-5: ルーティンをチップ化。完了は取り消し線で同じ並び、表示/隠す切替廃止(裁定I)",
+    "T2-6: 実績の簡易一覧を details から枠へ。開始時刻・名前・分。「日報を書く ›」",
+    "テスト: 旧契約の断言を置き換え(裁定K、一覧は reports/T2/codex-report-09.md・10.md)。v271 に FUND 保留の断言を維持(裁定M)"
+  ],
+  "verification": [
+    "受入 1 つにテスト 1 本(f6-today-layout に T2-1〜6 の check)。旧契約の断言は置き換え(裁定K)。Codex 11 中2低1 → 裁定 L・M・N(M はテスト 1 断言追加)。Claude 12 PASS(T2-1〜8 実機相当 OK)。製品差分 186 行(+71 −115)"
+  ],
+  "knownLimitations": [
+    "1024px 以上のタッチ端末(iPad 横)では「▶ これを次に」が hover 前提で見えにくい(行をタップしてフォーカスすると出る)→ T3 で確認",
+    "単発予定(schedule)の枠は据え置き・遅れ印なし(裁定L)",
+    "検索枠の文字列分割は T3 で検出分岐を足す(裁定N)"
+  ],
+  "uncertainties": [
+    "iOS Safari 実機は未確認(T3 で K が確認)",
+    "1024px 以上のタッチ端末での「▶ これを次に」の見え方"
+  ],
+  "reviewFocus": [
+    "renderWorkList の検索枠分割と patchWorkList の両立",
+    "data-row-state の late 判定",
+    "today-pick-next が保存を呼ばない",
+    "旧 select / showDone の残骸 0"
+  ],
+  "relatedSuites": [
+    "f6-today-layout",
+    "tower-core",
+    "today-core",
+    "ui-a-layout",
+    "daily-actuals-e2e",
+    "three-screen-connection-e2e",
+    "v241",
+    "v271",
+    "v310",
+    "v320",
+    "action-registry-core",
+    "remaining-screen-labels"
+  ]
+}

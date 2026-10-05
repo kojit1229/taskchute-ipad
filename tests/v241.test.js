@@ -47,7 +47,7 @@ function check(name, cond, extra = "") {
     // (折りたたみ)の2つ。本体3枠と記録群2つの件数・順序をそれぞれ検査する。
     // v410: 常設・非重複・保存非変更・配置の性質を現在のカードと2列で維持する。
     check("todayの本体は予定/記録群の2枠", JSON.stringify(await page.locator('.daily-today-main > *').evaluateAll(nodes => nodes.map(el => el.id || (el.classList.contains('daily-today-records') ? 'daily-today-records' : (el.classList.contains('tower-journal') ? 'tower-journal' : null))))) === JSON.stringify(['dailyTodayPlans', 'daily-today-records']));
-    check("記録群はルーティン/実績一覧の2つ・からだなし", JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.classList.contains('sec-gates') ? 'sec-gates' : (el.classList.contains('sec-bodymind') ? 'sec-bodymind' : (el.tagName === 'DETAILS' ? 'details-log' : null))))) === JSON.stringify(['sec-gates', 'details-log']) && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 0);
+    check("記録群はルーティン/実績一覧の2つ・からだなし", JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.classList.contains('sec-gates') ? 'sec-gates' : (el.classList.contains('sec-bodymind') ? 'sec-bodymind' : (el.classList.contains('sec-log') ? 'panel-log' : null))))) === JSON.stringify(['sec-gates', 'panel-log']) && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 0);
     // fixF6d(監督者決定2、F6-1): MITはNOW LANDINGの内側から独立した見出しへ移動した
     // (現在作業の内側に残るのはタイマーだけ)。同じ「常設1つ」の性質を新配置で検査する。
     // v410: 常設・非重複・保存非変更・配置の性質を現在のカードと2列で維持する。

@@ -32,28 +32,12 @@ let lastGateDocked;
 let lastFlightLogDate;
 let lastFlightLogKeys;
 let _towerArrivalSelectedId = null;
-let _towerGateShowDone = false;  // v320: 完了GATEの一時表示。stateへは保存しない
-let _towerGateShowDoneDate;
-
-function towerGateShowDone(date = todayISO()) {
-  if (_towerGateShowDoneDate !== date) {
-    _towerGateShowDoneDate = date;
-    _towerGateShowDone = false;
-  }
-  return _towerGateShowDone;
-}
-
-function toggleTowerGateShowDone() {
-  towerGateShowDone();
-  _towerGateShowDone = !_towerGateShowDone;
-}
-
 function setTowerArrivalSelection(id) {
   _towerArrivalSelectedId = id || null;
   if (typeof document !== "undefined") {
     const now = new Date();
     const blocks = blocksForDate(todayISO());
-    updateTowerArrivalSelection(blocks, boardFlights(blocks, now.getHours() * 60 + now.getMinutes(), scheduledTasksForDate(todayISO(), blocks)), true);
+    updateTowerArrivalSelection(blocks, boardFlights(blocks, now.getHours() * 60 + now.getMinutes(), scheduledTasksForDate(todayISO(), blocks)));
   }
 }
 
@@ -213,23 +197,10 @@ function runwayArrivalSelection(blocks, flights) {
   const candidates = arrivalWindow(flights).rows.filter((flight) => flight.kind !== "task-plan"
     && ["holding", "final", "resloted"].includes(flight.status)
     && !isStaleBlock(blocksById.get(String(flight.id))));
-  const selected = candidates.find((flight) => String(flight.id) === String(_towerArrivalSelectedId))
+  const selected = blocks.find(block => String(block.id) === String(_towerArrivalSelectedId)
+    && !block.completed && !block.actualStartAt && !block.actualEndAt && block.plannedStartAt && !isStaleBlock(block))
     || candidates.find((flight) => String(flight.id) === String(fallback?.id)) || fallback;
   return { candidates, selected };
-}
-
-function towerArrivalOptions(selection) {
-  const next = selection.selected;
-  if (!next || !selection.candidates.length) return "";
-  const selectedInWindow = selection.candidates.some((flight) => String(flight.id) === String(next.id));
-  const optionFlights = selectedInWindow ? selection.candidates : [{
-    id: next.id, title: next.title, plannedMin: next.plannedStartAt ? minutesOf(next.plannedStartAt) : null, hidden: true
-  }, ...selection.candidates];
-  return optionFlights.map((flight) => `<option value="${escapeHTML(flight.id)}" ${String(flight.id) === String(next.id) ? "selected" : ""} ${flight.hidden ? "hidden" : ""}>${flightTime(flight.plannedMin)} ${escapeHTML(flight.title)}</option>`).join("");
-}
-
-function towerArrivalSelectionKey(selection) {
-  return `${encodeURIComponent(String(selection.selected?.id || ""))}|${flightSetKey(selection.candidates)}`;
 }
 
 function todayNowDetails(block, now, running = false) {
@@ -252,7 +223,6 @@ function renderTodayNowCard(now, blocks, flights) {
   const block = running || blocks.find(item => String(item.id) === String(candidate?.id)) || candidate;
   const metrics = running ? runwayMetrics(running, now.getTime()) : null;
   const id = escapeHTML(block?.id || "");
-  const options = selection ? towerArrivalOptions(selection) : "";
   const ironLink = running && typeof linkedGymBlock === "function" && linkedGymBlock(blocks, now.getHours() * 60 + now.getMinutes())
     ? '<button class="tower-ironlog-link" data-action="open-iron-log">▶ IRON LOG</button>' : "";
   return `<section class="tower-runway sec-rwy today-now-card" data-now-mode="${running ? "running" : block ? "ready" : "empty"}">
@@ -261,7 +231,6 @@ function renderTodayNowCard(now, blocks, flights) {
       ${block ? `<button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${mitStarHTML(block)}${escapeHTML(block.title)}</button>
         ${running ? `<progress class="today-now-progress" id="todayNowProgress" max="100" value="${metrics.pct}" aria-label="作業の進み"></progress><span id="towerNowPct">進捗 ${metrics.pct}%</span>` : ""}
         <div class="today-now-details" id="todayNowDetails">${todayNowDetails(block, now, !!running)}</div>
-        ${options ? `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(towerArrivalSelectionKey(selection))}" aria-label="開始するARRIVALS便">${options}</select>` : ""}
         <div class="tower-now-actions">${ironLink}<button type="button" class="btn primary" data-action="${running ? "now-end" : "now-start"}" data-id="${id}">${running ? "■ 終了して報告" : "▶ 開始"}</button>
           ${running ? `<button type="button" class="btn" data-action="complete-block-with-actual" data-id="${id}">■ 完了(実績を記入)</button><button type="button" class="btn" data-action="now-conveyor-complete" data-id="${id}">▶ 次へ</button><button type="button" class="btn" data-action="edit-block" data-id="${id}">時刻を直す</button>` : '<span class="today-now-help">開始後、実行中カードのポモドーロで計れます</span><button type="button" class="btn" data-action="remaining-shift">遅れた分を後ろへずらす</button>'}
         </div>` : '本日の予定はありません ─ タイムラインで追加できます <button type="button" class="btn" data-action="nav" data-view="exec">実行で予定を追加</button>'}
@@ -298,10 +267,8 @@ function renderTowerRunway(now, blocks, flights) {
     </div>`;
   } else if (next) {
     const id = escapeHTML(next.id);
-    const candidateOptions = towerArrivalOptions(selection);
     hud = `<div class="tower-nowhud" data-status="ready">
       <button type="button" class="tower-now-title" data-action="edit-block" data-id="${id}">${mitStarHTML(next)}${escapeHTML(next.title)}</button>
-      ${candidateOptions ? `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(towerArrivalSelectionKey(selection))}" aria-label="開始するARRIVALS便">${candidateOptions}</select>` : ""}
       <button type="button" class="btn primary" data-action="now-start" data-id="${id}">▶ 開始</button>
     </div>`;
   }
@@ -366,18 +333,16 @@ function renderFlightLog(date, blocks) {
   const rows = completed.map((block) => {
     const isLatest = flashLatest && block === latest;
     const start = timeFromDateTime(block.actualStartAt) || "--:--";
-    const end = timeFromDateTime(block.actualEndAt) || "--:--";
     return `<button type="button" class="tower-log-row${isLatest ? " is-flip" : ""}" data-flight-id="${escapeHTML(block.id)}" data-action="edit-block" data-id="${escapeHTML(block.id)}">
-      <time>${start}-${end}</time><span class="tower-log-title">${mitStarHTML(block)}${escapeHTML(block.title)}</span>
+      <time>${start}</time><span class="tower-log-title">${block.isMIT ? '<span class="mit-star" aria-label="MIT">★</span>' : ""}${escapeHTML(block.title)}</span>
       <span class="tower-log-dur">${flightLogDuration(block)}</span>
-      <span class="tower-log-state" data-state="${block.completed ? "completed" : "ended"}">${block.completed ? "完了" : "終了"}</span>
       ${isLatest ? '<i class="tower-touchdown" aria-hidden="true" style="--tower-plane-x:50%"></i>' : ""}
     </button>`;
   }).join("");
   return `<section class="tower-panel-box sec-log">
-    <h2>やったこと <span>本日の終了実績</span></h2>
+    <h2>実績の簡易一覧 <span>終了時刻がある ${completed.length}件</span></h2>
     <div id="towerFlightLog">${rows || '<div class="tower-log-empty">終了実績はまだありません</div>'}</div>
-    <div class="tower-log-foot">終了実績を時系列で表示</div>
+    <button type="button" data-action="nav" data-view="journal">日報を書く ›</button>
   </section>`;
 }
 
@@ -444,32 +409,24 @@ function gateViewModel(blocks) {
   const date = todayISO();
   const gates = orderedGateBlocks(blocks);
   const early = earlyBirdGate(date);
-  const showDone = towerGateShowDone(date);
   const entries = gates.map((block, index) => ({ block, index }));
   const incompleteEntries = entries.filter(({ block }) => !block.completed);
   const completedEntries = entries.filter(({ block }) => block.completed);
   const incomplete = incompleteEntries.length + (early.checked ? 0 : 1);
   const done = completedEntries.length + (early.checked ? 1 : 0);
-  const gateSet = [`date:${encodeURIComponent(date)}`, `showDone:${showDone ? 1 : 0}`, `early:${early.checked ? 1 : 0}`,
+  const gateSet = [`date:${encodeURIComponent(date)}`, `early:${early.checked ? 1 : 0}`,
     ...gates.map((block) => `${encodeURIComponent(String(block.id))}:${block.completed ? 1 : 0}`)].join(",");
-  return { gates, early, showDone, incompleteEntries, completedEntries, incomplete, done, gateSet };
+  return { gates, early, incompleteEntries, completedEntries, incomplete, done, gateSet };
 }
 
 function gateTilesHTML(model, previousDocked, animate) {
   const docking = (id) => animate && !previousDocked.has(id);
-  const incompleteTiles = `${model.early.checked ? "" : earlyBirdHTML(model.early)}`
-    + model.incompleteEntries.map(({ block, index }) => regularGateHTML(block, index)).join("");
-  if (!model.showDone) return incompleteTiles;
-  const completedTiles = `${model.early.checked ? earlyBirdHTML(model.early, docking("__early_bird__")) : ""}`
-    + model.completedEntries.map(({ block, index }) => regularGateHTML(block, index, docking(String(block.id)))).join("");
-  return incompleteTiles + completedTiles;
+  return earlyBirdHTML(model.early, model.early.checked && docking("__early_bird__"))
+    + model.gates.map((block, index) => regularGateHTML(block, index, block.completed && docking(String(block.id)))).join("");
 }
 
-function gateCountHTML(incomplete, done, showDone) {
-  const doneControl = done > 0
-    ? `<button type="button" class="tower-gate-showdone" data-action="tower-gate-showdone-toggle" aria-pressed="${showDone ? "true" : "false"}">完了${done}件を${showDone ? "隠す" : "表示"}</button>`
-    : "完了0件";
-  return `未完了${incomplete}件・${doneControl}`;
+function gateCountHTML(incomplete, done) {
+  return `未完了${incomplete} · 完了${done}`;
 }
 
 function gateEditorHTML(early) {
@@ -494,14 +451,11 @@ function renderTowerGates(blocks) {
   const model = gateViewModel(blocks);
   const docked = new Set([...(model.early.checked ? ["__early_bird__"] : []), ...model.completedEntries.map(({ block }) => String(block.id))]);
   const firstRender = lastGateDocked === undefined;
-  const gateContent = model.incomplete === 0 && !model.showDone
-    ? '<div class="tower-gate-alldone">ルーティン完了</div>'
-    : gateTilesHTML(model, lastGateDocked || new Set(), !firstRender);
+  const gateContent = gateTilesHTML(model, lastGateDocked || new Set(), !firstRender);
   lastGateDocked = docked;
   return `<section class="tower-gates sec-gates">
-    <h2>ルーティン <button type="button" class="tower-gate-edit" data-action="tower-gate-edit-toggle">${gateEditMode() ? "DONE 完了" : "EDIT 編集"}</button></h2>
+    <h2>ルーティン <span id="towerGateCount">${gateCountHTML(model.incomplete, model.done)}</span> <button type="button" class="tower-gate-edit" data-action="tower-gate-edit-toggle">${gateEditMode() ? "完了" : "編集"}</button></h2>
     <div id="towerGateStrip" data-gate-set="${model.gateSet}">${gateEditMode() ? gateEditorHTML(model.early) : gateContent}</div>
-    <div id="towerGateCount">${gateCountHTML(model.incomplete, model.done, model.showDone)}</div>
   </section>`;
 }
 
@@ -622,7 +576,7 @@ function renderTodayTower() {
     <div class="daily-today-values">${renderLifeBand(true)}${renderStandingOrders()}</div>
     <div class="daily-today-main">
       <section id="dailyTodayPlans" aria-label="今日の予定">${renderWorkList("today")}</section>
-      <div class="daily-today-records">${renderTowerGates(blocks)}<details><summary>実績の簡易一覧</summary>${renderFlightLog(today, blocks)}</details></div>
+      <div class="daily-today-records">${renderTowerGates(blocks)}${renderFlightLog(today, blocks)}</div>
     </div>
   </div>`;
 }
@@ -653,20 +607,16 @@ function updateTowerGates(blocks) {
   const container = document.getElementById("towerGateStrip");
   if (!container || container.dataset.gateSet === model.gateSet || container.contains(document.activeElement)) return;
   const previous = new Set([...container.querySelectorAll('[data-docked="1"]')].map((gate) => gate.dataset.id));
-  container.innerHTML = model.incomplete === 0 && !model.showDone
-    ? '<div class="tower-gate-alldone">ルーティン完了</div>'
-    : gateTilesHTML(model, previous, true);
+  container.innerHTML = gateTilesHTML(model, previous, true);
   container.dataset.gateSet = model.gateSet;
   const count = document.getElementById("towerGateCount");
-  if (count) count.innerHTML = gateCountHTML(model.incomplete, model.done, model.showDone);
+  if (count) count.innerHTML = gateCountHTML(model.incomplete, model.done);
   lastGateDocked = new Set([...(model.early.checked ? ["__early_bird__"] : []), ...model.completedEntries.map(({ block }) => String(block.id))]);
 }
 
-function updateTowerArrivalSelection(blocks, flights, userSelection = false) {
+function updateTowerArrivalSelection(blocks, flights) {
   const hud = document.querySelector('.tower-nowhud[data-status="ready"]');
   if (!hud) return;
-  const select = hud.querySelector("[data-tower-arrival-select]");
-  if (select === document.activeElement && !userSelection) return;
   const selection = runwayArrivalSelection(blocks, flights);
   const next = blocks.find(item => String(item.id) === String(selection.selected?.id)) || selection.selected;
   if (!next) return;
@@ -677,16 +627,6 @@ function updateTowerArrivalSelection(blocks, flights, userSelection = false) {
   const details = document.getElementById("todayNowDetails");
   const html = todayNowDetails(next, new Date());
   if (details && details.innerHTML !== html) details.innerHTML = html;
-  if (select === document.activeElement) return;
-  const options = towerArrivalOptions(selection);
-  if (!options) { select?.remove(); return; }
-  const selectionKey = towerArrivalSelectionKey(selection);
-  if (!select) {
-    start?.insertAdjacentHTML("beforebegin", `<select class="tower-arrival-select" data-tower-arrival-select data-arrival-set="${escapeHTML(selectionKey)}" aria-label="開始するARRIVALS便">${options}</select>`);
-  } else if (select.dataset.arrivalSet !== selectionKey) {
-    select.innerHTML = options;
-    select.dataset.arrivalSet = selectionKey;
-  }
 }
 
 function updateTodayTowerTick() {
@@ -755,5 +695,5 @@ function updateTodayTowerTick() {
 
 export {
   configureTodayTower, renderTodayTower, runwayArrivalSelection, setTowerArrivalSelection, updateTodayTowerTick,
-  toggleTowerBodyMindWeekly, toggleTowerGateShowDone, pomodoroLinkFlights, flightLogBlocks, bmSummary, renderTowerBodyMind
+  toggleTowerBodyMindWeekly, pomodoroLinkFlights, flightLogBlocks, bmSummary, renderTowerBodyMind
 };

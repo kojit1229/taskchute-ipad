@@ -198,23 +198,23 @@ function check(name, cond, extra = "") {
     check("1280px未満でも当日16件のID集合が全て表示される", JSON.stringify(await todayIds()) === JSON.stringify(arrivals.map(item => `block:${item.id}`).sort()));
     check("全件数16/16を表示し省略窓は無い", (await page.locator('[data-work-list="today"] .work-list-count').textContent()).startsWith("16 / 16件") && await page.locator('.tower-flight-summary').count() === 0);
     check("callsign列は存在しない", await page.locator('[data-work-list="today"] .tower-callsign').count() === 0);
-    const arrivalEstimates = await Promise.all(arrivals.slice(0, 13).map(item => todayRow(item.id).locator('summary [role="cell"]').nth(3).textContent()));
+    const arrivalEstimates = await Promise.all(arrivals.slice(0, 13).map(item => todayRow(item.id).locator('summary [role="cell"]').nth(2).textContent()));
     check("全13通常行をIDで照合しarr-4だけ45分、他は既定30分", arrivalEstimates.every((text, i) => text === `${i === 4 ? 45 : 30}分`), JSON.stringify(arrivalEstimates));
-    const labels = await todayRows().locator('summary [role="cell"]:nth-child(5)').allTextContents();
-    check("状態ラベルは実記録の未完了と完了を区別する", labels.length === 16 && labels.filter(text => text === '未完了 ▾').length === 15 && (await todayRow('arr-completed').locator('summary [role="cell"]').nth(4).textContent()) === '完了 ▾');
+    const labels = await todayRows().evaluateAll(rows => rows.map(row => row.dataset.rowState));
+    check("状態属性は予定と完了を区別し、全行は3列", labels.length === 16 && labels.filter(value => ['open', 'late'].includes(value)).length === 15 && await todayRow('arr-completed').getAttribute('data-row-state') === 'done' && await todayRows().evaluateAll(rows => rows.every(row => row.querySelectorAll('summary [role="cell"]').length === 3)));
     check("ルーティンも今日一覧に出る", await todayRow('routine-hidden').count() === 1);
     check("oneTapも今日一覧に出る", await todayRow('onetap-hidden').count() === 1);
     check("完了便も今日一覧に1件含む", await todayRow('arr-completed').count() === 1);
     check("同Taskの別BlockとProjectなしをまとめず、前後日と削除を含めない", await todayRow('arr-1').count() === 1 && await todayRow('arr-2').count() === 1 && await todayRow('deleted-today').count() === 0 && await todayRow('previous-day').count() === 0 && await todayRow('dep-first').count() === 0);
     for (const [tab, count] of [['plans', 15], ['actuals', 1]]) {
       await page.locator(`[data-action="today-list-tab"][data-tab="${tab}"]`).click();
-      check(`${tab}の全件一覧の編集操作は44px以上`, await todayRows().locator('summary button:visible').evaluateAll((buttons, expected) => buttons.length === expected && buttons.every(button => { const box = button.getBoundingClientRect(); return box.width >= 44 && box.height >= 44; }), count));
+      check(`${tab}の全件一覧の編集操作は44px以上`, await todayRows().locator('summary [data-action="edit-block"]:visible').evaluateAll((buttons, expected) => buttons.length === expected && buttons.every(button => { const box = button.getBoundingClientRect(); return box.width >= 44 && box.height >= 44; }), count));
     }
     await page.locator('[data-action="today-list-tab"][data-tab="plans"]').click();
-    await page.locator('.daily-today-records > details > summary').click();
+    await page.locator('.daily-today-records > .sec-log').waitFor();
     const completedLog = page.locator('.tower-log-row[data-flight-id="arr-completed"]');
     check("完了便はFLIGHT LOGへ時系列表示", await completedLog.count() === 1
-      && (await completedLog.locator("time").textContent()) === "08:00-08:25"
+      && (await completedLog.locator("time").textContent()) === "08:00"
       && (await completedLog.locator(".tower-log-title").textContent()) === "完了済み便"
       && (await completedLog.locator(".tower-log-dur").textContent()) === "25分");
     check("FLIGHT LOG行は44px以上のbutton", await completedLog.evaluate((el) =>
@@ -286,10 +286,10 @@ function check(name, cond, extra = "") {
       { id: "task-future", title: "未来期日Task", status: "todo", dueDate: tomorrow, estimateMin: 50, deleted: false }
     ];
     await seedBoard([endedOnlyBlock, completedBlock, nextBlock, taskBlock, ...tomorrowBlocks], tasks);
-    check("終了のみBlockは今日一覧に終了・未完了として残る", await todayRow('ended-only').count() === 1 && (await todayRow('ended-only').textContent()).includes('終了・未完了'));
-    check("終了のみBlockはFLIGHT LOGへ終了ラベル付きで出る", await page.locator('[data-flight-id="ended-only"] .tower-log-state[data-state="ended"]', { hasText: "終了" }).count() === 1);
-    check("completed+actualEndAtは従来どおり完了実績として出る", await page.locator('[data-flight-id="completed-actual"] .tower-log-state[data-state="completed"]', { hasText: "完了" }).count() === 1);
-    await page.locator('.daily-today-records > details > summary').click();
+    check("終了のみBlockは実績行として3列で残り完了扱いにはしない", await todayRow('ended-only').count() === 1 && await todayRow('ended-only').getAttribute('data-row-state') === 'open' && await todayRow('ended-only').locator('summary [role="cell"]').count() === 3);
+    check("終了のみBlockは開始時刻・名前・分の1行で状態ラベルなし", await page.locator('[data-flight-id="ended-only"]').count() === 1 && await page.locator('[data-flight-id="ended-only"] time').textContent() === '09:00' && await page.locator('[data-flight-id="ended-only"] .tower-log-title').textContent() === '終了のみ便' && await page.locator('[data-flight-id="ended-only"] .tower-log-dur').textContent() === '20分' && await page.locator('[data-flight-id="ended-only"] .tower-log-state').count() === 0);
+    check("完了Blockも開始時刻・名前・分の1行で状態ラベルなし", await page.locator('[data-flight-id="completed-actual"]').count() === 1 && await page.locator('[data-flight-id="completed-actual"] time').textContent() === '09:30' && await page.locator('[data-flight-id="completed-actual"] .tower-log-title').textContent() === '完了実績便' && await page.locator('[data-flight-id="completed-actual"] .tower-log-dur').textContent() === '30分' && await page.locator('[data-flight-id="completed-actual"] .tower-log-state').count() === 0);
+    await page.locator('.daily-today-records > .sec-log').waitFor();
     await page.locator('.tower-log-row[data-flight-id="ended-only"]').click();
     await page.waitForSelector(".modal-card", { state: "attached" });
     check("終了のみFLIGHT LOG行タップで対象Block編集モーダルを開く",
@@ -336,7 +336,7 @@ function check(name, cond, extra = "") {
     check("カード→人生の時間→信条→予定→ルーティン→やったこと、記録群2つ・ジャーナルなし",
       JSON.stringify(sectionOrder) === JSON.stringify(['sec-rwy', 'life', 'creeds', 'sec-arrivals', 'sec-gates', 'sec-log'])
       && await page.locator('[data-daily-view="today"] .sec-condition').count() === 0 && await page.locator('[data-daily-view="today"] .sec-bodymind').count() === 0
-      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.tagName === 'DETAILS' ? 'actuals-details' : 'other'))) === JSON.stringify(['gates', 'actuals-details']),
+      && JSON.stringify(await page.locator('.daily-today-records > *').evaluateAll(nodes => nodes.map(el => el.matches('.sec-gates') ? 'gates' : el.matches('.sec-log') ? 'actuals-panel' : 'other'))) === JSON.stringify(['gates', 'actuals-panel']),
       JSON.stringify(sectionOrder));
     check("今日の全件一覧とGATEは引き続き表示", await page.locator('[data-work-list="today"].sec-arrivals').count() === 1
       && await page.locator(".sec-gates").count() === 1);
@@ -347,37 +347,32 @@ function check(name, cond, extra = "") {
     await seedBoard(crossing, []);
     // 起動時同期(404)後のアプリ全体render()がDOMを一度差し替えるため、沈静化してから同一性を計測する。
     await page.waitForLoadState("networkidle");
-    const crossingStatus = todayRow('flip-first').locator('summary [role="cell"]').nth(4);
-    check("境界前の未着手Blockは未完了", (await crossingStatus.textContent()) === '未完了 ▾');
+    const crossingStatus = todayRow('flip-first').locator('summary [role="cell"]').nth(0);
+    check("境界前の未着手Blockの開始時刻を表示", (await crossingStatus.textContent()) === '12:00');
     // レビューM2反映: locator再解決ではDOM同一性を検証できないため、遷移前のElementHandleの生存で「再構築していない」を固定する。
     // fixed clock下ではアニメーションイベントが発火しない(=is-flipはanimationendで外れず残る)ため、クラス+computedで検証する。
     const statusHandle = await crossingStatus.elementHandle();
     const beforeCrossingBlocks = await page.evaluate(KEY => JSON.stringify(JSON.parse(localStorage.getItem(KEY)).blocks), KEY);
-    const focusedRow = await todayRow('flip-first').locator('button').elementHandle();
+    const focusedRow = await todayRow('flip-first').locator('[data-action="edit-block"]').elementHandle();
     await focusedRow.focus();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 1, 0, 0));
     await page.waitForFunction(() => document.getElementById('towerClock')?.textContent === '12:01:00');
-    check("時刻経過だけでは実記録の未完了を変えない", (await crossingStatus.textContent()) === '未完了 ▾');
-    check("状態セルのDOM要素は再構築されず同一のまま", await statusHandle.evaluate(el => el.isConnected && el.textContent === '未完了 ▾'));
+    check("時刻経過だけでは実記録の開始時刻を変えない", (await crossingStatus.textContent()) === '12:00');
+    check("時刻セルのDOM要素は再構築されず同一のまま", await statusHandle.evaluate(el => el.isConnected && el.textContent === '12:00'));
     check("廃止した時刻だけのflipを足さず入力位置とBlock値を維持", await focusedRow.evaluate(el => el.isConnected && document.activeElement === el) && await statusHandle.evaluate(el => !el.classList.contains('is-flip')) && await page.evaluate(KEY => JSON.stringify(JSON.parse(localStorage.getItem(KEY)).blocks), KEY) === beforeCrossingBlocks);
     await page.evaluate(() => document.activeElement.blur());
 
-    console.log("[11] 全件一覧は時計を跨いでも全件、NOW候補6件窓は独立に追従する");
+    console.log("[11] 全件一覧と行の次候補選択は時計を跨いでも保持する");
     const many = Array.from({ length: 13 }, (_, i) => block(`w${i}`, `便${i}`, today, 9 * 60 + i * 30));
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 12, 0, 30, 0));
     await seedBoard(many);
     await page.waitForLoadState("networkidle");
     const allManyIds = many.map(item => `block:${item.id}`).sort();
     check("12:00時点も全13件のID集合を表示", JSON.stringify(await todayIds()) === JSON.stringify(allManyIds));
-    check("既定queue先頭が窓外でもNOW selectを保ち、候補だけ6件窓",
-      await page.locator("[data-tower-arrival-select]").inputValue() === "w0"
-      && JSON.stringify(await page.locator("[data-tower-arrival-select] option:not([hidden])").evaluateAll((options) => options.map((option) => option.value)))
-        === JSON.stringify(Array.from({ length: 6 }, (_, index) => `w${index + 5}`)));
-    await page.locator("[data-tower-arrival-select]").focus();
-    await page.locator("[data-tower-arrival-select]").selectOption("w5");
-    await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "w5");
-    const focusedWorkRow = await todayRow('w6').locator('button').elementHandle();
+    check("既定queue先頭を表示し全13行から選択できる", await page.locator('.tower-now-title').getAttribute('data-id') === 'w0' && await page.locator('[data-action="today-pick-next"]').count() === 13 && await page.locator('[data-tower-arrival-select]').count() === 0);
+    await page.locator('[data-action="today-pick-next"][data-id="w5"]').click();
+    await page.waitForFunction(() => document.querySelector('.tower-now-title')?.dataset.id === 'w5');
+    const focusedWorkRow = await todayRow('w6').locator('[data-action="edit-block"]').elementHandle();
     await focusedWorkRow.focus();
     const focusBeforeTick = await focusedWorkRow.evaluate(el => ({ connected: el.isConnected, active: document.activeElement === el,
       action: document.activeElement?.dataset.action, key: document.activeElement?.closest('[data-work-key]')?.dataset.workKey }));
@@ -388,25 +383,19 @@ function check(name, cond, extra = "") {
       action: document.activeElement?.dataset.action, key: document.activeElement?.closest('[data-work-key]')?.dataset.workKey }));
     check("行DOMとフォーカスは失われない", focusAfterTick.connected && focusAfterTick.active, JSON.stringify({ focusBeforeTick, focusAfterTick }));
     await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector('[data-tower-arrival-select] option:not([hidden])')?.value === 'w6'
-      && document.querySelector("[data-tower-arrival-select]")?.value === "w0");
+    await page.waitForFunction(() => document.querySelector('.tower-now-title')?.dataset.id === 'w5');
     check("フォーカス解除後も今日一覧は13件全てを表示", JSON.stringify(await todayIds()) === JSON.stringify(allManyIds));
-    check("tick窓移動でselectもw6..w11へ追従し、窓外選択w5はqueue先頭w0へ戻る",
-      JSON.stringify(await page.locator("[data-tower-arrival-select] option:not([hidden])").evaluateAll((options) => options.map((option) => option.value)))
-        === JSON.stringify(Array.from({ length: 6 }, (_, index) => `w${index + 6}`)));
+    check("時計の候補窓が移動しても行から選んだ便を保持", await page.locator('.tower-now-title').getAttribute('data-id') === 'w5' && await page.locator('[data-action="today-pick-next"]').count() === 13);
     check("時計進行後も一覧の全件数13/13が正しい", (await page.locator('[data-work-list="today"] .work-list-count').textContent()).startsWith('13 / 13件'));
-    const focusedSelect = page.locator("[data-tower-arrival-select]");
-    const focusedSelectHandle = await focusedSelect.elementHandle();
-    await focusedSelect.focus();
+    const focusedPick = page.locator('[data-action="today-pick-next"][data-id="w7"]');
+    const focusedPickHandle = await focusedPick.elementHandle();
+    await focusedPick.focus();
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 13, 0, 30, 0));
     await page.waitForFunction(() => document.getElementById('towerClock')?.textContent === '13:00:30');
-    check("NOW selectのフォーカス中も今日一覧の全件集合は不変", JSON.stringify(await todayIds()) === JSON.stringify(allManyIds));
-    check("selectフォーカス中はtick候補更新を保留してpicker要素を維持", await focusedSelectHandle.evaluate((el) =>
-      el.isConnected && document.activeElement === el && el.querySelector('option:not([hidden])')?.value === "w6"));
-    await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector('[data-tower-arrival-select] option:not([hidden])')?.value === "w7");
-    check("selectのblur後の次tickで保留候補をw7..w12へ反映",
-      (await page.locator("[data-tower-arrival-select] option:not([hidden])").first().getAttribute("value")) === "w7");
+    check("次候補ボタンのフォーカス中も今日一覧の全件集合は不変", JSON.stringify(await todayIds()) === JSON.stringify(allManyIds));
+    check("時計更新で次候補ボタンのDOMとフォーカスを維持", await focusedPickHandle.evaluate(el => el.isConnected && document.activeElement === el));
+    await focusedPick.click();
+    check("時計更新後も行から次候補を選べる", await page.locator('.tower-now-title').getAttribute('data-id') === 'w7');
 
     console.log("[12] 実行中BlockをRWYとNOW LANDINGへ表示する");
     await page.clock.setFixedTime(fixedTime(0));
@@ -463,11 +452,10 @@ function check(name, cond, extra = "") {
       { id: "task-deleted", title: "削除", status: "todo", deleted: true }
     ];
     await seedBoard(selectable, staleTasks);
-    const arrivalSelect = page.locator("[data-tower-arrival-select]");
-    check("既定はqueue先頭の次便", await arrivalSelect.inputValue() === "rwy-first"
+    const arrivalPick = page.locator('[data-action="today-pick-next"][data-id="rwy-second"]');
+    check("既定はqueue先頭の次便", await page.locator('.tower-now-title').getAttribute("data-id") === "rwy-first"
       && await page.locator('.tower-nowhud [data-action="now-start"]').getAttribute("data-id") === "rwy-first");
-    check("候補ラベルは時刻+タイトルで、完了/終了/ルーティンと中断/中止/削除タスク由来を除外",
-      JSON.stringify(await arrivalSelect.locator("option").allTextContents()) === JSON.stringify(["12:30 既定の次便", "13:00 選び替える便"]));
+    check("候補ボタンは未完了・未開始の全予定行と一致する", JSON.stringify(await page.locator('[data-action="today-pick-next"]').evaluateAll(buttons => buttons.map(button => button.dataset.id).sort())) === JSON.stringify(selectable.filter(block => !block.deleted && !block.completed && !block.actualStartAt && !block.actualEndAt && block.plannedStartAt).map(block => block.id).sort()) && await page.locator('[data-row-state="done"] [data-action="today-pick-next"]').count() === 0 && await page.locator('[data-tower-arrival-select]').count() === 0);
     const selectionTimestamps = await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return { dataModifiedAt: s.dataModifiedAt, updatedAt: Object.fromEntries(s.blocks.map((item) => [item.id, item.updatedAt])) };
@@ -480,23 +468,23 @@ function check(name, cond, extra = "") {
         return window.__towerOriginalSetItem.call(this, key, value);
       };
     }, KEY);
-    const guardedSelectHandle = await arrivalSelect.elementHandle();
-    await arrivalSelect.focus();
-    await arrivalSelect.selectOption("rwy-second");
-    check("selectフォーカス中は全体renderを保留しつつ編集・開始IDは即時追従", await guardedSelectHandle.evaluate((el) =>
+    const guardedPickHandle = await arrivalPick.elementHandle();
+    await arrivalPick.focus();
+    await arrivalPick.click();
+    check("行ボタン操作はDOMとフォーカスを保ち編集・開始IDを即時更新", await guardedPickHandle.evaluate((el) =>
       el.isConnected && document.activeElement === el)
       && await page.locator('.tower-now-title').getAttribute("data-id") === "rwy-second"
       && await page.locator('.tower-nowhud [data-action="now-start"]').getAttribute("data-id") === "rwy-second");
     check("選択操作はstate保存0回", await page.evaluate(() => window.__towerStateWrites) === 0);
     await page.evaluate(() => document.activeElement.blur());
-    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "rwy-second");
+    await page.waitForFunction(() => document.querySelector('.tower-now-title')?.dataset.id === "rwy-second");
     await page.evaluate(() => { Storage.prototype.setItem = window.__towerOriginalSetItem; });
     await page.locator('#sidebar [data-action="nav"][data-view="exec"]').click();
     await page.waitForSelector('#app[data-view="exec"]');
     await page.locator('#sidebar [data-action="nav"][data-view="today"]').click();
-    await page.waitForSelector("[data-tower-arrival-select]");
+    await page.waitForSelector('.tower-now-title[data-id="rwy-second"]');
     check("有効選択は無関係の全体renderをもう1回跨いでも保持",
-      await page.locator("[data-tower-arrival-select]").inputValue() === "rwy-second");
+      await page.locator(".tower-now-title").getAttribute("data-id") === "rwy-second");
     const timestampsAfterSelection = await page.evaluate(({ KEY }) => {
       const s = JSON.parse(localStorage.getItem(KEY));
       return { dataModifiedAt: s.dataModifiedAt, updatedAt: Object.fromEntries(s.blocks.map((item) => [item.id, item.updatedAt])) };
@@ -529,7 +517,7 @@ function check(name, cond, extra = "") {
       block("complete-selected", "完了にする選択便", today, 13 * 60, { plannedEndAt: atMinute(today, 13 * 60 + 30) })
     ];
     await seedBoard(completionCandidates, []);
-    await page.locator("[data-tower-arrival-select]").selectOption("complete-selected");
+    await page.locator('[data-action="today-pick-next"][data-id="complete-selected"]').click();
     await page.evaluate(() => document.activeElement.blur());
     await page.locator('.tower-now-title[data-id="complete-selected"]').click();
     // fixSB2: completion is permanently visible.
@@ -537,25 +525,25 @@ function check(name, cond, extra = "") {
       && await page.locator('.modal-card details:not([open])').count() === 0);
     await page.locator('[data-modal-field="completed"]').check();
     await page.locator('.modal-card [data-action="modal-save"]').click();
-    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "complete-first");
+    await page.waitForFunction(() => document.querySelector('.tower-now-title')?.dataset.id === "complete-first");
     check("選択中Blockが完了したら既定の次便へフォールバック",
       await page.locator('.tower-now-title').getAttribute("data-id") === "complete-first"
       && await page.locator('.tower-nowhud [data-action="now-start"]').getAttribute("data-id") === "complete-first");
 
     const deletionCandidates = [block("delete-first", "削除時の戻り先", today, 12 * 60 + 30), block("delete-selected", "削除する選択便", today, 13 * 60)];
     await seedBoard(deletionCandidates, []);
-    await page.locator("[data-tower-arrival-select]").selectOption("delete-selected");
+    await page.locator('[data-action="today-pick-next"][data-id="delete-selected"]').click();
     await page.evaluate(() => document.activeElement.blur());
     await page.locator('.tower-now-title[data-id="delete-selected"]').click();
     page.once("dialog", (dialog) => dialog.accept());
     await page.locator('.modal-card [data-action="modal-delete"]').click();
-    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "delete-first");
+    await page.waitForFunction(() => document.querySelector('.tower-now-title')?.dataset.id === "delete-first");
     check("選択候補が削除されたら既定の次便へフォールバック",
       await page.locator('.tower-now-title').getAttribute("data-id") === "delete-first");
 
     const runningWithQueue = [block("negative-running", "実行中", today, 11 * 60, { actualStartAt: atMinute(today, 11 * 60) }), block("negative-queue", "待機便", today, 13 * 60)];
     await seedBoard(runningWithQueue, []);
-    check("実行中BlockがあればARRIVALS selectを表示しない", await page.locator("[data-tower-arrival-select]").count() === 0);
+    check("実行中Blockがあれば行の候補ボタンもselectも表示しない", await page.locator("[data-tower-arrival-select], [data-action=\"today-pick-next\"]").count() === 0);
 
     const taskPlanOnly = [{ id: "only-task-plan", title: "予定便のみ", status: "todo", dueDate: today, estimateMin: 30, deleted: false }];
     await seedBoard([], taskPlanOnly);
@@ -570,19 +558,19 @@ function check(name, cond, extra = "") {
     await page.clock.setFixedTime(new Date(base.getFullYear(), base.getMonth(), base.getDate(), 23, 59, 59, 0));
     await seedBoard(crossDayBlocks, []);
     try {
-      await page.locator("[data-tower-arrival-select]").selectOption("cross-today-second");
+      await page.locator('[data-action="today-pick-next"][data-id="cross-today-second"]').click();
     } catch (originalError) {
       try {
         const trace = await page.evaluate(async KEY => {
           const { state } = await import('/src/state/store.js');
           const local = JSON.parse(localStorage.getItem(KEY));
           const active = document.activeElement;
-          const select = document.querySelector('[data-tower-arrival-select]');
+          const picks = [...document.querySelectorAll('[data-action="today-pick-next"]')];
           const summary = value => ({ currentView:value.currentView, selectedDate:value.selectedDate, lastOpenedDate:value.settings.lastOpenedDate,
             blocks:value.blocks.map(b=>({id:b.id,date:b.date,completed:b.completed,actualStartAt:b.actualStartAt,actualEndAt:b.actualEndAt})) });
           return { date:new Date().toISOString(), timezone:new Date().getTimezoneOffset(), current:summary(state), stored:summary(local),
             active:active?{tag:active.tagName,id:active.id,action:active.dataset.action,view:active.dataset.view}:null,
-            options:select?[...select.options].map(o=>({value:o.value,text:o.textContent})):null,
+            picks:picks.map(button=>({id:button.dataset.id,text:button.textContent})),
             appView:document.querySelector('#app')?.dataset.view,towerDate:document.querySelector('#towerDate')?.textContent,
             modalOpen:document.querySelector('#modalRoot')?.classList.contains('open') };
         }, KEY);
@@ -593,7 +581,7 @@ function check(name, cond, extra = "") {
     await page.evaluate(() => document.activeElement.blur());
     const nextDayForSelection = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1, 0, 0, 1, 0);
     await page.clock.setFixedTime(nextDayForSelection);
-    await page.waitForFunction(() => document.querySelector("[data-tower-arrival-select]")?.value === "cross-next-first");
+    await page.waitForFunction(() => document.querySelector('.tower-now-title')?.dataset.id === "cross-next-first");
     check("日跨ぎで前日選択を持ち越さず翌日のqueue先頭へフォールバック",
       await page.locator('.tower-now-title').getAttribute("data-id") === "cross-next-first");
 
@@ -713,7 +701,7 @@ function check(name, cond, extra = "") {
       JSON.parse(localStorage.getItem(KEY)).reports[today].includes("ポモドーロ経路"), { KEY, today }));
     if (await page.locator('[data-action="body-scan-discard"]').count()) await page.locator('[data-action="body-scan-discard"]').first().click();
 
-    console.log("[20] GATE数と完了非表示数はroutineRateと同じ母集団を使う");
+    console.log("[20] GATEの未完了・完了数はroutineRateと同じ母集団を使う");
     const gateSeed = [
       block("gate-done", "朝便", today, 7 * 60, { category: "ルーティン", completed: true, actualEndAt: atMinute(today, 7 * 60 + 5) }),
       block("gate-open", "昼便", today, 12 * 60, { category: "ルーティン" }),
@@ -728,18 +716,18 @@ function check(name, cond, extra = "") {
     }, { KEY, today });
     await page.reload();
     await page.waitForSelector(".tower-gates");
-    check("oneTap・削除済み・完了済みを除く通常ゲート1基+☀固定枠", await page.locator(".tower-gate:not(.tower-gate-fixed)").count() === 1
+    check("oneTap・削除済みを除く通常ゲート2基+☀固定枠", await page.locator(".tower-gate:not(.tower-gate-fixed)").count() === 2
       && await page.locator(".tower-gate-fixed").count() === 1
-      && await page.locator('.tower-gate[data-id="gate-done"]').count() === 0);
-    check("☀未チェックを含む未完了2件・完了1件を表示", (await page.locator("#towerGateCount").textContent()) === "未完了2件・完了1件を表示");
+      && await page.locator('.tower-gate[data-id="gate-done"][data-docked="1"]').count() === 1);
+    check("☀未チェックを含む未完了2 · 完了1", (await page.locator("#towerGateCount").textContent()) === "未完了2 · 完了1");
 
-    console.log("[21] GATEタップは既存action経由で完了しタイルを消してカウントを更新する");
+    console.log("[21] GATEタップは既存action経由で完了しチップとカウントを更新する");
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed === true, KEY);
     check("実DOMクリックでBlock.completedが保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed, KEY));
-    check("タップした完了ゲートはDOMから消える", await page.locator('.tower-gate[data-id="gate-open"]').count() === 0);
-    check("完了済み通常ゲートは就航灯や完了演出ごと残留しない", await page.locator('.tower-gate:not(.tower-gate-fixed)[data-docked="1"], .tower-gate:not(.tower-gate-fixed).is-docking').count() === 0);
-    check("完了後は未完了1件・完了2件へ更新", (await page.locator("#towerGateCount").textContent()) === "未完了1件・完了2件を表示");
+    check("タップした完了ゲートは取り消し線で残る", await page.locator('.tower-gate[data-id="gate-open"] strong').evaluate(el => getComputedStyle(el).textDecorationLine.includes('line-through')));
+    check("完了済み通常ゲート2件は同じ並びに残る", await page.locator('.tower-gate:not(.tower-gate-fixed)[data-docked="1"]').count() === 2);
+    check("完了後は未完了1 · 完了2へ更新", (await page.locator("#towerGateCount").textContent()) === "未完了1 · 完了2");
     check("toggleBlockは実績を補完し(v430 B2-62)、当日の日報は再生成される(D-2 裁定 2026-09-14)", await page.evaluate(({ KEY, today }) => {
       const state = JSON.parse(localStorage.getItem(KEY));
       const completed = state.blocks.find((b) => b.id === "gate-open");
@@ -748,12 +736,11 @@ function check(name, cond, extra = "") {
     const latestLog = page.locator('.tower-log-row[data-flight-id="gate-open"]');
     check("補完した実績が FLIGHT LOG 行に出る(v430 B2-62)", await latestLog.count() === 1);
     await dismissBodyScanIfOpen(page);
-    await page.locator('[data-action="tower-gate-showdone-toggle"]').click();
     await page.waitForSelector('.tower-gate[data-id="gate-open"][data-docked="1"]');
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed !== true, KEY);
-    check("完了表示から再タップするとcompleted=falseへ戻り未完了側に現れる", await page.locator('.tower-gate[data-id="gate-open"][data-docked="0"]').count() === 1
-      && (await page.locator("#towerGateCount").textContent()) === "未完了2件・完了1件を隠す");
+    check("完了チップの再タップでcompleted=falseへ戻り同じ並びで未完了になる", await page.locator('.tower-gate[data-id="gate-open"][data-docked="0"]').count() === 1
+      && (await page.locator("#towerGateCount").textContent()) === "未完了2 · 完了1");
     await page.locator('.tower-gate[data-id="gate-open"]').click();
     await page.waitForFunction((KEY) => JSON.parse(localStorage.getItem(KEY)).blocks.find((b) => b.id === "gate-open")?.completed === true, KEY);
     check("新規就航はis-dockingの700ms演出", await page.locator('.tower-gate[data-id="gate-open"]').evaluate((el) => {
@@ -761,8 +748,7 @@ function check(name, cond, extra = "") {
       return el.classList.contains("is-docking") && cs.animationName === "tower-gate-docking" && cs.animationDuration === "0.7s";
     }));
     await dismissBodyScanIfOpen(page);
-    await page.locator('[data-action="tower-gate-showdone-toggle"]').click();
-    await page.waitForFunction(() => !document.querySelector('.tower-gate[data-id="gate-open"]'));
+    await page.waitForFunction(() => document.querySelector('.tower-gate[data-id="gate-open"]')?.dataset.docked === '1');
 
     console.log("[21-b] ☀早起きゲートはEARLY BIRD正本へローカル時刻を書き、遅チェックも中立表示にする");
     check("G01☀は二重罫線の固定枠で削除UIを持たない", await page.locator('.tower-gate-fixed .tower-gate-lock', { hasText: "固定枠(削除不可)" }).count() === 1
@@ -771,10 +757,10 @@ function check(name, cond, extra = "") {
     await page.waitForFunction(({ KEY, today }) => Boolean(JSON.parse(localStorage.getItem(KEY)).earlyBird?.logs?.[today]), { KEY, today });
     const earlyBird = await page.evaluate(({ KEY, today }) => JSON.parse(localStorage.getItem(KEY)).earlyBird.logs[today], { KEY, today });
     check("state.earlyBird.logs[当日].checkedAtへ書き込む", /^\d{4}-\d{2}-\d{2}T12:00:\d{2}$/.test(earlyBird.checkedAt), JSON.stringify(earlyBird));
-    check("06:00より遅い12:00チェックも有効のまま、警告DOM・記号は表示しない", await page.locator('.tower-gate-fixed').count() === 0
+    check("06:00より遅い12:00チェックも有効のまま、警告DOM・記号は表示しない", await page.locator('.tower-gate-fixed[data-docked="1"]').count() === 1
       && await page.locator('.tower-gate-warning').count() === 0
       && !(await page.locator('.tower-gates').textContent()).includes("⚠")
-      && (await page.locator("#towerGateCount").textContent()) === "未完了0件・完了3件を表示");
+      && (await page.locator("#towerGateCount").textContent()) === "未完了0 · 完了3");
 
     console.log("[22] 全就航でも満灯class・色変化・フラッシュを出さない");
     check("全就航でもis-full/is-full-flashなし", await page.locator(".tower-gates.is-full, .tower-gates.is-full-flash").count() === 0);
@@ -828,7 +814,7 @@ function check(name, cond, extra = "") {
       restoredForbiddenHistory.length === 0
       && !/(?:^|\s)is-full(?:-flash)?(?:\s|$)/.test(restoredFullObservation.className)
       && restoredFullObservation.animationName === "none"
-      && await page.locator(".tower-gate-alldone", { hasText: "ルーティン完了" }).count() === 1,
+      && await page.locator(".tower-gate[data-docked=\"1\"]").count() === 3 && await page.locator(".tower-gate[data-docked=\"0\"]").count() === 0,
       `classHistory=${JSON.stringify(restoredFullObservation.classHistory)} animationName=${restoredFullObservation.animationName} tickerCycles=${restoredFullObservation.tickerCycles}`);
     await page.locator('[data-action="tower-gate-edit-toggle"]').click();
     await page.waitForSelector('.tower-gate-fixed[data-action="early-bird-check"][data-docked="1"]');
@@ -839,10 +825,10 @@ function check(name, cond, extra = "") {
     await seedT6(gateSeed);
     check("部分就航ではis-fullなし", await page.locator(".tower-gates.is-full").count() === 0);
     await seedT6([block("gate-none", "非ルーティンのみ", today, 9 * 60, { completed: true })]);
-    check("ルーティン0件でも☀固定枠を残し未完了1件・完了0件", await page.locator(".tower-gates.is-full").count() === 0
+    check("ルーティン0件でも☀固定枠を残し未完了1 · 完了0", await page.locator(".tower-gates.is-full").count() === 0
       && await page.locator(".tower-gate-fixed").count() === 1
       && await page.locator(".tower-gate-showdone").count() === 0
-      && (await page.locator("#towerGateCount").textContent()) === "未完了1件・完了0件");
+      && (await page.locator("#towerGateCount").textContent()) === "未完了1 · 完了0");
 
     console.log("[23] GATE編集モードで登録・削除(シリーズ終了)・上下並び替えを行う");
     const editRules = [
@@ -908,7 +894,7 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(fixture));
     }, KEY);
     await seedBoard(Array.from({ length: 4 }, (_, i) => block('layout-' + i, '配置検査予定' + i, today, 13 * 60 + i * 30)), []);
-    await page.locator('.daily-today-records > details > summary').click();
+    await page.locator('.daily-today-records > .sec-log').waitFor();
     const measureLayout = () => page.evaluate(() => {
       const root = document.querySelector('[data-daily-view="today"]');
       const rect = selector => {

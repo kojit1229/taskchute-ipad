@@ -144,7 +144,7 @@ function check(name, fn) { fn(); checks++; console.log(`PASS ${name}`); }
       const html = listHarness.listRow(listBlock(b), "today");
       assert.ok(html.includes(render(b, { ...deps, canEdit: false }, actual)));
       assert.deepEqual(calls.at(-1), [b, actual, false]);
-      assert.deepEqual([...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[1]), ["edit-block"]);
+      assert.deepEqual([...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[1]), actual ? ["edit-block"] : ["edit-block", "today-pick-next"]);  // v441 T2-3: 未開始の予定行だけ「▶ これを次に」
     }
   });
   check("Task rows and other scopes never call the today Block detail renderer", () => {

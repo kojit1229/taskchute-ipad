@@ -20,7 +20,7 @@ run(async(browser,server)=>{for(const width of [390,768,1024]){const f=await rea
    // ではこの確定がその1ステップ内で間に合わないことがあるため、固定sleepではなく実際に
    // activeElementがsummaryへ切り替わるまでポーリング待機してから同じ条件でassertする
    // (assertion自体・比較対象は変えない)。
-   await page.waitForFunction(()=>document.activeElement===document.querySelector('.feedback-regeneration > details > summary'),null,{timeout:2000}).catch(()=>{});
+   await page.waitForFunction(()=>document.activeElement===document.querySelector('.feedback-regeneration > details > summary'),null,{timeout:10000}).catch(()=>{});
    assert(await selected.evaluate(el=>el===document.activeElement),'Tab actually moves to history summary');
   }else await selected.focus();
   if(focusTarget==='outside')await f.editor().fill('synthetic focus outside preserves input');

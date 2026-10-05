@@ -94,7 +94,7 @@ import { configureRoutineView, renderRoutineView, startRoutineEdit, saveRoutine,
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriFree } from "./src/features/dandori-view.js";
 import {
   isRoutineGateBlock, pomodoroLinkFlights, setTowerArrivalSelection, toggleTowerBodyMindWeekly,
-  toggleTowerGateShowDone, flightLogBlocks, bmSummary, renderTowerBodyMind
+  flightLogBlocks, bmSummary, renderTowerBodyMind
 } from "./src/features/today-tower.js";
 // v168: app.js分割・段階4-2(WishタブTier1のCRUD・描画を抽出)。src/features/wish.js
 //   はstateをimportするがapp.js自身はimportしない(循環import回避)。
@@ -516,10 +516,7 @@ registerActions({
     _towerGateEditMode = !_towerGateEditMode;
     render();
   },
-  "tower-gate-showdone-toggle": () => {
-    toggleTowerGateShowDone();
-    render();
-  },
+  "today-pick-next": ({ target, event }) => { event.preventDefault(); setTowerArrivalSelection(target.dataset.id); },
   // v297: BODY/MINDウィジェットの週推移開閉(表示専用トグル。stateには触れない)。
   "tower-bodymind-toggle": () => {
     toggleTowerBodyMindWeekly();
@@ -1968,10 +1965,6 @@ document.addEventListener("change", (event) => {
   // するため、発注文の「textareaはblur時保存」をそのまま満たす(全体再描画はしない)。
   if (target.matches("[data-km-talk]")) {
     setWriteMeditationTalk(target.dataset.kmTalk, target.dataset.date, target.value);
-  }
-  if (target.matches("[data-tower-arrival-select]")) {
-    setTowerArrivalSelection(target.value);
-    render();
   }
   if (target.matches('[data-modal-field="is12WY"]')) {
     const section = modalRoot.querySelector("[data-twy-track]");
@@ -3468,7 +3461,7 @@ function render() {
   const journalFocus = document.activeElement?.matches?.('[data-tower-journal-date]');
   if (journalFocus && _imeComposing) { renderDeferringForFocus(); return; }
   // v271: iOSのネイティブpickerを開いている間はselectを含む全体DOMを差し替えず、focusout後に1回反映する。
-  if (document.activeElement?.matches?.("[data-tower-arrival-select], [data-fund-report-date]")) {
+  if (document.activeElement?.matches?.("[data-fund-report-date]")) {
     if (!_deferredRenderPending) _deferredRenderPendingSince = Date.now();
     _deferredRenderPending = true;
     return;

@@ -134,7 +134,7 @@ function scoreRecords(done, total) {
       && !(await page.locator(".today-tower").textContent()).includes("⚠"));
     check("再読込後2 ticker周期もis-full/is-full-flashを一度も付けず完了事実は残す", forbiddenFullHistory.length === 0
       && !/(?:^|\s)is-full(?:-flash)?(?:\s|$)/.test(fullObservation.className)
-      && await page.locator(".tower-gate-alldone", { hasText: "ルーティン完了" }).count() === 1,
+      && await page.locator(".tower-gate").count() > 0 && await page.locator('.tower-gate[data-docked="1"]').count() === await page.locator(".tower-gate").count(),  // v441 裁定I: 全完了でもチップのまま(取り消し線)
       `classHistory=${JSON.stringify(fullObservation.classHistory)} tickerCycles=${fullObservation.tickerCycles}`);
     check("全完了と未完了で背景・枠色が同じ、animation-nameはnone", fullStyle.background === incompleteStyle.background
       && fullStyle.border === incompleteStyle.border && fullStyle.animation === "none"

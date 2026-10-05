@@ -54,7 +54,8 @@ const today = '2026-09-06', selected = '2026-09-07';
     }, { key: STATE_KEY, today, selected });
     await page.reload();
     await page.locator('[data-work-list="today"]').waitFor();
-    assert.equal(await page.locator('[data-work-list="today"] h2 span').innerText(), '今日 2026-09-06');
+    assert.equal(await page.locator('[data-work-list="today"] h2 span').innerText(), '5件 · 見積 1時間15分');
+    assert((await page.locator('#towerDate').innerText()).includes(today), '時計帯には今日の日付を維持');
     // Keep fixture dates independent from startup's selected-date policy.
     await page.evaluate(async selected => { (await import('/src/state/store.js')).state.selectedDate = selected; }, selected);
     const businessBefore = await page.evaluate(async () => {
