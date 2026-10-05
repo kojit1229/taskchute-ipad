@@ -59,6 +59,7 @@ import { candidateTasks } from "./src/features/three-screen-rows.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
+import { configureDecideView, renderDecideView, undecidedCount } from "./src/features/decide-view.js";
 import { workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 import { workListRows, filterWorkList } from "./src/core/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
@@ -273,6 +274,7 @@ const navItems = [
   { id: "today", label: "今日", mark: "▶" },
   { id: "exec", label: "実行", mark: "E" },
   { id: "wbs", label: "作業一覧", mark: "W" },
+  { id: "decide", label: "決めること", mark: "?" },
   { id: "journal", label: "日報", mark: "J" },
   { id: "ai-reports", label: "AIレポート", mark: "A" },  // v92: コンテンツ総括・自己分析等の月次/不定期AIレポートビューア
   { id: "wish", label: "やりたいこと", mark: "✦" },
@@ -341,7 +343,8 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureWorkList({ escapeHTML, todayISO, addDays, daysBetween, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureDecideView({ renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
+configureWorkList({ undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
@@ -3654,6 +3657,7 @@ function renderMain() {
   if (view === "now") main.innerHTML = renderAiMorningBar() + renderNow();
   if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
+  if (view === "decide") main.innerHTML = renderDecideView();
   if (view === "routine") main.innerHTML = renderRoutineView();
   if (view === "wish") main.innerHTML = renderWish();
   if (view === "fund") main.innerHTML = renderFund();
@@ -5427,56 +5431,6 @@ function wbsFilteredProjects() {
     .filter((project) => !categoryFilter || (project.category || "未分類") === categoryFilter)
     .filter((project) => !hideDoneProjects || !isWbsProjectDone(project))
     .sort((a, b) => a.title.localeCompare(b.title, "ja"));
-}
-
-// v330: WBSの「今週」は月曜〜日曜。12WYコミット自体の既存週キーはweekRange()を維持する。
-function wbsWeekRange(dateISO) {
-  const day = parseDate(dateISO).getDay();
-  const weekStart = addDays(dateISO, -((day + 6) % 7));
-  return { weekStart, weekEnd: addDays(weekStart, 6) };
-}
-
-// v330修正: WBS母集団のProject(Wish除外)を1箇所に集約し、パネルと詳細ペインの
-// 独自定義を無くす。
-function wbsThisWeekProjects() {
-  return new Map(state.projects.filter((project) => !project.deleted && project.kind !== "wish")
-    .map((project) => [project.id, project]));
-}
-
-function wbsThisWeekTasks() {
-  const today = todayISO(), dueWeek = wbsWeekRange(today), commitWeekStart = weekRange(today).weekStart;
-  const projects = wbsThisWeekProjects();
-  // v330修正: 確定シート(twyCommitPostHTML)と同じscoredWeeklyCommitmentItemsForWeek()を
-  // 使い、「今週を確定」で確定したStepの母集団定義を二重化しない(レビュー指摘対応)。
-  const committedTaskIds = new Set(scoredWeeklyCommitmentItemsForWeek(commitWeekStart).scoreItems
-    .map((item) => item.taskId));
-  return state.tasks.filter((task) => {
-    if (task.deleted || !projects.has(task.projectId)) return false;
-    const due = effectiveDueDate(task);
-    return committedTaskIds.has(task.id) || (due && due >= dueWeek.weekStart && due <= dueWeek.weekEnd);
-  }).sort((a, b) => {
-    const statusOrder = Number(a.status === "completed") - Number(b.status === "completed");
-    if (statusOrder) return statusOrder;
-    const dueOrder = (effectiveDueDate(a) || "9999").localeCompare(effectiveDueDate(b) || "9999");
-    if (dueOrder) return dueOrder;
-    const projectOrder = projects.get(a.projectId).title.localeCompare(projects.get(b.projectId).title, "ja");
-    return projectOrder || wbsTaskCompare(a, b);
-  });
-}
-
-function renderWbsThisWeek() {
-  const tasks = wbsThisWeekTasks(), today = todayISO();
-  const projects = wbsThisWeekProjects();
-  const completed = tasks.filter((task) => task.status === "completed").length;
-  const overdue = tasks.filter((task) => {
-    const due = effectiveDueDate(task);
-    return task.status !== "completed" && due && due < today;
-  }).length;
-  const has12WY = [...projects.values()].some((project) => project.kind === "normal" && project.twelveWeekStartDate);
-  return `<section class="wbs-week-panel"><header><h2>今週やること <span>確定 ${tasks.length}件 ・ 完了 ${completed} ・ 期限超過 ${overdue}</span></h2>
-    ${has12WY ? `<button data-action="twy-open-commit">来週分を確定 ›</button>` : ""}</header>
-    <div class="wbs-week-list">${tasks.length ? tasks.map((task) => `<div data-wbs-week-row-id="${escapeHTML(task.id)}">${renderTaskRow(task, 0, false, false, false, false, projects.get(task.projectId)?.title || "")}</div>`).join("")
-      : `<div class="wbs-week-empty">今週の確定 Step と期限が今週のタスクはありません(12WY の「今週を確定」で追加)</div>`}</div></section>`;
 }
 
 function renderWBS() {
@@ -8792,6 +8746,7 @@ function renderCategoriesSettings() {
 const moreItems = [
   { id: "routine", label: "ルーティン", mark: "↻", group: "計画" },
   { id: "wbs", label: "作業一覧", mark: "🧩", group: "計画" },
+  { id: "decide", label: "決めること", mark: "?", group: "計画" },
   { id: "wish", label: "やりたいこと", mark: "✦", group: "計画" },
   { id: "vision", label: "ビジョン", mark: "🧭", group: "計画" },
   { id: "twelveweek", label: "12週計画", mark: "🎯", group: "計画" },  // v356: 12WYタブ(R1a)
@@ -13951,8 +13906,7 @@ function twyCommitCountLabel(total) {
 }
 
 // v330修正: 「今週を確定」で確定されスコア対象になるitemの判定をここへ集約する。
-// 確定シート(twyCommitPostHTML)とWBS「今週やること」パネル(wbsThisWeekTasks)の
-// 両方がこの関数を呼ぶ(以前はwbsThisWeekTasksがlane条件を落として独自に複製していた)。
+// 確定シート(twyCommitPostHTML)から使用する。
 function scoredWeeklyCommitmentItemsForWeek(weekStart) {
   const meta = twyCommittedWeekMeta(weekStart);
   const items = (state.weeklyCommitments || []).filter((record) =>

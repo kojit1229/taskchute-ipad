@@ -27,21 +27,21 @@ const checked={workflows:0,layouts:0};
   await page.reload();await page.locator('[data-work-list="today"]').waitFor();await page.waitForLoadState('networkidle');
   await page.locator('[data-work-list="today"] .daily-table-search:not([open]) > summary').click();  // v441 T2-4: 検索は既定で閉じている
   for(const scope of (process.env.WORK_LIST_SCOPES ?? 'today,exec,wbs').split(',').filter(Boolean)) {
-   const listScope=scope==='wbs'?'wbs-tasks-fixture-project':scope;
-   if(scope!=='today') {await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();if(scope==='wbs') await page.locator('[data-action="wbs-select-project"][data-id="fixture-project"]').click();await page.locator(`[data-work-list="${listScope}"]`).waitFor();}
+   const listScope=scope;
+   if(scope!=='today') {await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();if(scope==='wbs') { const group=page.locator('[data-work-group="fixture-project"]'); if(await group.getAttribute('open')===null) await group.locator('summary').click(); }await page.locator(`[data-work-list="${listScope}"]`).waitFor();}
    const root=page.locator(`[data-work-list="${listScope}"]`),rows=root.locator('[data-work-list-rows]'),query=root.locator('[data-work-filter="query"]');
-   if(scope==='wbs') await page.locator('[data-action="wbs-select-project"][data-id="fixture-project"]').click();
+   if(scope==='wbs') { const group=page.locator('[data-work-group="fixture-project"]'); if(await group.getAttribute('open')===null) await group.locator('summary').click(); }
    const total=300;
    assert.equal(await rows.locator('[data-work-key]').count(),total,scope+' all rows');
    if(scope==='wbs')assert.equal(await rows.locator('[data-work-key^="task:task-"]').count(),300,'selected Project has all 300 fixture Tasks and no other Project Tasks');
-   await query.fill('最後の固有メモ');assert.equal(await rows.locator('[data-work-key]').count(),1);
+   await query.fill(scope==='wbs'?'対象Task 299':'最後の固有メモ');assert.equal(await rows.locator('[data-work-key]').count(),1);
    assert((await rows.textContent()).includes('299'));
-   await query.fill('特別な完了条件');assert.equal(await rows.locator('[data-work-key]').count(),1);
+   await query.fill(scope==='wbs'?'対象Task 298':'特別な完了条件');assert.equal(await rows.locator('[data-work-key]').count(),1);
    await query.fill('存在しない');assert.equal(await rows.locator('[data-work-key]').count(),0);
-   await root.locator('[data-action="work-list-clear"]').click();
+   if(scope==='wbs') await query.fill(''); else await root.locator('[data-action="work-list-clear"]').click();
    await query.fill('対象');
    const beforeComposition=await rows.locator('[data-work-key]').count();
-   await query.evaluate(el=>{el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));el.value='最後の固有メモ';el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true}));});
+   await query.evaluate((el,text)=>{el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));el.value=text;el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true}));},scope==='wbs'?'対象Task 299':'最後の固有メモ');
    assert.equal(await rows.locator('[data-work-key]').count(),beforeComposition,'composition defers result rendering');
    await query.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));
    assert.equal(await rows.locator('[data-work-key]').count(),1,'composition commits result');
@@ -65,7 +65,7 @@ const checked={workflows:0,layouts:0};
    if(scope==='wbs') {
     const top=await rows.evaluate(el=>el.scrollTop);
     await page.evaluate(()=>{window.__searchClicks=[];document.addEventListener('click',e=>window.__searchClicks.push({action:e.target.closest('[data-action]')?.dataset.action,id:e.target.closest('[data-action]')?.dataset.id}),true);});
-    await last.locator('.wbs-task-title[data-action="edit-task"]').click();
+    await last.locator('[data-action="edit-task"]').click();
     console.log('WBS EDIT SNAPSHOT '+JSON.stringify(await page.evaluate(async()=>({clicks:window.__searchClicks,modal:(await import('/src/state/store.js')).state.modal,html:document.querySelector('#modalRoot').innerHTML.slice(0,180),active:document.activeElement?.outerHTML.slice(0,180)}))));
     assert.deepEqual(errors,[],'edit must not throw');
     await page.locator('[data-modal-field="title"]').fill('対象Task 299 編集後');
@@ -73,19 +73,27 @@ const checked={workflows:0,layouts:0};
     await page.waitForFunction(()=>document.querySelector('#modalRoot')&&!document.querySelector('#modalRoot').classList.contains('open'));
     assert.equal(await query.inputValue(),'対象');
     assert(Math.abs((await rows.evaluate(el=>el.scrollTop))-top)<3,'save restores WBS list scroll');
-    await last.locator('.wbs-task-title[data-action="edit-task"]').click();await page.locator('[data-action="modal-close"]').first().click();
+    await last.locator('[data-action="edit-task"]').click();await page.locator('[data-action="modal-close"]').first().click();
     await page.waitForFunction(()=>document.activeElement?.closest('[data-work-key]')?.dataset.workKey==='task:task-299');
     assert.equal(await query.inputValue(),'対象');
     assert(Math.abs((await rows.evaluate(el=>el.scrollTop))-top)<3,'cancel keeps WBS scroll');
    }
-   await root.locator('[data-action="work-list-clear"]').click();
+   if(scope==='wbs') await query.fill(''); else await root.locator('[data-action="work-list-clear"]').click();
    // fixF6d(監督者決定2、F6-3): today(scope='today')の絞り込みは「検索と絞り込みは1行に」
    // (search-frame.js compact=true)で.daily-table-filtersの折りたたみに入った。製品の
    // 折りたたみは変えず、開いてから選ぶ(exec/wbsは従来どおり折りたたみ無し)。
    if (scope === 'today') await root.locator('.daily-table-filters summary').click();
-   await root.locator('[data-work-filter="status"]').selectOption('completed');
-   assert.equal(await rows.locator('[data-work-key]').count(),1,scope+' completed only');
-   await root.locator('[data-action="work-list-clear"]').click();
+   if(scope==='wbs') {
+    await root.locator('[data-action="toggle-wbs-hide-done"]').evaluate(el=>el.click());
+    assert.equal(await rows.locator('[data-work-key]').count(),299,'hide completed Tasks');
+    assert.equal(await rows.locator('[data-work-key="task:task-0"]').count(),0);
+    await root.locator('[data-action="toggle-wbs-hide-done"]').evaluate(el=>el.click());
+    assert.equal(await rows.locator('[data-work-key]').count(),300,'restore completed Tasks');
+   } else {
+    await root.locator('[data-work-filter="status"]').selectOption('completed');
+    assert.equal(await rows.locator('[data-work-key]').count(),1,scope+' completed only');
+    await root.locator('[data-action="work-list-clear"]').click();
+   }
    if(scope==='exec') {
     const ended=rows.locator('[data-work-key="block:block-1"]');
     assert((await ended.textContent()).includes('終了・未完了'));
@@ -110,9 +118,13 @@ const checked={workflows:0,layouts:0};
   await page.evaluate(async()=>{(await import('/src/state/store.js')).state.selectedDate='2026-09-05';});
   for(const scope of ['today','exec']) {
    const listScope=scope;
-   await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).evaluate(el=>el.click());
+   await page.locator(`:is(#sidebar,#bottomNav) [data-action="nav"][data-view="${scope}"]:visible`).first().click();
    const root=page.locator(`[data-work-list="${listScope}"]`);
-   if(scope==='today') await root.locator('.daily-table-search:not([open]) > summary').click();  // v441 T2-4: 検索は既定で閉じている
+   if(scope==='today') {
+    const search=root.locator('.daily-table-search');
+    if(await search.getAttribute('open')===null) await search.locator(':scope > summary').click();
+    assert.notEqual(await search.getAttribute('open'),null,'search is open before input');
+   }
    if(scope==='exec') await root.locator('[data-work-filter="mode"]').selectOption('today');
    await root.locator('[data-action="work-list-clear"]').click();
    // v390(3段-01、設計06 §3.2/§3.3 の契約追随・監督者 2026-09-12): 今日は実時計の今日(300件のまま)、実行の一覧は選択日
@@ -124,8 +136,8 @@ const checked={workflows:0,layouts:0};
   for(const width of (process.env.WORK_LIST_WIDTHS??'390,768,1024,1280').split(',').filter(Boolean).map(Number)) {
    await page.setViewportSize({width,height:width===1024?768:844});
    for(const scope of ['today','exec','wbs']) {
-    const listScope=scope==='wbs'?'wbs-tasks-fixture-project':scope;
-    await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).evaluate(el=>el.click());
+    const listScope=scope;
+    await page.locator(`:is(#sidebar,#bottomNav) [data-action="nav"][data-view="${scope}"]:visible`).first().click();
     await page.locator(`[data-work-list="${listScope}"]`).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no overflow '+scope+' '+width);
     // fixV392 / 設計06 §7: 今日1024pxは縦、1280pxから予定/記録の2列。
@@ -149,12 +161,9 @@ const checked={workflows:0,layouts:0};
    return extras;
   });
   console.log('F4-1 isolated cross-search fixture; preceding workflows added '+JSON.stringify(crossFixtureExtras));
-  await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').evaluate(el=>el.click());
-  const switchMode=mode=>page.locator(`[data-action="wbs-detail-mode"][data-mode="${mode}"]`);
-  assert.equal(await switchMode('project').getAttribute('aria-pressed'),'true','selected Project is the default');
+  await page.locator(':is(#sidebar,#bottomNav) [data-action="nav"][data-view="wbs"]:visible').first().click();
   const savedBefore=await page.evaluate(key=>localStorage.getItem(key),STATE_KEY);
   const stateBefore=await page.evaluate(async()=>JSON.stringify((await import('/src/state/store.js')).state));
-  await switchMode('all').click();
   const allList=page.locator('[data-work-list="wbs"]'),allQuery=allList.locator('[data-work-filter="query"]');
   assert.equal(await allList.locator('[data-work-key^="task:"]').count(),301,'all Tasks span both Projects');
   await allQuery.fill('対象');
@@ -163,31 +172,30 @@ const checked={workflows:0,layouts:0};
   await allQuery.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true})));
   assert.equal(await allList.locator('[data-work-key]').count(),1);
   assert(await allQuery.evaluate(el=>el===window.__crossInput&&el===document.activeElement),'cross search preserves input and focus');
-  for(const [key,value] of [['status','open'],['project','cross-project'],['category','生活'],['due','today']]) {
-   await allList.locator(`[data-work-filter="${key}"]`).selectOption(value);
-   assert.equal(await allList.locator('[data-work-key="task:cross-task"]').count(),1,key+' filters cross-Project Task');
-  }
+  const chip=id=>allList.locator(`[data-kind="project"][data-value="${id}"]`);
+  await chip('cross-project').click();
+  assert.equal(await allList.locator('[data-work-key="task:cross-task"]').count(),1);
+  await allQuery.fill('');
+  assert.equal(await allList.locator('[data-work-key]').count(),1,'Project chip limits all Tasks');
+  await chip('fixture-project').click();
+  assert.equal(await allList.locator('[data-work-key]').count(),300);
+  await chip('').click();
+  assert.equal(await allList.locator('[data-work-key]').count(),301);
   assert.equal(await page.evaluate(key=>localStorage.getItem(key),STATE_KEY),savedBefore,'switch/search never persist');
   assert.equal(await page.evaluate(async()=>JSON.stringify((await import('/src/state/store.js')).state)),stateBefore,'switch/search never change state');
-  await allList.locator('[data-action="wbs-search-jump"][data-id="cross-task"]').click();
-  assert.equal(await switchMode('project').getAttribute('aria-pressed'),'true','jump restores selected mode');
-  await page.locator('[data-wbs-detail-id="cross-project"] [data-work-key="task:cross-task"]').waitFor();
-  console.log('PASS F4-1 cross-Project search, filters, IME, no persistence and tree jump');
-  // F4-1: 1列・2列とも44pxの切替があり、再読込で選択Project表示へ戻る。
   for(const width of [390,768,1024,1280]) {
    await page.setViewportSize({width,height:844});
-   for(const mode of ['all','project']) {
-    await switchMode(mode).click();
-    assert.equal(await switchMode(mode).getAttribute('aria-pressed'),'true');
-    for(const choice of ['all','project']) assert(await switchMode(choice).evaluate(el=>el.getBoundingClientRect().height>=44),'44px '+width);
-    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'WBS mode has no overflow '+width);
+   for(const id of ['cross-project','']) {
+    await chip(id).click();
+    assert.equal(await chip(id).getAttribute('aria-pressed'),'true');
+    assert(await chip(id).evaluate(el=>el.getBoundingClientRect().height>=44),'44px '+width);
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'WBS has no overflow '+width);
    }
   }
-  await switchMode('all').click();await page.reload();
-  await switchMode('project').waitFor();
-  assert.equal(await switchMode('project').getAttribute('aria-pressed'),'true','mode resets after reload');
-  assert.equal(await page.locator('[data-work-list="wbs"]').count(),0);
-  console.log('PASS F4-1 responsive 44px switch and transient default');
+  await chip('cross-project').click();await page.reload();
+  await page.locator('[data-work-list="wbs"]').waitFor();
+  assert.equal(await chip('').getAttribute('aria-pressed'),'true','Project filter resets after reload');
+  console.log('PASS cross-Project chips, title search, IME, 44px layout, no persistence and transient default');
   assert.deepEqual(errors,[],'no pageerror');
   console.log(`PASS work-list E2E: ${checked.workflows} workflows, ${checked.layouts} layout screens; desktop emulation only`);
  } finally {

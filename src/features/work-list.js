@@ -12,7 +12,7 @@ let modalOrigin;
 let renderFocus;
 let screenDeps;
 const views = new Map();
-const workDisplay = { expanded: new Set(), groups: new Map() };
+const workDisplay = { expanded: new Set(), groups: new Map(), children: new Set() };
 function view(scope) {
   if (!views.has(scope)) views.set(scope, { query: "", status: "", project: "", category: "", due: "", mode: "today", scroll: 0 });
   return views.get(scope);
@@ -31,6 +31,7 @@ function configureWorkList(deps) {
     "work-list-toggle": ({ target, event }) => {
       const { kind, value } = target.dataset, root = target.closest('[data-work-list="wbs"]');
       if (kind === "series") workDisplay.expanded.has(value) ? workDisplay.expanded.delete(value) : workDisplay.expanded.add(value);
+      else if (kind === "children") workDisplay.children.has(value) ? workDisplay.children.delete(value) : workDisplay.children.add(value);
       else if (kind === "group") { event.preventDefault(); workDisplay.groups.set(value, !target.closest("details").open); }
       else view("wbs")[kind] = view("wbs")[kind] === value ? "" : value;
       patchWorkList(root, true);
@@ -102,23 +103,21 @@ function workDateLabel(date, weekday = false) {
 }
 function workDueMatches(task, filter, today) {
   const due = dueDate(task);
-  return !filter || (filter === "none" ? !due : filter === "overdue" ? due && due < today : filter === "today" ? due === today : due > today && due <= screenDeps.addDays(today, 7));
+  return !filter || (filter === "none" ? !due : filter === "overdue" ? due && due < today : filter === "today" ? due === today : due >= today && due <= screenDeps.addDays(today, 7));
 }
-function workSuggestion(task, today) {
-  const parent = state.tasks.find(t => !t.deleted && t.id === task.parentTaskId);
-  if (parent?.dueDate) return { date: parent.dueDate, reason: "親と同じ期日" };
-  const created = /^\d{4}-\d{2}-\d{2}/.exec(task.createdAt || "")?.[0];
-  const date = created && screenDeps.addDays(created, 14);
-  return date && date >= screenDeps.addDays(today, 2) ? { date, reason: "作成から2週間" } : { date: screenDeps.addDays(today, 5), reason: "作成から2週間を過ぎているので5日後" };
+function renderWorkTaskRow(t, { titleHTML = "", ghost = false } = {}) {
+  const e = escapeHTML, due = dueDate(t), today = todayISO();
+  const status = { doing: "着手中", completed: "完了", suspended: "中断" }[t.status] || "";
+  return `<div class="work-list-row work-task-row${ghost ? " work-context-parent" : ""}" data-work-key="task:${e(t.id)}"><div class="work-task-name">${titleHTML || `<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${e(t.title || "（名称なし）")}</button>`}</div><div class="work-list-meta">${e([status, ghost ? "(条件外の親)" : "", `進捗 ${Number(t.progressNum) || 0}/${Number(t.progressDen) || 0}`, due && due < today && ["todo", "doing"].includes(t.status) ? `超過 ${screenDeps.daysBetween(due, today)}日` : "", due ? `作業 ${workDateLabel(due)}` : ""].filter(Boolean).join(" ・ "))}</div><div class="work-task-due">${t.dueDate ? `期日 ${workDateLabel(t.dueDate, true)}` : "期日なし"}<br>見積 ${Number(t.estimateMin) || 0}分</div></div>`;
 }
-function renderDecideList() {
+function renderWbsList() {
   const ui = view("wbs"), today = todayISO(), e = escapeHTML, settings = state.settings;
   const projects = state.projects.filter(p => !p.deleted), byId = new Map(projects.map(p => [p.id, p]));
   const live = state.tasks.filter(t => !t.deleted && t.kind !== "other" && (!t.projectId || byId.has(t.projectId)));
-  const managed = live.filter(t => byId.get(t.projectId)?.dueManaged === true && ["todo", "doing"].includes(t.status));
+  const unfinished = live.filter(t => ["todo", "doing"].includes(t.status));
   const visible = live.filter(t => (!settings.wbsHideCompleted || t.status !== "completed") && (settings.showSuspended || (t.status !== "suspended" && byId.get(t.projectId)?.status !== "paused")) && (!settings.wbsHideDoneProjects || byId.get(t.projectId)?.status !== "completed"));
   const q = ui.query.normalize("NFKC").trim().toLocaleLowerCase(), words = q.split(/\s+/).filter(Boolean);
-  const hits = visible.filter(t => (!ui.project || (t.projectId || "__none__") === ui.project) && words.every(word => String(t.title || "").normalize("NFKC").toLocaleLowerCase().includes(word)) && (!ui.due || managed.includes(t) && workDueMatches(t, ui.due, today)));
+  const hits = visible.filter(t => (!ui.project || (t.projectId || "__none__") === ui.project) && words.every(word => String(t.title || "").normalize("NFKC").toLocaleLowerCase().includes(word)) && (!ui.due || unfinished.includes(t) && workDueMatches(t, ui.due, today)));
   const hitIds = new Set(hits.map(t => t.id)), keep = new Map(hits.map(t => [t.id, t]));
   for (const task of hits) {
     let parent = live.find(t => t.id === task.parentTaskId && t.projectId === task.projectId);
@@ -130,32 +129,30 @@ function renderDecideList() {
     return [...collapseSeries(open, { noCollapse: !!q }), ...tasks.filter(t => !open.includes(t)).map(task => ({ task, hidden: 0, rest: [] }))].sort((a,b) => Math.min(...[a.task,...a.rest].map(t=>tasks.indexOf(t))) - Math.min(...[b.task,...b.rest].map(t=>tasks.indexOf(t))));
   };
   const chip = (kind, value, title, count) => `<button class="btn" data-action="work-list-toggle" data-kind="${kind}" data-value="${e(value)}" aria-pressed="${ui[kind] === value}">${e(title)} ${count}</button>`;
-  const counts = [["overdue", "超過"], ["today", "今日"], ["week", "7日以内"], ["none", "期日なし"]].map(([key, label]) => chip("due", key, label, key === "none" ? collapseSeries(managed.filter(t => !dueDate(t))).length : managed.filter(t => workDueMatches(t, key, today)).length)).join("");
-  const nudges = collapseSeries(managed.filter(t => !t.dueDate && !live.find(p => p.id === t.parentTaskId)?.dueDate)).map(g => g.task).sort((a,b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))).slice(0, 5);
-  const nudgeHTML = nudges.map(t => {
-    const proposal = workSuggestion(t, today);
-    return `<article class="work-nudge" data-nudge-id="${e(t.id)}" data-suggestion="${e(proposal.date)}"><strong>${e(t.title)}</strong><div>${e(byId.get(t.projectId)?.title || "Projectなし")} ・ 提案 ${workDateLabel(proposal.date, true)} ${proposal.reason}</div><div class="work-decide-chips"><button class="btn" disabled>${workDateLabel(proposal.date)} に</button><button class="btn" disabled aria-label="別の日を選ぶ">📅</button><button class="btn" disabled>期日なし…</button></div></article>`;
-  }).join("");
+  const counts = [["overdue", "超過"], ["week", "7日以内"], ["none", "期日なし"]].map(([key, label]) => chip("due", key, label, key === "none" ? collapseSeries(unfinished.filter(t => !dueDate(t))).length : unfinished.filter(t => workDueMatches(t, key, today)).length)).join("");
   const row = ({ task: t, hidden, rest }, depth = 0, seen = new Set()) => {
     if (seen.has(t.id)) return "";
     const trail = new Set([...seen, t.id]), due = dueDate(t), ghost = !hitIds.has(t.id), expanded = workDisplay.expanded.has(t.id);
     const children = [...keep.values()].filter(k => k.parentTaskId === t.id && k.projectId === t.projectId);
-    const status = { doing: "着手中", completed: "完了", suspended: "中断" }[t.status] || "";
-    return `<div class="work-list-row${ghost ? " work-context-parent" : ""}" data-work-key="task:${e(t.id)}"><button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${depth ? "└ " : ""}${e(t.title || "（名称なし）")}</button>${hidden ? `<button class="btn" data-action="work-list-toggle" data-kind="series" data-value="${e(t.id)}" aria-expanded="${expanded}">+${hidden}件</button>` : ""}<div class="work-list-meta">${e([status, t.category || byId.get(t.projectId)?.category, ghost ? "(条件外の親)" : "", due && due < today ? `超過 ${screenDeps.daysBetween(due, today)}日` : "", due ? `作業 ${workDateLabel(due)}` : "", t.dueDate ? `期日 ${workDateLabel(t.dueDate, true)}` : "期日なし", `見積 ${t.estimateMin || 0}分`].filter(Boolean).join(" ・ "))}</div></div>`
-      + groupTasks(children).map(g => row(g, depth + 1, trail)).join("") + (expanded ? rest.map(task => row({ task, hidden: 0, rest: [] }, depth, trail)).join("") : "");
+    const childrenOpen = !workDisplay.children.has(t.id) || !!q || !!ui.due;
+    const titleHTML = `${children.length ? `<button class="btn" data-action="work-list-toggle" data-kind="children" data-value="${e(t.id)}" aria-expanded="${childrenOpen}" aria-label="子タスクを開閉">${childrenOpen ? "▾" : "▸"}</button>` : ""}<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${depth ? "└ " : ""}${e(t.title || "（名称なし）")}</button>${hidden ? `<button class="btn" data-action="work-list-toggle" data-kind="series" data-value="${e(t.id)}" aria-expanded="${expanded}">+${hidden}件</button>` : ""}`;
+    return renderWorkTaskRow(t, { titleHTML, ghost }) + (childrenOpen ? groupTasks(children).map(g => row(g, depth + 1, trail)).join("") : "") + (expanded ? rest.map(task => row({ task, hidden: 0, rest: [] }, depth, trail)).join("") : "");
   };
   const groups = [...projects, ...(live.some(t => !t.projectId) ? [{ id: "", title: "Projectなし" }] : [])];
   const groupsHTML = groups.map(p => {
     const tasks = [...keep.values()].filter(t => (t.projectId || "") === p.id), matched = hits.filter(t => (t.projectId || "") === p.id);
     if (!tasks.length && ui.project !== (p.id || "__none__")) return "";
+    const all = live.filter(t => (t.projectId || "") === p.id), progress = screenDeps.projectProgressAgg(all);
+    const week = p.twelveWeekStartDate ? Math.floor(screenDeps.daysBetween(p.twelveWeekStartDate, today) / 7) + 1 : 0;
+    const overdue = unfinished.filter(t => (t.projectId || "") === p.id && workDueMatches(t, "overdue", today)).length;
     const roots = tasks.filter(t => !tasks.some(parent => parent.id === t.parentTaskId));
     const open = workDisplay.groups.get(p.id) ?? (!!ui.project || !!q || !!ui.due || groupTasks(roots).length <= 6);
-    return `<details class="work-project-group" data-work-group="${e(p.id)}" ${open ? "open" : ""}><summary data-action="work-list-toggle" data-kind="group" data-value="${e(p.id)}">${e(p.title)} <span>${e(p.category || "")} ${groupTasks(matched).length}/${matched.length}件</span></summary>${groupTasks(roots).map(g => row(g)).join("") || '<p>該当するタスクはありません。</p>'}</details>`;
+    return `<details class="work-project-group" data-work-group="${e(p.id)}" ${open ? "open" : ""}><summary data-action="work-list-toggle" data-kind="group" data-value="${e(p.id)}">${e(p.title)} <span>${e(p.category || "")} ${groupTasks(matched).length}/${matched.length}件 ・ 進捗 ${progress.num}/${progress.den} (${progress.pct}%)${week > 0 ? ` ・ 12週計画 第${week}週` : ""} ・ 期限超過 ${overdue}</span></summary>${groupTasks(roots).map(g => row(g)).join("") || '<p>該当するタスクはありません。</p>'}</details>`;
   }).join("");
-  return `<section class="work-list work-decide-layout" data-work-list="wbs"><aside class="work-decide-sidebar"><section data-work-decide><h2>決めること <small>今日 0/5 件</small></h2><div class="work-decide-chips">${counts}</div><h3>期日を決めてほしいもの</h3>${nudgeHTML || '<p>期日を決めるものはありません。</p>'}</section><label class="work-decide-query">題名を検索<input class="input" type="search" data-work-filter="query" value="${e(ui.query)}"></label><div class="work-decide-chips" data-work-projects>${chip("project", "", "すべて", groupTasks(visible).length)}${groups.map(p => chip("project", p.id || "__none__", p.title, groupTasks(visible.filter(t => (t.projectId || "") === p.id)).length)).join("")}</div><details><summary>その他</summary><button class="btn" data-action="toggle-wbs-hide-done">完了を隠す ${settings.wbsHideCompleted ? "ON" : "OFF"}</button><button class="btn" data-action="toggle-show-suspended">中断を表示 ${settings.showSuspended ? "ON" : "OFF"}</button></details></aside><div class="work-decide-groups" data-work-list-rows>${groupsHTML || '<p>該当するタスクはありません。</p>'}</div></section>`;
+  return `<section class="work-list work-decide-layout" data-work-list="wbs"><aside class="work-decide-sidebar"><div data-work-decide-link><button class="btn ghost" data-action="nav" data-view="decide">期日が決まっていないもの ${screenDeps.undecidedCount()} 件 → 決めること</button></div><div data-work-mode>一覧</div><div class="work-decide-chips" data-work-counts>${counts}</div><label class="work-decide-query">題名を検索<input class="input" type="search" data-work-filter="query" value="${e(ui.query)}"></label><div class="work-decide-chips" data-work-projects>${chip("project", "", "すべて", groupTasks(visible).length)}${groups.map(p => chip("project", p.id || "__none__", p.title, groupTasks(visible.filter(t => (t.projectId || "") === p.id)).length)).join("")}</div><details><summary>その他</summary><button class="btn" data-action="toggle-wbs-hide-done">完了を隠す ${settings.wbsHideCompleted ? "ON" : "OFF"}</button><button class="btn" data-action="toggle-show-suspended">中断を表示 ${settings.showSuspended ? "ON" : "OFF"}</button></details></aside><div class="work-decide-groups" data-work-list-rows>${groupsHTML || '<p>該当するタスクはありません。</p>'}</div></section>`;
 }
 function renderWorkList(scope) {
-  if (scope === "wbs") return renderDecideList();
+  if (scope === "wbs") return renderWbsList();
   const model = rowsFor(scope);
   if (scope === "today") {
     const minutes = model.rows.reduce((sum, row) => sum + (Number(row.kind === "block" ? resolveEstimateMin(row.item) : row.item.estimateMin) || 0), 0);
@@ -182,8 +179,8 @@ function renderWorkList(scope) {
 function patchWorkList(root, reset = false) {
   if (root.dataset.workComposing === "1") return;
   if (root.dataset.workList === "wbs") {
-    const template = root.ownerDocument.createElement("template"); template.innerHTML = renderDecideList();
-    for (const selector of ["[data-work-decide]", "[data-work-projects]", "[data-work-list-rows]"]) {
+    const template = root.ownerDocument.createElement("template"); template.innerHTML = renderWbsList();
+    for (const selector of ["[data-work-decide-link]", "[data-work-counts]", "[data-work-projects]", "[data-work-list-rows]"]) {
       const current = root.querySelector(selector), next = template.content.querySelector(selector);
       if (current.innerHTML !== next.innerHTML) current.innerHTML = next.innerHTML;
     }
@@ -285,4 +282,4 @@ function restoreWorkListScroll() {
     : saved.blockId != null ? `[data-block-id="${CSS.escape(saved.blockId)}"]` : '';
   root?.querySelector(`[data-work-key="${CSS.escape(saved.key)}"] button[data-action="${CSS.escape(saved.action)}"]${identity}:not(:disabled)`)?.focus({ preventScroll: true });
 }
-export { view as workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };
+export { renderWorkTaskRow, workDateLabel, workDueMatches, view as workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };

@@ -72,8 +72,7 @@ function check(name, cond, extra = "") {
   const fs = await page.locator('.wbs-inline-input').first().evaluate((el) => getComputedStyle(el).fontSize);
   check("インライン入力のfont-sizeが16px以上", parseFloat(fs) >= 16, fs);
   // task-A の期限を直接編集
-  // v374: 期限をNEXTWKへ変更すると「今週やること」パネル(renderWbsThisWeek、data-wbs-week-row-id)にも
-  // 同じdata-wbs-edit入力が現れ2件ヒットするため、メインWBS行(data-wbs-row-id)側だけを指定する。
+  // 編集対象のWBS行だけを指定する。
   const taskARow = page.locator('[data-wbs-row-id="task-A"]');
   await taskARow.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').fill(NEXTWK);
   await taskARow.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').dispatchEvent("change");

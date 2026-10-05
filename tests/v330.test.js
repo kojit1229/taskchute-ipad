@@ -1,6 +1,6 @@
-// v330 A-2: WBS「今週やること」と1280px以上のProject 2ペイン。
+// v330: 旧Project詳細ペインの回帰。週パネルの検査は発注02で撤去。
 const {
-  browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault,
+  chromium, launchOptions, startServer, blockGithubApiByDefault,
   passGithubGate, randomPort, STATE_KEY
 } = require("./helpers");
 
@@ -96,41 +96,8 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, projects, tasks, weeklyCommitments, today: TODAY });
     await page.reload();
-    await page.waitForSelector(".wbs-week-panel");
-
-    console.log("[1] 今週パネルの母集団・重複排除・並び・週境界");
-    const weekRows = page.locator(".wbs-week-list [data-wbs-week-row-id]");
-    const ids = await weekRows.evaluateAll((rows) => rows.map((row) => row.dataset.wbsWeekRowId));
-    // 並び: 未完了→完了、未完了内は期限昇順(期限なしは末尾)→プロジェクト順。
-    const expectedIds = [boundaryThisMon.id, currentDue.id, dupTask.id, otherDue.id, suspendedDue.id,
-      boundaryThisSun.id, stepOpen.id, stepDone.id];
-    check("確定Step2件+今週期限5件+確定/期限の重複1件(dup)の計8件、重複は1行かつ期限昇順→完了は末尾",
-      JSON.stringify(ids) === JSON.stringify(expectedIds), JSON.stringify(ids));
-    check("確定+今週期限の重複タスクは1回だけ出現", ids.filter((id) => id === dupTask.id).length === 1);
-    check("来週Step・来週期限・Wish・前週日曜・翌週月曜は出ない", !ids.includes(nextStep.id) && !ids.includes(nextDue.id)
-      && !ids.includes(wishDue.id) && !ids.includes(boundaryPrevSun.id) && !ids.includes(boundaryNextMon.id));
-    check("今週月曜(境界)は入る", ids.includes(boundaryThisMon.id));
-    check("今週日曜(境界)は入る", ids.includes(boundaryThisSun.id));
-    check("中断中でも今週期限なら入る", ids.includes(suspendedDue.id));
-    check("見出しは確定8・完了1・期限超過2", (await page.locator(".wbs-week-panel > header").textContent()).includes("確定 8件 ・ 完了 1 ・ 期限超過 2"));
-    check("所属Project・進捗・期限を既存行書式で表示", (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("12WY Project")
-      && (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("進捗 2/10")
-      && (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("期限 9/1 超過"));
-
-    console.log("[2] 今日へは既存task-todayを再利用");
-    const placementBrowsingDate = await browseYesterdayForPlacement(page);
-    const beforeBlocks = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
-    await page.locator(`[data-wbs-week-row-id="${stepOpen.id}"] [data-action="task-today"]`).click();
-    await assertUntimedTodayPlacement(page, { key: STATE_KEY, taskId: stepOpen.id, today: TODAY, browsingDate: placementBrowsingDate });
-
-    await page.waitForFunction(({ key, before }) => JSON.parse(localStorage.getItem(key)).blocks.length === before + 1,
-      { key: STATE_KEY, before: beforeBlocks });
-    check("Blockが1件増えtaskIdを引き継ぐ", await page.evaluate(({ key, id, before }) => {
-      const blocks = JSON.parse(localStorage.getItem(key)).blocks;
-      return blocks.length === before + 1 && blocks.at(-1).taskId === id;
-    }, { key: STATE_KEY, id: stepOpen.id, before: beforeBlocks }));
-
-    check("閲覧日を変更せず今日に配置する", await page.evaluate(async date => (await import('/src/state/store.js')).state.selectedDate === date, placementBrowsingDate));
+    await page.waitForSelector('[data-work-list="wbs"]');
+    check("週パネルは作業一覧に表示しない", await page.locator('.wbs-week-panel').count() === 0);
 
     console.log("[3] PC 2ペイン・12WY優先の既定選択・選択は非永続");
     check("1280pxは一覧/選択詳細が1:2の2列", await page.locator(".wbs-projects.is-desktop").isVisible()
@@ -188,21 +155,6 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
     // 後片付け: 以降のテストに影響しないよう再開しておく。
     await page.locator('[data-wbs-detail-id="p-other"] [data-action="resume-project"]').click();
     await page.waitForSelector('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]');
-
-    console.log("[6] 日跨ぎで翌週の母集団へ更新");
-    await page.clock.setFixedTime(new Date(2026, 8, 8, 10, 0, 0, 0));
-    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => document.querySelector('[data-wbs-week-row-id="t-next-step"]'));
-    const nextWeekIds = await weekRows.evaluateAll((rows) => rows.map((row) => row.dataset.wbsWeekRowId));
-    check("翌週は来週Step+来週期限+翌週月曜境界へ入れ替わる(期限昇順)",
-      JSON.stringify(nextWeekIds) === JSON.stringify([boundaryNextMon.id, nextDue.id, nextStep.id]), JSON.stringify(nextWeekIds));
-
-    console.log("[7] 対象0件のときの文言");
-    await page.clock.setFixedTime(new Date(2026, 8, 15, 10, 0, 0, 0));
-    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => !document.querySelector(".wbs-week-list [data-wbs-week-row-id]"));
-    check("0件文言が表示される", (await page.locator(".wbs-week-empty").textContent())
-      .includes("今週の確定 Step と期限が今週のタスクはありません(12WY の「今週を確定」で追加)"));
 
     console.log("[8] レスポンシブ品質");
     async function noOverflow(width) {
