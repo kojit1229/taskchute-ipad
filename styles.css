@@ -5709,6 +5709,26 @@ details.settings-row > .fold-summary.settings-row-summary {
 
 /* UI-A: 情報を保ち、狭幅の主操作と横画面の列幅を再配分する。 */
 .work-list { min-width: 0; }
+.work-decide-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.work-decide-sidebar, .work-decide-groups { min-width: 0; overflow-wrap: anywhere; }
+.work-decide-sidebar { padding: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.work-decide-sidebar h2, .work-decide-sidebar h3 { margin: 8px 0; }
+.work-decide-sidebar small { font-size: 12px; font-weight: normal; }
+.work-decide-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; }
+.work-decide-chips button { max-width: 100%; overflow-wrap: anywhere; }
+.work-decide-chips [aria-pressed="true"] { border-color: var(--tower-amber); color: var(--tower-amber); }
+.work-nudge { padding-block: 8px; border-top: 1px solid var(--tower-line); font-size: 13px; }
+.work-decide-query { display: block; margin-block: 12px; }
+.work-decide-query input { display: block; width: 100%; min-width: 0; font-size: 16px; min-height: 44px; }
+.work-project-group { margin-bottom: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); break-inside: avoid; overflow-wrap: anywhere; }
+.work-project-group > summary { min-height: 44px; padding: 10px; cursor: pointer; }
+.work-project-group > summary span { font-size: 12px; color: var(--muted); }
+.work-context-parent { opacity: .6; }
+@media (min-width: 900px) {
+  .work-decide-layout { grid-template-columns: 400px minmax(0, 1fr); }
+  .work-decide-sidebar { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+}
+@media (min-width: 1280px) { .work-decide-groups { columns: 2; column-gap: 12px; } }
 .work-list-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; align-items: end; }
 .work-list-filters label { display: flex; flex: 1 1 120px; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
 .work-list-filters .work-list-query { flex-basis: 100%; }

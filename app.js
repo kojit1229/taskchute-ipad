@@ -341,7 +341,7 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureWorkList({ escapeHTML, todayISO, addDays, daysBetween, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
@@ -5535,11 +5535,7 @@ function renderWBS() {
 
   return `
     <div class="tower-skin wbs-tower" data-daily-view="wbs"><header class="view-header wbs-header"><div class="wbs-heading"><h1>作業一覧</h1><span>${cycleMeta}</span></div>${wbsTools}</header>
-    ${renderWipBanner()}
-    ${renderWbsThisWeek()}
-    <section class="section grid wbs-projects${desktop ? " is-desktop" : ""}">
-      ${renderWbsDesktopProjects(filteredProjects)}
-    </section></div>
+    ${renderWorkList("wbs")}</div>
   `;
 }
 
