@@ -342,8 +342,8 @@
         "content-ai"
       ],
       "assertionSignals": 101,
-      "assertionHash": "9e9a4d7265bd0f09",
-      "sourceHash": "7d13b69b40b832f8",
+      "assertionHash": "f8205b536663de1a",
+      "sourceHash": "2f38de442c311fb5",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -1017,6 +1017,30 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
+        "clock": true
+      }
+    },
+    {
+      "file": "decide-view.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution",
+        "ui-responsive"
+      ],
+      "assertionSignals": 32,
+      "assertionHash": "2b64d2f2d64c786d",
+      "sourceHash": "18036a02f10e8ee8",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
         "clock": true
       }
     },
@@ -2562,7 +2586,7 @@
       ],
       "assertionSignals": 41,
       "assertionHash": "2546031bf02ee29f",
-      "sourceHash": "a82e5e7ea5296aba",
+      "sourceHash": "061475fa7fbf0e28",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -3577,9 +3601,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 147,
-      "assertionHash": "c4cdedf8eecdef48",
-      "sourceHash": "05101d473e76dc18",
+      "assertionSignals": 151,
+      "assertionHash": "8db8ae0d96107389",
+      "sourceHash": "b5ea461fcada23b8",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -4395,8 +4419,8 @@
         "ui-responsive"
       ],
       "assertionSignals": 30,
-      "assertionHash": "08d7612439845f8f",
-      "sourceHash": "34b5102751d87175",
+      "assertionHash": "3d60472333fc5c1c",
+      "sourceHash": "9d2fd58c0d04dd09",
       "waits": {
         "fixedCount": 1,
         "numericMilliseconds": 400,
@@ -7205,14 +7229,14 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "planning-execution"
+        "ui-responsive"
       ],
-      "assertionSignals": 23,
-      "assertionHash": "71016827fe7b8252",
-      "sourceHash": "a73211cee27266cd",
+      "assertionSignals": 16,
+      "assertionHash": "53d993dc10b46f0e",
+      "sourceHash": "e54e704a510e32f9",
       "waits": {
-        "fixedCount": 1,
-        "numericMilliseconds": 50,
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -7691,14 +7715,15 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "planning-execution"
+        "planning-execution",
+        "ui-responsive"
       ],
-      "assertionSignals": 13,
-      "assertionHash": "03752a709ee66252",
-      "sourceHash": "eaf25b7d2f5c0f14",
+      "assertionSignals": 10,
+      "assertionHash": "0a92474fefc81c6d",
+      "sourceHash": "b0373a8a204c58ef",
       "waits": {
-        "fixedCount": 9,
-        "numericMilliseconds": 3200,
+        "fixedCount": 4,
+        "numericMilliseconds": 1700,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -8004,7 +8029,7 @@
       ],
       "assertionSignals": 22,
       "assertionHash": "cd1db6066f0283a6",
-      "sourceHash": "b58743595fd70c93",
+      "sourceHash": "c0d768a9c8cc69e3",
       "waits": {
         "fixedCount": 2,
         "numericMilliseconds": 1000,
@@ -8776,9 +8801,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 45,
-      "assertionHash": "6b9ce0738ad9bb64",
-      "sourceHash": "c7e2ded240117811",
+      "assertionSignals": 49,
+      "assertionHash": "1bc7d029fc872dc1",
+      "sourceHash": "33c9c693a0581e20",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -8848,6 +8873,52 @@
       "assertionSignals": 5,
       "assertionHash": "62c83fa309fe0850",
       "sourceHash": "cd4b84a39caaf2e5",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": false,
+        "server": false,
+        "fileWrite": false,
+        "networkMock": false,
+        "clock": false
+      }
+    },
+    {
+      "file": "work-list-wbs.test.js",
+      "kind": "e2e",
+      "tier": "full",
+      "domains": [
+        "planning-execution"
+      ],
+      "assertionSignals": 53,
+      "assertionHash": "4fcdb8cb976f3def",
+      "sourceHash": "52bf37a231f80176",
+      "waits": {
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
+        "unresolvedCount": 0
+      },
+      "sideEffects": {
+        "browser": true,
+        "server": true,
+        "fileWrite": false,
+        "networkMock": true,
+        "clock": true
+      }
+    },
+    {
+      "file": "work-series.test.js",
+      "kind": "node",
+      "tier": "full",
+      "domains": [
+        "legacy-crosscutting"
+      ],
+      "assertionSignals": 14,
+      "assertionHash": "a961b9b851a975c3",
+      "sourceHash": "d8cb41f99fba8ba3",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
