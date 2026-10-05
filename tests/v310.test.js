@@ -71,7 +71,7 @@ function runningBlock() {
       && await page.locator('.tower-runway .tower-mit').count() === 0);
     // v410: 単一カード・主操作・2列と、C5カードの枠/影/文字の性質を検査する。
     check("予定は左、実績/ルーティン/本文は記録列、健康は別画面", await page.locator('#dailyTodayPlans > [data-work-list="today"]').count() === 1
-      && await page.locator('.daily-today-records > details > .sec-log').count() === 1 && await page.locator('.daily-today-records > .sec-gates').count() === 1
+      && await page.locator('.daily-today-records > .sec-log').count() === 1 && await page.locator('.daily-today-records > .sec-gates').count() === 1
       && await page.locator('.sec-journal, #towerJournalFree').count() === 0 && await page.locator('.sec-bodymind').count() === 0);
     const layout = await page.evaluate(() => {
       const r = s => document.querySelector(s).getBoundingClientRect();
