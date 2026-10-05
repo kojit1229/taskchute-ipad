@@ -25,6 +25,7 @@ const checked={workflows:0,layouts:0};
    localStorage.setItem(key,JSON.stringify(s));localStorage.removeItem('taskchute-journal-today-focus-v1');
   },{key:STATE_KEY,day:DAY});
   await page.reload();await page.locator('[data-work-list="today"]').waitFor();await page.waitForLoadState('networkidle');
+  await page.locator('[data-work-list="today"] .daily-table-search:not([open]) > summary').click();  // v441 T2-4: 検索は既定で閉じている
   for(const scope of (process.env.WORK_LIST_SCOPES ?? 'today,exec,wbs').split(',').filter(Boolean)) {
    const listScope=scope==='wbs'?'wbs-tasks-fixture-project':scope;
    if(scope!=='today') {await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();if(scope==='wbs') await page.locator('[data-action="wbs-select-project"][data-id="fixture-project"]').click();await page.locator(`[data-work-list="${listScope}"]`).waitFor();}
@@ -111,6 +112,7 @@ const checked={workflows:0,layouts:0};
    const listScope=scope;
    await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).evaluate(el=>el.click());
    const root=page.locator(`[data-work-list="${listScope}"]`);
+   if(scope==='today') await root.locator('.daily-table-search:not([open]) > summary').click();  // v441 T2-4: 検索は既定で閉じている
    if(scope==='exec') await root.locator('[data-work-filter="mode"]').selectOption('today');
    await root.locator('[data-action="work-list-clear"]').click();
    // v390(3段-01、設計06 §3.2/§3.3 の契約追随・監督者 2026-09-12): 今日は実時計の今日(300件のまま)、実行の一覧は選択日

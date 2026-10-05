@@ -38,6 +38,8 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     }, STATE_KEY);
     await page.reload();
     await page.locator('[data-work-list="today"]').waitFor();
+    // v441 T2-4: 検索・絞り込みは既定で閉じている。開いてから入力する
+    await page.locator('[data-work-list="today"] .daily-table-search:not([open]) > summary').click();
     for (const scope of ['today', 'exec', 'wbs']) {
       if (scope !== 'today') await page.locator(`#sidebar [data-action="nav"][data-view="${scope}"]`).click();
       if (scope === 'wbs') await page.locator('[data-action="wbs-select-project"][data-id="search-project"]').click();
