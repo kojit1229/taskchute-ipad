@@ -89,7 +89,7 @@ import { configureInstruments, renderInstruments } from "./src/features/instrume
 import { configureTrackUi, maybeShowTrackProgressToast } from "./src/features/track-ui.js";
 // v182: 新トップレベル「今日」コックピット。既存featureと同じ依存注入型で循環importを避ける。
 import { configureToday, renderToday, renderNow } from "./src/features/today.js";
-import { configureNowView, withNowDeclaration } from "./src/features/now-view.js";
+import { configureNowView, withNowDeclaration, renderAiMorningBar } from "./src/features/now-view.js";
 import { configureRoutineView, renderRoutineView, startRoutineEdit, saveRoutine, cancelRoutineEdit, endRoutine } from "./src/features/routine-view.js";
 import { configureDandoriView, renderDandoriView, moveDandoriBlock, addDandoriTask, addDandoriFree } from "./src/features/dandori-view.js";
 import {
@@ -343,7 +343,7 @@ configureGithubSync({
 });
 configureWorkList({ escapeHTML, todayISO, addDays, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
-configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin });
+configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
   endRecurrenceSeries, removeUntouchedInstances, runRecurrenceChange, saveAndRender, render, showToast, resolveEstimateMin });
 const { duplicateDandoriBlock } = configureDandoriView({ updateBlockField, render, getState: () => state, escapeHTML, todayISO, addDays, blocksForDate, timeFromDateTime,
@@ -3650,8 +3650,8 @@ function renderMain() {
   _lastScrollView = view;
   _lastScrollDate = state.selectedDate;
 
-  if (view === "today") main.innerHTML = renderToday();
-  if (view === "now") main.innerHTML = renderNow();
+  if (view === "today") main.innerHTML = renderAiMorningBar() + renderToday();
+  if (view === "now") main.innerHTML = renderAiMorningBar() + renderNow();
   if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "routine") main.innerHTML = renderRoutineView();
