@@ -36,14 +36,14 @@ const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithu
   await page.route('**/contents/taskchute/ai-morning-status.json?*', route => route.fulfill({
     status: response === null ? 404 : 200, contentType: 'application/json', body: JSON.stringify(response)
   }));
-  async function seed(skin, items = blocks) {
-    await page.evaluate(({ key, day, skin, blocks }) => {
+  async function seed(skin, items = blocks, view = 'today') {
+    await page.evaluate(({ key, day, skin, blocks, view }) => {
       const s = JSON.parse(localStorage.getItem(key));
-      Object.assign(s, { blocks, tasks: [], projects: [], recurrences: [], singleSchedules: [], currentView: 'today', selectedDate: day });
+      Object.assign(s, { blocks, tasks: [], projects: [], recurrences: [], singleSchedules: [], currentView: view, selectedDate: day });
       Object.assign(s.settings, { todaySkin: skin, autoSync: false });
       s.pomodoro.running = false;
       localStorage.setItem(key, JSON.stringify(s));
-    }, { key: STATE_KEY, day, skin, blocks: items });
+    }, { key: STATE_KEY, day, skin, blocks: items, view });
     await page.reload();
     await page.locator('[data-testid="ai-morning-host"][data-loaded="true"]').waitFor({ state: 'attached' });
   }
@@ -68,6 +68,8 @@ const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithu
     bar = page.locator('[data-testid="ai-morning-bar"]');
     assert.match(await bar.innerText(), /✦ AI が今朝は組めませんでした/);
     assert.match(await bar.innerText(), /接続エラー.*既存の予定はそのまま.*次の実行/s);
+    assert.match(await bar.innerText(), /次の実行 02:10/); // B1-8
+    assert.doesNotMatch(await bar.innerText(), /次の実行 \d{4}-/);
     assert.equal(await bar.getAttribute('data-status'), 'error');
     await bar.locator('summary').click();
     assert.match(await bar.innerText(), /AI が今日は置かなかったもの\(1 件\).*置けない作業/s);
@@ -88,6 +90,10 @@ const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithu
       assert.equal(await page.locator('#main > :first-child').getAttribute('data-testid'), 'ai-morning-host');
       assert.equal(await bar.evaluate(el => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().right <= innerWidth), true);
     }
+    // B1-2: independent now view, including asynchronous status insertion.
+    await seed('now', blocks, 'now');
+    assert.match(await page.locator('[data-testid="ai-morning-bar"]').innerText(), /AI が組みました/);
+    assert.equal(await page.locator('#main > :first-child').getAttribute('data-testid'), 'ai-morning-host');
     assert.deepEqual(errors, []);
     console.log('PASS acceptance 12: now/tower and 375px');
   } finally {

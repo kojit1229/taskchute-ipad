@@ -3651,7 +3651,7 @@ function renderMain() {
   _lastScrollDate = state.selectedDate;
 
   if (view === "today") main.innerHTML = renderAiMorningBar() + renderToday();
-  if (view === "now") main.innerHTML = renderNow();
+  if (view === "now") main.innerHTML = renderAiMorningBar() + renderNow();
   if (view === "dandori") main.innerHTML = `<div class="dandori-layout">${renderDandoriView()}<div class="tower-skin timeline-tower">${renderTimelineView({ embedded: true, mode: "planned" })}</div></div>`;
   if (view === "wbs") main.innerHTML = renderWBS();
   if (view === "routine") main.innerHTML = renderRoutineView();
