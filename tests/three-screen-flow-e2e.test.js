@@ -50,7 +50,7 @@ const additionalChecks = [];
     }, date);
     await page.locator('[data-action="wbs-select-project"][data-id="flow-project"]').click();
     for (const id of ['flow-a', 'flow-b']) {
-      await page.locator('[data-work-list="wbs-tasks-flow-project"] [data-action="task-today"][data-id="' + id + '"]').click();
+      await page.locator('[data-work-group="flow-project"] [data-action="placement-add-today"][data-id="' + id + '"]').click();
       await page.locator('.modal-footer [data-action="modal-save"]').click();
       await page.locator('#modalRoot.open').waitFor({ state: 'hidden' });
     }

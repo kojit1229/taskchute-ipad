@@ -49,11 +49,11 @@ const task = (id, projectId, extra = {}) => ({
     return page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
   }
 
-  async function openTaskMenu(taskId) {
+  async function openTaskEditor(taskId) {
     const projectId = (await stateNow()).tasks.find(task => task.id === taskId).projectId || '';
-    await page.locator(`[data-action="wbs-select-project"][data-id="${projectId}"]`).click();
-    await page.locator(`[data-wbs-row-id="${taskId}"] .wbs-row-menu-toggle`).click();
-    await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${taskId}"]`).click();
+    const chip = page.locator(`[data-action="wbs-select-project"][data-id="${projectId || '__none__'}"]`);
+    if (await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+    await page.locator(`[data-wbs-row-id="${taskId}"] [data-action="edit-task"][data-id="${taskId}"]`).click();
     await page.waitForSelector('[data-action="modal-save"]', { state: "visible" });
   }
 
@@ -150,7 +150,7 @@ const task = (id, projectId, extra = {}) => ({
       projects: [project("p-12wy", { twelveWeekStartDate: TODAY }), project("p-normal")],
       tasks: [task("t-12wy", "p-12wy"), task("t-normal", "p-normal")]
     });
-    await openTaskMenu("t-12wy");
+    await openTaskEditor("t-12wy");
     check("週次目安の入力欄がある", await page.locator('[data-modal-field="twyPerWeek"]').count() === 1);
     check("対象週(開始)のselectがある", await page.locator('[data-modal-field="twyFromWeek"]').count() === 1);
     check("対象週(終了)のselectがある", await page.locator('[data-modal-field="twyToWeek"]').count() === 1);
@@ -170,7 +170,7 @@ const task = (id, projectId, extra = {}) => ({
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });
 
     console.log("[6] Task編集モーダル: 非12WY配下Taskは区画がDOMに無い");
-    await openTaskMenu("t-normal");
+    await openTaskEditor("t-normal");
     check("週次目安の入力欄がDOMに無い", await page.locator('[data-modal-field="twyPerWeek"]').count() === 0);
     check("対象週selectがDOMに無い", await page.locator('[data-modal-field="twyFromWeek"]').count() === 0
       && await page.locator('[data-modal-field="twyToWeek"]').count() === 0);
@@ -186,7 +186,7 @@ const task = (id, projectId, extra = {}) => ({
     const beforeTask = before.tasks.find((t) => t.id === "t-12wy");
     const beforeDataModifiedAt = before.dataModifiedAt;
     await page.waitForTimeout(1100);  // nowDateTime()の秒精度で確実にbumpを検出するための待機(固定時間そのものが検証対象=許容する唯一の例外。M3)
-    await openTaskMenu("t-12wy");
+    await openTaskEditor("t-12wy");
     await page.fill('[data-modal-field="twyPerWeek"]', "5");
     await page.selectOption('[data-modal-field="twyFromWeek"]', "3");
     await page.selectOption('[data-modal-field="twyToWeek"]', "9");
@@ -217,7 +217,7 @@ const task = (id, projectId, extra = {}) => ({
     const beforeUnchanged = await stateNow();
     const beforeUnchangedTask = beforeUnchanged.tasks.find((t) => t.id === "t-12wy");
     const beforeUnchangedDataModifiedAt = beforeUnchanged.dataModifiedAt;
-    await openTaskMenu("t-12wy");
+    await openTaskEditor("t-12wy");
     await page.click('[data-action="modal-save"]');
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });
     const stampsUnchanged = await waitForTaskStampsUnchanged("t-12wy", beforeUnchangedTask.updatedAt, beforeUnchangedDataModifiedAt);
@@ -240,7 +240,7 @@ const task = (id, projectId, extra = {}) => ({
     // A(normalizeTwyPlan)の規則どおりclampされることを確認する。
     // ============================================================
     console.log("[9b] Task編集モーダル: UI経由の逆転値(fromWeek>toWeek)はtoWeek=fromWeekへ補正される(M4)");
-    await openTaskMenu("t-12wy");
+    await openTaskEditor("t-12wy");
     await page.selectOption('[data-modal-field="twyFromWeek"]', "9");
     await page.selectOption('[data-modal-field="twyToWeek"]', "3");
     await page.click('[data-action="modal-save"]');
@@ -250,7 +250,7 @@ const task = (id, projectId, extra = {}) => ({
       && afterReversed.twyPlan.toWeek === 9, JSON.stringify(afterReversed.twyPlan));
 
     console.log("[9c] Task編集モーダル: UI経由で週次目安を空欄にすると保存後は0になる(M4)");
-    await openTaskMenu("t-12wy");
+    await openTaskEditor("t-12wy");
     await page.fill('[data-modal-field="twyPerWeek"]', "");
     await page.click('[data-action="modal-save"]');
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });
@@ -258,7 +258,7 @@ const task = (id, projectId, extra = {}) => ({
     check("週次目安を空欄にして保存→perWeek=0", afterEmpty.twyPlan.perWeek === 0, JSON.stringify(afterEmpty.twyPlan));
 
     console.log("[9d] Task編集モーダル: UI経由で週次目安に負数を入れても保存後は0になる(M4)");
-    await openTaskMenu("t-12wy");
+    await openTaskEditor("t-12wy");
     await page.fill('[data-modal-field="twyPerWeek"]', "-4");
     await page.click('[data-action="modal-save"]');
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });
@@ -270,7 +270,7 @@ const task = (id, projectId, extra = {}) => ({
     // ============================================================
     console.log("[9e] 非12WY Taskの保存はtwyPlanを既定値のまま維持する(区画を経由しないため上書きしない)");
     const beforeNormal = (await stateNow()).tasks.find((t) => t.id === "t-normal");
-    await openTaskMenu("t-normal");
+    await openTaskEditor("t-normal");
     await page.click('[data-action="modal-save"]');
     await page.waitForSelector('[data-action="modal-save"]', { state: "detached" });
     const afterNormal = (await stateNow()).tasks.find((t) => t.id === "t-normal");
@@ -311,8 +311,7 @@ const task = (id, projectId, extra = {}) => ({
     await pageMobile.reload();
     await pageMobile.waitForSelector("main");
     await pageMobile.locator('[data-action="wbs-select-project"][data-id="p-mobile"]').click();
-    await pageMobile.locator('[data-wbs-row-id="t-mobile"] .wbs-row-menu-toggle').click();
-    await pageMobile.locator('.wbs-row-menu-panel [data-action="edit-task"][data-id="t-mobile"]').click();
+    await pageMobile.locator('[data-wbs-row-id="t-mobile"] [data-action="edit-task"][data-id="t-mobile"]').click();
     await pageMobile.waitForSelector('[data-action="modal-save"]', { state: "visible" });
     check("モバイルでも12週プラン区画が出る", await pageMobile.locator('[data-modal-field="twyPerWeek"]').count() === 1);
     const metrics = await pageMobile.evaluate(() => {

@@ -80,6 +80,9 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     });
     await check('U2-6 title search project chips ancestor context and IME', async () => {
       const query = root.locator('[data-work-filter="query"]');
+      assert.equal(await query.getAttribute('id'), 'wbs-projects-query');
+      assert.equal(await root.locator('[data-work-list="wbs-projects"] [data-action="wbs-select-project"][data-id="q"]').count(), 1);
+      assert.equal(await root.locator('.wbs-project-detail [data-wbs-row-id="free"]').count(), 1);
       await query.fill('物語'); assert.equal(await root.locator('[data-work-key]').count(),3);
       await query.evaluate(el=>{ window.__decideInput=el; el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true})); el.value='子だけ'; el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true})); });
       assert.equal(await root.locator('[data-work-key]').count(),3);
@@ -100,6 +103,9 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
     await check('U2-8 responsive columns and no horizontal overflow', async () => {
       for (const width of [375,900,1280]) {
         await page.setViewportSize({width,height:900});
+        await root.locator('.work-decide-sidebar').waitFor();
+        await root.locator('[data-work-list-rows]').waitFor();
+        await root.locator('input').waitFor();
         const size = await root.evaluate(el=>{const side=el.querySelector('.work-decide-sidebar'),groups=el.querySelector('[data-work-list-rows]'),a=side.getBoundingClientRect(),b=groups.getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,side:a.width,sideX:a.x,listX:b.x,listY:b.y,sideBottom:a.bottom,position:getComputedStyle(side).position,columns:getComputedStyle(groups).columnCount,font:parseFloat(getComputedStyle(el.querySelector('input')).fontSize)};});
         assert(!size.overflow,'overflow at '+width); assert(size.font>=16);
         if(width>=900) { assert.equal(Math.round(size.side),400); assert(size.listX>size.sideX); assert.equal(size.position,'sticky'); } else assert(size.listY>=size.sideBottom);

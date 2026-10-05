@@ -186,7 +186,7 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
       state.currentView = "wbs"; state.selectedDate = today; state.settings.twelveWeekStartDate = cycle;
       Object.assign(state, fixture); localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, cycle: CYCLE, fixture });
-    await page.reload(); await page.waitForSelector('button[data-action="twy-open-commit"]');
+    await page.reload(); await page.waitForSelector('#wbs-projects-query');
   }
   async function resetSaveProbe() {
     await page.evaluate((key) => {
@@ -201,7 +201,7 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
   const callCounts = () => page.evaluate(() => ({ generateReport: window.__v264GenerateReportCalls || 0,
     excuse: window.__v264ExcuseCalls || 0, unexcuse: window.__v264UnexcuseCalls || 0, add: window.__v264AddCalls || 0 }));
   const savedState = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
-  const openSheet = () => page.locator('.wbs-detail-actions [data-action="twy-open-commit"]').click();
+  const openSheet = () => page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('twy-open-commit', {}));
   const row = (id) => page.locator(`[data-twy-commit-item][data-id="wci_${WEEK}_${id}"]`);
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 25, 10, 0, 0));
@@ -360,9 +360,9 @@ for (const name of ["twy-excuse", "twy-excuse-cancel", "twy-add-item", "twy-add-
     check("pre-commit見積表示spanにpointerが出ない", await page.locator('.twy-commit-sub .c-when').first()
       .evaluate((el) => getComputedStyle(el).cursor !== "pointer"));
     await page.locator('[data-action="modal-close"]').click();
-    // v329: 行の副操作は…メニュー(排他)の中。閉じている時だけ開く(セレクタ追随・assert不変)
+    // 同じProject編集モーダルを登録済みアクションから開く。
     await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
-    await page.locator('[data-action="edit-project"][data-id="p1"]').first().click();
+    await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('edit-project', { id: 'p1' }));
     await page.locator('[data-modal-field="title"]').fill("Project saved"); await page.locator('[data-action="modal-save"]').click();
     check("既存projectモーダル保存に退行なし", (await savedState()).projects.find((entry) => entry.id === "p1").title === "Project saved");
 

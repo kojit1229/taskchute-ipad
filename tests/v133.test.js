@@ -139,7 +139,7 @@ function check(name, cond, extra = "") {
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
     await page.click('[data-action="wbs-select-project"][data-id="wish-proj-v133"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="add-task-to-project"][data-id="wish-proj-v133"]');
+    await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('add-task-to-project', { id: 'wish-proj-v133' }));
     await page.waitForTimeout(200);
     await page.fill('[data-modal-field="title"]', "Wishタスク_期日テスト_v133");
     await page.fill('[data-modal-field="dueDate"]', addDaysStr(TODAY, 5));
@@ -156,7 +156,7 @@ function check(name, cond, extra = "") {
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
     await page.click('[data-action="wbs-select-project"][data-id="normal-proj-v133"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="add-task-to-project"][data-id="normal-proj-v133"]');
+    await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('add-task-to-project', { id: 'normal-proj-v133' }));
     await page.waitForTimeout(200);
     await page.fill('[data-modal-field="title"]', "通常タスク_期日テスト_v133");
     const futureDate = addDaysStr(TODAY, 5);

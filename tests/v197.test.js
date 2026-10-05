@@ -147,7 +147,7 @@ function check(name, cond, extra = "") {
   await pageA.reload();
   await pageA.waitForTimeout(400);
   await pageA.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"]`).click();
-  await pageA.click(`.wbs-detail-actions [data-action="add-task-to-project"][data-id="${PROJECT_ID}"]`);
+  await pageA.evaluate(async id => (await import('/src/ui/actions.js')).dispatchAction('add-task-to-project', { id }), PROJECT_ID);
   await pageA.waitForSelector('[data-modal-field="title"]', { state: "visible" });
   await pageA.fill('[data-modal-field="title"]', TASK_TITLE);
   await pageA.click('[data-action="modal-save"]');
