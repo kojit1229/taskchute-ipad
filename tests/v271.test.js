@@ -34,6 +34,7 @@ check("today-pick-next配線は選択setterを呼び保存しない", !!pickNext
   && /setTowerArrivalSelection\(target\.dataset\.id\)/.test(pickNextHandler)
   && !/saveState|saveAndRender/.test(pickNextHandler));
 check("廃止selectのrender保留条件は残さない", !appSource.includes("data-tower-arrival-select"));
+check("FUND日付入力のフォーカス中は全体renderを保留する契約を維持", /if \(document\.activeElement\?\.matches\?\.\("\[data-fund-report-date\]"\)\) \{\s*if \(!_deferredRenderPending\) _deferredRenderPendingSince = Date\.now\(\);\s*_deferredRenderPending = true;/.test(appSource));
 
 console.log("[2] FLIGHT LOGは既存edit-blockを使う44px button");
 check("行はbutton+edit-block", /<button type="button" class="tower-log-row[\s\S]*?data-action="edit-block"/.test(towerSource));

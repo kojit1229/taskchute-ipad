@@ -5954,9 +5954,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 16,
-      "assertionHash": "0750d48ef7415f53",
-      "sourceHash": "8edd811d71f32ee2",
+      "assertionSignals": 17,
+      "assertionHash": "811fa966a1b9d129",
+      "sourceHash": "d5c92cb007d18f5f",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

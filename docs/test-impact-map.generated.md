@@ -251,7 +251,7 @@
 | v266.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 61 | 0 | 0 |
 | v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 23 | 1 | 200 |
 | v268.test.js | e2e | full | planning-execution | 11 | 0 | 0 |
-| v271.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
+| v271.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | v274.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
 | v275.test.js | e2e | full | ui-responsive | 34 | 0 | 0 |
 | v276.test.js | e2e | full | planning-execution, ui-responsive | 35 | 0 | 0 |
