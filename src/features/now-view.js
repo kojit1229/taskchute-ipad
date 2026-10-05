@@ -5,6 +5,7 @@ let beatenShownFor = null;
 const towerDays = ["月", "火", "水", "木", "金", "土", "日"];
 let visibilityBound = false;
 let declarationStartId = null;
+let fetchMorningStatus, morningStatus = null, morningKey = '', morningLoaded = false, morningCheckedAt = 0, morningPending = false;
 const declarationDrafts = new Map();
 if (typeof document !== "undefined") document.addEventListener("input", event => {
   if (event.target?.matches('[data-field="now-declaration"]')) declarationDrafts.set(event.target.dataset.id, event.target.value);
@@ -12,6 +13,7 @@ if (typeof document !== "undefined") document.addEventListener("input", event =>
 
 export function configureNowView(deps) {
   ({ getState, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin } = deps);
+  fetchMorningStatus = deps.fetchMorningStatus;
   if (!visibilityBound && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
       const root = document.querySelector(".now-view");
@@ -20,6 +22,58 @@ export function configureNowView(deps) {
     });
     visibilityBound = true;
   }
+}
+
+function morningTime(value) {
+  const m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/);
+  if (!m) return '--:--';
+  if (!m[6]) return `${m[4]}:${m[5]}`;
+  const offset = m[6] === 'Z' ? 0 : (m[6][0] === '-' ? -1 : 1) * (+m[6].slice(1, 3) * 60 + +m[6].slice(4));
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) + (540 - offset) * 60000).toISOString().slice(11, 16);
+}
+
+function morningBarHTML() {
+  const today = todayISO(), status = morningStatus;
+  if (!status || status.date !== today) return '';
+  const blocks = blocksForDate(today).filter(b => !b.deleted && !b.migratedTo);
+  const ai = blocks.filter(b => b.aiPlan?.source === 'morning'), failed = status.status === 'error';
+  const skipped = Array.isArray(status.skipped) ? status.skipped : [];
+  if (!failed && !ai.length && !skipped.length) return '';
+  const remaining = blocks.filter(b => !b.completed && !b.actualStartAt && !isRoutineBlock(b) && !String(b.id).startsWith('rec_'))
+    .reduce((sum, b) => sum + Math.max(0, Number(resolveEstimateMin(b)) || 0), 0);
+  const endAt = blocks.map(b => timeFromDateTime(b.actualEndAt || b.plannedEndAt)).filter(Boolean).sort().at(-1) || '--:--';
+  const builtAt = ai.map(b => b.aiPlan.builtAt).filter(Boolean).sort().at(-1) || status.builtAt;
+  const reasons = (label, items) => `<details style="margin-top:6px"><summary>${label}</summary><ul>${items.map(text => `<li>${escapeHTML(text)}</li>`).join('')}</ul></details>`;
+  return `<section class="ai-bar${failed ? ' fail' : ''}" data-testid="ai-morning-bar" data-status="${failed ? 'error' : 'ok'}" style="box-sizing:border-box;min-width:0;max-width:100%;overflow-wrap:anywhere;border:1px solid ${failed ? '#c43c45' : '#8872c4'};background:${failed ? '#fff0f1' : '#f2edff'};color:#342e43;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px">
+    ${failed ? `<b>✦ AI が今朝は組めませんでした</b><div>理由: ${escapeHTML(status.reason || '不明')} ・ 既存の予定はそのまま</div><div>次の実行 ${escapeHTML(status.nextRunAt || '--:--')}</div>`
+      : ai.length ? `<b>✦ AI が組みました ・ ${morningTime(builtAt)}</b><div>AI が置いたもの ${ai.length} 件 ・ 残り ${remaining} 分(ルーティン除く)・ 終わる見込み ${escapeHTML(endAt)}</div>${reasons('なぜこう組んだか', ai.map(b => b.aiPlan.reason || ''))}` : ''}
+    ${skipped.length ? reasons(`AI が今日は置かなかったもの(${skipped.length} 件)`, skipped.map(item => `${item.title || ''} ・ ${item.reason || ''}`)) : ''}
+  </section>`;
+}
+
+export function renderAiMorningBar() {
+  const cfg = getState().settings.github || {};
+  const key = JSON.stringify([todayISO(), cfg.dataOwner, cfg.dataRepo, cfg.branch, cfg.token]);
+  if (key !== morningKey) {
+    morningKey = key; morningStatus = null; morningLoaded = false; morningCheckedAt = 0; morningPending = false;
+  }
+  if (fetchMorningStatus && !morningPending && (!morningLoaded || Date.now() - morningCheckedAt >= 60000)) {
+    morningPending = true;
+    void (async () => {
+      let status = null;
+      try {
+        const result = await fetchMorningStatus('ai-morning-status.json', 'text', { cache: 'no-store' });
+        if (result.ok) status = JSON.parse(result.text);
+      } catch { /* Missing, malformed or unavailable status is display-only. */ }
+      if (key !== morningKey) return;
+      morningStatus = status; morningPending = false; morningLoaded = true; morningCheckedAt = Date.now();
+      const host = document.querySelector('[data-testid="ai-morning-host"]');
+      if (host && getState().currentView === 'today') {
+        host.innerHTML = morningBarHTML(); host.dataset.loaded = 'true';
+      }
+    })();
+  }
+  return `<div data-testid="ai-morning-host" data-loaded="${morningLoaded}" style="min-width:0;max-width:100%">${morningBarHTML()}</div>`;
 }
 
 function hasDateTime(value) {
