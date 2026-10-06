@@ -104,10 +104,10 @@ function sourceBetween(source, startMarker, endMarker) {
     unit: "", deadline: "", baselineValue: 0, goalValue: 0, valueStep: 1, milestones, ...extra });
   const measurement = (trackId, value, observedDate, id = `m-${trackId}`) => ({ id, trackId, value,
     observedAt: `${observedDate}T10:00:00`, updatedAt: `${observedDate}T10:00:00`, deleted: false });
-  async function seed({ projects = [], tasks = [], tracks = [], measurements = [], settingCycle = CYCLE } = {}) {
-    await page.evaluate(({ key, today, projects, tasks, tracks, measurements, settingCycle }) => {
+  async function seed({ projects = [], tasks = [], tracks = [], measurements = [], settingCycle = CYCLE, view = "wbs" } = {}) {
+    await page.evaluate(({ key, today, projects, tasks, tracks, measurements, settingCycle, view }) => {
       const state = JSON.parse(localStorage.getItem(key));
-      state.currentView = "wbs";
+      state.currentView = view;
       state.selectedDate = today;
       state.settings.twelveWeekStartDate = settingCycle;
       state.settings.showSuspended = true;
@@ -119,22 +119,44 @@ function sourceBetween(source, startMarker, endMarker) {
       state.blocks = [];
       state.recurrences = [];
       localStorage.setItem(key, JSON.stringify(state));
-    }, { key: STATE_KEY, today: TODAY, projects, tasks, tracks, measurements, settingCycle });
+    }, { key: STATE_KEY, today: TODAY, projects, tasks, tracks, measurements, settingCycle, view });
     await page.reload();
     await page.waitForSelector("main");
   }
-  async function selectProject(projectId) {
-    if (await page.locator('.wbs-project-detail').getAttribute('data-wbs-detail-id') !== projectId)
-      await page.locator(`[data-action="wbs-select-project"][data-id="${projectId}"]`).click();
+  // 現行(裁定A-8): Projectの箱の12週トラックは作業一覧に出さず、12週計画タブ(GOALSは現サイクルの最大3件・読み取り専用)で見る。
+  // 3件を超える見本は、Projectごとに状態を作り直して12週計画タブを開く。
+  let world = null, shownKey = "";
+  async function openCycleFold() {
+    await page.waitForSelector(".twy-cycle-fold", { state: "attached" });
+    if (!await page.locator(".twy-cycle-fold").evaluate((el) => el.open)) await page.locator(".twy-cycle-fold > summary").click();
+    await page.waitForSelector(".twy-goals-panel", { state: "visible" });
+  }
+  async function showOwners(ownerIds) {
+    const key = ownerIds.join(",");
+    if (shownKey === key) return;
+    const trackIds = world.tracks.filter(track => ownerIds.includes(track.ownerId)).map(track => track.id);
+    await seed({ projects: world.projects.filter(item => ownerIds.includes(item.id)),
+      tasks: world.tasks.filter(item => ownerIds.includes(item.projectId)),
+      tracks: world.tracks.filter(track => ownerIds.includes(track.ownerId)),
+      measurements: world.measurements.filter(item => trackIds.includes(item.trackId)), view: "twelveweek" });
+    await openCycleFold();
+    shownKey = key;
   }
   const row = async (trackId) => {
-    const ownerId = await page.evaluate(({ key, trackId }) => JSON.parse(localStorage.getItem(key)).tracks.find(track => track.id === trackId).ownerId, { key: STATE_KEY, trackId });
-    await selectProject(ownerId);
-    return page.locator(`.twy-row[data-twy-track-id="${trackId}"]`);
+    const ownerId = world.tracks.find(track => track.id === trackId).ownerId;
+    await showOwners([ownerId]);
+    return page.locator(`.twy-goals-panel .twy-row[data-twy-track-id="${trackId}"]`);
   };
-  const projectCard = async projectId => {
-    await selectProject(projectId);
-    return page.locator(`[data-wbs-detail-id="${projectId}"], .wbs-project-choice[data-id="${projectId}"]`);
+  const goalCard = async projectId => {
+    await showOwners([projectId]);
+    return page.locator(".twy-goals-panel");
+  };
+  const wbsGroup = async (projects, tasks, projectId, settingCycle = CYCLE) => {
+    await seed({ projects, tasks, settingCycle, view: "wbs" });
+    shownKey = "";
+    const all = page.locator('[data-action="wbs-select-project"][data-id=""]');
+    if (await all.getAttribute("aria-pressed") !== "true") await all.click();
+    return page.locator(`[data-work-group="${projectId}"]`);
   };
 
   try {
@@ -210,7 +232,7 @@ function sourceBetween(source, startMarker, endMarker) {
     tracks.push(numeric(xss, "pxss-num", { unit: xss }), milestoneTrack("xss-ms", "pxss-ms", [milestone("xm", xss, "2026-09-01")]));
     measurements.push(measurement(xss, 10, TODAY, "mxss"));
 
-    await seed({ projects, tasks, tracks, measurements });
+    world = { projects, tasks, tracks, measurements };
 
     const stateCheck = async (trackId, label, cls) => {
       const chip = (await row(trackId)).locator(".t-state");
@@ -229,7 +251,7 @@ function sourceBetween(source, startMarker, endMarker) {
       && (await (await row("n-stale")).textContent()).includes("ペース不明") && (await (await row("n-stale")).textContent()).includes("8日前")
       && await (await row("n-stale")).locator(".twy-val").evaluate((el) => Number(getComputedStyle(el).opacity) < 1));
     check("B-6 #6 numeric完了", await stateCheck("n-done", "完了", "s-done")
-      && await (await row("n-done")).locator(".twy-correct").textContent() === "訂正"
+      && await (await row("n-done")).locator("button").count() === 0
       && (await (await row("n-done")).textContent()).includes("8/20 達成")
       && await (await row("n-done")).locator(".twy-meta").textContent() === "期限 9/3"
       && await (await row("n-done")).locator(".twy-bar > i").count() === 0);
@@ -248,25 +270,35 @@ function sourceBetween(source, startMarker, endMarker) {
     check("B-6 #11 milestone期限超過", await stateCheck("ms-overdue", "期限超過", "s-overdue")
       && await (await row("ms-overdue")).locator(".twy-ms-node.late").count() === 1);
     check("B-6 #12 milestone完了", await stateCheck("ms-done", "完了", "s-done")
-      && await (await row("ms-done")).locator(".twy-correct").textContent() === "訂正"
+      && await (await row("ms-done")).locator("button").count() === 0
       && (await (await row("ms-done")).textContent()).includes("8/21 達成")
       && !(await (await row("ms-done")).textContent()).includes("8/22"));
-    check("B-6 #13 track無し現サイクル", await (await projectCard("p13")).locator(".twy-row,.twy-stale-note").count() === 0);
-    check("B-6 #14 track無し前サイクル", await (await projectCard("p14")).locator(".twy-stale-note").count() === 1
-      && await (await projectCard("p14")).locator(".twy-row").count() === 0);
-    check("B-6 #15 trackあり前サイクルは注記+行", await (await projectCard("p15")).locator(".twy-stale-note").count() === 1
-      && await (await projectCard("p15")).locator('.twy-row[data-twy-track-id="n-old"]').count() === 1);
-    check("B-6 #16 非12WY", await (await projectCard("p16")).locator(".twy-row,.twy-stale-note").count() === 0);
-    check("B-6 #17 closed track", await (await projectCard("p17")).locator(".twy-row,.twy-stale-note").count() === 0);
-    check("B-6 #18 現サイクルactive 12WYの第三の進捗非表示", await (await projectCard("p18")).locator(".wbs-progress-row").count() === 0
-      && await (await projectCard("p18")).locator(".wbs-progress-agg").count() === 0
-      && (await (await projectCard("p18")).locator(".wbs-project-meta").textContent()).includes("[12週計画]"));
-    check("B-6 #19 対象外Task/Project進捗は維持", (await (async () => {
+    check("B-6 #13 track無し現サイクル: 12週タブは「進捗の記録が未設定」", await (await goalCard("p13")).locator(".twy-row,.twy-stale-note").count() === 0
+      && await page.locator(".twy-goal-no-track").count() === 1);
+    check("B-6 #14 track無し前サイクルは12週タブの目標に出ない", await (await goalCard("p14")).locator(".twy-goal").count() === 0
+      && await page.locator(".twy-row,.twy-stale-note").count() === 0);
+    check("B-6 #15 trackあり前サイクルも12週タブの目標に出ない", await (await goalCard("p15")).locator(".twy-goal").count() === 0
+      && await page.locator('.twy-row[data-twy-track-id="n-old"]').count() === 0);
+    check("B-6 #16 非12WYは12週タブの目標に出ない", await (await goalCard("p16")).locator(".twy-goal").count() === 0);
+    check("B-6 #17 closed trackは行を出さず「未設定」", await (await goalCard("p17")).locator(".twy-row,.twy-stale-note").count() === 0
+      && await page.locator(".twy-goal-no-track").count() === 1);
+    {
+      const group = await wbsGroup([project("p18", { showProgress: true })], [task("t18-root", "p18"), task("t18-child", "p18", { parentTaskId: "t18-root" })], "p18");
+      const summary = await group.locator("> summary").textContent();
+      check("B-6 #18 現サイクルactive 12WYのProject箱は見出しに「12週計画 第N週」と進捗を1回だけ出す", /12週計画 第[0-9]+週/.test(summary)
+        && (summary.match(/進捗/g) || []).length === 1 && await group.locator(".twy-row,.wbs-progress-row,.wbs-progress-agg").count() === 0, summary);
+    }
+    {
+      const items = [["p19-past", { twelveWeekStartDate: OLD_CYCLE }], ["p19-non", { twelveWeekStartDate: "" }],
+        ["p19-inactive", { status: "suspended" }], ["p19-future", { twelveWeekStartDate: "2026-11-07" }]];
       const results = [];
-      for (const id of ["p19-past", "p19-non", "p19-inactive", "p19-future"])
-        results.push(await (await projectCard(id)).locator(".wbs-task-meta").count() === 1 && await (await projectCard(id)).locator(".wbs-progress-agg").count() === 1);
-      return results;
-    })()).every(Boolean));
+      for (const [id, extra] of items) {
+        const group = await wbsGroup([project(id, { showProgress: true, ...extra })], [task(`t-${id}`, id)], id);
+        results.push(await group.locator(".work-task-row .work-list-meta").textContent().then(text => text.includes("進捗"))
+          && (await group.locator("> summary").textContent()).includes("進捗"));
+      }
+      check("B-6 #19 対象外Task/Project進捗は維持", results.length === 4 && results.every(Boolean), JSON.stringify(results));
+    }
 
     check("STALE_DAYS 7/8日境界", await stateCheck("b-stale7", "順調", "s-ontrack")
       && await stateCheck("b-stale8", "未更新", "s-stale"));
@@ -291,49 +323,62 @@ function sourceBetween(source, startMarker, endMarker) {
     check("milestoneノードlate 当日/前日・全体期限と独立", await (await row("b-ms-today")).locator(".twy-ms-node.late").count() === 0
       && await (await row("b-ms-midlate")).locator(".twy-ms-node.late").count() === 1
       && await (await row("b-ms-midlate")).locator(".t-state.s-warn").textContent() === "要注意");
-    check("deleted trackはtrack無し扱い", await (await projectCard("p17-deleted")).locator(".twy-row,.twy-stale-note").count() === 0);
+    check("deleted trackはtrack無し扱い", await (await goalCard("p17-deleted")).locator(".twy-row,.twy-stale-note").count() === 0);
     const xssResults = [];
-    for (const projectId of ["pxss-num", "pxss-ms", "pxss-old"]) {
-      await selectProject(projectId);
-      xssResults.push(await page.evaluate((payload) => ({
+    const collectXss = () => page.evaluate((payload) => ({
       breached: document.querySelectorAll("[data-v260-breached]").length,
       executed: window.__v260Xss === true,
       trackId: [...document.querySelectorAll("[data-twy-track-id]")].some((el) => el.dataset.twyTrackId === payload),
       text: document.querySelector("main").textContent
-    }), xss));
-    }
+    }), xss);
+    for (const projectId of ["pxss-num", "pxss-ms"]) { await showOwners([projectId]); xssResults.push(await collectXss()); }
+    await wbsGroup(world.projects.filter(item => item.id === "pxss-old"), [], "pxss-old", OLD_CYCLE);
+    xssResults.push(await collectXss());
     const xssResult = { breached: xssResults.reduce((n, result) => n + result.breached, 0), executed: xssResults.some(result => result.executed), trackId: xssResults[0].trackId, text: xssResults.map(result => result.text).join("\n") };
     check("unit/track.id/milestone.labelをescapeHTML", xssResult.breached === 0 && !xssResult.executed
       && xssResult.trackId && xssResult.text.includes(xss), JSON.stringify(xssResult));
 
-    for (const theme of ["light", "dark", "cockpit"]) {
-      await page.evaluate(themeName => { document.documentElement.dataset.theme = themeName; }, theme);
-      const colors = [];
-      for (const id of ['n-ahead', 'n-ontrack', 'n-warn', 'n-overdue', 'n-stale', 'n-done'])
-        colors.push(await (await row(id)).locator('.t-state').evaluate(el => getComputedStyle(el).color));
-      check(`${theme}テーマで状態色が解決される`, colors.length === 6 && colors.every((color) => color && color !== "rgba(0, 0, 0, 0)"));
+    const themeColors = { light: [], dark: [], cockpit: [] };
+    for (const batch of [["p1", "p2", "p3"], ["p4", "p5", "p6"]]) {
+      await showOwners(batch);
+      for (const theme of Object.keys(themeColors)) {
+        await page.evaluate(themeName => { document.documentElement.dataset.theme = themeName; }, theme);
+        for (const id of batch) {
+          const trackId = world.tracks.find(track => track.ownerId === id).id;
+          themeColors[theme].push(await page.locator(`.twy-row[data-twy-track-id="${trackId}"] .t-state`).evaluate(el => getComputedStyle(el).color));
+        }
+      }
     }
+    for (const [theme, colors] of Object.entries(themeColors))
+      check(`${theme}テーマで状態色が解決される`, colors.length === 6 && colors.every((color) => color && color !== "rgba(0, 0, 0, 0)"));
     for (const width of [390, 768, 1024]) {
       await page.setViewportSize({ width, height: 900 });
       const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
-      check(`${width}pxでWBS全体に横スクロールなし`, noOverflow);
+      check(`${width}pxで12週タブ全体に横スクロールなし`, noOverflow);
     }
     check("今日の理想ラベルを行端でクリップしない", await (await row("n-ahead")).evaluate((el) => getComputedStyle(el).overflow === "visible"));
 
     await seed({ projects: [], tasks: [], tracks: [], measurements: [] });
-    check("空stateでもrenderWBSが例外を投げず空表示", await page.locator("main").count() === 1
+    check("空stateでも作業一覧が例外を投げず空表示", await page.locator("main").count() === 1
       && await page.locator(".twy-row,.twy-stale-note").count() === 0);
-    await seed({ projects: [project("p-unset", { twelveWeekStartDate: OLD_CYCLE, showProgress: true })],
-      tasks: [task("t-unset", "p-unset")], settingCycle: "" });
-    check("12WY未設定では前サイクル注記を出さない", await (await projectCard("p-unset")).locator(".twy-stale-note").count() === 0
-      && await (await projectCard("p-unset")).locator(".wbs-task-meta,.wbs-progress-agg").count() === 2);
+    {
+      const group = await wbsGroup([project("p-unset", { twelveWeekStartDate: OLD_CYCLE, showProgress: true })], [task("t-unset", "p-unset")], "p-unset", "");
+      check("12WY未設定では前サイクル注記を出さず、進捗は見出しと行に残る", await group.locator(".twy-stale-note").count() === 0
+        && (await group.locator("> summary").textContent()).includes("進捗") && (await group.locator(".work-task-row .work-list-meta").textContent()).includes("進捗"));
+    }
 
-    console.log("[3] E2E条件1: フォーム登録→WBS状態表示");
+    console.log("[3] E2E条件1: フォーム登録→12週タブの状態表示");
     async function openProjectEditor(projectId) {
-      await selectProject(projectId);
-      await page.locator(`.wbs-detail-actions [data-action="edit-project"][data-id="${projectId}"]`).click();
+      const all = page.locator('[data-action="wbs-select-project"][data-id=""]');
+      if (await all.getAttribute("aria-pressed") !== "true") await all.click();
+      await page.locator(`[data-work-group="${projectId}"] > summary [data-action="edit-project"]`).click();
       await page.waitForSelector("[data-twy-track]", { state: "attached" });
     }
+    const savedRow = async (trackId) => {
+      await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').evaluate(el => el.click());
+      await openCycleFold();
+      return page.locator(`.twy-goals-panel .twy-row[data-twy-track-id="${trackId}"]`);
+    };
     await seed({ projects: [project("p-form-numeric")], tasks: [task("t-form-num", "p-form-numeric")] });
     await openProjectEditor("p-form-numeric");
     await page.locator('[data-action="twy-kind-numeric"]').click();
@@ -348,7 +393,7 @@ function sourceBetween(source, startMarker, endMarker) {
     let saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     let active = saved.tracks.find((item) => item.ownerId === "p-form-numeric" && item.status === "active");
     check("numericをフォーム保存するとWBS行へ状態表示", active?.kind === "numeric"
-      && await (await row(active.id)).locator(".t-state").count() === 1 && (await (await row(active.id)).locator(".t-state").textContent()).length > 0);
+      && await (await savedRow(active.id)).locator(".t-state").count() === 1 && (await (await savedRow(active.id)).locator(".t-state").textContent()).length > 0);
 
     await seed({ projects: [project("p-form-ms")], tasks: [task("t-form-ms", "p-form-ms")] });
     await openProjectEditor("p-form-ms");
@@ -363,7 +408,7 @@ function sourceBetween(source, startMarker, endMarker) {
     saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), STATE_KEY);
     active = saved.tracks.find((item) => item.ownerId === "p-form-ms" && item.status === "active");
     check("milestoneをフォーム保存するとWBS行へ状態+ノード表示", active?.kind === "milestone"
-      && await (await row(active.id)).locator(".t-state").count() === 1 && await (await row(active.id)).locator(".twy-ms-node").count() === 2);
+      && await (await savedRow(active.id)).locator(".t-state").count() === 1 && await (await savedRow(active.id)).locator(".twy-ms-node").count() === 2);
   } catch (error) {
     failures++;
     console.log("  ❌ 例外:", error.stack || error.message);
