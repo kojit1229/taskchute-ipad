@@ -13,7 +13,7 @@ const payload = '架空 <img src=x onerror="window.__injected=1"> & メモ';
 const TASK_FIELDS = ["title", "projectId", "status", "parentTaskId", "category", "dueDate", "selfDueEnabled",
   "doneCriteria", "firstStep", "leverageType", "aiWork", "aiWorkBrief", "planTarget", "aiBrief", "description",
   "twyPerWeek", "twyFromWeek", "twyToWeek", "twyKeystone"];
-const PROJECT_FIELDS = ["title", "kind", "status", "priority", "category", "startDate", "dueDate", "is12WY",
+const PROJECT_FIELDS = ["title", "kind", "status", "priority", "category", "startDate", "dueDate", "dueManaged", "is12WY",
   "showProgress", "description", "twyKind", "twyName", "twyStartDate", "twyBaseline", "twyGoal", "twyUnit", "twyDeadline", "twyStep"];
 const BLOCK_FIELDS = ["title", "category", "taskId", "isMIT", "date", "plannedStartAt", "plannedEndAt", "estimateMin",
   "actualStartAt", "actualEndAt", "charge", "discharge", "recurrenceKind", "comment", "leverageType", "completed", "outcome", "resultNote"];

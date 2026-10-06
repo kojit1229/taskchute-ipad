@@ -129,8 +129,9 @@ function check(name, cond, extra = "") {
     const beforeDueRead = await stateNow();
     await page.locator('[data-action="wbs-select-project"][data-id="wish-1"]').click();
     const wishRow = page.locator('[data-wbs-row-id="w-1"]');
-    check("Wishタスクの期日・見積は文字表示で入力なし", (await wishRow.locator('.work-task-due').textContent()).includes('期日なし')
-      && (await wishRow.locator('.work-task-due').textContent()).includes('見積 0分') && await wishRow.locator('input,select').count() === 0);
+    // v448 束B: 期日・見積はその場編集の入力欄(状態 select は無い)。読むだけでは保存しない。
+    check("Wishタスクの期日・見積は入力欄で表示(期日なし・見積0)", await wishRow.locator('[data-work-edit="dueDate"]').inputValue() === ''
+      && await wishRow.locator('[data-work-edit="estimateMin"]').inputValue() === '0' && await wishRow.locator('select').count() === 0);
     check("期日を読むだけでは保存state不変", JSON.stringify(await stateNow()) === JSON.stringify(beforeDueRead));
 
     // ============================================================
