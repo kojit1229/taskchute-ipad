@@ -229,6 +229,7 @@ function patchWorkList(root, reset = false, editedId = "") {
 }
 function handleWorkListEdit(target) {
   if (!target.matches?.("[data-work-edit]")) return false;
+  if (screenDeps.handleDecideEdit(target)) return true;
   const { id, workEdit: field } = target.dataset, task = state.tasks.find(t => t.id === id && !t.deleted);
   if (!task || !["dueDate", "estimateMin"].includes(field)) return true;
   const value = field === "estimateMin" ? Number(target.value) : target.value;

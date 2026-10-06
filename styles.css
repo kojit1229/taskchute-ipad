@@ -5712,6 +5712,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .work-decide-sidebar small { font-size: 12px; font-weight: normal; }
 .work-decide-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; }
 .work-decide-chips button { max-width: 100%; overflow-wrap: anywhere; }
+.work-decide-chips .input, .work-decide-chips .select { min-height: 44px; max-width: 100%; }
 .work-decide-chips [aria-pressed="true"] { border-color: var(--tower-amber); color: var(--tower-amber); }
 .decide-view { min-width: 0; overflow-wrap: anywhere; }
 .decide-view button { min-height: 44px; max-width: 100%; white-space: normal; }
