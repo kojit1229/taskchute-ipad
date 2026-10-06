@@ -146,6 +146,40 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       await root.locator('[data-action="add-task"]').click();
       assert(await page.evaluate(async()=> (await import('/src/state/store.js')).state.tasks.some(t=>t.title==='追加入口のTask'&&t.projectId==='q'&&!t.deleted)));
     });
+    await check('B-1 inline date and estimate persist on change and patch the row', async () => {
+      await root.locator('[data-work-filter="query"]').fill('期限超過');
+      const row = taskRow('late'), due = row.locator('[data-work-edit="dueDate"]'), estimate = row.locator('[data-work-edit="estimateMin"]');
+      assert.equal(await due.count(),1,'native due-date editor exists');
+      assert.equal(await due.getAttribute('type'),'date');
+      assert.equal(await estimate.getAttribute('type'),'number');
+      assert.equal(await estimate.getAttribute('min'),'0');
+      assert.equal(await estimate.getAttribute('step'),'1');
+      assert.equal(await row.locator('select').count(),0,'no status select');
+      await root.locator('[data-work-filter="query"]').evaluate(el=>{window.__bundleBQuery=el;});
+      const original = await due.inputValue();
+      await due.evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));},fixture.overdue);
+      assert.equal(await page.evaluate(async()=> (await import('/src/state/store.js')).state.tasks.find(t=>t.id==='late').dueDate),original,'input does not save before change');
+      await due.dispatchEvent('change');
+      const saved = async () => page.evaluate(key=>JSON.parse(localStorage.getItem(key)).tasks.find(t=>t.id==='late'),STATE_KEY);
+      assert.equal((await saved()).dueDate,fixture.overdue);
+      assert((await row.textContent()).includes('超過 3日'));
+      const workDate = await page.evaluate(value=>{const [y,m,d]=value.split('-').map(Number),day=new Date(y,m-1,d-2);return `${day.getMonth()+1}/${day.getDate()}`;},fixture.overdue);
+      assert((await row.textContent()).includes(`作業 ${workDate}`));
+      for (const minutes of [45,60]) {
+        await estimate.fill(String(minutes)); await estimate.dispatchEvent('change');
+        assert.equal((await saved()).estimateMin,minutes);
+      }
+      await due.fill(''); await due.dispatchEvent('change');
+      assert.equal((await saved()).dueDate,'');
+      assert(!(await row.textContent()).includes('超過 '));
+      assert(!(await row.textContent()).includes('作業 '));
+      assert(await root.locator('[data-work-filter="query"]').evaluate(el=>el===window.__bundleBQuery),'query node is preserved');
+      for (const input of [due,estimate]) {
+        const size=await input.evaluate(el=>({font:parseFloat(getComputedStyle(el).fontSize),height:el.getBoundingClientRect().height}));
+        assert(size.font>=16); assert(size.height>=44);
+      }
+      assert.deepEqual(errors,[]);
+    });
     assert.equal(failures,0,'acceptance failures');
   } finally { if(browser) await browser.close(); if(server) await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

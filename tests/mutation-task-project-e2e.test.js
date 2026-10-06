@@ -43,7 +43,7 @@ async function fixture() {
     render: () => { counts.render++; },
     closeModal: () => { if (ctx.draftSaveTransaction.defer(() => ctx.closeModal())) return; counts.close++; ctx.state.modal = null; },
     maybeQueueNextAiStep: () => { if (ctx.draftSaveTransaction.defer(() => ctx.maybeQueueNextAiStep(), { post: true })) return; counts.queue++; },
-    closeAiStepConfirmIfUndone: () => { counts.close++; },
+    closeAiStepConfirmIfUndone: () => { counts.close++; }, inheritDueNudge: () => {},  // v448: toggleTask/updateTaskField が呼ぶシリーズ引き継ぎ(ESM import)の代替
     modalDeleteMessage: () => 'delete?',
     // v381(監督者追随): deleteFromModal は型の if 連鎖を持たず、レジストリ(dispatchModalDelete)がハンドラの戻り値
     // (false=保存失敗)を返す。代役はハンドラ登録と同じ経路(deleteTask/deleteProject の戻り値)を再現する。

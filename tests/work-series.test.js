@@ -28,4 +28,14 @@ const path = require('node:path');
   assert.equal(nudgeKey(tasks[0]), 's:p||物語|巻');
   assert.equal(nudgeKey(tasks[1]), '単発');
   console.log('PASS U1-3 stable nudge keys');
+  const dateSource = fs.readFileSync(path.join(__dirname, '../src/core/daily-time.js'), 'utf8');
+  const { addMonths } = await import('data:text/javascript;base64,' + Buffer.from(dateSource).toString('base64'));
+  const { fixedClock } = require('./helpers');
+  const year = new Date(fixedClock(new Date().getTime())()).getFullYear();
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  for (const y of [year, year+1, year+2, year+3]) for (const m of [0, 7, 11]) for (const delta of [1, 3]) {
+    const start = new Date(y,m+1,0), last = new Date(y,m+delta+1,0);
+    assert.equal(addMonths(iso(start),delta),iso(new Date(y,m+delta,Math.min(start.getDate(),last.getDate()))));
+  }
+  console.log('PASS B-4 calendar months clamp month end, leap February and year rollover');
 })().catch(error => { console.error(error); process.exitCode = 1; });

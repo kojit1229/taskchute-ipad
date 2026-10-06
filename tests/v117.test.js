@@ -131,7 +131,7 @@ function check(name, cond, extra = "") {
     });
     const rowAuto = await taskRowInfo("t-auto");
     check("締切ラベルに前倒し後の日付が出る", rowAuto.text.includes(effOf5.slice(5).split("-").map(Number).join("/")), rowAuto.text);
-    check("前倒し後の作業日と元の期日を併記する", rowAuto.text.includes(`期日 ${dueIn5.slice(5).split("-").map(Number).join("/")}`), rowAuto.text);
+    check("前倒し後の作業日と元の期日を併記する", await page.locator('[data-work-list="wbs"] [data-wbs-row-id="t-auto"] [data-work-edit="dueDate"]').inputValue() === dueIn5, rowAuto.text);  // v448 束B: 期日は入力欄の値
     check("期限切れ(wbs-overdue)にはならない(3日後はまだ先)", rowAuto.overdueCount === 0);
 
     console.log("[6] effectiveDueDate: 前倒しにより「まだ実期日前だが有効締切は過ぎている」タスクが期限切れ表示になる");
@@ -152,7 +152,7 @@ function check(name, cond, extra = "") {
     });
     const rowOff = await taskRowInfo("t-off");
     const dueLabel = dueTomorrow.slice(5).split("-").map(Number).join("/");
-    check("selfDueOff=trueは作業日と期日が同じ日付になる", rowOff.text.includes(`作業 ${dueLabel}`) && rowOff.text.includes(`期日 ${dueLabel}`), rowOff.text);
+    check("selfDueOff=trueは作業日と期日が同じ日付になる", rowOff.text.includes(`作業 ${dueLabel}`) && await page.locator('[data-work-list="wbs"] [data-wbs-row-id="t-off"] [data-work-edit="dueDate"]').inputValue() === dueTomorrow, rowOff.text);  // v448 束B
     check("selfDueOff=trueは期限切れにならない(実期日は明日でまだ先)", rowOff.overdueCount === 0);
 
     console.log("[8] タスク編集モーダル: 「⏪ 自己締切(期日−2日)」チェックボックスの保存反映(反転マッピング)");

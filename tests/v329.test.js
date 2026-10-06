@@ -101,7 +101,7 @@ function task(id, projectId, title, extra = {}) {
     await activeRow.locator('[data-action="edit-task"]').click();await page.locator('[data-modal-field="status"]').selectOption('suspended');await page.locator('[data-action="modal-save"]').click();
     check('Task suspension persists through its editor',(await stored()).tasks.find(t=>t.id==='t-active').status==='suspended');
     check('Absent AI/owner/order actions leave values unchanged',(await stored()).tasks.find(t=>t.id==='t-active').criteriaRequest===false&&(await stored()).tasks.find(t=>t.id==='t-step').owner==='k'&&(await stored()).tasks.find(t=>t.id==='t-step').order===1000);
-    for(const id of ['t-plan','t-suspended']) check('Cycle and non-cycle tasks have no inline input: '+id,await row(id).locator('input,select').count()===0);
+    for(const id of ['t-plan','t-suspended']) check('Cycle and non-cycle tasks have due/estimate inputs and no status select: '+id,await row(id).locator('[data-work-edit="dueDate"]').count()===1&&await row(id).locator('[data-work-edit="estimateMin"]').count()===1&&await row(id).locator('select').count()===0);
     const cycleSummary=await page.locator('[data-work-group="p-cycle"] > summary').textContent();
     check('Cycle summary retains week, task count and progress',cycleSummary.includes('12\u9031\u8a08\u753b \u7b2c3\u9031')&&cycleSummary.includes('6/6')&&cycleSummary.includes('\u9032\u6357'));
     const shapes=[];

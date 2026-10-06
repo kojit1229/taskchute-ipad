@@ -59,8 +59,8 @@ import { candidateTasks } from "./src/features/three-screen-rows.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
-import { configureDecideView, renderDecideView, undecidedCount } from "./src/features/decide-view.js";
-import { workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
+import { configureDecideView, renderDecideView, undecidedCount, handleDecideEdit, inheritDueNudge, updateDecideTaskField } from "./src/features/decide-view.js";
+import { workListConditions, configureWorkList, renderWorkList, handleWorkListEdit, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 import { workListRows, filterWorkList } from "./src/core/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -343,8 +343,8 @@ configureGithubSync({
   _startupDataModifiedAt,
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
-configureDecideView({ renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
-configureWorkList({ renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureDecideView({ updateTaskField, saveDecision: callback => draftSaveTransaction.run(callback, { kinds: ["tasks"] }).ok, renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
+configureWorkList({ handleDecideEdit, renderDecideView, updateTaskField: updateDecideTaskField, renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
@@ -1959,6 +1959,7 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (handleWorkListEdit(event.target)) return;
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
@@ -2523,6 +2524,7 @@ function normalizeState(value) {
   value.tasks = value.tasks.map((task) => {
     // v18: 古い trigger/celebrate フィールドは削除(あれば)
     const { trigger, celebrate, ...rest } = task;
+    if (rest.dueNudge === null) delete rest.dueNudge;
     // v195: ownerを実行主体の正典にし、既存のAIワーカー表示・バッチ用aiWorkを同期する。
     // **updatedAtは絶対に進めない**(v135): normalizeStateは起動時・同期時に走り、同期マージは
     // updatedAtの新しい方をオブジェクト丸ごと採択する。読み込んだだけで時刻が進むと、
@@ -2886,7 +2888,7 @@ function normalizeState(value) {
   // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
   //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
   // v95: WBS進捗率(Σ分子/Σ分母)の表示トグルを追加。既定OFF(未使用Projectでバーが乱立しないように)
-  value.projects = value.projects.map((p) => ({ priority: "中", showProgress: false, updatedAt: "", ...p }));
+  value.projects = value.projects.map((p) => ({ priority: "中", showProgress: false, updatedAt: "", ...p }));  // v448: dueManaged は未設定=false 扱い(既定値を書き込まない。v303 の保存不変の約束を守る)
   // v73: コンディションOS — 睡眠/服薬/余力/夜の記録/運動ログの軽量ログ(日付キー)。
   //      体調そのもの(1〜10相当)は既存の朝の体調ピッカー(state.settings.morningEnergyLog)を
   //      引き続き使い、二重管理にしない(CHANGES_v73.md参照)。
@@ -5328,6 +5330,7 @@ function updateTaskField(id, field, value) {
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, [field]: value, ...(field === "status" && value === "completed" ? { progressNum: fillProgressOnComplete(t) } : {}) }
     : t);
+  if (field === "status" && value === "completed") inheritDueNudge(id);
   draftSaveTransaction.complete();
 }
 
@@ -10084,6 +10087,7 @@ function toggleTask(id) {
   }
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t) } : t);
+  inheritDueNudge(id);  // v448 束B: シリーズの dueNudge を次の未完了の巻へ引き継ぐ
   const date = todayISO(), end = nowDateTime();
   const minutes = Number.isFinite(task.estimateMin) && task.estimateMin > 0 ? task.estimateMin : 15;
   // 既存の減算ヘルパーは分までを返すので、チェック時刻の秒を保つ。
@@ -14529,6 +14533,7 @@ function buildProjectModal(project) {
             <input class="input" type="date" data-modal-field="dueDate" value="${project.dueDate || ""}">
           </div>
         </div>
+        <label class="checkbox-line"><input type="checkbox" data-modal-field="dueManaged" ${project.dueManaged ? "checked" : ""}>期日を管理(決めることの対象にする)</label>
         </section><section class="detail-column" aria-label="12週の計画・進捗">
         <h4 class="tower-section-title">12週の計画・進捗</h4>
         <div class="field">
@@ -14639,6 +14644,7 @@ function saveProjectFromModal(id, fields) {
       dueDate: fields.dueDate || "",
       description: fields.description || "",
       twelveWeekStartDate,
+      dueManaged: Boolean(fields.dueManaged),
       showProgress: Boolean(fields.showProgress)  // v95: WBS進捗率(Σ分子/Σ分母)の表示トグル
     };
   });

@@ -238,9 +238,9 @@ async function seed(page, values) {
     check("実効+7日TaskはWBS全件に出る", await results.locator('[data-work-key="task:t-eff7"]').count() === 1);
     check("実効+8日TaskもWBS全件に保持する", await results.locator('[data-work-key="task:t-eff8"]').count() === 1);
     const eff7Meta = await results.locator('[data-work-key="task:t-eff7"]').textContent();
-    check("作業期限と外部期限の両方を表示", eff7Meta.includes(`作業 ${mdFmtJs(addDaysISO(TODAY, 7))}`) && eff7Meta.includes(`期日 ${mdFmtJs(addDaysISO(TODAY, 9))}`), eff7Meta);
+    check("作業期限と外部期限の両方を表示", eff7Meta.includes(`作業 ${mdFmtJs(addDaysISO(TODAY, 7))}`) && await results.locator('[data-work-key="task:t-eff7"] [data-work-edit="dueDate"]').inputValue() === addDaysISO(TODAY, 9), eff7Meta);  // v448 束B: 期日は入力欄の値
     await results.locator('[data-work-key="task:t-eff7"]').scrollIntoViewIfNeeded();
-    check("行のM/D(作業・期日)は別の欄に出る", (await tree("t-eff7").locator('.work-task-due').textContent()).includes(mdFmtJs(addDaysISO(TODAY, 9))) && (await tree("t-eff7").locator('.work-list-meta').first().textContent()).includes(mdFmtJs(addDaysISO(TODAY, 7))));
+    check("行のM/D(作業・期日)は別の欄に出る", await tree("t-eff7").locator('.work-task-due [data-work-edit="dueDate"]').inputValue() === addDaysISO(TODAY, 9) && (await tree("t-eff7").locator('.work-list-meta').first().textContent()).includes(mdFmtJs(addDaysISO(TODAY, 7))));
 
     await seed(page, { currentView: "wbs", selectedDate: TODAY, projects: [project("p1"), project("pWish", { kind: "wish" })], tasks, blocks: [upA, upB, addedBlock] });
     await selectProject("p1");

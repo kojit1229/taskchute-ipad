@@ -120,7 +120,8 @@ function renderWorkTaskRow(t, { titleHTML = "", ghost = false, depth = 0 } = {})
     ${depth < 2 ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${e(t.id)}">＋ サブ</button>` : ""}
     ${placementActions({ kind: "task", id: t.id, item: t }, "wbs")}
   </div><div class="work-task-due">
-    ${t.dueDate ? `期日 ${workDateLabel(t.dueDate, true)}` : "期日なし"}<br>見積 ${Number(t.estimateMin) || 0}分
+    <label>期日<input class="input" type="date" data-work-edit="dueDate" data-id="${e(t.id)}" value="${e(t.dueDate || "")}" aria-label="期日"></label>
+    <label>見積 ${Number(t.estimateMin) || 0}分<input class="input" type="number" min="0" step="1" data-work-edit="estimateMin" data-id="${e(t.id)}" value="${Number(t.estimateMin) || 0}" aria-label="見積（分）"></label>
   </div></div>`;
 }
 function renderWbsList() {
@@ -189,12 +190,21 @@ function renderWorkList(scope) {
     ${scope === "exec" ? '<p class="muted">Taskは <button class="btn ghost" data-action="nav" data-view="wbs">作業一覧で見る</button></p>' : ""}
   </section>`;
 }
-function patchWorkList(root, reset = false) {
+function patchWorkList(root, reset = false, editedId = "") {
   if (root.dataset.workComposing === "1") return;
   if (root.dataset.workList === "wbs") {
     const template = root.ownerDocument.createElement("template"); template.innerHTML = renderWbsList();
     for (const selector of ["[data-work-decide-link]", "[data-work-counts]", "[data-work-projects]", "[data-work-list-rows]"]) {
       const current = root.querySelector(selector), next = template.content.querySelector(selector);
+      if (selector === "[data-work-list-rows]" && editedId) {
+        const rows = [...current.querySelectorAll("[data-work-key]")], nextRows = [...next.querySelectorAll("[data-work-key]")];
+        if (rows.length === nextRows.length && rows.every((row, i) => row.dataset.workKey === nextRows[i].dataset.workKey)) {
+          rows.forEach((row, i) => { if (row.innerHTML !== nextRows[i].innerHTML) row.innerHTML = nextRows[i].innerHTML; });
+          const summaries = current.querySelectorAll(".work-project-group > summary");
+          next.querySelectorAll(".work-project-group > summary").forEach((summary, i) => { if (summaries[i].innerHTML !== summary.innerHTML) summaries[i].innerHTML = summary.innerHTML; });
+          continue;
+        }
+      }
       if (current.innerHTML !== next.innerHTML) current.innerHTML = next.innerHTML;
     }
     if (reset) root.querySelector("[data-work-list-rows]").scrollTop = 0;
@@ -216,6 +226,26 @@ function patchWorkList(root, reset = false) {
     });
   }
   patchSearchFrame(root, searchModel(scope, model), { escapeHTML, resultsHTML: template.innerHTML, reset });
+}
+function handleWorkListEdit(target) {
+  if (!target.matches?.("[data-work-edit]")) return false;
+  if (screenDeps.handleDecideEdit(target)) return true;
+  const { id, workEdit: field } = target.dataset, task = state.tasks.find(t => t.id === id && !t.deleted);
+  if (!task || !["dueDate", "estimateMin"].includes(field)) return true;
+  const value = field === "estimateMin" ? Number(target.value) : target.value;
+  if (!target.validity.valid || (field === "estimateMin" && (!Number.isInteger(value) || value < 0))) {
+    target.value = task[field] ?? (field === "estimateMin" ? 0 : "");
+    return true;
+  }
+  const root = target.closest('[data-work-list="wbs"]');
+  if (!screenDeps.updateTaskField(id, field, value)) target.value = task[field] ?? (field === "estimateMin" ? 0 : "");
+  else if (target.closest("[data-decide-view]")) { target.closest("[data-decide-view]").outerHTML = screenDeps.renderDecideView(); return true; }  // 循環 import を避け deps 経由(fixB-2)
+  if (root) patchWorkList(root, false, id);
+  else {
+    const row = target.closest("[data-work-key]");
+    if (row) row.outerHTML = renderWorkTaskRow(state.tasks.find(t => t.id === id));
+  }
+  return true;
 }
 function handleWorkListInput(target) {
   const root = target.closest?.("[data-work-list]");
@@ -298,4 +328,4 @@ function restoreWorkListScroll() {
     : saved.blockId != null ? `[data-block-id="${CSS.escape(saved.blockId)}"]` : '';
   root?.querySelector(`[data-work-key="${CSS.escape(saved.key)}"] button[data-action="${CSS.escape(saved.action)}"]${identity}:not(:disabled)`)?.focus({ preventScroll: true });
 }
-export { renderWorkTaskRow, workDateLabel, workDueMatches, view as workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };
+export { renderWorkTaskRow, workDateLabel, workDueMatches, view as workListConditions, configureWorkList, renderWorkList, handleWorkListEdit, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };
