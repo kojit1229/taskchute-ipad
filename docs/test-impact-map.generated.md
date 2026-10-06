@@ -9,7 +9,7 @@
 | archive-date-protection-e2e.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 19 | 0 | 0 |
 | archive-date-protection.test.js | node | full | sync-storage | 50 | 0 | 0 |
 | archive-snapshot-safety.test.js | node | full | sync-storage | 51 | 0 | 0 |
-| archive-tombstone-sync.test.js | node | full | sync-storage | 40 | 0 | 0 |
+| archive-tombstone-sync.test.js | node | full | sync-storage | 42 | 0 | 0 |
 | bridge-epoch-independent.test.js | node | full | content-ai | 4 | 0 | 0 |
 | coach-core.test.js | node | full | sync-storage, content-ai, ui-responsive | 7 | 0 | 0 |
 | code-index.test.js | node | full | legacy-crosscutting | 18 | 0 | 0 |

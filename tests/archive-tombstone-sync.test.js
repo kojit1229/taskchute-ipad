@@ -23,7 +23,7 @@ function check(name, condition, extra = "") {
 
 function noop() {}
 
-function configureMinimalStubs(syncMod) {
+function configureMinimalStubs(syncMod, overrides = {}) {
   syncMod.configureGithubSync({
     normalizeState: (x) => x, nowDateTime: () => "2026-09-05T12:00:00",
     todayISO: () => "2026-09-05", addDays: (d) => d, isTouchedBlock: () => false,
@@ -33,7 +33,7 @@ function configureMinimalStubs(syncMod) {
     readArchiveForSync: async () => ({ journals: { "2026-01-05": "古いジャーナル本文" }, feedback: { "2026-01-05": "古いフィードバック本文" }, reports: {} }),
     gitHubContentsURL: noop, githubHeaders: noop, gitHubErrorMessage: noop, fromBase64: noop, toBase64: noop,
     sanitizedStateForGitHub: noop, maybeWriteBackupSnapshot: noop, updateAutoSaveStatus: noop, updateSyncDot: noop,
-    renderSyncBanner: noop, pruneExpiredSuggestedThemes: (x) => x, _startupDataModifiedAt: ""
+    renderSyncBanner: noop, pruneExpiredSuggestedThemes: (x) => x, _startupDataModifiedAt: "", ...overrides
   });
 }
 
@@ -283,6 +283,63 @@ if (require.main === module) (async () => {
     const result = merged.values.blocks.find((b) => b.id === "b-old");
     check("tombstone(deleted:true)が勝つ・本文は蘇らない",
       !!result && result.deleted === true && !("title" in result), JSON.stringify(result));
+  }
+
+  console.log("[e] 終了済みルールのコマは取り込みで墓標化");
+  {
+    const today = "2026-09-05", now = `${today}T12:00:00`;
+    const addDays = (date, days) => {
+      const [year, month, day] = date.split("-").map(Number);
+      return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+    };
+    configureMinimalStubs(syncMod, {
+      todayISO: () => today, nowDateTime: () => now, addDays,
+      isTouchedBlock: (b) => b.id === "r1-touched"
+    });
+    const block = (id, offset, extra = {}) => ({
+      id, date: addDays(today, offset), recurrenceGroupId: "R1",
+      createdAt: `${addDays(today, -1)}T09:00:00`, ...extra
+    });
+    const shared = block("r1-today", 0);
+    const local = baseState({
+      recurrences: [{ id: "R1" }, { id: "R2" }],
+      blocks: [block("r1-yesterday", -1), shared, block("r1-local", 1),
+        block("r1-touched", 1), block("r2-live", 1, { recurrenceGroupId: "R2" }),
+        block("no-rule", 1, { recurrenceGroupId: undefined }),
+        block("orphan", 1, { recurrenceGroupId: "L-orphan" }),
+        block("already-deleted", 1, { deleted: true, updatedAt: `${today}T08:00:00` })]
+    });
+    const remote = baseState({
+      recurrences: [{ id: "R1", deleted: true }, { id: "R2" }],
+      blocks: [{ ...shared }, block("r1-remote", 1)]
+    });
+    const targets = new Set(["r1-today", "r1-local", "r1-remote"]);
+    const originals = [...local.blocks, remote.blocks[1]];
+    const before = JSON.stringify([local, remote]);
+    let tombstone;
+    for (const [hand, other] of [[local, remote], [remote, local]]) {
+      storeMod.setState(hand);
+      await syncMod.prepareArchiveMerge(other);
+      const merged = syncMod.computeSyncMerge(other, "local");
+      const results = merged.values.blocks;
+      check("両側の終了ルールを見て3件だけ墓標化し、対象外の内容・参照と入力を維持する",
+        results.length === originals.length && originals.every((original) => {
+          const result = results.find((b) => b.id === original.id);
+          return targets.has(original.id)
+            ? JSON.stringify(result) === JSON.stringify({ ...original, deleted: true, updatedAt: now })
+            : result === original && JSON.stringify(result) === JSON.stringify(original);
+        }) && JSON.stringify([local, remote]) === before, JSON.stringify(results));
+      tombstone = results.find((b) => b.id === "r1-local");
+    }
+    const staleRemote = baseState({ blocks: [block("r1-local", 1)] });
+    storeMod.setState(baseState({ blocks: [tombstone] }));
+    await syncMod.prepareArchiveMerge(staleRemote);
+    const merged = syncMod.computeSyncMerge(staleRemote, "local");
+    syncMod.applySyncMergeToRemote(merged, staleRemote);
+    const result = staleRemote.blocks[0];
+    check("新しい墓標はcreatedAtだけが古い相手の生きた同idに巻き戻されない",
+      result?.deleted === true && JSON.stringify(result) === JSON.stringify(tombstone), JSON.stringify(result));
+    configureMinimalStubs(syncMod);
   }
 
   console.log(failures === 0 ? "\narchive-tombstone-sync: 全件成功" : `\narchive-tombstone-sync: ${failures}件失敗`);

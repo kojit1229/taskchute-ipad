@@ -155,9 +155,9 @@
       "domains": [
         "sync-storage"
       ],
-      "assertionSignals": 40,
-      "assertionHash": "c162867eab490424",
-      "sourceHash": "87f6a8d4f5e15a8b",
+      "assertionSignals": 42,
+      "assertionHash": "2f209f1578d5bdb2",
+      "sourceHash": "c94bd789908ba111",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
