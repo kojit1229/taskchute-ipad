@@ -2888,7 +2888,7 @@ function normalizeState(value) {
   // v63: WIP上限アラート(提案2)用の優先度フィールド(高/中/低)。既存Projectは「中」で後方互換補完。
   //      wish/other の自動生成Projectもここで拾われる(map は自動生成の push より後に実行するため)。
   // v95: WBS進捗率(Σ分子/Σ分母)の表示トグルを追加。既定OFF(未使用Projectでバーが乱立しないように)
-  value.projects = value.projects.map((p) => ({ dueManaged: false, priority: "中", showProgress: false, updatedAt: "", ...p }));
+  value.projects = value.projects.map((p) => ({ priority: "中", showProgress: false, updatedAt: "", ...p }));  // v448: dueManaged は未設定=false 扱い(既定値を書き込まない。v303 の保存不変の約束を守る)
   // v73: コンディションOS — 睡眠/服薬/余力/夜の記録/運動ログの軽量ログ(日付キー)。
   //      体調そのもの(1〜10相当)は既存の朝の体調ピッカー(state.settings.morningEnergyLog)を
   //      引き続き使い、二重管理にしない(CHANGES_v73.md参照)。
