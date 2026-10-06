@@ -5730,6 +5730,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .work-task-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; }
 .work-task-row > * { min-width: 0; overflow-wrap: anywhere; }
 .work-task-name { display: flex; flex-wrap: wrap; align-items: center; }
+.work-task-name > button[data-kind="children"] { min-width: 44px; min-height: 44px; }
 .work-task-name .work-list-title { flex: 1; min-width: 0; width: auto; padding: 4px; }
 .work-task-row .work-list-meta { padding: 0; }
 .work-task-due { font-size: 12px; }
