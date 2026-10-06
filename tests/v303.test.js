@@ -212,7 +212,9 @@ function functionBlock(source, name, nextName) {
     releasePull();
     await waitForToast("GitHub読込失敗: アーカイブと一致しない記録");
     const raceAfter = await storedState();
-    check("接続変更後の旧応答は端末記録と更新時刻を変更しない", ["tasks", "projects", "blocks", "dataModifiedAt"].every(key => JSON.stringify(raceAfter[key]) === JSON.stringify(raceBefore[key])));
+    const raceDiffKeys = ["tasks", "projects", "blocks", "dataModifiedAt"].filter(key => JSON.stringify(raceAfter[key]) !== JSON.stringify(raceBefore[key]));
+    check("接続変更後の旧応答は端末記録と更新時刻を変更しない", raceDiffKeys.length === 0,
+      JSON.stringify({ raceDiffKeys, before: Object.fromEntries(raceDiffKeys.map(k => [k, raceBefore[k]])), after: Object.fromEntries(raceDiffKeys.map(k => [k, raceAfter[k]])) }).slice(0, 1500));  // v448: CI だけで落ちるため差分を出す(断言は不変)
     check("接続変更で中止した読込は成功時刻を進めない", await page.evaluate(key => localStorage.getItem(key), PULL_AT_KEY) === pullAtBeforeRace);
     check("接続変更後は控え保存を含む追加通信を開始しない", api.requests.length === requestsBeforeRelease);
     check("旧token応答の採用中止後も現在tokenの認証バナーが残る",
