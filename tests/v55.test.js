@@ -56,7 +56,7 @@ function check(name, cond, extra = "") {
     && (await page.locator('[data-work-key="task:task-B"] .work-task-due').textContent()).includes('見積 0分'));
   check("行内入力欄と状態selectが無い", await rows.locator('input,select,textarea').count() === 0
     && await page.locator('.wbs-inline-input,[data-wbs-edit]').count() === 0);
-  check("検索入力は16px以上", parseFloat(await page.locator('[data-work-list="wbs"] input').evaluate(el => getComputedStyle(el).fontSize)) >= 16);
+  check("検索入力は16px以上", parseFloat(await page.locator('[data-work-list="wbs"] #wbs-projects-query').evaluate(el => getComputedStyle(el).fontSize)) >= 16);
 
   // ---- [2] 後方互換 ----
   console.log("[2] 後方互換");

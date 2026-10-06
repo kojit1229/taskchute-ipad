@@ -64,7 +64,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
       await page.locator('[data-date-picker]').fill(fixtureDates.yesterday);
       await page.waitForFunction(async () => (await import('/src/state/store.js')).state.selectedDate === fixtureDates.yesterday);
       await nav('wbs');
-      await page.locator('[data-action="work-list-toggle"][data-kind="project"][data-value="p"]').click();
+      await page.locator('[data-action="wbs-select-project"][data-kind="project"][data-value="p"]').click();
     };
     const open = async id => {
       await page.locator(`[data-work-scope="wbs-tasks-p"] :is([data-action="task-today"],[data-action="placement-add-today"])[data-id="${id}"]`).click();
@@ -332,7 +332,7 @@ const { chromium, launchOptions, startServer, randomPort, STATE_KEY, defaultCont
     assert.equal((await state()).blocks.length, 4);
     assert.equal((await state()).tasks.find(t => t.id === 'continuous-8').status, 'completed');
     await page.reload(); await nav('wbs');
-      await page.locator('[data-action="work-list-toggle"][data-kind="project"][data-value="p"]').click();
+      await page.locator('[data-action="wbs-select-project"][data-kind="project"][data-value="p"]').click();
     assert.equal((await state()).blocks.length, 4, 'reload does not resend requests');
     assert.deepEqual((await state()).blocks.find(b => b.id === firstSaved.id),
       // B4 25: normalizeState fills missing copiedFromId on reload; compare the full record.

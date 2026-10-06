@@ -1,17 +1,17 @@
 {
-  "version": 445,
+  "version": 447,
   "date": "2026-10-06",
   "title": "作業一覧を WBS の新しい顔に(絞り込みチップ・題名検索・Project チップ・シリーズ畳み)+別タブ「決めること」(束A、表示のみ)",
   "summary": "作業一覧タブを「全体計画(WBS)」に徹した見た目にしました。上から 絞り込みチップ「超過 N」「7日以内 N」「期日なし N」、題名の検索窓、Project チップ(すべて+各 Project)。一覧は Project ごとの折りたたみで、見出しに件数・進捗・12週計画の週・期限超過を、行に 題名・着手中の印・進捗・超過日数・作業日・期日・見積 を出します。「鬼滅 1巻〜3巻」のようなシリーズは最小の 1 件に畳み「+N件」で展開できます。子タスクは親の下に「└」付きで折りたたみ。従来の状態/カテゴリ/期限の絞り込み枠と「今週やること」の節は作業一覧から外しました。あわせて新しいタブ「決めること」(PC サイドバー・その他から開く)で、期日管理する Project の期日が決まっていないタスクを最大 5 件、提案期日と理由付きで示します(ボタンは無効表示。採用・編集は束B)。保存・同期・日付処理は変えていません。",
   "changedFiles": [
     "\"\\350\\250\\255\\350\\250\\210\\346\\233\\270.md\"",
-    "CHANGES_v445.md",
+    "CHANGES_v447.md",
     "app.js",
     "docs/code-index.generated.json",
     "docs/code-index.generated.md",
     "docs/screens.md",
     "docs/work-list.md",
-    "releases/v445.json",
+    "releases/v447.json",
     "scripts/test-manifest.js",
     "src/core/work-series.js",
     "src/features/decide-view.js",
@@ -22,6 +22,7 @@
     "tests/daily-search-e2e.test.js",
     "tests/decide-view.test.js",
     "tests/fill-gap-layout-inputs-e2e.test.js",
+    "tests/impact-regression-map.json",
     "tests/mutation-block-e2e.test.js",
     "tests/placement-e2e.test.js",
     "tests/r0-twyplan.test.js",
@@ -91,7 +92,7 @@
     "裁定 A-1〜A-9(spec §12): 絞り込み中の子の開閉 / 今日へ追加(placement-add-today)と scope の印の復元 / 期日・見積は表示のみ / 到達不能な「親の期日」提案の削除 / 旧の作業一覧の印(wbs-select-project・wbs-projects・#wbs-projects-query・.wbs-project-detail・data-wbs-row-id)を互換で付与 / ✓完了(toggle-task)・＋サブ(add-subtask)・Project 編集(edit-project)・＋追加(wbs-add-menu)の入口を復元(製品 15+36 行)",
     "裁定 A-10〜A-12: カテゴリ絞り込みを新しい一覧でも効かせる / 無効な Project 指定は無視 / 44px(✓・追加パネル・その他・題名、名前列 132px 下限)",
     "テスト追随(製品 0 行): CI で落ちた 52 本を「新しい画面での同じ意味の断言」に置き換え(削除・skip なし。一覧は reports/bundleA/contract-changes.md)。12 週トラック表示の検査(v260)は 12 週計画タブへ移動",
-    "版番号: 作業名 v443 → 公開版 v445(main に v444 が先に入ったため)"
+    "版番号: 作業名 v443 → 公開版 v447(main に v444・v446 が先に入ったため)"
   ],
   "verification": [
     "(b) 表示のみ: Codex レビュー 1 周(03)+Claude 独立検証 1 系統(04)。検査: work-series / work-list-wbs / decide-view / work-list-e2e / work-list-model / work-list-focus / work-list-render-focus / v71 / remaining-nav-labels / sw-integration exit 0。製品差分 189 行(U2 128・U3 61)",

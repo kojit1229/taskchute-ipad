@@ -139,7 +139,7 @@ function check(name, cond, extra = "") {
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
     const filterSelectMobile = pageMobile.locator('[data-work-list="wbs"] [data-work-filter="query"]');
-    const mobileTask = TASKS.find(t => t.projectId === 'proj-work');
+    const mobileTask = TASKS.find(t => t.projectId === 'proj-manabi');
     await filterSelectMobile.fill(mobileTask.title);
     check("390px title query is visible", await filterSelectMobile.isVisible());
     check("390px title query finds the matching task", await pageMobile.locator(`[data-work-key="task:${mobileTask.id}"]`).count() === 1);

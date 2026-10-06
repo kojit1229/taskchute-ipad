@@ -79,7 +79,7 @@ function check(name, cond, extra = "") {
     }, { KEY, tasks, blocks, projects, TODAY, view });
     await page.reload();
     await page.waitForTimeout(400);
-    if(view==='wbs') await page.locator('[data-action="work-list-toggle"][data-kind="project"][data-value="test-proj"]').click();
+    if(view==='wbs') await page.locator('[data-action="wbs-select-project"][data-kind="project"][data-value="test-proj"]').click();
   }
 
   async function stateNow() {
