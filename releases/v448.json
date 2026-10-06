@@ -1,0 +1,63 @@
+{
+  "version": 448,
+  "date": "2026-10-06",
+  "title": "作業一覧の保存・編集(束B): 行の期日・見積をその場で直す / Project「期日を管理」/ 決めることの採用・別の日・期日なし…(再確認)・今日 n/5",
+  "summary": "作業一覧の各行で期日(日付)と見積(分)をその場で直せるようにしました(変えた瞬間に保存、その行だけ描き直し)。Project 編集に「期日を管理(決めることの対象にする)」のチェックを足し、ON にした Project だけが「決めること」タブの対象になります。「決めること」の促しは「M/D に」で提案日を期日にし、「📅」で別の日を選べます。「期日なし…」は 1週間後・1か月後(暦)・3か月後に再確認するか、促さないかを選べ、再確認は 1 日 2 件まで、「促さない」はチップから一覧・解除できます。シリーズ(同じ名前の連番)は次の巻へ引き継ぎます。見出しは「今日 n/5 件」で、5 件決めたら今日の分は終わりです。",
+  "changedFiles": [
+    "\"\\350\\250\\255\\350\\250\\210\\346\\233\\270.md\"",
+    "CHANGES_v448.md",
+    "app.js",
+    "docs/code-index.generated.json",
+    "docs/code-index.generated.md",
+    "docs/test-impact-map.generated.md",
+    "docs/work-list.md",
+    "releases/v448.json",
+    "src/core/daily-time.js",
+    "src/features/decide-view.js",
+    "src/features/work-list.js",
+    "styles.css",
+    "sw.js",
+    "tests/decide-view.test.js",
+    "tests/suite-manifest.json",
+    "tests/v55.test.js",
+    "tests/work-list-wbs.test.js",
+    "tests/work-series.test.js"
+  ],
+  "intent": [
+    "案件 projects/2026-10-05-work-list-due-nudge/spec.md §13(契約表・受入 B-1〜B-6)と「束B レビュー裁定」(B-7・B-8)。K 承認 2026-10-06 夜「発注文を作って起動して」。保存・日付に触れる=(c) 2 系統"
+  ],
+  "changes": [
+    "U1 src/features/work-list.js handleWorkListEdit: 行の期日・見積の input(change で updateTaskField、行だけ patchWorkList、不正値は元に戻す)。製品 40 行",
+    "U2 app.js Project 編集モーダルの「期日を管理」チェック(dueManaged、normalizeState 既定 false)+ src/features/decide-view.js の decide-adopt / decide-pick / 今日 n/5(dueDecidedAt)。製品 47 行",
+    "U3 decide-view.js 期日なし…(dueNudge{cycle,at,decidedAt,key,count})、再確認 1 日 2 件、チップ「再確認待ち」「促さない」と解除、シリーズ引き継ぎ inheritDueNudge(toggleTask / updateTaskField の完了経路)、src/core/daily-time.js addMonths(月末丸め)。製品 76 行",
+    "fixB 裁定 B-7(決めること内の行編集で全体を再描画・保存直前に対象を再確認)・B-8(引き継ぎは新しい決定を守る)。製品 14 行",
+    "テスト: work-list-wbs(B-1)・decide-view(B-2〜B-5、B-7・B-8)・work-series(addMonths)。v55 と decide-view U3-11 の約束を置き換え(reports/bundleA/contract-changes.md)"
+  ],
+  "verification": [
+    "(c) 2 系統: Codex レビュー 05(高0・中2・低1 → 裁定 B-7・B-8・文書修正)/ Claude 検証 06 PASS(NG 0・未確認 4)→ fixB → 2 周目 Claude 検証 07 PASS(差分だけ、NG 0)。手元: work-list-wbs / decide-view / work-series / v55 / work-list-e2e / v71 / task-complete-actual / remaining-nav-labels exit 0。関門 --final は束末に 1 回(reports/v448/gate-final.log)"
+  ],
+  "knownLimitations": [
+    "日程表(今後 8 週の表)は束D。AI の提案期日は束C",
+    "再確認から期日を付けた場合は再確認の 1 日 2 件には数えない(n/5 には数える)",
+    "墓標・同期は tasks/projects の updatedAt 優先マージに乗る(新しい state 直下キーなし)"
+  ],
+  "uncertainties": [
+    "iPhone Safari での date/number 入力の見え方(実機未確認)",
+    "うるう年の月末丸め(2/29)は机上のみ"
+  ],
+  "reviewFocus": [
+    "保存経路が updateTaskField / draftSaveTransaction だけか",
+    "dueNudge の導出(今日 n/5・再確認 2 件)と引き継ぎ条件",
+    "決めること内の行編集後の全体再描画"
+  ],
+  "relatedSuites": [
+    "work-list-wbs",
+    "decide-view",
+    "work-series",
+    "v55",
+    "work-list-e2e",
+    "v71",
+    "task-complete-actual",
+    "sw-integration"
+  ]
+}
