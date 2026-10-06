@@ -708,6 +708,7 @@ const APP_SHELL = [
   "./src/core/week.js",
 
   "./src/core/work-list.js",
+  "./src/core/work-series.js",
 
   "./src/core/today-model.js",
 
@@ -725,6 +726,7 @@ const APP_SHELL = [
   "./src/features/daily-draft.js",
   "./src/features/block-detail.js",
   "./src/features/tower-journal.js",
+  "./src/features/decide-view.js",
   "./src/features/three-screen-rows.js",
   "./src/features/zero-entry.js",
   "./src/features/zero-session.js",
