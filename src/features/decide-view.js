@@ -13,6 +13,7 @@ function configureDecideView(injected) {
     target.closest("[data-decide-view]").outerHTML = renderDecideView();
   }, "decide-adopt": ({ target, id }) => saveDecision(id, target.closest('[data-nudge-id]').dataset.suggestion, target),
   "decide-pick": ({ target, id }) => {
+    if (!currentDecisionTask(id, target)) return;
     const row = target.closest('[data-nudge-id]');
     if (!row.querySelector('[data-work-edit="decideDate"]')) target.insertAdjacentHTML('afterend', `<input class="input" style="font-size:16px" type="date" data-work-edit="decideDate" data-id="${deps.escapeHTML(id)}" aria-label="別の日">`);
     row.querySelector('[data-work-edit="decideDate"]').focus();
@@ -37,7 +38,7 @@ function inheritDueNudge(id) {
   const task = state.tasks.find(t => t.id === id && !t.deleted);
   if (!task?.dueNudge) return;
   const next = collapseSeries(state.tasks.filter(t => !t.deleted && t.id !== id && ["todo", "doing"].includes(t.status) && nudgeKey(t) === nudgeKey(task)))[0]?.task;
-  if (next) deps.updateTaskField(next.id, "dueNudge", { ...task.dueNudge });
+  if (next && (!next.dueNudge || next.dueNudge.decidedAt < task.dueNudge.decidedAt)) deps.updateTaskField(next.id, "dueNudge", { ...task.dueNudge });
 }
 function updateDecideTaskField(id, field, value) {
   if (field !== "dueDate" || !value) return deps.updateTaskField(id, field, value);
@@ -47,8 +48,13 @@ function updateDecideTaskField(id, field, value) {
     if (task) writeNudge(task, null);
   });
 }
+function currentDecisionTask(id, target) {
+  const task = managedTasks().find(t => t.id === id && !t.dueDate);
+  if (!task) target.closest('[data-decide-view]').outerHTML = renderDecideView();
+  return task;
+}
 function saveDecision(id, date, target) {
-  const task = state.tasks.find(t => t.id === id && !t.deleted);
+  const task = currentDecisionTask(id, target);
   if (!task || !date || decidedToday() >= 5) return false;
   const ok = deps.saveDecision(() => {
     deps.updateTaskField(id, "dueDate", date);
@@ -60,7 +66,7 @@ function saveDecision(id, date, target) {
 }
 function handleDecideEdit(target) {
   if (target.matches('[data-work-nudge-cycle]')) {
-    const task = state.tasks.find(t => t.id === target.dataset.workNudgeCycle && !t.deleted), cycle = target.value, today = deps.todayISO();
+    const task = currentDecisionTask(target.dataset.workNudgeCycle, target), cycle = target.value, today = deps.todayISO();
     if (!task || !Object.hasOwn(cycles, cycle) || decidedToday() >= 5 || (task.dueNudge?.at <= today && recheckedToday() >= 2)) { target.value = ""; return true; }
     const at = cycle === "never" ? "9999-12-31" : cycle === "1w" ? deps.addDays(today, 7) : addMonths(today, cycle === "1m" ? 1 : 3);
     const nudge = { cycle, at, decidedAt: today, key: nudgeKey(task), count: (task.dueNudge?.count || 0) + 1 };

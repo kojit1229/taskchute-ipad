@@ -223,6 +223,61 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       assert.equal((await storedTask('r2')).dueNudge,null);
       assert.deepEqual(errors,[]);
     });
+    await check('B-7 inline due edit refreshes counts and rejects stale decisions', async () => {
+      await resetNudges();
+      const chip = root.locator('[data-value="none"]');
+      if (await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+      await page.evaluate(() => { window.__staleNudge = document.querySelector('[data-nudge-id="r0"]').outerHTML; });
+      await taskRow('r0').locator('[data-work-edit="dueDate"]').evaluate((el, value) => {
+        el.value = value; el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, fixture.recent);
+      const afterEdit = {
+        count: await chip.textContent(), row: await taskRow('r0').count(),
+        nudge: await root.locator('[data-nudge-id="r0"]').count()
+      };
+      const saved = await snapshot();
+      // Reinsert the old proposal to exercise a stale event after the row edit.
+      for (const action of ['decide-adopt', 'decide-pick', 'cycle']) {
+        await refresh();
+        await root.evaluate(el => el.insertAdjacentHTML('beforeend', window.__staleNudge));
+        const stale = root.locator('[data-nudge-id="r0"]').last();
+        if (action === 'cycle') await stale.locator('select').selectOption('1w');
+        else {
+          await stale.locator(`[data-action="${action}"]`).click();
+          if (action === 'decide-pick' && await stale.locator('input[type="date"]').count()) {
+            await stale.locator('input').evaluate((el, value) => { el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); }, fixture.suggestion);
+          }
+        }
+        assert.deepEqual(await snapshot(), saved, action + ' must not save a stale decision');
+        assert.equal(await root.locator('[data-nudge-id="r0"]').count(), 0);
+      }
+      assert.deepEqual(afterEdit, { count: '期日なし 7', row: 0, nudge: 0 });
+      assert.equal((await storedTask('r0')).dueDate, fixture.recent);
+      await page.evaluate(() => { delete window.__staleNudge; });
+    });
+    await check('B-8 recompleting an old volume preserves the newer second decision', async () => {
+      await resetNudges(true);
+      const chip = root.locator('[data-value="none"]');
+      if (await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+      await root.locator('[data-work-nudge-cycle="r0"]').selectOption('1m');
+      const original = (await storedTask('r0')).dueNudge;
+      await taskRow('r0').locator('[data-action="toggle-task"]').click();
+      const [y, m, d] = original.at.split('-').map(Number);
+      await page.clock.setFixedTime(new Date(y, m - 1, d, 12)); await refresh();
+      await root.locator('[data-work-nudge-cycle="r1"]').selectOption('1w');
+      const newer = (await storedTask('r1')).dueNudge;
+      assert.equal(newer.count, 2); assert(newer.decidedAt > original.decidedAt);
+      // The old completed volume is hidden; use its normal delegated completion action.
+      for (const status of ['doing', 'completed']) {
+        await root.evaluate(el => {
+          el.insertAdjacentHTML('beforeend', '<button data-action="toggle-task" data-id="r0" data-fixb-old-volume>old volume</button>');
+          el.querySelector('[data-fixb-old-volume]').click();
+        });
+        assert.equal((await storedTask('r0')).status, status);
+      }
+      assert.deepEqual((await storedTask('r1')).dueNudge, newer);
+      assert.deepEqual(errors, []);
+    });
     assert.equal(failures,0,'acceptance failures');
   } finally { if(browser) await browser.close(); if(server) await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

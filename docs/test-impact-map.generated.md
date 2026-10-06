@@ -46,7 +46,7 @@
 | data-contract-gate.test.js | node | full | content-ai | 20 | 0 | 0 |
 | data-stamp-normalize.test.js | node | full | legacy-crosscutting | 13 | 0 | 0 |
 | day-cross-ticker.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 8 | 7600 |
-| decide-view.test.js | e2e | full | planning-execution, ui-responsive | 85 | 0 | 0 |
+| decide-view.test.js | e2e | full | planning-execution, ui-responsive | 95 | 0 | 0 |
 | detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 31 | 0 | 0 |
 | directory-fallback.test.js | node | full | content-ai | 14 | 0 | 0 |
 | draft-leave.test.js | node | full | legacy-crosscutting | 34 | 0 | 0 |
