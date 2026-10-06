@@ -201,8 +201,9 @@ process.on("beforeExit", async () => {
     await page.locator(`[data-work-list="wbs"] [data-action="toggle-task"][data-id="${addedA.id}"]`).click();
     await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((task) => task.id === id)?.status === "completed",
       { key: STATE_KEY, id: addedA.id });
-    await waitForRegressionOrder(page, [addedA.id, addedB.id], [addedB.id, addedA.id]);
-    check("order未採番の兄弟は未完了が完了より上", JSON.stringify(await regressionSiblingOrder(page, [addedA.id, addedB.id])) === JSON.stringify([addedB.id, addedA.id]));
+    // 現行WBS(裁定A-3): 兄弟は保存順のまま並び、完了しても行は動かない。
+    await waitForRegressionOrder(page, [addedA.id, addedB.id], [addedA.id, addedB.id]);
+    check("order未採番の兄弟は完了しても保存順のまま", JSON.stringify(await regressionSiblingOrder(page, [addedA.id, addedB.id])) === JSON.stringify([addedA.id, addedB.id]));
 
     console.log("[B] 旧aiWork=trueをowner=aiへ正規化しupdatedAtを保持");
     const projectB = regressionProject("reg-b-project", "旧AI担当回帰");
@@ -232,17 +233,13 @@ process.on("beforeExit", async () => {
     const stepHiddenB = regressionTask("reg-c-b", projectC.id, "非表示B", { parentTaskId: parentC.id, order: 2000, status: "completed" });
     const stepVisibleC = regressionTask("reg-c-c", projectC.id, "可視C", { parentTaskId: parentC.id, order: 3000 });
     await loadWbsState(page, projectC, [parentC, stepVisibleA, stepHiddenB, stepVisibleC], { wbsHideCompleted: true });
-    await page.waitForSelector('.wbs-projects .wbs-task-title[data-id="reg-c-a"]');
-    await page.waitForSelector('.wbs-projects .wbs-task-title[data-id="reg-c-c"]');
-    check("完了Bは非表示でA/Cだけ表示", await page.locator('.wbs-projects .wbs-task-title[data-id="reg-c-b"]').count() === 0
+    await page.waitForSelector('[data-work-key="task:reg-c-a"]');
+    await page.waitForSelector('[data-work-key="task:reg-c-c"]');
+    check("完了Bは非表示でA/Cだけ表示", await page.locator('[data-work-key="task:reg-c-b"]').count() === 0
       && JSON.stringify(await regressionSiblingOrder(page, [stepVisibleA.id, stepHiddenB.id, stepVisibleC.id])) === JSON.stringify([stepVisibleA.id, stepVisibleC.id]));
-    await openRegressionMenu(page, "reg-c-a");
-    await page.locator('[data-action="move-plan-step"][data-id="reg-c-a"][data-direction="1"]').click();
-    await waitForRegressionOrder(page, [stepVisibleA.id, stepVisibleC.id], [stepVisibleC.id, stepVisibleA.id]);
-    check("Aの↓1回で可視A/Cが入れ替わる", JSON.stringify(await regressionSiblingOrder(page, [stepVisibleA.id, stepVisibleC.id])) === JSON.stringify([stepVisibleC.id, stepVisibleA.id]));
-    check("先頭可視ステップの↑と末尾可視ステップの↓がdisabled",
-      await page.locator('[data-action="move-plan-step"][data-id="reg-c-c"][data-direction="-1"]').isDisabled()
-      && await page.locator('[data-action="move-plan-step"][data-id="reg-c-a"][data-direction="1"]').isDisabled());
+    // 裁定A-8: 上下移動は束Bの入口。現行の行に入口が無く、可視兄弟の並びも動かない。
+    check("現行の行に上下移動の入口が無く、可視A/Cの並びは保存順のまま", await page.locator('[data-action="move-plan-step"]').count() === 0
+      && JSON.stringify(await regressionSiblingOrder(page, [stepVisibleA.id, stepVisibleC.id])) === JSON.stringify([stepVisibleA.id, stepVisibleC.id]));
   } catch (error) {
     failures++;
     console.error(error);

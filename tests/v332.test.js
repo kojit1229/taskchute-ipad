@@ -165,45 +165,46 @@ async function seed(page, values) {
     check("Wish配下TaskもWBS全件へ保持", shown.includes("task:t-wish"));
     check("中断TaskもWBS全件へ保持", shown.includes("task:t-suspended"));
     check("元fixture全8Taskを欠落・重複なく保持", tasks.every(t => shown.filter(id => id === `task:${t.id}`).length === 1));
-    const total = await page.evaluate(key => { const s = JSON.parse(localStorage.getItem(key)); return [...s.projects, ...s.tasks].filter(x => !x.deleted).length; }, STATE_KEY);
+    const total = await page.evaluate(key => { const s = JSON.parse(localStorage.getItem(key)); return s.projects.filter(x => !x.deleted).length + s.tasks.filter(x => !x.deleted && x.kind !== "other").length; }, STATE_KEY);
     let reachedTotal = 0;
-    const projectIds = await page.locator('[data-action="wbs-select-project"]').evaluateAll(els=>els.map(el=>el.dataset.id));
+    const projectIds = (await page.locator('[data-action="wbs-select-project"]').evaluateAll(els=>els.map(el=>el.dataset.id))).filter(Boolean);
     for(const projectId of projectIds) {
       await selectProject(projectId);
       const count=(await ids()).length;
-      check(`選択${projectId}の件数表示は一覧と一致`, (await results.locator('.work-list-count').textContent()).startsWith(`${count} / ${count}件`));
-      reachedTotal += count + (projectId ? 1 : 0);
+      // 現行(裁定A-3): 件数は選択Projectの見出しの「n/m件」に出る。
+      const groupId = projectId === '__none__' ? '' : projectId;
+      check(`選択${projectId}の件数表示は一覧と一致`, (await results.locator(`[data-work-group="${groupId}"] > summary span`).textContent()).includes(`${count}/${count}件`));
+      reachedTotal += count + (projectId !== '__none__' ? 1 : 0);
     }
-    check("Project選択で到達する総件数は削除以外のProject/Task全件と一致", reachedTotal === total);
+    check("Project選択で到達する総件数は削除以外のProject/Task全件と一致", reachedTotal === total, `${reachedTotal} vs ${total} ${JSON.stringify(projectIds)}`);
     await selectProject('p1');
     const beforeFilters = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
     await resetSetItemLog(page);
-    await results.locator('[data-work-filter="due"]').selectOption("overdue");
-    check("期限超過filterは超過Taskだけ", JSON.stringify(await ids()) === JSON.stringify(["task:t-overdue"]));
-    const filterAcrossProjects = async (status) => {
-      const found=[];
-      for(const id of ['p1','pWish']) {
-        await selectProject(id);
-        await results.locator('[data-work-filter="due"]').selectOption('today');
-        await results.locator('[data-work-filter="status"]').selectOption(status);
-        found.push(...await ids());
-      }
-      return found.sort();
+    // 現行の期日絞り込みは「超過/7日以内/期日なし」の3チップ(押すたびに入切)。旧の対象日・状態セレクトは無い。
+    const setDueChip = async (value, on) => {
+      const chip = results.locator(`[data-kind="due"][data-value="${value}"]`);
+      if((await chip.getAttribute('aria-pressed') === 'true') !== on) await chip.click();
     };
-    const dueToday = await filterAcrossProjects('');
-    check("対象日期限filterは今日/Wish/中断の3Task", JSON.stringify(dueToday) === JSON.stringify(["task:t-suspended", "task:t-today", "task:t-wish"]));
-    const dueOpen = await filterAcrossProjects("open");
-    check("未完了filterで中断だけ除外", JSON.stringify(dueOpen) === JSON.stringify(["task:t-today", "task:t-wish"]));
+    await setDueChip("overdue", true);
+    check("期限超過filterは超過Taskだけ", JSON.stringify(await ids()) === JSON.stringify(["task:t-overdue"]));
+    await setDueChip("overdue", false);
+    await setDueChip("week", true);
+    const weekFound = [];
+    for(const id of ['p1','pWish']) {
+      await selectProject(id);
+      weekFound.push(...await ids());
+    }
+    check("7日以内filterは今日/3日後/7日後/Wish配下のTaskで、中断・+8日・期限なしを混ぜない", JSON.stringify(weekFound.sort()) === JSON.stringify(["task:t-plus3", "task:t-plus7", "task:t-today", "task:t-wish"]), JSON.stringify(weekFound));
     await selectProject("p1");
-    check("Project filterでWishを除外できる", JSON.stringify(await ids()) === JSON.stringify(["task:t-today"]));
-    await results.locator('[data-action="work-list-clear"]').click();
-    await results.locator('[data-work-filter="due"]').selectOption("none");
+    check("Project選択でWishを除外できる", !(await ids()).includes("task:t-wish") && (await ids()).includes("task:t-today"));
+    await setDueChip("week", false);
+    await setDueChip("none", true);
     check("期限なしfilterは期限ありTaskを混ぜない", (await ids()).includes("task:t-nodue") && !(await ids()).some(id => ["task:t-overdue", "task:t-today", "task:t-plus3", "task:t-plus7", "task:t-plus8"].includes(id)));
-    await results.locator('[data-action="work-list-clear"]').click();
+    await setDueChip("none", false);
     check("絞り込み・解除は保存しない", await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === beforeFilters && await contentChangingWrites(page, STATE_KEY) === 0);
     const tree = id => page.locator(`[data-work-key="task:${id}"]`);
     await results.locator('[data-work-key="task:t-overdue"]').scrollIntoViewIfNeeded();
-    check("超過TaskはWBSでアンバー表示", await tree("t-overdue").locator('.wbs-overdue').evaluate(el => getComputedStyle(el).color) === await tokenColor(page, ".wbs-tower", "--tower-amber"));
+    check("超過Taskは行に「超過 n日」と出る", (await tree("t-overdue").locator('.work-list-meta').first().textContent()).includes("超過 3日"));
     const beforeExisting = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
     await tree("t-today").locator('[data-action="placement-add-today"]').click();
     await page.waitForSelector('[data-action="placement-return"]');
@@ -214,7 +215,7 @@ async function seed(page, values) {
     console.log("[3] WBSの今日へは時刻なし確認でBlock配置しTaskを残す");
     const placementBrowsingDate = await browseYesterdayForPlacement(page);
     const countBefore = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
-    await tree("t-plus7").locator('[data-action="task-today"]').click();
+    await tree("t-plus7").locator('[data-action="placement-add-today"]').click();
     await page.waitForSelector('.placement-form');
     check("今日へだけではまだBlockを増やさない", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY) === countBefore);
     await assertUntimedTodayPlacement(page, { key: STATE_KEY, taskId: 't-plus7', today: TODAY, browsingDate: placementBrowsingDate });
@@ -236,10 +237,10 @@ async function seed(page, values) {
     await selectProject("p1");
     check("実効+7日TaskはWBS全件に出る", await results.locator('[data-work-key="task:t-eff7"]').count() === 1);
     check("実効+8日TaskもWBS全件に保持する", await results.locator('[data-work-key="task:t-eff8"]').count() === 1);
-    const eff7Meta = await results.locator('[data-work-key="task:t-eff7"] .wbs-task-meta').textContent();
-    check("作業期限と外部期限の両方を表示", eff7Meta.includes(`期限 ${mdFmtJs(addDaysISO(TODAY, 7))}(実 ${mdFmtJs(addDaysISO(TODAY, 9))})`), eff7Meta);
+    const eff7Meta = await results.locator('[data-work-key="task:t-eff7"]').textContent();
+    check("作業期限と外部期限の両方を表示", eff7Meta.includes(`作業 ${mdFmtJs(addDaysISO(TODAY, 7))}`) && eff7Meta.includes(`期日 ${mdFmtJs(addDaysISO(TODAY, 9))}`), eff7Meta);
     await results.locator('[data-work-key="task:t-eff7"]').scrollIntoViewIfNeeded();
-    check("既存WBSツリーのM/D(実M/D)も保持", (await tree("t-eff7").textContent()).includes(`期限 ${mdFmtJs(addDaysISO(TODAY, 7))}(実 ${mdFmtJs(addDaysISO(TODAY, 9))})`));
+    check("行のM/D(作業・期日)は別の欄に出る", (await tree("t-eff7").locator('.work-task-due').textContent()).includes(mdFmtJs(addDaysISO(TODAY, 9))) && (await tree("t-eff7").locator('.work-list-meta').first().textContent()).includes(mdFmtJs(addDaysISO(TODAY, 7))));
 
     await seed(page, { currentView: "wbs", selectedDate: TODAY, projects: [project("p1"), project("pWish", { kind: "wish" })], tasks, blocks: [upA, upB, addedBlock] });
     await selectProject("p1");
@@ -247,28 +248,25 @@ async function seed(page, values) {
     console.log("[4] WBS副操作メニューの排他・中断/編集・無保存を保持");
     await resetSetItemLog(page);
     const beforeState = await page.evaluate(key => localStorage.getItem(key), STATE_KEY);
-    check("展開前は中断操作が非表示", !await tree("t-today").locator('[data-action="suspend-task"]').isVisible());
-    await tree("t-today").locator('[data-action="wbs-row-menu-toggle"]').click();
-    check("展開で中断/編集を表示", await tree("t-today").locator('[data-action="suspend-task"]').isVisible() && await tree("t-today").locator('.wbs-row-menu-panel [data-action="edit-task"]').isVisible());
-    await tree("t-plus3").locator('[data-action="wbs-row-menu-toggle"]').click();
-    check("別行の展開で先のメニューを閉じる", !await tree("t-today").locator('.wbs-row-menu-panel').isVisible());
-    check("タスク副操作開閉は保存値不変", await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === beforeState);
-    check("タスク副操作開閉は内容変更書込0回", await contentChangingWrites(page, STATE_KEY) === 0);
+    // 裁定A-8: 副操作メニュー(中断/編集の折りたたみ)は束Bの入口。現行の行には出さない。
+    check("行に副操作メニュー・中断操作の入口が無い", await tree("t-today").locator('[data-action="wbs-row-menu-toggle"], [data-action="suspend-task"], .wbs-row-menu-panel').count() === 0);
+    check("タスク行の表示だけでは保存値不変", await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === beforeState);
+    check("タスク行の表示だけでは内容変更書込0回", await contentChangingWrites(page, STATE_KEY) === 0);
     const taskCheckboxBox = await tree("t-today").locator('[data-action="toggle-task"]').boundingBox();
     check("タスク完了操作は44x44px以上", !!taskCheckboxBox && taskCheckboxBox.width >= 44 && taskCheckboxBox.height >= 44);
     const todayHrefBox = await tree("t-today").locator('[data-action="placement-add-today"]').boundingBox();
     check("今日へ操作は44x44px以上", !!todayHrefBox && todayHrefBox.width >= 44 && todayHrefBox.height >= 44);
-    const expandTriggerBox = await tree("t-plus7").locator('[data-action="wbs-row-menu-toggle"]').boundingBox();
-    check("副操作の展開は44px以上", !!expandTriggerBox && expandTriggerBox.height >= 44);
-    await tree("t-plus3").locator('.wbs-row-menu-panel [data-action="edit-task"]').click();
+    const addSubBox = await tree("t-plus7").locator('[data-action="add-subtask"]').boundingBox();
+    check("＋サブ操作は44px以上", !!addSubBox && addSubBox.height >= 44);
+    await tree("t-plus3").locator('[data-action="edit-task"]').click();
     await page.locator('[data-modal-field="title"]').fill("t-plus3 編集保持");
     await page.locator('[data-action="modal-save"]').click();
     check("WBS編集を保存し検索全件へ反映", (await results.locator('[data-work-key="task:t-plus3"]').textContent()).includes("t-plus3 編集保持"));
     await tree("t-today").locator('[data-action="toggle-task"]').click();
-    await results.locator('[data-work-filter="status"]').selectOption("completed");
-    check("完了Taskは消去せず完了条件で見つかる", await results.locator('[data-work-key="task:t-today"]').count() === 1);
-    await results.locator('[data-work-filter="status"]').selectOption("open");
-    check("完了Taskは未完了条件には混ぜない", await results.locator('[data-work-key="task:t-today"]').count() === 0);
+    check("完了Taskは消去せず完了印つきで残る", await tree("t-today").locator('.checkbox-button.done').count() === 1);
+    await setDueChip("week", true);
+    check("完了Taskは7日以内(未完了だけ)の絞り込みには混ぜない", await results.locator('[data-work-key="task:t-today"]').count() === 0);
+    await setDueChip("week", false);
     await page.locator('[data-action="nav"][data-view="exec"]:visible').first().click();
 
     // v332修正: renderBlockItem削除は実行コード差分200行の都合で本バージョンでは対象外にした

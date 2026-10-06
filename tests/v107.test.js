@@ -497,8 +497,8 @@ function check(name, cond, extra = "") {
     const rows = page.locator('[data-work-list="wbs"] [data-work-key^="task:"]');
     const rowKeys = async () => (await rows.evaluateAll(els => els.map(el => el.dataset.workKey))).filter(key => !receptacleKeys.includes(key));
     const idsInOrder = (await rowKeys()).map(key => key.slice(5));
-    check("選択Projectは期限7日・8日・未設定を落とさず既存ツリーの期限順で表示する",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-in7days", "task-8days", "task-nodue2"]), JSON.stringify(idsInOrder));
+    check("選択Projectは期限7日・8日・未設定を落とさず既存ツリー(投入順)で表示する",
+      JSON.stringify(idsInOrder) === JSON.stringify(SORT_TASKS.map(task => task.id)), JSON.stringify(idsInOrder));
     check("表示順を変えても保存された元Task順は変えない", JSON.stringify((await stateNow()).tasks.filter(task => SORT_TASKS.some(seed => seed.id === task.id)).map(task => task.id)) === JSON.stringify(SORT_TASKS.map(task => task.id)));
     { const dueChip = page.locator('[data-work-list="wbs"] [data-kind="due"][data-value="overdue"]'); if(await dueChip.getAttribute('aria-pressed')!=='true') await dueChip.click(); }
     check("期限超過filterは超過Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-overdue']));
