@@ -847,6 +847,19 @@ function mergeBlockLists(localBlocks, remoteBlocks, archivedBlocksBefore = "") {
   });
 }
 
+// v446: どちらかの端末で終了したルールの未着手コマを墓標にして同期する。
+function tombstoneEndedRuleBlocks(blocks, localRules, remoteRules) {
+  const endedIds = new Set([...(localRules || []), ...(remoteRules || [])]
+    .filter((rule) => rule.deleted).map((rule) => rule.id));
+  const today = todayISO();
+  const now = nowDateTime();
+  return blocks.map((b) => {
+    if (!b.recurrenceGroupId || !endedIds.has(b.recurrenceGroupId)
+      || b.deleted || !(b.date >= today) || isTouchedBlock(b)) return b;
+    return { ...b, deleted: true, updatedAt: now };
+  });
+}
+
 // mergeByIdPreferNewer: src/core/merge.js へ抽出済み(v164。tasks/projectsマージ保護の
 // 契約コメント・v135/v136の経緯も同ファイルへ移動した)。冒頭のimportを参照。
 
@@ -935,7 +948,8 @@ function computeSyncMerge(remoteNorm, tieWinner) {
     const conditionLogs = mergeConditionLogMaps(state.condition.logs, (remoteNorm.condition || {}).logs);
     const sleepLogs = mergeSleepLogMaps(state.sleep.logs, (remoteNorm.sleep || {}).logs);
     const morningEnergyLog = mergeMorningEnergyLogs(state.settings.morningEnergyLog, (remoteNorm.settings || {}).morningEnergyLog);
-    const blocksRaw = mergeBlockLists(state.blocks, remoteNorm.blocks, archivedBlocksBefore);
+    const blocksRaw = tombstoneEndedRuleBlocks(
+      mergeBlockLists(state.blocks, remoteNorm.blocks, archivedBlocksBefore), state.recurrences, remoteNorm.recurrences);
     const reading = mergeReadingEvidence(state, remoteNorm, blocksRaw,
       block => normalizeState(JSON.parse(JSON.stringify({ ...state, blocks: [block] }))).blocks[0]);
     const zeroThinking = mergeZeroThinkingLists(state.zeroThinking, remoteNorm.zeroThinking);
