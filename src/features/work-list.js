@@ -30,6 +30,7 @@ function configureWorkList(deps) {
   registerActions({ "work-list-clear": clear, "daily-search-clear": clear,
     "work-list-toggle": ({ target, event }) => {
       const { kind, value } = target.dataset, root = target.closest('[data-work-list="wbs"]');
+      if (kind === "project" && value !== "" && value !== "__none__" && !state.projects.some(p => !p.deleted && p.id === value)) return;
       if (kind === "series") workDisplay.expanded.has(value) ? workDisplay.expanded.delete(value) : workDisplay.expanded.add(value);
       else if (kind === "children") workDisplay.children.has(value) ? workDisplay.children.delete(value) : workDisplay.children.add(value);
       else if (kind === "group") { event.preventDefault(); workDisplay.groups.set(value, !target.closest("details").open); }
@@ -150,7 +151,7 @@ function renderWbsList() {
     const titleHTML = `${children.length ? `<button class="btn" data-action="work-list-toggle" data-kind="children" data-value="${e(t.id)}" aria-expanded="${childrenOpen}" aria-label="子タスクを開閉">${childrenOpen ? "▾" : "▸"}</button>` : ""}<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${depth ? "└ " : ""}${e(t.title || "（名称なし）")}</button>${hidden ? `<button class="btn" data-action="work-list-toggle" data-kind="series" data-value="${e(t.id)}" aria-expanded="${expanded}">+${hidden}件</button>` : ""}`;
     return renderWorkTaskRow(t, { titleHTML, ghost, depth }) + (childrenOpen ? groupTasks(children).map(g => row(g, depth + 1, trail)).join("") : "") + (expanded ? rest.map(task => row({ task, hidden: 0, rest: [] }, depth, trail)).join("") : "");
   };
-  const groups = [...projects, ...(live.some(t => !t.projectId) ? [{ id: "", title: "Projectなし" }] : [])];
+  const groups = [...projects, ...(live.some(t => !t.projectId) ? [{ id: "", title: "Projectなし" }] : [])].filter(p => !settings.wbsCategoryFilter || (p.category || "未分類") === settings.wbsCategoryFilter);
   const groupsHTML = groups.map(p => {
     const tasks = [...keep.values()].filter(t => (t.projectId || "") === p.id), matched = hits.filter(t => (t.projectId || "") === p.id);
     if (!tasks.length && ui.project !== (p.id || "__none__")) return "";

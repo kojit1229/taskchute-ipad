@@ -153,7 +153,7 @@ async function verifyJumpPaths(page) {
     const handle=await button.elementHandle(); await handle.evaluate((el,id)=>{el.dataset.id=id;el.dataset.value=id;},id); await handle.click();
     check(id+': invalid selection preserves query, selected project and rows', JSON.stringify(await snapshot())===JSON.stringify(beforeSelection));
     check(id+': invalid selection makes no storage changes',await page.evaluate(()=>window.__v288StateWrites)===0 && await page.evaluate(()=>JSON.stringify(Object.entries(localStorage).sort()))===beforeStorage);
-    await button.evaluate(el=>{el.dataset.id='p-a';el.dataset.value='p-a';});
+    await handle.evaluate(el=>{el.dataset.id='p-a';el.dataset.value='p-a';});
   }
 }
 async function verifyRegressionAndProjectDefault(page) {

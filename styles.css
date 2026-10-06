@@ -5727,11 +5727,15 @@ details.settings-row > .fold-summary.settings-row-summary {
   .work-decide-sidebar { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
 }
 /* WBS rows share their display with the decide tab; project boxes stay in one column. */
-.work-task-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; }
+.work-task-row { display: grid; grid-template-columns: minmax(132px, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; }
 .work-task-row > * { min-width: 0; overflow-wrap: anywhere; }
-.work-task-name { display: flex; flex-wrap: wrap; align-items: center; }
+.work-task-row .checkbox-button { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+.work-task-row .checkbox-button::before { content: none; }
+.work-decide-sidebar .wbs-add-panel .input, .work-decide-sidebar .wbs-add-panel .select { min-height: 44px; }
+.work-decide-sidebar > details > summary { min-height: 44px; display: flex; align-items: center; }
+.work-task-name { display: flex; flex-wrap: nowrap; align-items: center; }
 .work-task-name > button[data-kind="children"] { min-width: 44px; min-height: 44px; }
-.work-task-name .work-list-title { flex: 1; min-width: 0; width: auto; padding: 4px; }
+.work-task-name .work-list-title { flex: 1; min-width: 44px; min-height: 44px; width: auto; padding: 4px; box-sizing: border-box; }
 .work-task-row .work-list-meta { padding: 0; }
 .work-task-due { font-size: 12px; }
 .work-list-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; align-items: end; }
