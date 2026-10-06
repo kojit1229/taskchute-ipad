@@ -72,13 +72,11 @@ function check(name, cond, extra = "") {
   async function stateNow() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
-  // WBSタスク行のテキスト・期限切れ表示有無を取得する。renderTaskRow内は
-  // [data-action="edit-task"][data-id]がタイトル(title-line内)と「編集」ボタン
-  // (row.wbs-actions内)の2箇所にあるため、.first()でタイトル側に絞ってから
-  // 最も近い祖先div.rowを辿る(=タイトル・期限バッジ等を含む本体行)。
+  // 新一覧の同じTask行から期日と超過日数の表示を取得する。
   async function taskRowInfo(taskId) {
-    const row = page.locator(`.wbs-projects [data-wbs-row-id="${taskId}"] > .wbs-task-row`);
-    return { text: await row.innerText(), overdueCount: await row.locator(".wbs-overdue").count() };
+    const row = page.locator(`[data-work-list="wbs"] [data-wbs-row-id="${taskId}"]`);
+    const text = await row.innerText();
+    return { text, overdueCount: (text.match(/超過 \d+日/g) || []).length };
   }
 
   try {
@@ -133,7 +131,7 @@ function check(name, cond, extra = "") {
     });
     const rowAuto = await taskRowInfo("t-auto");
     check("締切ラベルに前倒し後の日付が出る", rowAuto.text.includes(effOf5.slice(5).split("-").map(Number).join("/")), rowAuto.text);
-    check("実期日も併記される(前倒しが効いている時だけ)", rowAuto.text.includes(`実 ${dueIn5.slice(5).split("-").map(Number).join("/")}`), rowAuto.text);
+    check("前倒し後の作業日と元の期日を併記する", rowAuto.text.includes(`期日 ${dueIn5.slice(5).split("-").map(Number).join("/")}`), rowAuto.text);
     check("期限切れ(wbs-overdue)にはならない(3日後はまだ先)", rowAuto.overdueCount === 0);
 
     console.log("[6] effectiveDueDate: 前倒しにより「まだ実期日前だが有効締切は過ぎている」タスクが期限切れ表示になる");
@@ -153,7 +151,8 @@ function check(name, cond, extra = "") {
       view: "wbs"
     });
     const rowOff = await taskRowInfo("t-off");
-    check("selfDueOff=trueは実期日のみ表示(「実」の併記が無い)", !rowOff.text.includes("(実"), rowOff.text);
+    const dueLabel = dueTomorrow.slice(5).split("-").map(Number).join("/");
+    check("selfDueOff=trueは作業日と期日が同じ日付になる", rowOff.text.includes(`作業 ${dueLabel}`) && rowOff.text.includes(`期日 ${dueLabel}`), rowOff.text);
     check("selfDueOff=trueは期限切れにならない(実期日は明日でまだ先)", rowOff.overdueCount === 0);
 
     console.log("[8] タスク編集モーダル: 「⏪ 自己締切(期日−2日)」チェックボックスの保存反映(反転マッピング)");

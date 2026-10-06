@@ -124,8 +124,7 @@ function check(name, cond, extra = "") {
     return page.evaluate(({ key }) => JSON.parse(localStorage.getItem(key)).tasks, { key: STATE_KEY });
   }
   async function openTaskEditor(id) {
-    await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
-    await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${id}"]`).click();
+    await page.locator(`[data-wbs-row-id="${id}"] [data-action="edit-task"][data-id="${id}"]`).click();
   }
 
   try {

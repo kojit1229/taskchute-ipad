@@ -1,4 +1,4 @@
-// v194: 実行計画(WBS)の兄弟タスクに、従来順を維持する任意の order 順を追加。
+// v443 A-8: WBSの旧手動並び替え契約は題名検索へ移行。Wishの並び順契約は維持。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, STATE_KEY } = require("./helpers");
 
 const PORT = randomPort();
@@ -54,15 +54,17 @@ function check(name, cond, extra = "") {
     }, { key: STATE_KEY, project: makeProject(), tasks });
     await page.reload();
     await page.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"]`).click();
+    const collapsedSeries = page.locator('[data-work-list="wbs"] [data-kind="series"][aria-expanded="false"]');
+    while (await collapsedSeries.count()) await collapsedSeries.first().click();
     await page.waitForFunction((ids) => {
       if (!document.querySelector('#app[data-view="wbs"]')) return false;
-      const renderedIds = new Set(Array.from(document.querySelectorAll('.wbs-project-detail .wbs-task-title[data-id]'), (el) => el.dataset.id));
+      const renderedIds = new Set(Array.from(document.querySelectorAll('.wbs-project-detail .work-list-title[data-id]'), (el) => el.dataset.id));
       return ids.every((id) => renderedIds.has(id));
     }, tasks.map((task) => task.id));
   }
 
   async function wbsSiblingOrder(ids) {
-    return page.locator('.wbs-project-detail .wbs-task-title[data-id]').evaluateAll((elements, wantedIds) => {
+    return page.locator('.wbs-project-detail .work-list-title[data-id]').evaluateAll((elements, wantedIds) => {
       const wanted = new Set(wantedIds);
       return elements.map((el) => el.dataset.id).filter((id) => wanted.has(id));
     }, ids);
@@ -114,10 +116,11 @@ function check(name, cond, extra = "") {
     ];
     await seedWbs(orderParent, orderedChildren);
     const orderIds = orderedChildren.map((task) => task.id);
+    await page.locator('[data-work-filter="query"]').fill('order 2000');
     const renderedOrder = await wbsSiblingOrder(orderIds);
-    check("3000/1000/2000 の兄弟が 1000→2000→3000 で描画される",
-      JSON.stringify(renderedOrder) === JSON.stringify(["order-1000", "order-2000", "order-3000"]),
-      JSON.stringify(renderedOrder));
+    check("orderの異なる兄弟も題名検索で該当行だけ残る",
+      JSON.stringify(renderedOrder) === JSON.stringify(["order-2000"]), JSON.stringify(renderedOrder));
+    check("検索対象の親を文脈として残す", await page.locator('[data-work-key="task:order-parent"]').count() === 1);
 
     console.log("[2] 片方だけ order がある混在期も未完了が完了済みより上");
     const mixedParent = makeTask("mixed-parent", "混在親");
@@ -129,10 +132,12 @@ function check(name, cond, extra = "") {
     ];
     await seedWbs(mixedParent, mixedChildren);
     const mixedIds = mixedChildren.map((task) => task.id);
+    await page.locator('[data-work-filter="query"]').fill('orderあり完了');
     const renderedMixed = await wbsSiblingOrder(mixedIds);
-    check("完了側だけ order ありでも未完了→完了の従来順を維持する",
-      JSON.stringify(renderedMixed) === JSON.stringify(["mixed-incomplete", "mixed-completed"]),
-      JSON.stringify(renderedMixed));
+    check("完了表示設定で完了兄弟を題名検索でき未完了兄弟を混ぜない",
+      JSON.stringify(renderedMixed) === JSON.stringify(["mixed-completed"]), JSON.stringify(renderedMixed));
+    check("検索した完了行は状態selectなしで完了を文字表示", await page.locator('[data-work-key="task:mixed-completed"] select').count() === 0
+      && (await page.locator('[data-work-key="task:mixed-completed"] .work-list-meta').textContent()).includes('完了'));
 
     console.log("[3] order なし兄弟は期限昇順→createdAt昇順の従来順");
     const legacyParent = makeTask("legacy-parent", "従来順親");
@@ -152,11 +157,14 @@ function check(name, cond, extra = "") {
     ];
     await seedWbs(legacyParent, legacyChildren);
     const legacyIds = legacyChildren.map((task) => task.id);
+    await page.locator('[data-work-filter="query"]').fill('早い期限');
     const renderedLegacy = await wbsSiblingOrder(legacyIds);
-    check("全員 order なしなら期限、同一期限の createdAt、期限なしの順で描画される",
-      JSON.stringify(renderedLegacy) === JSON.stringify([
-        "legacy-early-older", "legacy-early-newer", "legacy-later-due", "legacy-no-due"
-      ]), JSON.stringify(renderedLegacy));
+    check("orderなしでも題名検索は同名部分の2兄弟だけ残す",
+      JSON.stringify([...renderedLegacy].sort()) === JSON.stringify(["legacy-early-newer", "legacy-early-older"]), JSON.stringify(renderedLegacy));
+    await page.locator('[data-action="wbs-select-project"][data-id=""]').click();
+    await page.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"]`).click();
+    check("Projectチップ往復で検索語と結果を保持", await page.locator('[data-work-filter="query"]').inputValue() === '早い期限'
+      && JSON.stringify(await wbsSiblingOrder(legacyIds)) === JSON.stringify(renderedLegacy));
 
     console.log("[4] Wishサブタスクは片側期限でcreatedAt、両側orderでorder昇順");
     const wishDueChildren = [

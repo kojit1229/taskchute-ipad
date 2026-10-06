@@ -3108,14 +3108,10 @@ details.settings-row > .fold-summary.settings-row-summary {
 @media (max-width: 480px) { .wbs-project-head { grid-template-columns: 44px minmax(0, 1fr) auto 44px; } .twy-commit-open { padding: 4px 6px; font-size: 11px; } .wbs-row-menu-panel { padding-left: 0; } }
 
 /* v330: 今週やることパネルと1280px以上のProject 2ペイン。 */
-.wbs-week-panel { border: 1px solid #6b5322; color: var(--tower-text); background: var(--tower-panel); }
-.wbs-week-panel > header, .wbs-project-list > header, .wbs-project-detail > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 6px 12px; border-bottom: 1px solid var(--tower-line); }
-.wbs-week-panel h2, .wbs-project-detail h2 { margin: 0; color: var(--tower-amber); font-size: 14px; }
-.wbs-week-panel h2 span, .wbs-project-detail h2 span, .wbs-project-list > header span { color: var(--tower-text); font-size: 11px; font-weight: 400; opacity: .7; }
-.wbs-week-panel > header button, .wbs-detail-actions button { min-width: 44px; min-height: 44px; border: 1px solid var(--tower-line); color: var(--tower-cyan); background: transparent; font-size: 11px; }
-.wbs-week-list > [data-wbs-week-row-id] { padding: 0 8px; }
-.wbs-week-list > [data-wbs-week-row-id]:first-child .wbs-task-row { border-top: 0; }
-.wbs-week-empty { min-height: 48px; padding: 14px 12px; color: var(--tower-text); font-size: 11px; opacity: .7; }
+.wbs-project-list > header, .wbs-project-detail > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 6px 12px; border-bottom: 1px solid var(--tower-line); }
+.wbs-project-detail h2 { margin: 0; color: var(--tower-amber); font-size: 14px; }
+.wbs-project-detail h2 span, .wbs-project-list > header span { color: var(--tower-text); font-size: 11px; font-weight: 400; opacity: .7; }
+.wbs-detail-actions button { min-width: 44px; min-height: 44px; border: 1px solid var(--tower-line); color: var(--tower-cyan); background: transparent; font-size: 11px; }
 @media (min-width: 1280px) {
   .wbs-projects.is-desktop { display: grid; grid-template-columns: 380px minmax(0, 1fr); align-items: stretch; }
   .wbs-project-list { min-width: 0; border-right: 1px solid var(--tower-line); background: var(--tower-panel); }
@@ -5709,6 +5705,39 @@ details.settings-row > .fold-summary.settings-row-summary {
 
 /* UI-A: 情報を保ち、狭幅の主操作と横画面の列幅を再配分する。 */
 .work-list { min-width: 0; }
+.work-decide-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.work-decide-sidebar, .work-decide-groups { min-width: 0; overflow-wrap: anywhere; }
+.work-decide-sidebar { padding: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); }
+.work-decide-sidebar h2, .work-decide-sidebar h3 { margin: 8px 0; }
+.work-decide-sidebar small { font-size: 12px; font-weight: normal; }
+.work-decide-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; }
+.work-decide-chips button { max-width: 100%; overflow-wrap: anywhere; }
+.work-decide-chips [aria-pressed="true"] { border-color: var(--tower-amber); color: var(--tower-amber); }
+.decide-view { min-width: 0; overflow-wrap: anywhere; }
+.decide-view button { min-height: 44px; max-width: 100%; white-space: normal; }
+.work-nudge { padding-block: 8px; border-top: 1px solid var(--tower-line); font-size: 13px; }
+.work-decide-query { display: block; margin-block: 12px; }
+.work-decide-query input { display: block; width: 100%; min-width: 0; font-size: 16px; min-height: 44px; }
+.work-project-group { margin-bottom: 12px; border: 1px solid var(--tower-line); background: var(--tower-panel); break-inside: avoid; overflow-wrap: anywhere; }
+.work-project-group > summary { min-height: 44px; padding: 10px; cursor: pointer; }
+.work-project-group > summary span { font-size: 12px; color: var(--muted); }
+.work-context-parent { opacity: .6; }
+@media (min-width: 900px) {
+  .work-decide-layout { grid-template-columns: 400px minmax(0, 1fr); }
+  .work-decide-sidebar { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+}
+/* WBS rows share their display with the decide tab; project boxes stay in one column. */
+.work-task-row { display: grid; grid-template-columns: minmax(132px, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; }
+.work-task-row > * { min-width: 0; overflow-wrap: anywhere; }
+.work-task-row .checkbox-button { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+.work-task-row .checkbox-button::before { content: none; }
+.work-decide-sidebar .wbs-add-panel .input, .work-decide-sidebar .wbs-add-panel .select { min-height: 44px; }
+.work-decide-sidebar > details > summary { min-height: 44px; display: flex; align-items: center; }
+.work-task-name { display: flex; flex-wrap: nowrap; align-items: center; }
+.work-task-name > button[data-kind="children"] { min-width: 44px; min-height: 44px; }
+.work-task-name .work-list-title { flex: 1; min-width: 44px; min-height: 44px; width: auto; padding: 4px; box-sizing: border-box; }
+.work-task-row .work-list-meta { padding: 0; }
+.work-task-due { font-size: 12px; }
 .work-list-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; align-items: end; }
 .work-list-filters label { display: flex; flex: 1 1 120px; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
 .work-list-filters .work-list-query { flex-basis: 100%; }

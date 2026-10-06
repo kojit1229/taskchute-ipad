@@ -220,177 +220,75 @@ function syncState(extra = {}) {
   check("型select・数値input・既存date inputをネイティブ型で描画", editorHTML.includes("<select data-twy-progress-type>")
     && (editorHTML.match(/type="number"/g) || []).length === 3 && editorHTML.includes('type="date"'));
 
-  console.log("[4] 実ブラウザ: 3型保存・再描画・reload・クリア・完了独立・既存導線");
+  console.log("[4] 実ブラウザ(裁定A-13): 節目progressの行内編集の入口が無く、読み取り表示だけが出る");
   const server = startServer(PORT);
   const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1024, height: 900 } });
   const page = await context.newPage();
   page.on("pageerror", (error) => { failures++; console.log("  ❌ pageerror:", error.message); });
-  page.on("dialog", (dialog) => dialog.accept());
   await blockGithubApiByDefault(page);
   const TODAY = "2026-08-27", CYCLE = "2026-08-15", INITIAL = "2026-08-15T00:00:00";
+  const EDIT_ENTRANCES = ['[data-action="twy-open-editor"]', '[data-action="twy-ms-toggle-progress"]',
+    '[data-action="twy-ms-save-progress"]', '[data-action="twy-ms-clear-progress"]', '[data-action="twy-ms-edit-date"]',
+    '[data-action="twy-ms-toggle-done"]', "[data-twy-ms-progress-editor]", "[data-twy-progress-type]",
+    "[data-twy-progress-current]", ".twy-editor", ".twy-ms-edit-item"].join(",");
+  async function go(view) {
+    await page.evaluate(({ key, view }) => {
+      const state = JSON.parse(localStorage.getItem(key));
+      state.currentView = view;
+      localStorage.setItem(key, JSON.stringify(state));
+    }, { key: STATE_KEY, view });
+    await page.reload();
+    await page.waitForSelector("main");
+    if (view === "twelveweek") {
+      await page.waitForSelector(".twy-cycle-fold", { state: "attached" });
+      if (!await page.locator(".twy-cycle-fold").evaluate((el) => el.open)) await page.locator(".twy-cycle-fold > summary").click();
+      await page.waitForSelector(".twy-goals-panel", { state: "visible" });
+    } else {
+      await page.waitForSelector('[data-work-group="p1"]');
+    }
+  }
   try {
     await page.clock.setFixedTime(new Date(2026, 7, 27, 12, 0, 0));
     await page.goto(`http://localhost:${PORT}/`);
     await passGithubGate(page);
     await page.evaluate(({ key, today, cycle, initial }) => {
       const state = JSON.parse(localStorage.getItem(key));
-      state.currentView = "wbs"; state.selectedDate = today; state.settings.twelveWeekStartDate = cycle;
+      state.selectedDate = today; state.settings.twelveWeekStartDate = cycle;
+      state.settings.showSuspended = true; state.settings.wbsHideCompleted = false;
       state.projects = [{ id: "p1", kind: "normal", title: "執筆", status: "active", priority: "中",
         category: "", startDate: cycle, dueDate: "", description: "", twelveWeekStartDate: cycle,
         showProgress: false, collapsed: false, createdAt: initial, updatedAt: initial, deleted: false }];
-      state.tasks = []; state.blocks = []; state.recurrences = []; state.trackMeasurements = [];
+      state.tasks = [{ id: "task-1", projectId: "p1", parentTaskId: "", title: "既存WBS操作", status: "todo",
+        progressNum: 0, progressDen: 10, deleted: false }];
+      state.blocks = []; state.recurrences = []; state.trackMeasurements = [];
       state.tracks = [{ id: "t1", ownerType: "project", ownerId: "p1", cycleStartDate: cycle,
         kind: "milestone", name: "本文", unit: "", startDate: cycle, deadline: "", baselineValue: 0,
         goalValue: 0, valueStep: 1, status: "active", closedAt: "", closedReason: "",
         supersedesTrackId: "", carriedFromTrackId: "", createdAt: initial, updatedAt: initial, deleted: false,
         milestones: [{ id: "m1", label: "本文", plannedDate: "2026-09-10", originalPlannedDate: "2026-09-10",
           doneAt: "", doneChangedAt: "", updatedAt: initial, deleted: false,
-          progress: { type: "count", current: "bad", target: 10, start: null, unit: "章" } }] }];
+          progress: { type: "count", current: 3, target: 10, start: null, unit: "章" } }] }];
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, cycle: CYCLE, initial: INITIAL });
-    await page.reload();
-    const row = page.locator('.twy-row[data-twy-track-id="t1"]');
-    await row.waitFor();
-    check("壊れたprogressはnormalize後に非表示", await row.locator(".twy-ms-progress").count() === 0);
-    const projectProgress = page.locator('[data-action="wbs-select-project"][data-id="p1"] .wbs-project-meta');
-    async function readProjectProgress() {
-      const text = await projectProgress.textContent();
-      const progress = /進捗\s+(\d+)\/(\d+)\s+・\s+(\d+)%/.exec(text || "");
-      if (!progress) throw new Error("Project進捗の分子/分母/率を読めません: " + text);
-      return progress.slice(1).join("/");
-    }
-    const projectWidthBefore = await readProjectProgress();
-    await row.locator('[data-action="twy-open-editor"]').click();
-
-    async function openProgress() {
-      await row.locator('[data-action="twy-ms-toggle-progress"]').click();
-      return row.locator("[data-twy-ms-progress-editor]");
-    }
-    async function saveProgress(type, current, target, start, unit) {
-      const panel = await openProgress();
-      await panel.locator("[data-twy-progress-type]").selectOption(type);
-      await panel.locator("[data-twy-progress-current]").fill(current);
-      await panel.locator("[data-twy-progress-target]").fill(target);
-      await panel.locator("[data-twy-progress-start]").fill(start);
-      await panel.locator("[data-twy-progress-unit]").fill(unit);
-      await panel.locator('[data-action="twy-ms-save-progress"]').click();
-    }
-    const firstPanel = await openProgress();
-    const fontSizes = await firstPanel.locator("input,select").evaluateAll((nodes) =>
-      nodes.map((node) => parseFloat(getComputedStyle(node).fontSize)));
-    check("進捗input/selectは全てfont-size 16px以上", fontSizes.length === 5 && fontSizes.every((size) => size >= 16));
-    await firstPanel.locator("[data-twy-progress-current]").fill("3");
-    await firstPanel.locator("[data-twy-progress-target]").fill("10");
-    await firstPanel.locator("[data-twy-progress-unit]").fill("章");
-    await firstPanel.locator('[data-action="twy-ms-save-progress"]').click();
-    await row.locator(".twy-ms-node .twy-ms-progress-text", { hasText: "3/10章" }).waitFor();
-    const projectWidthAt30 = await readProjectProgress();
-    check("count保存後にchainとeditor一覧へ再描画", await row.locator(".twy-ms-progress-text", { hasText: "3/10章" }).count() === 2);
-
-    await saveProgress("count", "10", "10", "", "章");
-    const reachedState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0], STATE_KEY);
-    const projectWidthAtTarget = await readProjectProgress();
-    check("target到達でもdoneAt・二値節目数は不変", reachedState.milestones[0].doneAt === ""
-      && (await row.locator(".twy-val").textContent()).includes("0/1節目")
-      && (await row.locator(".t-state").textContent()) !== "完了");
-    check("Project本体進捗バーは保存前・30%・target到達後で不変",
-      projectWidthBefore === projectWidthAt30 && projectWidthAt30 === projectWidthAtTarget,
-      JSON.stringify([projectWidthBefore, projectWidthAt30, projectWidthAtTarget]));
-
-    const invalidPercentPanel = await openProgress();
-    await invalidPercentPanel.locator("[data-twy-progress-type]").selectOption("percent");
-    await invalidPercentPanel.locator("[data-twy-progress-current]").fill("101");
-    await invalidPercentPanel.locator('[data-action="twy-ms-save-progress"]').click();
-    check("percent範囲外はユーザ向けtoastで拒否",
-      (await page.locator(".toast").last().textContent()).includes("進捗率は0〜100"));
-    await invalidPercentPanel.locator("[data-twy-progress-current]").fill("30");
-    await invalidPercentPanel.locator('[data-action="twy-ms-save-progress"]').click();
-    let stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("percentはtarget=null/start=null/unit空で保存", stored.progress.type === "percent"
-      && stored.progress.current === 30 && stored.progress.target === null && stored.progress.start === null
-      && stored.progress.unit === "" && (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "30%");
-
-    await saveProgress("value", "65", "60", "70", "kg");
-    check("value+startを70→65/60kg表示", (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "70→65/60kg");
-    await page.reload();
-    await row.waitFor();
-    check("reload後もprogressを維持", (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "70→65/60kg");
-    await row.locator('[data-action="twy-open-editor"]').click();
-    let panel = await openProgress();
-    await panel.locator('[data-action="twy-ms-clear-progress"]').click();
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("進捗なしでstate・chain・一覧から除去", !Object.prototype.hasOwnProperty.call(stored, "progress")
-      && await row.locator(".twy-ms-progress").count() === 0);
-
-    panel = await openProgress();
-    await panel.locator('[data-action="twy-ms-save-progress"]').click();
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("非数相当の空入力はtoastを出して保存しない", !Object.prototype.hasOwnProperty.call(stored, "progress")
-      && (await page.locator(".toast").last().textContent()).includes("有効な数値"));
-    await panel.locator("[data-twy-progress-current]").fill("3");
-    await panel.locator("[data-twy-progress-target]").fill("0");
-    await panel.locator("[data-twy-progress-unit]").fill("章");
-    await panel.locator('[data-action="twy-ms-save-progress"]').click();
-    check("target=0は保存・テキスト表示しバーだけ省略", (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "3/0章"
-      && await row.locator(".twy-ms-node .twy-ms-progress-bar").count() === 0);
-    const routeProgress = { type: "count", current: 3, target: 0, start: null, unit: "章" };
-
-    const dateInput = row.locator("[data-twy-ms-date-input]");
-    await dateInput.fill("2026-09-12");
-    await row.locator('[data-action="twy-ms-edit-date"]').click();
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("日付変更でprogressのdeep equalityと表示を維持", isDeepStrictEqual(stored.progress, routeProgress)
-      && (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "3/0章");
-    await row.locator('[data-action="twy-ms-toggle-done"]').check();
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("完了ONでprogressのdeep equalityと表示を維持", stored.doneAt === TODAY
-      && isDeepStrictEqual(stored.progress, routeProgress)
-      && (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "3/0章");
-    await row.locator('[data-action="twy-ms-toggle-done"]').uncheck();
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("完了OFFでprogressのdeep equalityと表示を維持", stored.plannedDate === "2026-09-12"
-      && stored.doneAt === "" && isDeepStrictEqual(stored.progress, routeProgress)
-      && (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "3/0章");
-
-    await row.locator('[data-action="twy-ms-toggle-done"]').check();
-    await saveProgress("count", "4", "10", "", "章");
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("完了済みのまま進捗フォームから変更保存してdoneAtを維持", stored.doneAt === TODAY
-      && stored.progress.current === 4 && (await row.locator(".twy-ms-progress-text").first().textContent()) === "4/10章");
-
-    await saveProgress("value", "10", "10", "10", "kg");
-    stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks[0].milestones[0], STATE_KEY);
-    check("start===targetをUI保存しstate・テキストを保持してバーだけ非表示",
-      isDeepStrictEqual(stored.progress, { type: "value", current: 10, target: 10, start: 10, unit: "kg" })
-      && (await row.locator(".twy-ms-node .twy-ms-progress-text").textContent()) === "10→10/10kg"
-      && await row.locator(".twy-ms-node .twy-ms-progress-bar").count() === 0);
-
+    await go("wbs");
+    const before = await page.evaluate((key) => JSON.stringify(JSON.parse(localStorage.getItem(key)).tracks), STATE_KEY);
+    check("A-13 作業一覧に節目progress・予定日・完了の編集入口が無い", await page.locator(EDIT_ENTRANCES).count() === 0);
+    check("作業一覧のProject見出しに「12週計画 第N週」が出る",
+      /12週計画 第[0-9]+週/.test(await page.locator('[data-work-group="p1"] > summary').textContent()));
+    await go("twelveweek");
+    check("A-13 12週計画タブに節目progress・予定日・完了の編集入口が無い", await page.locator(EDIT_ENTRANCES).count() === 0);
+    const row = page.locator('.twy-goals-panel .twy-row[data-twy-track-id="t1"]');
+    check("GOALSに節目トラックの行が読み取り表示される", await row.count() === 1);
+    check("GOALSの行は読み取り専用(input/select/編集ボタンなし)",
+      await row.locator("input, select, button").count() === 0);
     await page.setViewportSize({ width: 390, height: 844 });
-    await openProgress();
-    const mobileLayout = await page.evaluate(() => ({ inner: window.innerWidth,
-      scroll: document.documentElement.scrollWidth }));
-    check("390pxでも進捗フォームが横スクロールを作らない", mobileLayout.scroll <= mobileLayout.inner);
-
-    const carryProgress = { type: "count", current: 4, target: 10, start: null, unit: "章" };
-    await page.evaluate(({ key, progress }) => {
-      const state = JSON.parse(localStorage.getItem(key));
-      state.settings.twelveWeekStartDate = "2026-11-07";
-      state.projects[0].twelveWeekStartDate = "2026-08-15";
-      const active = state.tracks.find((track) => track.status === "active");
-      active.milestones[0].doneAt = ""; active.milestones[0].progress = progress;
-      localStorage.setItem(key, JSON.stringify(state));
-    }, { key: STATE_KEY, progress: carryProgress });
-    await page.reload();
-    await page.locator('[data-action="wbs-select-project"][data-id="p1"]').click();
-    await page.locator('.wbs-detail-actions [data-action="edit-project"][data-id="p1"]').click();
-    await page.locator('[data-action="twy-carry-cycle"]').click();
-    await page.locator("[data-twy-carry-ms-date]").fill("2026-11-07");
-    await page.locator('[data-action="twy-carry-confirm"]').click();
-    const carried = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).tracks
-      .find((track) => track.status === "active"), STATE_KEY);
-    check("twy-carry-cycle導線で未完了節目progressを新サイクルへ引き継ぐ",
-      carried?.carriedFromTrackId === "t1" && isDeepStrictEqual(carried.milestones[0].progress, carryProgress));
+    check("390pxでも外側横スクロールを作らない", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    check("表示だけでは節目progressを含むトラックが変わらない",
+      await page.evaluate((key) => JSON.stringify(JSON.parse(localStorage.getItem(key)).tracks), STATE_KEY) === before);
+  } catch (error) {
+    failures++;
+    console.log("  ❌ 例外:", error.stack || error.message);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

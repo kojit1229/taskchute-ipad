@@ -84,21 +84,24 @@ function check(name, cond, extra = "") {
     await page.reload();
     // S-B1(3段-02)の契約追随(2026-09-12 CHANGELOG 21:35): 作業一覧は左 Project 選択→右にその Project の Task。先に Project を選ぶ(断言は不変)
     await page.click('[data-action="wbs-select-project"][data-id="test-proj"]');
-    await page.waitForSelector('[data-wbs-row-id="task-ai1"] [data-action="wbs-row-menu-toggle"]');
+    await page.waitForSelector('[data-wbs-row-id="task-ai1"] [data-action="edit-task"]');
     check("保存前はWBS一覧に🤝マーク無し", await page.locator(".ai-work-flag").count() === 0);
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
-    await page.click('[data-wbs-row-id="task-ai1"] [data-action="wbs-row-menu-toggle"]');
+    await page.click('[data-wbs-row-id="task-ai1"] [data-action="edit-task"]');
     await page.waitForTimeout(150);
-    await page.click('[data-action="edit-task"][data-id="task-ai1"]');
     await page.check('[data-modal-field="aiWork"]');
     await page.fill('[data-modal-field="aiWorkBrief"]', "候補3社を比較してまとめてほしい");
     await page.click('[data-action="modal-save"]');
     // v329: 🤝マークは…メニュー(既定非表示)の中。表示検証はcountで行うためattachedで待つ
-    await page.waitForSelector(".ai-work-flag", { state: "attached" });
+    await page.waitForSelector('[data-wbs-row-id="task-ai1"] [data-action="edit-task"]');
     const saved = (await readState()).tasks.find((task) => task.id === "task-ai1");
     check("aiWorkをtrueで保存", saved?.aiWork === true, JSON.stringify(saved));
     check("aiWorkBriefを保存", saved?.aiWorkBrief === "候補3社を比較してまとめてほしい", JSON.stringify(saved));
-    check("保存後はWBS一覧に🤝マークを表示", await page.locator(".ai-work-flag").count() === 1);
+    check("保存後も一覧は題名・情報・期日見積の3列", await page.locator('[data-wbs-row-id="task-ai1"] > div').count() === 3);
+    await page.locator('[data-wbs-row-id="task-ai1"] [data-action="edit-task"]').click();
+    check("保存したAI指定と指示を詳細で読める", await page.locator('[data-modal-field="aiWork"]').isChecked()
+      && await page.locator('[data-modal-field="aiWorkBrief"]').inputValue() === "候補3社を比較してまとめてほしい");
+    await page.locator('#modalRoot [data-action="modal-close"]').first().click();
 
     check("AI作業結果の廃止済み承認/質問ボタンはDOMへ戻さない",
       await page.locator('[data-action="ai-work-approve"], [data-action="ai-work-question"]').count() === 0);

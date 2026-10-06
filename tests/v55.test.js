@@ -1,9 +1,4 @@
-// v55 検証: WBSのインライン編集
-//
-// v60メモ: 本スイートはもともと「AI一括編集」(自然文指示→callClaudeで変更案生成→確認→反映)も
-// 検証していたが、v60でアプリ内からのClaude API直接呼び出しを全廃したのに伴い機能ごと削除した
-// ため、該当セクションは削除した(詳細はCHANGES_v60.md)。インライン編集はAIと無関係の機能
-// なのでそのまま残す。
+// v55 / A-3: WBSの期日・見積は表示のみ。
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -36,7 +31,7 @@ function check(name, cond, extra = "") {
   await passGithubGate(page);
 
   // ---- seed: プロジェクト + タスク3件 + カテゴリ ----
-  await page.evaluate(({ KEY, TODAY }) => {
+  await page.evaluate(({ KEY, TODAY, NEXTWK }) => {
     const s = JSON.parse(localStorage.getItem(KEY));
     s.settings.categories = [{ id: "c1", name: "開発", color: "#007aff" }, { id: "c2", name: "学習", color: "#2fb96d" }];
     // デモの normal プロジェクトは除去して件数を決定的に(wish/other は残す)
@@ -44,54 +39,24 @@ function check(name, cond, extra = "") {
     s.projects.push({ id: "proj-1", kind: "normal", title: "英語学習", category: "", status: "active", description: "", dueDate: "", twelveWeekStartDate: TODAY, createdAt: "2026-01-01T00:00", updatedAt: "2026-01-01T00:00", deleted: false, collapsed: false });
     const mkTask = (id, title, due) => ({ id, projectId: "proj-1", parentTaskId: "", title, category: "", status: "todo", dueDate: due, description: "", createdAt: `2026-01-0${id.slice(-1)}T00:00`, updatedAt: "2026-01-01T00:00", deleted: false });
     s.tasks = [mkTask("task-A", "単語帳", ""), mkTask("task-B", "模試", ""), mkTask("task-C", "リスニング", "")];
+    s.tasks[0].dueDate = NEXTWK; s.tasks[0].estimateMin = 45;
     s.currentView = "wbs";
     localStorage.setItem(KEY, JSON.stringify(s));
-  }, { KEY, TODAY });
+  }, { KEY, TODAY, NEXTWK });
   await page.reload();
   await page.waitForTimeout(500);
 
-  // ---- [1] インライン編集モード ----
-  console.log("[1] インライン編集モード");
-  // v374: 1280px未満では.wbs-edit-toggleは非表示(styles.css:2968)になり、
-  // 「表示▾」メニュー内の.wbs-menu-edit-toggleに切替わる(狭幅なのでビューポートは変えず、メニュー経由で操作する)。
-  check("編集モードトグルがある", await page.locator('.wbs-edit-toggle[data-action="toggle-wbs-edit"]').count() === 1);
-  check("通常時はインライン入力が出ない", await page.locator('[data-wbs-edit]').count() === 0);
-  async function toggleWbsEditViaMenu() {
-    const viewMenu = page.locator("details.wbs-view-menu");
-    if (!await viewMenu.evaluate((el) => el.open)) await viewMenu.locator("summary").click();
-    await page.locator('.wbs-menu-edit-toggle[data-action="toggle-wbs-edit"]').click();
-    if (await viewMenu.evaluate((el) => el.open)) await viewMenu.locator("summary").click();
-  }
-  await toggleWbsEditViaMenu();
-  await page.waitForTimeout(300);
-  check("編集モードで各タスクに3項目(状態/期限/カテゴリ)の行内フォーム",
-    await page.locator('[data-wbs-edit][data-id="task-A"]').count() === 3
-    && await page.locator('[data-wbs-edit][data-id="task-B"]').count() === 3
-    && await page.locator('[data-wbs-edit][data-id="task-C"]').count() === 3);
-  // 入力の font-size 16px(iOSズーム防止)
-  const fs = await page.locator('.wbs-inline-input').first().evaluate((el) => getComputedStyle(el).fontSize);
-  check("インライン入力のfont-sizeが16px以上", parseFloat(fs) >= 16, fs);
-  // task-A の期限を直接編集
-  // v374: 期限をNEXTWKへ変更すると「今週やること」パネル(renderWbsThisWeek、data-wbs-week-row-id)にも
-  // 同じdata-wbs-edit入力が現れ2件ヒットするため、メインWBS行(data-wbs-row-id)側だけを指定する。
-  const taskARow = page.locator('[data-wbs-row-id="task-A"]');
-  await taskARow.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').fill(NEXTWK);
-  await taskARow.locator('input[data-wbs-edit="dueDate"][data-id="task-A"]').dispatchEvent("change");
-  await page.waitForTimeout(300);
-  check("期限がモーダルなしで保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks.find((t) => t.id === "task-A").dueDate, KEY) === NEXTWK);
-  // task-B の状態を中断に
-  await page.selectOption('select[data-wbs-edit="status"][data-id="task-B"]', "suspended");
-  await page.waitForTimeout(300);
-  check("状態がその場で保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks.find((t) => t.id === "task-B").status, KEY) === "suspended");
-  // task-C のカテゴリを開発に
-  await page.selectOption('select[data-wbs-edit="category"][data-id="task-C"]', "開発");
-  await page.waitForTimeout(300);
-  check("カテゴリがその場で保存される", await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks.find((t) => t.id === "task-C").category, KEY) === "開発");
-  check("dataModifiedAtが更新される(実データ変更)", await page.evaluate((KEY) => !!JSON.parse(localStorage.getItem(KEY)).dataModifiedAt, KEY));
-  // 編集モードOFFで通常表示に戻る(中断表示のため中断を表示に)
-  await toggleWbsEditViaMenu();
-  await page.waitForTimeout(300);
-  check("編集モードOFFでフォームが消える", await page.locator('[data-wbs-edit]').count() === 0);
+  // A-3: edit controls are deferred; due date and estimate remain readable.
+  const rows = page.locator('[data-work-group="proj-1"] .work-task-row');
+  check("3件のタスクを表示", await rows.count() === 3);
+  const due = page.locator('[data-work-key="task:task-A"] .work-task-due');
+  check("期日を文字で表示", (await due.textContent()).includes(`期日 ${Number(NEXTWK.slice(5,7))}/${Number(NEXTWK.slice(8,10))}`));
+  check("見積を文字で表示", (await due.textContent()).includes('見積 45分'));
+  check("期日なし・見積0も文字表示", (await page.locator('[data-work-key="task:task-B"] .work-task-due').textContent()).includes('期日なし')
+    && (await page.locator('[data-work-key="task:task-B"] .work-task-due').textContent()).includes('見積 0分'));
+  check("行内入力欄と状態selectが無い", await rows.locator('input,select,textarea').count() === 0
+    && await page.locator('.wbs-inline-input,[data-wbs-edit]').count() === 0);
+  check("検索入力は16px以上", parseFloat(await page.locator('[data-work-list="wbs"] #wbs-projects-query').evaluate(el => getComputedStyle(el).fontSize)) >= 16);
 
   // ---- [2] 後方互換 ----
   console.log("[2] 後方互換");

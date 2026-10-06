@@ -33,6 +33,7 @@ function registerActions(handlers) {
 // 登録済みならhandler(ctx)を呼んでtrueを返す。未登録ならfalse
 // (呼び出し側=app.jsの既存if連鎖はfalseの場合だけフォールバック実行する)。
 function dispatchAction(name, ctx) {
+  if (name === "wbs-select-project" && ctx.target?.matches('[data-kind="project"]')) name = "work-list-toggle";
   const handler = actionRegistry.get(name);
   if (!handler) return false;
   handler(ctx);

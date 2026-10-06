@@ -111,7 +111,7 @@ function check(name, cond, extra = "") {
     // ============================================================
     console.log("[2] Task編集モーダルに doneCriteria/firstStep テキストエリアがあり、ガイド文言・16px以上");
     await seed({ tasks: [task("task-A", "テストTask")], projects: [testProject()] });
-    await page.click('[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:task-A"] .wbs-task-title[data-action="edit-task"]');
+    await page.click('[data-work-list="wbs"] [data-work-key="task:task-A"] .work-list-title[data-action="edit-task"]');
     await page.waitForTimeout(200);
     check("完了条件のテキストエリアがある", await page.locator('[data-modal-field="doneCriteria"]').count() === 1);
     check("スモールステップのテキストエリアがある", await page.locator('[data-modal-field="firstStep"]').count() === 1);
@@ -155,25 +155,25 @@ function check(name, cond, extra = "") {
       projects: [testProject()],
       view: "wbs"
     });
-    const work = page.locator('[data-work-list="wbs-tasks-test-proj"]');
+    const work = page.locator('[data-work-list="wbs"]');
     check("WBS全件に対象Taskがある", await work.locator('[data-work-key="task:task-B"]').count() === 1);
     const beforeRead = await stateNow();
-    await work.locator('[data-work-key="task:task-B"] .wbs-task-title[data-action="edit-task"]').click();
+    await work.locator('[data-work-key="task:task-B"] .work-list-title[data-action="edit-task"]').click();
     check("同Task詳細で完了条件全文が読める", await page.locator('[data-modal-field="doneCriteria"]').inputValue() === "報告書が上長にメール送信済み");
     check("同Task詳細で第一歩全文が読める", await page.locator('[data-modal-field="firstStep"]').inputValue() === "報告書の雛形を開く");
     // v374: 閉じるボタン(×)とキャンセルの2つがdata-action="modal-close"を共有する(app.js:5303等)。
     // aria-label="閉じる"で×だけを一意に指定する。
     await page.locator('#modalRoot [data-action="modal-close"][aria-label="閉じる"]').click();
-    await work.locator('[data-work-key="task:task-C"] .wbs-task-title[data-action="edit-task"]').click();
+    await work.locator('[data-work-key="task:task-C"] .work-list-title[data-action="edit-task"]').click();
     check("空Taskの完了条件に別Task本文を混ぜない", await page.locator('[data-modal-field="doneCriteria"]').inputValue() === "");
     check("空Taskの第一歩に別Task本文を混ぜない", await page.locator('[data-modal-field="firstStep"]').inputValue() === "");
     await page.locator('#modalRoot [data-action="modal-close"][aria-label="閉じる"]').click();
     check("読むだけでTask本文を書き換えない", JSON.stringify((await stateNow()).tasks) === JSON.stringify(beforeRead.tasks));
-    await work.locator('[data-work-filter="query"]').fill("報告書が上長");
-    check("完了条件検索は入力済みTaskだけに一致", await work.locator('[data-work-key]').count() === 1 && await work.locator('[data-work-key="task:task-B"]').count() === 1);
+    await work.locator('[data-work-filter="query"]').fill("両欄入力済み");
+    check("題名検索は入力済みTaskだけに一致", await work.locator('[data-work-key]').count() === 1 && await work.locator('[data-work-key="task:task-B"]').count() === 1);
     await work.locator('[data-work-filter="query"]').fill("存在しない完了条件");
     check("不一致条件では0件", await work.locator('[data-work-key]').count() === 0);
-    await work.locator('[data-action="work-list-clear"]').click();
+    await work.locator('[data-work-filter="query"]').fill('');
 
     // ============================================================
     // (e) 390px幅で横スクロールが発生しない
@@ -208,7 +208,7 @@ function check(name, cond, extra = "") {
     await pageMobile.reload();
     await pageMobile.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await pageMobile.waitForTimeout(500);
-    await pageMobile.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:task-M"] .wbs-task-title[data-action="edit-task"]').click();
+    await pageMobile.locator('[data-work-list="wbs"] [data-work-key="task:task-M"] .work-list-title[data-action="edit-task"]').click();
     check("390px詳細で長い完了条件と第一歩を保持", (await pageMobile.locator('[data-modal-field="doneCriteria"]').inputValue()).includes("とても長い完了条件") && (await pageMobile.locator('[data-modal-field="firstStep"]').inputValue()).includes("とても長いスモールステップ"));
     const metricsMobile = await pageMobile.evaluate(() => {
       const doc = document.scrollingElement || document.documentElement;

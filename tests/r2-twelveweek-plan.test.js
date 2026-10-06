@@ -212,7 +212,7 @@ async function seed(page, values) {
     ]) {
       await seed(page, { settings: { twelveWeekStartDate: settingStart },
         projects: [project("save-project", { twelveWeekStartDate: projectStart })], tasks: [], tracks: [], currentView: "wbs" });
-      await page.click('[data-action="edit-project"][data-id="save-project"]');
+      await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('edit-project', { id: 'save-project' }));
       await page.waitForSelector('[data-modal-field="is12WY"]');
       await page.check('[data-modal-field="is12WY"]');
       await page.click('[data-action="modal-save"]');

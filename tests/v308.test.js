@@ -210,18 +210,18 @@ async function checkWbsUnchanged(browser) {
     }, STATE_KEY);
     await current.page.reload();
     await current.page.locator('#app[data-view="wbs"]').waitFor();
-    const metrics = await current.page.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"] > strong`).evaluate((element) => {
+    const metrics = await current.page.locator(`[data-action="wbs-select-project"][data-id="${PROJECT_ID}"]`).evaluate((element) => {
       const style = getComputedStyle(element);
       const parsedLineHeight = parseFloat(style.lineHeight);
       const lineHeight = Number.isFinite(parsedLineHeight) ? parsedLineHeight : parseFloat(style.fontSize) * 1.6;
       return {
-        offsetHeight: element.offsetHeight, lineHeight,
+        contentHeight: element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom), lineHeight,
         minWidth: style.minWidth, flexGrow: style.flexGrow, overflowX: style.overflowX,
         overflowWrap: style.overflowWrap, whiteSpace: style.whiteSpace, textOverflow: style.textOverflow
       };
     });
     check("745px: WBSプロジェクトタイトルは従来どおり複数行へ折り返す",
-      Number.isFinite(metrics.lineHeight) && metrics.offsetHeight > metrics.lineHeight + 1, JSON.stringify(metrics));
+      Number.isFinite(metrics.lineHeight) && metrics.contentHeight > metrics.lineHeight + 1, JSON.stringify(metrics));
     check("745px: Block専用ellipsis指定がWBSプロジェクト行へ波及しない",
       // v328でWBS見出しがgridセル内の display:block になり、min-width:auto の算出値は "0px" になる(Block専用の4chではない)。
       (metrics.minWidth === "auto" || metrics.minWidth === "0px") && metrics.flexGrow === "0" && metrics.overflowX === "visible"

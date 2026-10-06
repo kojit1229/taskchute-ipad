@@ -37,7 +37,7 @@
 | daily-reading-e2e.test.js | e2e | full | content-ai | 34 | 0 | 0 |
 | daily-reading-sync.test.js | e2e | full | sync-storage, content-ai | 46 | 0 | 0 |
 | daily-report-e2e.test.js | e2e | full | journal-health, content-ai | 34 | 0 | 0 |
-| daily-search-e2e.test.js | e2e | full | content-ai | 35 | 0 | 0 |
+| daily-search-e2e.test.js | e2e | full | content-ai | 36 | 0 | 0 |
 | daily-stamp-e2e.test.js | node | full | content-ai | 14 | 0 | 0 |
 | daily-start-end-e2e.test.js | e2e | full | content-ai | 154 | 0 | 0 |
 | daily-time-e2e.test.js | e2e | full | content-ai | 28 | 0 | 0 |
@@ -46,6 +46,7 @@
 | data-contract-gate.test.js | node | full | content-ai | 20 | 0 | 0 |
 | data-stamp-normalize.test.js | node | full | legacy-crosscutting | 13 | 0 | 0 |
 | day-cross-ticker.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 8 | 7600 |
+| decide-view.test.js | e2e | full | planning-execution, ui-responsive | 32 | 0 | 0 |
 | detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 31 | 0 | 0 |
 | directory-fallback.test.js | node | full | content-ai | 14 | 0 | 0 |
 | draft-leave.test.js | node | full | legacy-crosscutting | 34 | 0 | 0 |
@@ -99,7 +100,7 @@
 | life-export-core.test.js | node | full | sync-storage, journal-health | 21 | 0 | 0 |
 | merge-core.test.js | node | full | sync-storage | 23 | 0 | 0 |
 | modal-delete-impact.test.js | node | full | ui-responsive | 15 | 0 | 0 |
-| mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 312 | 0 | 0 |
+| mutation-block-e2e.test.js | e2e | full | planning-execution, content-ai | 313 | 0 | 0 |
 | mutation-bundle-e2e.test.js | node | full | legacy-crosscutting | 16 | 0 | 0 |
 | mutation-global-e2e.test.js | e2e | full | sync-storage | 179 | 0 | 0 |
 | mutation-recurrence-e2e.test.js | node | full | legacy-crosscutting | 15 | 0 | 0 |
@@ -114,7 +115,7 @@
 | planned-occupancy-core.test.js | node | full | legacy-crosscutting | 28 | 0 | 0 |
 | primary-settings-conflict.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | r0-twyplan.test.js | e2e | full | sync-storage, planning-execution, journal-health | 37 | 1 | 1100 |
-| r1-twelveweek.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 83 | 0 | 0 |
+| r1-twelveweek.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai, ui-responsive | 84 | 0 | 0 |
 | r2-twelveweek-plan.test.js | e2e | full | planning-execution, ui-responsive | 80 | 0 | 0 |
 | r3-delivery-e2e.test.js | e2e | full | ui-responsive, security-offline | 6 | 0 | 0 |
 | r3-twelveweek-week.test.js | e2e | full | journal-health, ui-responsive | 28 | 0 | 0 |
@@ -152,7 +153,7 @@
 | sync-load-confirm-snapshot.test.js | e2e | full | sync-storage | 32 | 10 | 4550 |
 | task-complete-actual.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 2 | 0 | 0 |
 | test-manifest-generator.test.js | node | full | legacy-crosscutting | 11 | 0 | 0 |
-| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 147 | 0 | 0 |
+| three-screen-connection-e2e.test.js | e2e | full | planning-execution, ui-responsive | 151 | 0 | 0 |
 | three-screen-flow-e2e.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 82 | 0 | 0 |
 | timeline-layout-core.test.js | node | full | planning-execution | 25 | 0 | 0 |
 | timeline-render-core.test.js | node | full | planning-execution, ui-responsive | 41 | 0 | 0 |
@@ -183,7 +184,7 @@
 | v106.test.js | e2e | full | sync-storage, planning-execution, journal-health | 18 | 5 | 5600 |
 | v107.test.js | e2e | full | planning-execution | 61 | 20 | 5300 |
 | v108.test.js | e2e | full | sync-storage, planning-execution | 21 | 6 | 1800 |
-| v109.test.js | e2e | full | planning-execution, ui-responsive | 24 | 12 | 3900 |
+| v109.test.js | e2e | full | planning-execution, ui-responsive | 16 | 5 | 2100 |
 | v110.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 2 | 1000 |
 | v111.test.js | e2e | full | ui-responsive | 24 | 19 | 6700 |
 | v112.test.js | e2e | full | planning-execution, ui-responsive | 30 | 1 | 400 |
@@ -198,7 +199,7 @@
 | v123.test.js | e2e | full | ui-responsive | 24 | 4 | 1700 |
 | v124.test.js | e2e | full | content-ai | 25 | 5 | 1520 |
 | v125.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 30 | 5 | 1500 |
-| v126.test.js | e2e | full | planning-execution, journal-health | 21 | 12 | 3150 |
+| v126.test.js | e2e | full | planning-execution, journal-health | 21 | 7 | 2050 |
 | v127.test.js | e2e | full | ui-responsive | 25 | 5 | 2100 |
 | v128.test.js | e2e | full | journal-health | 18 | 3 | 1300 |
 | v129.test.js | e2e | full | planning-execution, journal-health | 29 | 14 | 4250 |
@@ -225,11 +226,11 @@
 | v162.test.js | e2e | full | planning-execution, journal-health | 33 | 13 | 4600 |
 | v163.test.js | node | full | journal-health, ui-responsive | 3 | 0 | 0 |
 | v193.test.js | node | full | content-ai, sync-storage, planning-execution, ui-responsive | 12 | 0 | 0 |
-| v194.test.js | e2e | full | planning-execution | 8 | 0 | 0 |
-| v195.test.js | e2e | full | sync-storage, planning-execution, content-ai | 30 | 0 | 0 |
+| v194.test.js | e2e | full | sync-storage, planning-execution, content-ai | 11 | 0 | 0 |
+| v195.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 0 | 0 |
 | v196.test.js | e2e | full | planning-execution, content-ai | 29 | 0 | 0 |
 | v197.test.js | e2e | full | sync-storage, planning-execution, content-ai | 30 | 12 | 5000 |
-| v198.test.js | e2e | full | content-ai | 49 | 13 | 4300 |
+| v198.test.js | e2e | full | content-ai | 51 | 13 | 4300 |
 | v199.test.js | e2e | full | planning-execution, content-ai | 48 | 8 | 3150 |
 | v231.test.js | e2e | full | journal-health | 9 | 0 | 0 |
 | v235.test.js | node | full | journal-health | 8 | 0 | 0 |
@@ -245,13 +246,13 @@
 | v258.test.js | e2e | full | sync-storage | 41 | 1 | 150 |
 | v259.test.js | e2e | full | sync-storage, journal-health | 52 | 1 | 150 |
 | v260.test.js | e2e | full | planning-execution, journal-health, ui-responsive | 49 | 0 | 0 |
-| v261.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 60 | 0 | 0 |
-| v262.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive, security-offline | 59 | 0 | 0 |
-| v263.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 42 | 2 | 300 |
+| v261.test.js | e2e | full | planning-execution, ui-responsive | 11 | 0 | 0 |
+| v262.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive, security-offline | 60 | 0 | 0 |
+| v263.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 43 | 0 | 0 |
 | v264.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 50 | 0 | 0 |
-| v266.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 61 | 0 | 0 |
-| v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 23 | 1 | 200 |
-| v268.test.js | e2e | full | planning-execution | 11 | 0 | 0 |
+| v266.test.js | e2e | full | planning-execution, sync-storage, ui-responsive | 62 | 0 | 0 |
+| v267.test.js | e2e | full | planning-execution, sync-storage, journal-health, ui-responsive | 24 | 1 | 200 |
+| v268.test.js | e2e | full | planning-execution | 12 | 0 | 0 |
 | v271.test.js | node | full | legacy-crosscutting | 17 | 0 | 0 |
 | v274.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
 | v275.test.js | e2e | full | ui-responsive | 34 | 0 | 0 |
@@ -260,13 +261,13 @@
 | v278.test.js | e2e | full | planning-execution, ui-responsive | 26 | 0 | 0 |
 | v280.test.js | e2e | full | planning-execution, ui-responsive | 44 | 0 | 0 |
 | v281.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 53 | 0 | 0 |
-| v282.test.js | e2e | full | planning-execution | 48 | 0 | 0 |
+| v282.test.js | e2e | full | planning-execution | 34 | 0 | 0 |
 | v283.test.js | e2e | full | content-ai, sync-storage, ui-responsive | 47 | 0 | 0 |
 | v284.test.js | e2e | full | sync-storage, journal-health, planning-execution, ui-responsive | 29 | 0 | 0 |
 | v285.test.js | e2e | full | content-ai, sync-storage, planning-execution, ui-responsive | 27 | 0 | 0 |
 | v286.test.js | e2e | full | content-ai, ui-responsive | 27 | 0 | 0 |
 | v287.test.js | e2e | full | content-ai, planning-execution, ui-responsive | 43 | 1 | 150 |
-| v288.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 32 | 0 | 0 |
+| v288.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 33 | 0 | 0 |
 | v293.test.js | e2e | full | planning-execution, ui-responsive | 38 | 0 | 0 |
 | v294.test.js | e2e | full | sync-storage, planning-execution, journal-health, content-ai | 42 | 0 | 0 |
 | v295.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 43 | 0 | 0 |
@@ -275,7 +276,7 @@
 | v299.test.js | node | full | planning-execution, content-ai | 29 | 0 | 0 |
 | v300.test.js | node | full | content-ai | 18 | 0 | 0 |
 | v301.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 28 | 0 | 0 |
-| v302.test.js | e2e | full | planning-execution, ui-responsive | 43 | 0 | 0 |
+| v302.test.js | e2e | full | planning-execution, ui-responsive | 36 | 0 | 0 |
 | v303.test.js | e2e | full | sync-storage | 41 | 0 | 0 |
 | v304.test.js | e2e | full | planning-execution | 13 | 0 | 0 |
 | v305.test.js | e2e | full | planning-execution | 30 | 0 | 0 |
@@ -291,7 +292,7 @@
 | v315.test.js | e2e | full | ui-responsive | 17 | 0 | 0 |
 | v316.test.js | e2e | full | sync-storage, journal-health | 15 | 0 | 0 |
 | v317.test.js | e2e | full | planning-execution, journal-health | 23 | 1 | 200 |
-| v318.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 40 | 0 | 0 |
+| v318.test.js | e2e | full | sync-storage, journal-health, ui-responsive | 41 | 0 | 0 |
 | v319.test.js | e2e | full | ui-responsive | 21 | 0 | 0 |
 | v320.test.js | e2e | full | planning-execution, ui-responsive | 27 | 0 | 0 |
 | v321.test.js | e2e | full | planning-execution, ui-responsive | 28 | 0 | 0 |
@@ -301,11 +302,11 @@
 | v325.test.js | e2e | full | sync-storage, planning-execution, journal-health, ui-responsive | 25 | 0 | 0 |
 | v326.test.js | e2e | full | ui-responsive | 18 | 0 | 0 |
 | v327.test.js | e2e | full | ui-responsive | 23 | 0 | 0 |
-| v328.test.js | e2e | full | planning-execution, ui-responsive | 22 | 0 | 0 |
-| v329.test.js | e2e | full | planning-execution | 28 | 0 | 0 |
-| v330.test.js | e2e | full | planning-execution | 23 | 1 | 50 |
+| v328.test.js | e2e | full | planning-execution, ui-responsive | 27 | 0 | 0 |
+| v329.test.js | e2e | full | planning-execution | 25 | 0 | 0 |
+| v330.test.js | e2e | full | ui-responsive | 16 | 0 | 0 |
 | v331.test.js | e2e | full | planning-execution, ui-responsive | 21 | 1 | 50 |
-| v332.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 56 | 1 | 50 |
+| v332.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 53 | 1 | 50 |
 | v333.test.js | e2e | full | planning-execution | 47 | 3 | 150 |
 | v334.test.js | e2e | full | planning-execution, ui-responsive | 48 | 8 | 2400 |
 | v335.test.js | e2e | full | planning-execution, journal-health, content-ai | 23 | 8 | 1100 |
@@ -323,7 +324,7 @@
 | v49.test.js | e2e | full | sync-storage, content-ai | 19 | 16 | 7900 |
 | v50.test.js | e2e | smoke | planning-execution, ui-responsive | 17 | 12 | 4200 |
 | v53.test.js | e2e | full | sync-storage, journal-health | 19 | 14 | 7500 |
-| v55.test.js | e2e | full | planning-execution | 13 | 9 | 3200 |
+| v55.test.js | e2e | full | planning-execution, ui-responsive | 10 | 4 | 1700 |
 | v56.test.js | e2e | full | content-ai | 18 | 8 | 3320 |
 | v57.test.js | e2e | full | sync-storage, content-ai | 8 | 5 | 3000 |
 | v58.test.js | e2e | full | planning-execution, content-ai, ui-responsive | 34 | 25 | 11300 |
@@ -331,9 +332,9 @@
 | v60.test.js | e2e | full | content-ai, security-offline | 32 | 19 | 7300 |
 | v61.test.js | e2e | full | planning-execution | 40 | 19 | 5600 |
 | v62.test.js | e2e | full | journal-health, content-ai | 38 | 19 | 7650 |
-| v63.test.js | e2e | full | ui-responsive | 15 | 8 | 2450 |
-| v65.test.js | e2e | full | planning-execution | 34 | 16 | 4150 |
-| v67.test.js | e2e | smoke | planning-execution, content-ai | 18 | 1 | 150 |
+| v63.test.js | e2e | full | ui-responsive | 16 | 7 | 2150 |
+| v65.test.js | e2e | full | planning-execution | 35 | 16 | 4150 |
+| v67.test.js | e2e | smoke | planning-execution, content-ai | 19 | 1 | 150 |
 | v68.test.js | e2e | full | sync-storage, journal-health, content-ai | 44 | 18 | 5500 |
 | v70.test.js | e2e | smoke | planning-execution | 44 | 16 | 4850 |
 | v71.test.js | e2e | full | content-ai, ui-responsive | 22 | 2 | 1000 |
@@ -355,11 +356,11 @@
 | v92.test.js | e2e | full | planning-execution, journal-health, content-ai | 16 | 5 | 1800 |
 | v93.test.js | e2e | full | ui-responsive | 10 | 3 | 1500 |
 | v94.test.js | e2e | full | sync-storage, planning-execution | 16 | 9 | 4000 |
-| v95.test.js | e2e | full | planning-execution | 29 | 11 | 3200 |
+| v95.test.js | e2e | full | content-ai | 17 | 6 | 2200 |
 | v96.test.js | e2e | full | planning-execution | 26 | 9 | 3500 |
 | v97.test.js | e2e | full | planning-execution, ui-responsive | 23 | 7 | 2500 |
 | v98.test.js | e2e | full | ui-responsive | 10 | 7 | 3100 |
-| v99.test.js | e2e | full | sync-storage, planning-execution, content-ai, ui-responsive | 21 | 12 | 4100 |
+| v99.test.js | e2e | full | content-ai | 12 | 6 | 2500 |
 | vision-connection-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive, security-offline | 15 | 0 | 0 |
 | vision-connection.test.js | node | full | content-ai, sync-storage, ui-responsive, security-offline | 17 | 0 | 0 |
 | vision-layout-e2e.test.js | e2e | full | content-ai | 18 | 0 | 0 |
@@ -368,10 +369,12 @@
 | weekly-reviews-core.test.js | node | full | sync-storage, journal-health | 4 | 0 | 0 |
 | weekly-save-e2e.test.js | e2e | full | content-ai, sync-storage, ui-responsive | 17 | 0 | 0 |
 | wish-core.test.js | node | full | content-ai, ui-responsive | 48 | 0 | 0 |
-| work-list-e2e.test.js | e2e | full | planning-execution, ui-responsive | 45 | 0 | 0 |
+| work-list-e2e.test.js | e2e | full | planning-execution, ui-responsive | 49 | 0 | 0 |
 | work-list-focus.test.js | node | full | legacy-crosscutting | 6 | 0 | 0 |
 | work-list-model.test.js | node | full | legacy-crosscutting | 19 | 0 | 0 |
 | work-list-render-focus.test.js | node | full | ui-responsive | 5 | 0 | 0 |
+| work-list-wbs.test.js | e2e | full | planning-execution | 66 | 0 | 0 |
+| work-series.test.js | node | full | legacy-crosscutting | 14 | 0 | 0 |
 | xss-sanitizer.test.js | e2e | smoke | content-ai, security-offline | 41 | 2 | 1000 |
 | zero-autosave-e2e.test.js | node | full | legacy-crosscutting | 65 | 0 | 0 |
 | zero-clock.test.js | node | full | legacy-crosscutting | 18 | 0 | 0 |
@@ -387,13 +390,13 @@
 
 | Code-index area | Test-manifest domain | Functions | Suites | Suite list |
 |---|---|---:|---:|---|
-| content | content-ai | 121 | 162 | action-registry-core.test.js, ai-morning-bar.test.js, ai-tabs-e2e.test.js, bridge-epoch-independent.test.js, coach-core.test.js, daily-actual-row.test.js, daily-actuals-e2e.test.js, daily-adapters-e2e.test.js, daily-add-e2e.test.js, daily-block-merge.test.js, daily-completion-e2e.test.js, daily-copy-e2e.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-draft-e2e.test.js, daily-mock-adapter.test.js, daily-operations-registry.test.js, daily-order-core.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-parts-snapshot.test.js, daily-placement-e2e.test.js, daily-plan-row.test.js, daily-preview-server.test.js, daily-reading-core.test.js, daily-reading-e2e.test.js, daily-reading-sync.test.js, daily-report-e2e.test.js, daily-search-e2e.test.js, daily-stamp-e2e.test.js, daily-start-end-e2e.test.js, daily-time-e2e.test.js, daily-view-model.test.js, data-contract-gate.test.js, day-cross-ticker.test.js, directory-fallback.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fund-comparison-view.test.js, fund-controller.test.js, fund-dom-bridge.test.js, fund-integration-e2e.test.js, fund-read-transport.test.js, fund-read.test.js, fund-report.test.js, fund-workspace.test.js, github-vision-pdf-fallback.test.js, independent-picker.test.js, individual.test.js, instruments-e2e.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-input-core.test.js, journal-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, layout-rail-columns.test.js, legacy-raw-fixtures.test.js, legacy-restoration.test.js, mutation-block-e2e.test.js, placement-core.test.js, placement-e2e.test.js, r1-twelveweek.test.js, remaining-handover-e2e.test.js, remaining-screen-labels.test.js, remaining-twelveweek-layout.test.js, remote-invalid-fail-close.test.js, report-view.test.js, state-container-recovery.test.js, store-core.test.js, sw-self-heal.test.js, three-screen-flow-e2e.test.js, today-core.test.js, v100.test.js, v101.test.js, v102.test.js, v103.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v121.test.js, v122.test.js, v124.test.js, v125.test.js, v133.test.js, v135.test.js, v136.test.js, v138.test.js, v140.test.js, v141.test.js, v143.test.js, v159.test.js, v160.test.js, v193.test.js, v195.test.js, v196.test.js, v197.test.js, v198.test.js, v199.test.js, v251.test.js, v281.test.js, v283.test.js, v285.test.js, v286.test.js, v287.test.js, v294.test.js, v296.test.js, v299.test.js, v300.test.js, v301.test.js, v322.test.js, v324.test.js, v332.test.js, v335.test.js, v356.test.js, v361.test.js, v362.test.js, v367.test.js, v49.test.js, v56.test.js, v57.test.js, v58.test.js, v59.test.js, v60.test.js, v62.test.js, v67.test.js, v68.test.js, v71.test.js, v75.test.js, v76.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v85.test.js, v86.test.js, v90.test.js, v92.test.js, v99.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-layout-e2e.test.js, vision-overview.test.js, weekly-save-e2e.test.js, wish-core.test.js, xss-sanitizer.test.js, zero-draft-e2e.test.js, zero-export-e2e.test.js |
-| core | legacy-crosscutting | 234 | 30 | code-index.test.js, commit-size-gate.test.js, data-stamp-normalize.test.js, draft-leave.test.js, draft-save-transaction.test.js, fund-data-contract.test.js, impact-regression-coverage.test.js, instruments-core.test.js, mutation-bundle-e2e.test.js, mutation-recurrence-e2e.test.js, mutation-twelve-week-e2e.test.js, planned-occupancy-core.test.js, primary-settings-conflict.test.js, release-gate.test.js, release-record.test.js, run-all-options.test.js, run-all-results.test.js, suite-manifest.test.js, test-manifest-generator.test.js, tower-model-core.test.js, tower-week-core.test.js, twy-decide-face.test.js, v247.test.js, v271.test.js, week-core.test.js, work-list-focus.test.js, work-list-model.test.js, zero-autosave-e2e.test.js, zero-clock.test.js, zero-session.test.js |
-| execution | planning-execution | 150 | 160 | action-registry-core.test.js, daily-block-merge.test.js, daily-detail-fields-e2e.test.js, daily-view-model.test.js, dandori-view.test.js, day-cross-ticker.test.js, detail-draft-e2e.test.js, exec-layout-media.test.js, exec-timeline-e2e.test.js, f2-plan-completion-e2e.test.js, f2-pomodoro-expiry-e2e.test.js, fill-gap-layout-inputs-e2e.test.js, github-state-blob-fallback.test.js, iron-log-e2e.test.js, layout-rail-columns.test.js, mutation-block-e2e.test.js, mutation-task-project-e2e.test.js, now-view.test.js, plan-core.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, r2-twelveweek-plan.test.js, recurrence-core.test.js, routine-view.test.js, schedule-series-core.test.js, schedule-series-derive.test.js, schedule-series-merge.test.js, schedule-series-sync-e2e.test.js, single-schedule-auto-placement.test.js, single-schedule-core.test.js, single-schedule-flow-e2e.test.js, single-schedule-layout-e2e.test.js, single-schedule-merge.test.js, single-schedule-ops-e2e.test.js, single-schedule-report.test.js, single-schedule-sync-e2e.test.js, single-schedule-view-e2e.test.js, store-core.test.js, sw-integration.test.js, task-complete-actual.test.js, three-screen-connection-e2e.test.js, three-screen-flow-e2e.test.js, timeline-layout-core.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, track-commit-core.test.js, track-core.test.js, track-crud-core.test.js, twy-stack-core.test.js, ui-a-layout.test.js, unit9-carryover-fields.test.js, v106.test.js, v107.test.js, v108.test.js, v109.test.js, v110.test.js, v112.test.js, v113.test.js, v116.test.js, v117.test.js, v118.test.js, v125.test.js, v126.test.js, v129.test.js, v132.test.js, v133.test.js, v135.test.js, v136.test.js, v137.test.js, v144.test.js, v146.test.js, v147.test.js, v148.test.js, v150.test.js, v159.test.js, v160.test.js, v162.test.js, v193.test.js, v194.test.js, v195.test.js, v196.test.js, v197.test.js, v199.test.js, v240.test.js, v253.test.js, v254.test.js, v260.test.js, v261.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v268.test.js, v276.test.js, v278.test.js, v280.test.js, v282.test.js, v284.test.js, v285.test.js, v287.test.js, v288.test.js, v293.test.js, v294.test.js, v295.test.js, v296.test.js, v299.test.js, v302.test.js, v304.test.js, v305.test.js, v306.test.js, v307.test.js, v308.test.js, v309.test.js, v310.test.js, v311.test.js, v312.test.js, v317.test.js, v320.test.js, v321.test.js, v325.test.js, v328.test.js, v329.test.js, v330.test.js, v331.test.js, v332.test.js, v333.test.js, v334.test.js, v335.test.js, v355.test.js, v357.test.js, v358.test.js, v359.test.js, v361.test.js, v366.test.js, v50.test.js, v55.test.js, v58.test.js, v59.test.js, v61.test.js, v65.test.js, v67.test.js, v70.test.js, v75.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v86.test.js, v87.test.js, v92.test.js, v94.test.js, v95.test.js, v96.test.js, v97.test.js, v99.test.js, work-list-e2e.test.js |
-| journal-health | journal-health | 77 | 72 | action-registry-core.test.js, archive-date-protection-e2e.test.js, daily-report-e2e.test.js, fund-report.test.js, journal-core.test.js, life-export-core.test.js, plan-core.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, r3-twelveweek-week.test.js, remaining-handover-e2e.test.js, report-view.test.js, single-schedule-report.test.js, task-complete-actual.test.js, three-screen-flow-e2e.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, tower-core.test.js, track-commit-core.test.js, track-core.test.js, ui-a-layout.test.js, v105.test.js, v106.test.js, v113.test.js, v120.test.js, v121.test.js, v122.test.js, v126.test.js, v128.test.js, v129.test.js, v130.test.js, v131.test.js, v132.test.js, v134.test.js, v140.test.js, v141.test.js, v144.test.js, v162.test.js, v163.test.js, v231.test.js, v235.test.js, v256.test.js, v259.test.js, v260.test.js, v261.test.js, v262.test.js, v267.test.js, v284.test.js, v294.test.js, v296.test.js, v312.test.js, v314.test.js, v316.test.js, v317.test.js, v318.test.js, v322.test.js, v325.test.js, v335.test.js, v362.test.js, v53.test.js, v62.test.js, v68.test.js, v73.test.js, v76.test.js, v78.test.js, v81.test.js, v82.test.js, v85.test.js, v91.test.js, v92.test.js, weekly-reviews-core.test.js, zero-export-e2e.test.js |
-| state | sync-storage | 148 | 136 | action-registry-core.test.js, ai-tabs-e2e.test.js, archive-date-protection-e2e.test.js, archive-date-protection.test.js, archive-snapshot-safety.test.js, archive-tombstone-sync.test.js, coach-core.test.js, daily-block-merge.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-reading-sync.test.js, dandori-view.test.js, day-cross-ticker.test.js, detail-draft-e2e.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fill-gap-layout-inputs-e2e.test.js, fund-integration-e2e.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-input-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, life-export-core.test.js, merge-core.test.js, mutation-global-e2e.test.js, mutation-stamp-core.test.js, normalize-null-defense.test.js, now-view.test.js, placement-core.test.js, placement-e2e.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, recurrence-core.test.js, schedule-series-merge.test.js, schedule-series-sync-e2e.test.js, single-schedule-merge.test.js, single-schedule-sync-e2e.test.js, state-container-recovery-e2e.test.js, store-core.test.js, sync-load-confirm-snapshot.test.js, task-complete-actual.test.js, three-screen-flow-e2e.test.js, timeline-tick-wiring.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, tower-core.test.js, track-crud-core.test.js, track-merge-core.test.js, track-normalize.test.js, track-sync-characterization.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v195.test.js, v197.test.js, v252.test.js, v254.test.js, v258.test.js, v259.test.js, v261.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v281.test.js, v283.test.js, v284.test.js, v285.test.js, v288.test.js, v294.test.js, v295.test.js, v296.test.js, v297.test.js, v301.test.js, v303.test.js, v314.test.js, v316.test.js, v318.test.js, v322.test.js, v325.test.js, v356.test.js, v358.test.js, v362.test.js, v364.test.js, v366.test.js, v367.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, v99.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-overview.test.js, weekly-reviews-core.test.js, weekly-save-e2e.test.js, zero-draft-e2e.test.js, zero-export-e2e.test.js, zero-save-boundary.test.js, zero-sync-e2e.test.js |
-| sync | sync-storage | 78 | 136 | action-registry-core.test.js, ai-tabs-e2e.test.js, archive-date-protection-e2e.test.js, archive-date-protection.test.js, archive-snapshot-safety.test.js, archive-tombstone-sync.test.js, coach-core.test.js, daily-block-merge.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-reading-sync.test.js, dandori-view.test.js, day-cross-ticker.test.js, detail-draft-e2e.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fill-gap-layout-inputs-e2e.test.js, fund-integration-e2e.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-input-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, life-export-core.test.js, merge-core.test.js, mutation-global-e2e.test.js, mutation-stamp-core.test.js, normalize-null-defense.test.js, now-view.test.js, placement-core.test.js, placement-e2e.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, recurrence-core.test.js, schedule-series-merge.test.js, schedule-series-sync-e2e.test.js, single-schedule-merge.test.js, single-schedule-sync-e2e.test.js, state-container-recovery-e2e.test.js, store-core.test.js, sync-load-confirm-snapshot.test.js, task-complete-actual.test.js, three-screen-flow-e2e.test.js, timeline-tick-wiring.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, tower-core.test.js, track-crud-core.test.js, track-merge-core.test.js, track-normalize.test.js, track-sync-characterization.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v195.test.js, v197.test.js, v252.test.js, v254.test.js, v258.test.js, v259.test.js, v261.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v281.test.js, v283.test.js, v284.test.js, v285.test.js, v288.test.js, v294.test.js, v295.test.js, v296.test.js, v297.test.js, v301.test.js, v303.test.js, v314.test.js, v316.test.js, v318.test.js, v322.test.js, v325.test.js, v356.test.js, v358.test.js, v362.test.js, v364.test.js, v366.test.js, v367.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, v99.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-overview.test.js, weekly-reviews-core.test.js, weekly-save-e2e.test.js, zero-draft-e2e.test.js, zero-export-e2e.test.js, zero-save-boundary.test.js, zero-sync-e2e.test.js |
-| ui | ui-responsive | 310 | 158 | action-registry-core.test.js, ai-tabs-e2e.test.js, archive-date-protection-e2e.test.js, coach-core.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-view-model.test.js, dandori-view.test.js, detail-draft-e2e.test.js, exec-layout-media.test.js, f6-today-layout.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fill-gap-layout-inputs-e2e.test.js, fund-integration-e2e.test.js, instruments-e2e.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-e2e.test.js, iron-log-input-core.test.js, journal-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, layout-rail-columns.test.js, modal-delete-impact.test.js, now-view.test.js, placement-core.test.js, placement-e2e.test.js, r1-twelveweek.test.js, r2-twelveweek-plan.test.js, r3-delivery-e2e.test.js, r3-twelveweek-week.test.js, remaining-handover-e2e.test.js, remaining-screen-labels.test.js, remaining-twelveweek-layout.test.js, reset-demo-confirm.test.js, task-complete-actual.test.js, three-screen-connection-e2e.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, today-detail-integration-e2e.test.js, tower-core.test.js, twy-review-face.test.js, ui-a-layout.test.js, v100.test.js, v101.test.js, v104.test.js, v105.test.js, v109.test.js, v111.test.js, v112.test.js, v113.test.js, v122.test.js, v123.test.js, v125.test.js, v127.test.js, v134.test.js, v151.test.js, v163.test.js, v193.test.js, v241.test.js, v253.test.js, v255.test.js, v256.test.js, v260.test.js, v261.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v274.test.js, v275.test.js, v276.test.js, v277.test.js, v278.test.js, v280.test.js, v281.test.js, v283.test.js, v284.test.js, v285.test.js, v286.test.js, v287.test.js, v288.test.js, v293.test.js, v295.test.js, v296.test.js, v297.test.js, v301.test.js, v302.test.js, v306.test.js, v307.test.js, v308.test.js, v309.test.js, v310.test.js, v311.test.js, v312.test.js, v313.test.js, v314.test.js, v315.test.js, v318.test.js, v319.test.js, v320.test.js, v321.test.js, v323.test.js, v325.test.js, v326.test.js, v327.test.js, v328.test.js, v331.test.js, v332.test.js, v334.test.js, v355.test.js, v356.test.js, v357.test.js, v358.test.js, v359.test.js, v361.test.js, v362.test.js, v363.test.js, v366.test.js, v367.test.js, v50.test.js, v58.test.js, v63.test.js, v71.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v93.test.js, v97.test.js, v98.test.js, v99.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-overview.test.js, weekly-save-e2e.test.js, wish-core.test.js, work-list-e2e.test.js, work-list-render-focus.test.js, zero-draft-e2e.test.js, zero-save-boundary.test.js |
+| content | content-ai | 121 | 164 | action-registry-core.test.js, ai-morning-bar.test.js, ai-tabs-e2e.test.js, bridge-epoch-independent.test.js, coach-core.test.js, daily-actual-row.test.js, daily-actuals-e2e.test.js, daily-adapters-e2e.test.js, daily-add-e2e.test.js, daily-block-merge.test.js, daily-completion-e2e.test.js, daily-copy-e2e.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-draft-e2e.test.js, daily-mock-adapter.test.js, daily-operations-registry.test.js, daily-order-core.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-parts-snapshot.test.js, daily-placement-e2e.test.js, daily-plan-row.test.js, daily-preview-server.test.js, daily-reading-core.test.js, daily-reading-e2e.test.js, daily-reading-sync.test.js, daily-report-e2e.test.js, daily-search-e2e.test.js, daily-stamp-e2e.test.js, daily-start-end-e2e.test.js, daily-time-e2e.test.js, daily-view-model.test.js, data-contract-gate.test.js, day-cross-ticker.test.js, directory-fallback.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fund-comparison-view.test.js, fund-controller.test.js, fund-dom-bridge.test.js, fund-integration-e2e.test.js, fund-read-transport.test.js, fund-read.test.js, fund-report.test.js, fund-workspace.test.js, github-vision-pdf-fallback.test.js, independent-picker.test.js, individual.test.js, instruments-e2e.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-input-core.test.js, journal-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, layout-rail-columns.test.js, legacy-raw-fixtures.test.js, legacy-restoration.test.js, mutation-block-e2e.test.js, placement-core.test.js, placement-e2e.test.js, r1-twelveweek.test.js, remaining-handover-e2e.test.js, remaining-screen-labels.test.js, remaining-twelveweek-layout.test.js, remote-invalid-fail-close.test.js, report-view.test.js, state-container-recovery.test.js, store-core.test.js, sw-self-heal.test.js, three-screen-flow-e2e.test.js, today-core.test.js, v100.test.js, v101.test.js, v102.test.js, v103.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v121.test.js, v122.test.js, v124.test.js, v125.test.js, v133.test.js, v135.test.js, v136.test.js, v138.test.js, v140.test.js, v141.test.js, v143.test.js, v159.test.js, v160.test.js, v193.test.js, v194.test.js, v195.test.js, v196.test.js, v197.test.js, v198.test.js, v199.test.js, v251.test.js, v281.test.js, v283.test.js, v285.test.js, v286.test.js, v287.test.js, v294.test.js, v296.test.js, v299.test.js, v300.test.js, v301.test.js, v322.test.js, v324.test.js, v332.test.js, v335.test.js, v356.test.js, v361.test.js, v362.test.js, v367.test.js, v49.test.js, v56.test.js, v57.test.js, v58.test.js, v59.test.js, v60.test.js, v62.test.js, v67.test.js, v68.test.js, v71.test.js, v75.test.js, v76.test.js, v77.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v85.test.js, v86.test.js, v90.test.js, v92.test.js, v95.test.js, v99.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-layout-e2e.test.js, vision-overview.test.js, weekly-save-e2e.test.js, wish-core.test.js, xss-sanitizer.test.js, zero-draft-e2e.test.js, zero-export-e2e.test.js |
+| core | legacy-crosscutting | 232 | 31 | code-index.test.js, commit-size-gate.test.js, data-stamp-normalize.test.js, draft-leave.test.js, draft-save-transaction.test.js, fund-data-contract.test.js, impact-regression-coverage.test.js, instruments-core.test.js, mutation-bundle-e2e.test.js, mutation-recurrence-e2e.test.js, mutation-twelve-week-e2e.test.js, planned-occupancy-core.test.js, primary-settings-conflict.test.js, release-gate.test.js, release-record.test.js, run-all-options.test.js, run-all-results.test.js, suite-manifest.test.js, test-manifest-generator.test.js, tower-model-core.test.js, tower-week-core.test.js, twy-decide-face.test.js, v247.test.js, v271.test.js, week-core.test.js, work-list-focus.test.js, work-list-model.test.js, work-series.test.js, zero-autosave-e2e.test.js, zero-clock.test.js, zero-session.test.js |
+| execution | planning-execution | 150 | 159 | action-registry-core.test.js, daily-block-merge.test.js, daily-detail-fields-e2e.test.js, daily-view-model.test.js, dandori-view.test.js, day-cross-ticker.test.js, decide-view.test.js, detail-draft-e2e.test.js, exec-layout-media.test.js, exec-timeline-e2e.test.js, f2-plan-completion-e2e.test.js, f2-pomodoro-expiry-e2e.test.js, fill-gap-layout-inputs-e2e.test.js, github-state-blob-fallback.test.js, iron-log-e2e.test.js, layout-rail-columns.test.js, mutation-block-e2e.test.js, mutation-task-project-e2e.test.js, now-view.test.js, plan-core.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, r2-twelveweek-plan.test.js, recurrence-core.test.js, routine-view.test.js, schedule-series-core.test.js, schedule-series-derive.test.js, schedule-series-merge.test.js, schedule-series-sync-e2e.test.js, single-schedule-auto-placement.test.js, single-schedule-core.test.js, single-schedule-flow-e2e.test.js, single-schedule-layout-e2e.test.js, single-schedule-merge.test.js, single-schedule-ops-e2e.test.js, single-schedule-report.test.js, single-schedule-sync-e2e.test.js, single-schedule-view-e2e.test.js, store-core.test.js, sw-integration.test.js, task-complete-actual.test.js, three-screen-connection-e2e.test.js, three-screen-flow-e2e.test.js, timeline-layout-core.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, track-commit-core.test.js, track-core.test.js, track-crud-core.test.js, twy-stack-core.test.js, ui-a-layout.test.js, unit9-carryover-fields.test.js, v106.test.js, v107.test.js, v108.test.js, v109.test.js, v110.test.js, v112.test.js, v113.test.js, v116.test.js, v117.test.js, v118.test.js, v125.test.js, v126.test.js, v129.test.js, v132.test.js, v133.test.js, v135.test.js, v136.test.js, v137.test.js, v144.test.js, v146.test.js, v147.test.js, v148.test.js, v150.test.js, v159.test.js, v160.test.js, v162.test.js, v193.test.js, v194.test.js, v195.test.js, v196.test.js, v197.test.js, v199.test.js, v240.test.js, v253.test.js, v254.test.js, v260.test.js, v261.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v268.test.js, v276.test.js, v278.test.js, v280.test.js, v282.test.js, v284.test.js, v285.test.js, v287.test.js, v288.test.js, v293.test.js, v294.test.js, v295.test.js, v296.test.js, v299.test.js, v302.test.js, v304.test.js, v305.test.js, v306.test.js, v307.test.js, v308.test.js, v309.test.js, v310.test.js, v311.test.js, v312.test.js, v317.test.js, v320.test.js, v321.test.js, v325.test.js, v328.test.js, v329.test.js, v331.test.js, v332.test.js, v333.test.js, v334.test.js, v335.test.js, v355.test.js, v357.test.js, v358.test.js, v359.test.js, v361.test.js, v366.test.js, v50.test.js, v55.test.js, v58.test.js, v59.test.js, v61.test.js, v65.test.js, v67.test.js, v70.test.js, v75.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v86.test.js, v87.test.js, v92.test.js, v94.test.js, v96.test.js, v97.test.js, work-list-e2e.test.js, work-list-wbs.test.js |
+| journal-health | journal-health | 76 | 71 | action-registry-core.test.js, archive-date-protection-e2e.test.js, daily-report-e2e.test.js, fund-report.test.js, journal-core.test.js, life-export-core.test.js, plan-core.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, r3-twelveweek-week.test.js, remaining-handover-e2e.test.js, report-view.test.js, single-schedule-report.test.js, task-complete-actual.test.js, three-screen-flow-e2e.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, tower-core.test.js, track-commit-core.test.js, track-core.test.js, ui-a-layout.test.js, v105.test.js, v106.test.js, v113.test.js, v120.test.js, v121.test.js, v122.test.js, v126.test.js, v128.test.js, v129.test.js, v130.test.js, v131.test.js, v132.test.js, v134.test.js, v140.test.js, v141.test.js, v144.test.js, v162.test.js, v163.test.js, v231.test.js, v235.test.js, v256.test.js, v259.test.js, v260.test.js, v262.test.js, v267.test.js, v284.test.js, v294.test.js, v296.test.js, v312.test.js, v314.test.js, v316.test.js, v317.test.js, v318.test.js, v322.test.js, v325.test.js, v335.test.js, v362.test.js, v53.test.js, v62.test.js, v68.test.js, v73.test.js, v76.test.js, v78.test.js, v81.test.js, v82.test.js, v85.test.js, v91.test.js, v92.test.js, weekly-reviews-core.test.js, zero-export-e2e.test.js |
+| state | sync-storage | 148 | 135 | action-registry-core.test.js, ai-tabs-e2e.test.js, archive-date-protection-e2e.test.js, archive-date-protection.test.js, archive-snapshot-safety.test.js, archive-tombstone-sync.test.js, coach-core.test.js, daily-block-merge.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-reading-sync.test.js, dandori-view.test.js, day-cross-ticker.test.js, detail-draft-e2e.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fill-gap-layout-inputs-e2e.test.js, fund-integration-e2e.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-input-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, life-export-core.test.js, merge-core.test.js, mutation-global-e2e.test.js, mutation-stamp-core.test.js, normalize-null-defense.test.js, now-view.test.js, placement-core.test.js, placement-e2e.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, recurrence-core.test.js, schedule-series-merge.test.js, schedule-series-sync-e2e.test.js, single-schedule-merge.test.js, single-schedule-sync-e2e.test.js, state-container-recovery-e2e.test.js, store-core.test.js, sync-load-confirm-snapshot.test.js, task-complete-actual.test.js, three-screen-flow-e2e.test.js, timeline-tick-wiring.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, tower-core.test.js, track-crud-core.test.js, track-merge-core.test.js, track-normalize.test.js, track-sync-characterization.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v194.test.js, v195.test.js, v197.test.js, v252.test.js, v254.test.js, v258.test.js, v259.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v281.test.js, v283.test.js, v284.test.js, v285.test.js, v288.test.js, v294.test.js, v295.test.js, v296.test.js, v297.test.js, v301.test.js, v303.test.js, v314.test.js, v316.test.js, v318.test.js, v322.test.js, v325.test.js, v356.test.js, v358.test.js, v362.test.js, v364.test.js, v366.test.js, v367.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-overview.test.js, weekly-reviews-core.test.js, weekly-save-e2e.test.js, zero-draft-e2e.test.js, zero-export-e2e.test.js, zero-save-boundary.test.js, zero-sync-e2e.test.js |
+| sync | sync-storage | 78 | 135 | action-registry-core.test.js, ai-tabs-e2e.test.js, archive-date-protection-e2e.test.js, archive-date-protection.test.js, archive-snapshot-safety.test.js, archive-tombstone-sync.test.js, coach-core.test.js, daily-block-merge.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-reading-sync.test.js, dandori-view.test.js, day-cross-ticker.test.js, detail-draft-e2e.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fill-gap-layout-inputs-e2e.test.js, fund-integration-e2e.test.js, github-state-blob-fallback.test.js, github-vision-pdf-fallback.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-input-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, life-export-core.test.js, merge-core.test.js, mutation-global-e2e.test.js, mutation-stamp-core.test.js, normalize-null-defense.test.js, now-view.test.js, placement-core.test.js, placement-e2e.test.js, r0-twyplan.test.js, r1-twelveweek.test.js, recurrence-core.test.js, schedule-series-merge.test.js, schedule-series-sync-e2e.test.js, single-schedule-merge.test.js, single-schedule-sync-e2e.test.js, state-container-recovery-e2e.test.js, store-core.test.js, sync-load-confirm-snapshot.test.js, task-complete-actual.test.js, three-screen-flow-e2e.test.js, timeline-tick-wiring.test.js, today-detail-integration-e2e.test.js, topband-core.test.js, tower-core.test.js, track-crud-core.test.js, track-merge-core.test.js, track-normalize.test.js, track-sync-characterization.test.js, v102.test.js, v103.test.js, v104.test.js, v105.test.js, v106.test.js, v108.test.js, v110.test.js, v113.test.js, v118.test.js, v119.test.js, v120.test.js, v130.test.js, v134.test.js, v135.test.js, v136.test.js, v143.test.js, v193.test.js, v194.test.js, v195.test.js, v197.test.js, v252.test.js, v254.test.js, v258.test.js, v259.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v281.test.js, v283.test.js, v284.test.js, v285.test.js, v288.test.js, v294.test.js, v295.test.js, v296.test.js, v297.test.js, v301.test.js, v303.test.js, v314.test.js, v316.test.js, v318.test.js, v322.test.js, v325.test.js, v356.test.js, v358.test.js, v362.test.js, v364.test.js, v366.test.js, v367.test.js, v49.test.js, v53.test.js, v57.test.js, v68.test.js, v72.test.js, v79.test.js, v85.test.js, v94.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-overview.test.js, weekly-reviews-core.test.js, weekly-save-e2e.test.js, zero-draft-e2e.test.js, zero-export-e2e.test.js, zero-save-boundary.test.js, zero-sync-e2e.test.js |
+| ui | ui-responsive | 310 | 160 | action-registry-core.test.js, ai-tabs-e2e.test.js, archive-date-protection-e2e.test.js, coach-core.test.js, daily-detail-fields-e2e.test.js, daily-detail-frame.test.js, daily-parts-contract.test.js, daily-parts-isolation-e2e.test.js, daily-view-model.test.js, dandori-view.test.js, decide-view.test.js, detail-draft-e2e.test.js, exec-layout-media.test.js, f6-today-layout.test.js, feedback-busy-boundary.test.js, feedback-busy-coordinator.test.js, feedback-canonical-e2e.test.js, feedback-canonical-wiring.test.js, feedback-canonical.test.js, feedback-date-contract.test.js, feedback-http-entry.test.js, feedback-input-e2e.test.js, feedback-lifecycle-e2e.test.js, feedback-readonly-scroll.test.js, feedback-recovery-e2e.test.js, feedback-refresh-guard.test.js, feedback-save-proof.test.js, feedback-ui-core.test.js, fill-gap-layout-inputs-e2e.test.js, fund-integration-e2e.test.js, instruments-e2e.test.js, iron-input-safety-e2e.test.js, iron-log-core.test.js, iron-log-e2e.test.js, iron-log-input-core.test.js, journal-core.test.js, karada-import-core.test.js, karada-import-e2e.test.js, layout-rail-columns.test.js, modal-delete-impact.test.js, now-view.test.js, placement-core.test.js, placement-e2e.test.js, r1-twelveweek.test.js, r2-twelveweek-plan.test.js, r3-delivery-e2e.test.js, r3-twelveweek-week.test.js, remaining-handover-e2e.test.js, remaining-screen-labels.test.js, remaining-twelveweek-layout.test.js, reset-demo-confirm.test.js, task-complete-actual.test.js, three-screen-connection-e2e.test.js, timeline-render-core.test.js, timeline-tick-wiring.test.js, today-core.test.js, today-detail-integration-e2e.test.js, tower-core.test.js, twy-review-face.test.js, ui-a-layout.test.js, v100.test.js, v101.test.js, v104.test.js, v105.test.js, v109.test.js, v111.test.js, v112.test.js, v113.test.js, v122.test.js, v123.test.js, v125.test.js, v127.test.js, v134.test.js, v151.test.js, v163.test.js, v193.test.js, v241.test.js, v253.test.js, v255.test.js, v256.test.js, v260.test.js, v261.test.js, v262.test.js, v263.test.js, v264.test.js, v266.test.js, v267.test.js, v274.test.js, v275.test.js, v276.test.js, v277.test.js, v278.test.js, v280.test.js, v281.test.js, v283.test.js, v284.test.js, v285.test.js, v286.test.js, v287.test.js, v288.test.js, v293.test.js, v295.test.js, v296.test.js, v297.test.js, v301.test.js, v302.test.js, v306.test.js, v307.test.js, v308.test.js, v309.test.js, v310.test.js, v311.test.js, v312.test.js, v313.test.js, v314.test.js, v315.test.js, v318.test.js, v319.test.js, v320.test.js, v321.test.js, v323.test.js, v325.test.js, v326.test.js, v327.test.js, v328.test.js, v330.test.js, v331.test.js, v332.test.js, v334.test.js, v355.test.js, v356.test.js, v357.test.js, v358.test.js, v359.test.js, v361.test.js, v362.test.js, v363.test.js, v366.test.js, v367.test.js, v50.test.js, v55.test.js, v58.test.js, v63.test.js, v71.test.js, v79.test.js, v81.test.js, v82.test.js, v83.test.js, v93.test.js, v97.test.js, v98.test.js, vision-connection-e2e.test.js, vision-connection.test.js, vision-overview.test.js, weekly-save-e2e.test.js, wish-core.test.js, work-list-e2e.test.js, work-list-render-focus.test.js, zero-draft-e2e.test.js, zero-save-boundary.test.js |
 
 ## Test pitfall warnings (advisory)
 
@@ -443,9 +446,9 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 4 | tests/v104.test.js | 47, 73, 102, 129 |
 | missing-timezone | 1 | tests/v105.test.js | 36 |
 | missing-timezone | 1 | tests/v106.test.js | 25 |
-| missing-timezone | 2 | tests/v107.test.js | 45, 337 |
+| missing-timezone | 2 | tests/v107.test.js | 45, 343 |
 | missing-timezone | 1 | tests/v108.test.js | 44 |
-| missing-timezone | 2 | tests/v109.test.js | 31, 192 |
+| missing-timezone | 2 | tests/v109.test.js | 16, 121 |
 | fixed-date | 1 | tests/v110.test.js | 43 |
 | missing-timezone | 2 | tests/v110.test.js | 23, 136 |
 | missing-timezone | 1 | tests/v111.test.js | 60 |
@@ -487,11 +490,11 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v160.test.js | 42 |
 | missing-timezone | 1 | tests/v162.test.js | 54 |
 | missing-timezone | 1 | tests/v194.test.js | 14 |
-| missing-timezone | 2 | tests/v195.test.js | 14, 251 |
+| missing-timezone | 2 | tests/v195.test.js | 14, 174 |
 | fixed-date | 1 | tests/v196.test.js | 84 |
 | missing-timezone | 1 | tests/v196.test.js | 17 |
 | missing-timezone | 4 | tests/v197.test.js | 128, 173, 252, 349 |
-| missing-timezone | 3 | tests/v198.test.js | 94, 345, 487 |
+| missing-timezone | 3 | tests/v198.test.js | 94, 342, 484 |
 | missing-timezone | 1 | tests/v199.test.js | 41 |
 | missing-timezone | 1 | tests/v231.test.js | 35 |
 | missing-timezone | 1 | tests/v241.test.js | 19 |
@@ -505,12 +508,12 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v258.test.js | 99 |
 | missing-timezone | 1 | tests/v259.test.js | 134 |
 | missing-timezone | 1 | tests/v260.test.js | 83 |
-| missing-timezone | 1 | tests/v261.test.js | 290 |
+| missing-timezone | 1 | tests/v261.test.js | 21 |
 | missing-timezone | 1 | tests/v262.test.js | 364 |
 | missing-timezone | 1 | tests/v263.test.js | 136 |
 | missing-timezone | 1 | tests/v264.test.js | 151 |
 | missing-timezone | 1 | tests/v266.test.js | 104 |
-| fixed-date | 5 | tests/v267.test.js | 111, 114, 118, 281, 285 |
+| fixed-date | 5 | tests/v267.test.js | 112, 115, 119, 282, 286 |
 | missing-timezone | 1 | tests/v274.test.js | 82 |
 | missing-timezone | 1 | tests/v275.test.js | 63 |
 | fixed-date | 3 | tests/v276.test.js | 77, 199, 274 |
@@ -526,14 +529,14 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v286.test.js | 81 |
 | fixed-date | 9 | tests/v287.test.js | 59, 124, 214, 242, 249, 273, 287, 309, 351 |
 | missing-timezone | 1 | tests/v287.test.js | 79 |
-| missing-timezone | 1 | tests/v288.test.js | 334 |
+| missing-timezone | 1 | tests/v288.test.js | 201 |
 | missing-timezone | 2 | tests/v293.test.js | 75, 392 |
 | missing-timezone | 1 | tests/v294.test.js | 150 |
 | missing-timezone | 2 | tests/v295.test.js | 59, 310 |
 | missing-timezone | 1 | tests/v296.test.js | 51 |
 | missing-timezone | 1 | tests/v297.test.js | 19 |
 | fixed-date | 5 | tests/v301.test.js | 14, 30, 49, 121, 137 |
-| missing-timezone | 1 | tests/v302.test.js | 449 |
+| missing-timezone | 1 | tests/v302.test.js | 396 |
 | missing-timezone | 1 | tests/v303.test.js | 70 |
 | missing-timezone | 1 | tests/v304.test.js | 32 |
 | missing-timezone | 1 | tests/v305.test.js | 58 |
@@ -550,7 +553,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v323.test.js | 45 |
 | fixed-date | 1 | tests/v355.test.js | 19 |
 | missing-timezone | 1 | tests/v358.test.js | 41 |
-| missing-timezone | 3 | tests/v359.test.js | 114, 334, 386 |
+| missing-timezone | 3 | tests/v359.test.js | 114, 332, 384 |
 | missing-timezone | 1 | tests/v361.test.js | 27 |
 | missing-timezone | 1 | tests/v362.test.js | 51 |
 | missing-timezone | 1 | tests/v363.test.js | 26 |
@@ -558,7 +561,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v367.test.js | 26 |
 | missing-timezone | 1 | tests/v49.test.js | 21 |
 | missing-timezone | 1 | tests/v53.test.js | 23 |
-| missing-timezone | 1 | tests/v55.test.js | 21 |
+| missing-timezone | 1 | tests/v55.test.js | 16 |
 | missing-timezone | 1 | tests/v56.test.js | 17 |
 | missing-timezone | 1 | tests/v57.test.js | 35 |
 | missing-timezone | 5 | tests/v58.test.js | 30, 114, 191, 247, 303 |
@@ -566,7 +569,7 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v61.test.js | 28 |
 | missing-timezone | 1 | tests/v62.test.js | 35 |
 | missing-timezone | 1 | tests/v63.test.js | 16 |
-| missing-timezone | 1 | tests/v65.test.js | 40 |
+| missing-timezone | 1 | tests/v65.test.js | 36 |
 | missing-timezone | 1 | tests/v67.test.js | 21 |
 | missing-timezone | 1 | tests/v68.test.js | 38 |
 | missing-timezone | 1 | tests/v71.test.js | 38 |
@@ -588,11 +591,11 @@ fixed-date: 時計注入のない固定日付、request-counter: 通信開始待
 | missing-timezone | 1 | tests/v92.test.js | 24 |
 | missing-timezone | 2 | tests/v93.test.js | 82, 141 |
 | missing-timezone | 1 | tests/v94.test.js | 57 |
-| missing-timezone | 2 | tests/v95.test.js | 32, 181 |
+| missing-timezone | 2 | tests/v95.test.js | 16, 126 |
 | missing-timezone | 2 | tests/v96.test.js | 27, 182 |
-| missing-timezone | 2 | tests/v97.test.js | 35, 168 |
+| missing-timezone | 2 | tests/v97.test.js | 35, 167 |
 | missing-timezone | 2 | tests/v98.test.js | 120, 145 |
-| fixed-date | 1 | tests/v99.test.js | 30 |
+| fixed-date | 1 | tests/v99.test.js | 25 |
 | missing-timezone | 2 | tests/vision-connection-e2e.test.js | 29, 37 |
 | missing-timezone | 1 | tests/xss-sanitizer.test.js | 44 |
 | fixed-date | 1 | tests/zero-export-e2e.test.js | 51 |

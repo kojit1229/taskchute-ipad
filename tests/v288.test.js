@@ -71,261 +71,128 @@ async function installSpies(page) {
   }, STATE_KEY);
 }
 
-const projectRoot = '[data-work-list="wbs-projects"]';
-const taskRoot = '[data-work-list^="wbs-tasks-"]';
-async function search(page, query, scope = 'projects') {
-  const root = page.locator(scope === 'projects' ? projectRoot : taskRoot);
-  await root.locator('[data-work-filter="query"]').fill(query);
-  await page.waitForFunction(({ selector, query }) => {
-    const root = document.querySelector(selector);
-    return root.querySelector('[data-work-filter="query"]').value === query && root.dataset.workComposing !== '1';
-  }, { selector: scope === 'projects' ? projectRoot : taskRoot, query });
-}
-async function selectProject(page, id) {
-  await page.locator('[data-action="wbs-select-project"]').filter({ has: page.locator('strong') }).evaluateAll((els, id) => {
-    if (!els.some(el => el.dataset.id === id)) throw Error('Project choice is missing: ' + id);
-  }, id);
-  await page.locator('[data-action="wbs-select-project"][data-id="' + id + '"]').click();
-}
-async function clickResult(page, id) {
-  const row = page.locator('[data-wbs-row-id="' + id + '"]');
-  await row.scrollIntoViewIfNeeded();
-  if (await row.getAttribute('data-action') === 'wbs-select-project') await row.click();
-}
-const taskKeys = page => page.locator(taskRoot + ' [data-work-key]').evaluateAll(els => els.map(el => el.dataset.workKey));
+const rootSelector = '[data-work-list="wbs"]';
+const taskKeys = page => page.locator(rootSelector + ' [data-work-key]').evaluateAll(els => els.map(el => el.dataset.workKey));
+const search = (page, query) => page.locator(rootSelector + ' [data-work-filter="query"]').fill(query);
+const selectProject = async (page, id) => {
+  const chip = page.locator(rootSelector + ` [data-action="wbs-select-project"][data-id="${id}"]`);
+  if(await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+};
 async function verifySearchAndDebounce(page) {
-  console.log('[1] 独立検索: 空検索・1文字・部分一致・削除/XSS・全51件');
-  const p = project('p-search', 'ALPHA案件');
-  await seed(page, { projects: [p, project('p-uncat', '危険<img src=x onerror=alert(1)>', { category: '' }), project('p-deleted', '削除済みProject', { deleted: true })],
-    tasks: [task('t-alpha', p.id, 'alpha設計'), task('t-deleted', p.id, '削除済みTask', { deleted: true }), task('t-live-under-deleted', 'p-deleted', '削除配下の生Task')] });
+  const p = project('p-search', 'ALPHA project');
+  await seed(page, { projects: [p, project('p-xss', '<img src=x onerror=alert(1)>', {category:''}), project('p-deleted', 'Deleted', { deleted: true })],
+    tasks: [task('t-alpha', p.id, 'alpha title'), task('t-deleted', p.id, 'Deleted', { deleted: true }), task('t-orphan', 'p-deleted', 'Deleted parent')] });
   await selectProject(page, p.id);
-  check('空検索は未削除Project/Taskを表示し削除済みを除外',
-    await page.locator(projectRoot + ' [data-work-filter="query"]').inputValue() === '' && await page.locator(taskRoot + ' [data-work-filter="query"]').inputValue() === ''
-    && await page.locator('[data-action="wbs-select-project"][data-id="p-search"]').count() === 1
-    && await page.locator('[data-action="wbs-select-project"][data-id="p-uncat"]').count() === 1
-    && JSON.stringify(await taskKeys(page)) === '["task:t-alpha"]'
-    && await page.locator('[data-action="wbs-select-project"][data-id="p-deleted"], [data-work-key="task:t-deleted"]').count() === 0);
-  await search(page, '設', 'tasks');
-  check('1文字でも一致Taskだけを表示', JSON.stringify(await taskKeys(page)) === '["task:t-alpha"]');
-  await search(page, 'alpha'); await search(page, 'alpha', 'tasks');
-  const alphaTitles = [await page.locator(projectRoot + ' .wbs-project-choice strong').textContent(), await page.locator(taskRoot + ' .wbs-task-title').textContent()];
-  check('大文字小文字を区別せずProject/Taskを独立部分一致', JSON.stringify(alphaTitles) === '["ALPHA案件","alpha設計"]'
-    && (await page.locator('.wbs-project-detail header h2').textContent()).includes('ALPHA案件') && await page.locator('.wbs-project-detail').getAttribute('data-wbs-detail-id') === p.id);
-  await page.locator('.wbs-detail-actions [data-action="edit-project"]').click();
-  check('所属カテゴリはProject詳細から読める', await page.locator('[data-modal-field="category"]').inputValue() === '仕事');
-  await page.locator('#modalRoot [data-action="modal-close"]').first().click();
-  await search(page, '危険');
-  check('タイトルをescapeHTMLしてタグを生成しない', await page.locator(projectRoot + ' img').count() === 0
-    && (await page.locator('[data-id="p-uncat"] strong').textContent()).includes('<img'));
-  await selectProject(page, 'p-uncat');
-  await page.locator('.wbs-detail-actions [data-action="edit-project"]').click();
-  check('未分類Projectは詳細でもカテゴリ未設定', await page.locator('[data-modal-field="category"]').inputValue() === '');
-  await page.locator('#modalRoot [data-action="modal-close"]').first().click();
-  // 削除Projectは選択肢にない。生Taskの検索・保持は新設された実行候補から確認する。
+  check('Empty query retains live task and excludes deleted tasks/projects', JSON.stringify(await taskKeys(page)) === '["task:t-alpha"]' && await page.locator('[data-action="wbs-select-project"][data-id="p-deleted"]').count() === 0);
+  for (const query of ['a', 'ALPHA', 'alpha']) {
+    await search(page, query);
+    check('Case-insensitive partial title query: ' + query, JSON.stringify(await taskKeys(page)) === '["task:t-alpha"]');
+  }
+  const xss = page.locator('[data-action="wbs-select-project"][data-id="p-xss"]');
+  check('Project title escaped as text', (await xss.textContent()).includes('<img') && await xss.locator('img').count() === 0);
+  for (const [id,category] of [['p-search',p.category],['p-xss','']]) {
+    await search(page,''); await selectProject(page,id);
+    await page.locator(`[data-work-group="${id}"] > summary [data-action="edit-project"]`).click();
+    check('Project category retained in editor: '+id,await page.locator('[data-modal-field="category"]').inputValue()===category);
+    await page.locator('#modalRoot [data-action="modal-close"]').first().click();
+  }
+  await search(page, 'absent');
+  check('Zero matches retain input and show no task rows', (await taskKeys(page)).length === 0 && await page.locator(rootSelector + ' [data-work-filter="query"]').inputValue() === 'absent');
+  check('Zero-match guidance remains visible',(await page.locator(rootSelector+' [data-work-list-rows]').textContent()).includes('\u8a72\u5f53\u3059\u308b\u30bf\u30b9\u30af\u306f\u3042\u308a\u307e\u305b\u3093\u3002'));
   await page.locator('#bottomNav [data-view="exec"]').click();
-  const candidates = page.locator('[data-work-list="exec-candidates"]');
-  await candidates.locator('[data-work-filter="query"]').fill('削除');
-  check('削除Project配下の生Taskも新候補検索で保持し削除Taskは除外',
-    JSON.stringify(await candidates.locator('[data-work-key]').evaluateAll(els => els.map(el => el.dataset.workKey))) === '["task:t-live-under-deleted"]'
-    && await candidates.locator('[data-action="wbs-search-jump"]').count() === 0);
-  await page.locator('#bottomNav [data-view="wbs"]').click();
-  await search(page, '存在しない');
-  check('0件案内と検索入力を保持し結果を作らない',
-    (await page.locator(projectRoot + ' [data-work-list-rows]').textContent()).trim() === '条件に一致する項目はありません。'
-    && await page.locator(projectRoot + ' [data-work-filter="query"]').inputValue() === '存在しない' && await page.locator(projectRoot + ' .wbs-project-choice').count() === 0);
-  await seed(page, { projects: Array.from({ length: 51 }, (_, i) => project('p-limit-' + i, '上限対象' + String(i).padStart(2, '0'))) });
-  const total = (await stateNow(page)).projects.filter(p => !p.deleted).length + 1;
-  await search(page, '上限');
-  check('51件を元順で全件表示しProject母集団の件数も一致',
-    JSON.stringify(await page.locator(projectRoot + ' .wbs-project-choice').evaluateAll(els => els.map(el => el.dataset.id))) === JSON.stringify(Array.from({ length: 51 }, (_, i) => 'p-limit-' + i))
-    && await page.locator(projectRoot + ' .wbs-project-choice').count() === 51
-    && (await page.locator(projectRoot + ' .work-list-count').textContent()).trim() === '51 / ' + total + '件 ・ 全件スクロール');
-  console.log('[2] 連続入力は同じinput・focus・保存時刻を保持');
-  await seed(page, { projects: [project('p-focus', '連続入力検索対象')] });
+  check('Live task under deleted project remains reachable from execution candidates',await page.locator('[data-work-list="exec-candidates"] [data-work-key="task:t-orphan"]').count()===1 && await page.locator('[data-work-list="exec-candidates"] [data-work-key="task:t-deleted"]').count()===0);
+  const projects = Array.from({length:51}, (_,i) => project('p-limit-' + i, 'Project ' + i));
+  await seed(page, {projects, tasks: projects.map((p,i) => task('t-limit-' + i, p.id, 'limit task ' + i))});
+  await search(page, 'limit');
+  check('All 51 matching task rows in original order', JSON.stringify(await taskKeys(page)) === JSON.stringify(projects.map((_,i) => 'task:t-limit-' + i)));
+  check('All 51 projects retain one chip', await page.locator('[data-action="wbs-select-project"][data-id^="p-limit-"]').count() === 51);
+  await installSpies(page);
+  const before = await stateNow(page);
   await page.evaluate(() => {
     const input = document.querySelector('#wbs-projects-query'); window.__v288InputNode = input; input.focus();
-    for (const text of ['連続', '連続入力']) { input.value = text; input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })); }
+    for (const text of ['limit', 'limit task']) { input.value = text; input.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:text})); }
   });
-  await page.locator('[data-action="wbs-select-project"][data-id="p-focus"]').waitFor();
-  const focus = await page.evaluate(key => ({ sameNode: window.__v288InputNode === document.querySelector('#wbs-projects-query'), focused: document.activeElement === window.__v288InputNode, modified: JSON.parse(localStorage.getItem(key)).dataModifiedAt }), STATE_KEY);
-  check('連続入力後も同じinputがfocus中', focus.sameNode && focus.focused, JSON.stringify(focus));
-  check('検索入力だけでは保存時刻を変更しない', focus.modified === OLD_MODIFIED);
+  check('Continuous input preserves node/focus', await page.evaluate(() => document.activeElement === window.__v288InputNode && document.querySelector('#wbs-projects-query') === window.__v288InputNode));
+  check('Search makes no storage write or state change', await page.evaluate(() => window.__v288StateWrites) === 0 && JSON.stringify(await stateNow(page)) === JSON.stringify(before));
 }
 async function verifyJumpPaths(page) {
-  console.log('[3] Project選択・Task depth 0/1/2の検索と到達・保存なし');
-  const p = project('p-tree', '階層Project', { collapsed: true });
-  const root = task('t-root', p.id, 'ルート対象', { collapsed: true });
-  const child = task('t-child', p.id, '中間対象', { parentTaskId: root.id, collapsed: true });
-  const grand = task('t-grand', p.id, '末端対象', { parentTaskId: child.id, collapsed: true });
-  for (const [id, query] of [[p.id, '階層'], [root.id, 'ルート'], [child.id, '中間'], [grand.id, '末端']]) {
-    await seed(page, { projects: [p], tasks: [root, child, grand], settings: { wbsCategoryFilter: '仕事' } });
-    await installSpies(page); const before = await stateNow(page);
-    if (id === p.id) { await search(page, query); await clickResult(page, id); }
-    else { await selectProject(page, p.id); await search(page, query, 'tasks'); await clickResult(page, id); }
-    const state = await stateNow(page);
-    check(query + ': 選択Projectの必要な祖先・未完了の子へ到達', JSON.stringify(await taskKeys(page)) === JSON.stringify(id === p.id ? ['task:t-root'] : ['task:t-root','task:t-child','task:t-grand']));
-    check(query + ': 対象がスクロール表示内にある', await page.locator('[data-wbs-row-id="' + id + '"]').evaluate(el => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; }));
-    check(query + ': 検索と選択は保存0回・collapsed/updatedAt/全体時刻を変更しない', await page.evaluate(() => window.__v288StateWrites) === 0 && JSON.stringify(state) === JSON.stringify(before));
-    check(query + ': Project/Task updatedAtは全て不変', state.projects.find(x => x.id === p.id).updatedAt === p.updatedAt && [root,child,grand].every(t => state.tasks.find(x => x.id === t.id).updatedAt === t.updatedAt));
-    check(query + ': 不要なカテゴリ・中断条件の変更なし', state.settings.wbsCategoryFilter === '仕事' && state.settings.showSuspended === false);
+  const p = project('p-tree', 'Tree', {collapsed:true});
+  const tasks = [task('root',p.id,'Root',{collapsed:true}), task('child',p.id,'Child',{parentTaskId:'root',collapsed:true}), task('grand',p.id,'Grand',{parentTaskId:'child'})];
+  await seed(page,{projects:[p],tasks});
+  await selectProject(page,p.id); await installSpies(page); const before = await stateNow(page);
+  for (const [query,expected] of [['Root',['root']],['Child',['root','child']],['Grand',['root','child','grand']]]) {
+    await search(page,query);
+    check('Matching row retains only required ancestors: '+query, JSON.stringify(await taskKeys(page)) === JSON.stringify(expected.map(id=>'task:'+id)));
+    const target=page.locator(`[data-work-key="task:${expected.at(-1)}"]`); await target.scrollIntoViewIfNeeded();
+    check('Target is visible: '+query, await target.isVisible());
   }
-  console.log('[4] 非表示条件を明示解除し、中断Project/祖先/Taskへ到達');
-  const paused = project('p-paused', '中断Project対象', { category: '仕事', status: 'paused', collapsed: true });
-  await seed(page, { projects: [paused], settings: { wbsCategoryFilter: '学び', showSuspended: false } });
-  await page.locator('.wbs-view-menu > summary').click();
-  await page.locator('[data-action="wbs-category-filter"]').selectOption('');
-  if (!(await page.locator('.wbs-view-menu').evaluate(el => el.open))) await page.locator('.wbs-view-menu > summary').click();
-  await page.locator('[data-action="toggle-show-suspended"]').click();
-  await search(page, '中断Project'); await selectProject(page, paused.id);
-  let state = await stateNow(page);
-  check('カテゴリ不一致と中断条件を解除して対象Projectを表示', state.settings.wbsCategoryFilter === '' && state.settings.showSuspended === true && await page.locator('[data-wbs-detail-id="p-paused"]').count() === 1);
-  const active = project('p-susp-task', '中断Task案件', { collapsed: true });
-  for (const own of [false, true]) {
-    const suspended = task('t-susp-root', active.id, '中断祖先', { status: 'suspended', collapsed: true });
-    const target = task('t-target', active.id, '祖先配下対象', own ? { status: 'suspended' } : { parentTaskId: suspended.id });
-    await seed(page, { projects: [active], tasks: own ? [target] : [suspended,target] });
-    await page.locator('.wbs-view-menu > summary').click(); await page.locator('[data-action="toggle-show-suspended"]').click();
-    await selectProject(page, active.id); await search(page, '祖先配下', 'tasks'); await clickResult(page, target.id);
-    check(own ? '中断Task自身へ到達' : '中断祖先を含めて子へ到達', (await stateNow(page)).settings.showSuspended === true
-      && JSON.stringify(await taskKeys(page)) === JSON.stringify(own ? ['task:t-target'] : ['task:t-susp-root','task:t-target']));
+  check('Search and selection preserve collapsed/timestamps and all saved state', await page.evaluate(()=>window.__v288StateWrites)===0 && JSON.stringify(await stateNow(page))===JSON.stringify(before));
+  const paused=project('p-paused','Paused',{status:'paused'});
+  await seed(page,{projects:[paused],tasks:[task('paused-task',paused.id,'Paused task')]});
+  await selectProject(page,paused.id);
+  check('Paused project initially hides its task',await page.locator('[data-work-key="task:paused-task"]').count()===0);
+  const pausedMenu=page.locator(rootSelector+' details').filter({has:page.locator('[data-action="toggle-show-suspended"]')});
+  await pausedMenu.locator('summary').click(); await pausedMenu.locator('[data-action="toggle-show-suspended"]').click();
+  check('Explicit suspended display restores paused project task',await page.locator('[data-work-key="task:paused-task"]').count()===1);
+  for (const own of [false,true]) {
+    const suspended = task('suspended',p.id,'Suspended',{status:'suspended'});
+    const target = task('target',p.id,'Target',own?{status:'suspended'}:{parentTaskId:'suspended'});
+    await seed(page,{projects:[p],tasks:own?[target]:[suspended,target]});
+    const menu=page.locator(rootSelector+' details').filter({has:page.locator('[data-action="toggle-show-suspended"]')});
+    await menu.locator('summary').click(); await menu.locator('[data-action="toggle-show-suspended"]').click();
+    await selectProject(page,p.id); await search(page,'Target');
+    check('Suspended row/ancestor can be reached explicitly', JSON.stringify(await taskKeys(page))===JSON.stringify(own?['task:target']:['task:suspended','task:target']));
   }
-  // 新導線はkindを受け取らないため旧不正kind負例は廃止。不正idは選択・詳細・条件・保存の不変を検査する。
-  await seed(page, { projects: [project('p-a', '比較案件A'), project('p-b', '比較案件B'), project('p-deleted', '削除案件', { deleted: true })],
-    tasks: [task('t-a', 'p-a', '比較作業A'), task('t-b', 'p-b', '比較作業B')] });
-  await selectProject(page, 'p-b'); await search(page, '比較'); await search(page, '比較作業B', 'tasks');
-  const selectionSnapshot = () => page.evaluate(() => ({
-    selected: [...document.querySelectorAll('[data-work-list="wbs-projects"] .wbs-project-choice.selected')].map(el => el.dataset.id),
-    detail: document.querySelector('.wbs-project-detail')?.outerHTML,
-    taskList: document.querySelector('[data-work-list^="wbs-tasks-"]')?.dataset.workList,
-    conditions: [...document.querySelectorAll('[data-work-list] [data-work-filter]')].map(el => [el.closest('[data-work-list]').dataset.workList, el.dataset.workFilter, el.value])
-  }));
-  const beforeSelection = await selectionSnapshot();
-  check('負例の開始時はp-b選択・右Task一覧・検索語が設定済み', JSON.stringify(beforeSelection.selected) === '["p-b"]'
-    && beforeSelection.taskList === 'wbs-tasks-p-b' && JSON.stringify(await taskKeys(page)) === '["task:t-b"]'
-    && await page.locator(taskRoot + ' [data-work-filter="query"]').inputValue() === '比較作業B');
-  const beforeStorage = await page.evaluate(() => JSON.stringify(Object.entries(localStorage).sort()));
-  await installSpies(page);
-  for (const id of ['missing', 'p-deleted']) {
-    const button = page.locator('[data-action="wbs-select-project"][data-wbs-row-id="p-a"]');
-    await button.evaluate((el, id) => { el.dataset.id = id; }, id); await button.click();
-    check(`${id}: 選択・右Task一覧・検索条件が不変`, JSON.stringify(await selectionSnapshot()) === JSON.stringify(beforeSelection)
-      && await page.locator('[data-work-list="wbs-tasks-p-b"]').count() === 1
-      && JSON.stringify(await taskKeys(page)) === '["task:t-b"]');
-    check(`${id}: 保存0回・localStorage不変`, await page.evaluate(() => window.__v288StateWrites) === 0
-      && await page.evaluate(() => JSON.stringify(Object.entries(localStorage).sort())) === beforeStorage);
+  await seed(page,{projects:[project('p-a','A'),project('p-b','B'),project('p-deleted','Deleted',{deleted:true})],tasks:[task('t-a','p-a','Task A'),task('t-b','p-b','Task B')]});
+  await selectProject(page,'p-b'); await search(page,'Task B'); await installSpies(page);
+  const snapshot=()=>page.evaluate(()=>({selected:[...document.querySelectorAll('[data-work-list="wbs"] [data-action="wbs-select-project"][aria-pressed="true"]')].map(el=>el.dataset.id),rows:document.querySelector('[data-work-list="wbs"] [data-work-list-rows]').innerHTML,query:document.querySelector('#wbs-projects-query').value}));
+  const beforeSelection=await snapshot(),beforeStorage=await page.evaluate(()=>JSON.stringify(Object.entries(localStorage).sort()));
+  check('Negative case starts from B and its matching task', JSON.stringify(beforeSelection.selected)==='["p-b"]' && JSON.stringify(await taskKeys(page))==='["task:t-b"]');
+  for (const id of ['missing','p-deleted']) {
+    const button=page.locator('[data-work-list="wbs"] [data-action="wbs-select-project"][data-value="p-a"]');
+    const handle=await button.elementHandle(); await handle.evaluate((el,id)=>{el.dataset.id=id;el.dataset.value=id;},id); await handle.click();
+    check(id+': invalid selection preserves query, selected project and rows', JSON.stringify(await snapshot())===JSON.stringify(beforeSelection));
+    check(id+': invalid selection makes no storage changes',await page.evaluate(()=>window.__v288StateWrites)===0 && await page.evaluate(()=>JSON.stringify(Object.entries(localStorage).sort()))===beforeStorage);
+    await handle.evaluate(el=>{el.dataset.id='p-a';el.dataset.value='p-a';});
   }
 }
-
 async function verifyRegressionAndProjectDefault(page) {
-  console.log("[5] 12WYトラック/週次実行計画は検索・ジャンプでstate/UI/並び順不変");
-  const cycle = "2026-08-15";
-  const p = project("p-plan", "計画Project", { twelveWeekStartDate: cycle });
-  const parent = task("t-plan-parent", p.id, "計画親", { planTarget: true, order: 1000 });
-  const stepA = task("t-plan-a", p.id, "検索する計画A", { parentTaskId: parent.id, owner: "k", order: 1000 });
-  const stepB = task("t-plan-b", p.id, "計画B", { parentTaskId: parent.id, owner: "ai", aiWork: true, order: 2000 });
-  const track = {
-    id: "track-v288", ownerType: "project", ownerId: p.id, cycleStartDate: cycle,
-    kind: "numeric", name: "週次KPI", unit: "件", startDate: cycle, deadline: "2026-09-30",
-    baselineValue: 0, goalValue: 10, valueStep: 1, milestones: [], status: "active",
-    closedAt: "", closedReason: "", supersedesTrackId: "", carriedFromTrackId: "",
-    createdAt: `${cycle}T00:00:00`, updatedAt: `${cycle}T00:00:00`, deleted: false
-  };
-  await seed(page, { projects: [p], tasks: [parent, stepA, stepB], tracks: [track], settings: { twelveWeekStartDate: cycle } });
-  await selectProject(page, p.id);
-  const initialWbsTreeSnapshot = await page.locator('#app[data-view="wbs"] section.section.grid')
-    .evaluate((tree) => tree.innerHTML);
-  const initialSearchValue = await page.locator("#wbs-projects-query").inputValue();
+  const cycle='2026-08-15',p=project('p-plan','Plan',{twelveWeekStartDate:cycle});
+  const tasks=[task('parent',p.id,'Parent',{planTarget:true}),task('step',p.id,'Step',{parentTaskId:'parent',owner:'ai',aiWork:true,order:1000})];
+  const track={id:'track-v288',ownerType:'project',ownerId:p.id,cycleStartDate:cycle,kind:'numeric',name:'KPI',unit:'items',startDate:cycle,deadline:'2026-09-30',baselineValue:0,goalValue:10,valueStep:1,milestones:[],status:'active',deleted:false};
+  await seed(page,{projects:[p],tasks,tracks:[track],settings:{twelveWeekStartDate:cycle}});
+  await selectProject(page,p.id); const before=await stateNow(page);
+  const group=page.locator('[data-work-group="p-plan"]');
+  check('Project summary carries cycle week', /12\u9031\u8a08\u753b \u7b2c\d+\u9031/.test(await group.locator('summary').textContent()));
+  check('Track editing and owner/move/insert absent from WBS',await group.locator('[data-twy-track-id],[data-action="toggle-plan-owner"],[data-action="move-plan-step"],[data-action="add-plan-step-below"]').count()===0);
+  const original=await group.innerHTML(); await search(page,'Step'); await search(page,'');
+  check('Search reset retains tree DOM and complete state',await group.innerHTML()===original && JSON.stringify(await stateNow(page))===JSON.stringify(before));
   await page.locator('#bottomNav [data-action="nav"][data-view="today"]').click();
-  await page.waitForSelector('#app[data-view="today"]');
-  await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
-  await page.waitForSelector('#app[data-view="more"]');
-  await page.locator('.more-tower-grid [data-action="nav"][data-view="wbs"]').click();
-  await page.locator('[data-work-list="wbs-projects"]').waitFor();
-  const rerenderedWbsTreeSnapshot = await page.locator('#app[data-view="wbs"] section.section.grid')
-    .evaluate((tree) => tree.innerHTML);
-  const rerenderedSearchValue = await page.locator("#wbs-projects-query").inputValue();
-  check("検索未使用の再render後も12WY Project/Task行DOM断片は完全一致",
-    initialSearchValue === "" && rerenderedSearchValue === ""
-    && rerenderedWbsTreeSnapshot === initialWbsTreeSnapshot,
-    JSON.stringify({
-      initialSearchValue, rerenderedSearchValue,
-      initialLength: initialWbsTreeSnapshot.length, rerenderedLength: rerenderedWbsTreeSnapshot.length
-    }));
-  const snapshot = await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key));
-    const taskFields = state.tasks.filter((item) => item.id.startsWith("t-plan"))
-      .map(({ id, parentTaskId, planTarget, owner, aiWork, order, status, updatedAt }) => ({ id, parentTaskId, planTarget, owner, aiWork, order, status, updatedAt }));
-    const order = [...document.querySelectorAll('.wbs-task-title[data-id^="t-plan"]')].map((el) => el.dataset.id);
-    const actions = [...document.querySelectorAll('[data-action="toggle-plan-owner"],[data-action="move-plan-step"],[data-action="add-plan-step-below"]')]
-      .map((el) => `${el.dataset.action}:${el.dataset.id}:${el.dataset.direction || ""}:${el.textContent.trim()}`);
-    return { tracks: state.tracks, taskFields, order, actions, trackRows: document.querySelectorAll('[data-twy-track-id="track-v288"]').length };
-  }, STATE_KEY);
-  await installSpies(page);
-  await selectProject(page, p.id);
-  await search(page, "検索する計画", 'tasks');
-  await clickResult(page, stepA.id);
-  await search(page, "", 'tasks');
-  const after = await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key));
-    const taskFields = state.tasks.filter((item) => item.id.startsWith("t-plan"))
-      .map(({ id, parentTaskId, planTarget, owner, aiWork, order, status, updatedAt }) => ({ id, parentTaskId, planTarget, owner, aiWork, order, status, updatedAt }));
-    const order = [...document.querySelectorAll('.wbs-task-title[data-id^="t-plan"]')].map((el) => el.dataset.id);
-    const actions = [...document.querySelectorAll('[data-action="toggle-plan-owner"],[data-action="move-plan-step"],[data-action="add-plan-step-below"]')]
-      .map((el) => `${el.dataset.action}:${el.dataset.id}:${el.dataset.direction || ""}:${el.textContent.trim()}`);
-    return { tracks: state.tracks, taskFields, order, actions, trackRows: document.querySelectorAll('[data-twy-track-id="track-v288"]').length };
-  }, STATE_KEY);
-  check("12WY track state/row数は不変", JSON.stringify(after.tracks) === JSON.stringify(snapshot.tracks)
-    && snapshot.trackRows === 1 && after.trackRows === 1, JSON.stringify({ before: snapshot.trackRows, after: after.trackRows }));
-  check("週次実行計画のstate・操作UI・Task並び順は不変", JSON.stringify(after.taskFields) === JSON.stringify(snapshot.taskFields)
-    && JSON.stringify(after.actions) === JSON.stringify(snapshot.actions)
-    && JSON.stringify(after.order) === JSON.stringify(snapshot.order));
-
-  console.log("[6] 新規Projectは既定collapsed=trueで保存・再読込後も折りたたみ");
-  await seed(page, { projects: [] });
-  await installSpies(page);
-  await page.locator('.wbs-add-menu > summary').click();
-  await page.locator("#projectTitle").fill("新規closed案件");
-  await page.locator('[data-action="add-project"]').click();
-  await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).projects.some((item) => item.title === "新規closed案件"), STATE_KEY);
-  let state = await stateNow(page);
-  const added = state.projects.find((item) => item.title === "新規closed案件");
-  check("add-project直後collapsed=true・saveState 1回・dataModifiedAt更新", added?.collapsed === true
-    && await page.evaluate(() => window.__v288StateWrites) === 1 && state.dataModifiedAt !== OLD_MODIFIED, JSON.stringify(added));
-  check("新規Projectを選択肢として表示", await page.locator(`[data-action="wbs-select-project"][data-id="${added.id}"]`).count() === 1);
-  await page.reload();
-  await page.waitForSelector(`[data-wbs-row-id="${added.id}"]`);
-  state = await stateNow(page);
-  check("リロード後もcollapsed=trueを保持", state.projects.find((item) => item.id === added.id)?.collapsed === true
-    && await page.locator(`[data-action="wbs-select-project"][data-id="${added.id}"]`).count() === 1);
+  await page.locator('#sidebar [data-action="nav"][data-view="wbs"]').evaluate(el=>el.click());
+  check('Returning to WBS keeps the project/task DOM',await group.innerHTML()===original);
+  await page.locator('#sidebar [data-action="nav"][data-view="twelveweek"]').evaluate(el=>el.click());
+  console.log('Twelve-week navigation',await page.locator('#app').getAttribute('data-view'),await page.locator('.twy-tower').count());
+  await page.locator('.twy-cycle-fold > summary').click();
+  check('Track is available in the twelve-week tab',await page.locator('.twy-goals-panel [data-twy-track-id="track-v288"]').count()===1);
+  await seed(page,{projects:[]}); await installSpies(page);
+  await page.locator('.wbs-add-menu > summary').click(); await page.locator('#projectTitle').fill('New project'); await page.locator('[data-action="add-project"]').click();
+  const state=await stateNow(page),added=state.projects.find(p=>p.title==='New project');
+  check('Project addition saves collapsed=true once and advances timestamp',added?.collapsed===true && await page.evaluate(()=>window.__v288StateWrites)===1 && state.dataModifiedAt!==OLD_MODIFIED);
+  check('New project has a chip',await page.locator(`[data-action="wbs-select-project"][data-id="${added.id}"]`).count()===1);
+  await page.reload(); await page.locator(`[data-action="wbs-select-project"][data-id="${added.id}"]`).waitFor();
+  check('Reload retains collapsed default', (await stateNow(page)).projects.find(p=>p.id===added.id).collapsed===true);
 }
-
 async function verifyResponsive(page) {
-  console.log("[7] 390px: 検索input/結果/既存WBS行に横スクロールなし、input 16px・結果44px以上");
-  await page.setViewportSize({ width: 390, height: 844 });
-  const p = project("p-mobile", "モバイル対象Project");
-  const longTitle = `モバイル対象${"長いタイトル".repeat(12)}`;
-  await seed(page, { projects: [p], tasks: [task("t-mobile", p.id, longTitle)] });
-  await selectProject(page, p.id);
-  await search(page, "モバイル対象");
-  await search(page, "モバイル対象", 'tasks');
-  const metrics = await page.evaluate(() => {
-    const doc = document.scrollingElement || document.documentElement;
-    const input = document.querySelector("#wbs-projects-query");
-    const results = document.querySelector("#wbs-projects-search-results");
-    const row = document.querySelector('[data-wbs-row-id="p-mobile"]');
-    const taskInput = document.querySelector('[data-work-list^="wbs-tasks-"] [data-work-filter="query"]');
-    const taskResults = document.querySelector('[data-work-list^="wbs-tasks-"] [data-work-list-rows]');
-    const rects = [input, results, row, taskInput, taskResults, document.querySelector('[data-work-key="task:t-mobile"]')].map((el) => el.getBoundingClientRect());
-    const heights = [...document.querySelectorAll('.wbs-project-choice, [data-work-list^="wbs-tasks-"] .wbs-task-title')].map((el) => el.getBoundingClientRect().height);
-    return {
-      noDocOverflow: doc.scrollWidth <= doc.clientWidth + 1,
-      rectsInside: rects.every((rect) => rect.left >= -1 && rect.right <= innerWidth + 1),
-      fontSize: parseFloat(getComputedStyle(input).fontSize), taskFontSize: parseFloat(getComputedStyle(taskInput).fontSize), heights
-    };
+  await page.setViewportSize({width:390,height:844}); const p=project('mobile','Mobile project');
+  await seed(page,{projects:[p],tasks:[task('mobile-task',p.id,'Mobile title '.repeat(12))]}); await selectProject(page,p.id); await search(page,'Mobile');
+  const metrics=await page.evaluate(()=>{
+    const root=document.querySelector('[data-work-list="wbs"]'),input=root.querySelector('[data-work-filter="query"]');
+    const boxes=[input,root.querySelector('[data-work-list-rows]'),root.querySelector('[data-work-key="task:mobile-task"]'),root.querySelector('[data-action="wbs-select-project"][data-id="mobile"]')].map(el=>el.getBoundingClientRect());
+    const buttons=[root.querySelector('[data-action="wbs-select-project"][data-id="mobile"]'),root.querySelector('[data-action="edit-task"][data-id="mobile-task"]')];
+    return {fits:document.documentElement.scrollWidth<=innerWidth+1&&boxes.every(b=>b.left>=-1&&b.right<=innerWidth+1),font:parseFloat(getComputedStyle(input).fontSize),heights:buttons.map(el=>el.getBoundingClientRect().height)};
   });
-  check("390pxでdocument/input/結果/Project行に横スクロールなし", metrics.noDocOverflow && metrics.rectsInside, JSON.stringify(metrics));
-  check("検索input 16px以上・全結果タップ標的44px以上", metrics.fontSize >= 16 && metrics.taskFontSize >= 16
-    && metrics.heights.length === 2 && metrics.heights.every((height) => height >= 44), JSON.stringify(metrics));
+  check('390px query/results fit viewport',metrics.fits,JSON.stringify(metrics));
+  check('Input >=16px and both tap targets >=44px',metrics.font>=16&&metrics.heights.length===2&&metrics.heights.every(h=>h>=44),JSON.stringify(metrics));
 }
 
 (async () => {
@@ -335,7 +202,7 @@ async function verifyResponsive(page) {
   const page = await context.newPage();
   const pageErrors = [];
   const consoleErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("pageerror", (error) => { pageErrors.push(error.message); console.error("PAGEERROR",error.message); });
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
   try {
     await page.clock.setFixedTime(FIXED_NOW);

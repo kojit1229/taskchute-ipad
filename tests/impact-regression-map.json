@@ -31,49 +31,123 @@
   ],
   "areas": {
     "task-complete-actual": {
-      "patterns": ["toggleTask|subtractMinutesFromDateTime|fillProgressOnComplete"],
-      "suites": ["task-complete-actual"]
+      "patterns": [
+        "toggleTask|subtractMinutesFromDateTime|fillProgressOnComplete"
+      ],
+      "suites": [
+        "task-complete-actual"
+      ]
     },
     "weekly-reviews": {
-      "paths": ["^src/features/twelve-week\\.js$", "^src/sync/github\\.js$"],
-      "patterns": ["weeklyReviews|WeeklyReview"],
-      "suites": ["weekly-reviews-core"]
+      "paths": [
+        "^src/features/twelve-week\\.js$",
+        "^src/sync/github\\.js$"
+      ],
+      "patterns": [
+        "weeklyReviews|WeeklyReview"
+      ],
+      "suites": [
+        "weekly-reviews-core"
+      ]
     },
     "schedule-occurrence-time": {
-      "paths": ["^src/features/schedule-occurrence-time\\.js$"],
-      "suites": ["schedule-series-sync-e2e", "placement-e2e"]
+      "paths": [
+        "^src/features/schedule-occurrence-time\\.js$"
+      ],
+      "suites": [
+        "schedule-series-sync-e2e",
+        "placement-e2e"
+      ]
     },
     "lifecycle-save": {
-      "paths": ["^src/features/lifecycle-save\\.js$"],
-      "suites": ["mutation-block-e2e", "v70", "v87", "v107", "today-core", "mutation-bundle-e2e"]
+      "paths": [
+        "^src/features/lifecycle-save\\.js$"
+      ],
+      "suites": [
+        "mutation-block-e2e",
+        "v70",
+        "v87",
+        "v107",
+        "today-core",
+        "mutation-bundle-e2e"
+      ]
     },
     "twelve-week-save": {
-      "paths": ["^src/features/twelve-week-save\\.js$"],
-      "suites": ["v70", "v87", "v107", "mutation-twelve-week-e2e"]
+      "paths": [
+        "^src/features/twelve-week-save\\.js$"
+      ],
+      "suites": [
+        "v70",
+        "v87",
+        "v107",
+        "mutation-twelve-week-e2e"
+      ]
     },
     "recurrence-save": {
-      "paths": ["^src/features/recurrence-save\\.js$"],
-      "suites": ["recurrence-core", "v59", "mutation-recurrence-e2e"]
+      "paths": [
+        "^src/features/recurrence-save\\.js$"
+      ],
+      "suites": [
+        "recurrence-core",
+        "v59",
+        "mutation-recurrence-e2e"
+      ]
     },
     "daily-reading-report": {
-      "paths": ["^src/features/feedback/report-(input|builder|derived)\\.js$", "^src/core/recurrence\\.js$"],
-      "suites": ["daily-reading-core", "daily-reading-e2e", "recurrence-core", "v276"]
+      "paths": [
+        "^src/features/feedback/report-(input|builder|derived)\\.js$",
+        "^src/core/recurrence\\.js$"
+      ],
+      "suites": [
+        "daily-reading-core",
+        "daily-reading-e2e",
+        "recurrence-core",
+        "v276"
+      ]
     },
     "daily-reading-sync": {
-      "paths": ["^src/core/daily-reading-sync\\.js$", "^src/sync/github\\.js$"],
-      "suites": ["daily-reading-sync", "v106", "v364", "mutation-global-e2e", "feedback-save-proof"]
+      "paths": [
+        "^src/core/daily-reading-sync\\.js$",
+        "^src/sync/github\\.js$"
+      ],
+      "suites": [
+        "daily-reading-sync",
+        "v106",
+        "v364",
+        "mutation-global-e2e",
+        "feedback-save-proof"
+      ]
     },
     "daily-reading": {
-      "paths": ["^src/(core|features)/daily-reading\\.js$"],
-      "suites": ["daily-reading-core", "daily-reading-e2e"]
+      "paths": [
+        "^src/(core|features)/daily-reading\\.js$"
+      ],
+      "suites": [
+        "daily-reading-core",
+        "daily-reading-e2e"
+      ]
     },
     "tower-journal": {
-      "paths": ["^src/features/tower-journal\\.js$"],
-      "suites": ["three-screen-connection-e2e", "today-core", "tower-core", "day-cross-ticker"]
+      "paths": [
+        "^src/features/tower-journal\\.js$"
+      ],
+      "suites": [
+        "three-screen-connection-e2e",
+        "today-core",
+        "tower-core",
+        "day-cross-ticker"
+      ]
     },
     "block-detail": {
-      "paths": ["^src/features/block-detail\\.js$"],
-      "suites": ["three-screen-connection-e2e", "draft-save-transaction", "v359", "v366"]
+      "paths": [
+        "^src/features/block-detail\\.js$"
+      ],
+      "suites": [
+        "three-screen-connection-e2e",
+        "draft-save-transaction",
+        "v359",
+        "v366"
+      ]
     },
     "mutation-stamp": {
       "paths": [
@@ -89,7 +163,9 @@
     "work-list-ui": {
       "paths": [
         "^src/(core|features)/work-list\\.js$",
-        "^src/features/three-screen-rows\\.js$"
+        "^src/features/three-screen-rows\\.js$",
+        "^src/core/work-series\\.js$",
+        "^src/features/decide-view\\.js$"
       ],
       "patterns": [
         "configureWorkList|renderWorkList|handleWorkList|restoreWorkList|rememberWorkList|execDoneListHTML|renderExecDoneRow|block-row-toggle|exec-row-copy"
@@ -103,16 +179,37 @@
         "work-list-e2e",
         "normalize-null-defense",
         "ui-a-layout",
-        "today-detail-integration-e2e"
+        "today-detail-integration-e2e",
+        "work-series",
+        "work-list-wbs",
+        "decide-view"
       ]
     },
     "zero-session": {
-      "paths": ["^src/features/zero-session\\.js$", "^src/features/daily-draft\\.js$"],
-      "suites": ["zero-session", "zero-save-boundary", "data-contract-gate"]
+      "paths": [
+        "^src/features/zero-session\\.js$",
+        "^src/features/daily-draft\\.js$"
+      ],
+      "suites": [
+        "zero-session",
+        "zero-save-boundary",
+        "data-contract-gate"
+      ]
     },
     "zero-entry": {
-      "paths": ["^src/features/zero-entry\\.js$"],
-      "suites": ["zero-save-boundary", "zero-autosave-e2e", "zero-sync-e2e", "zero-draft-e2e", "draft-leave", "draft-save-transaction", "daily-operations-registry", "daily-parts-contract"]
+      "paths": [
+        "^src/features/zero-entry\\.js$"
+      ],
+      "suites": [
+        "zero-save-boundary",
+        "zero-autosave-e2e",
+        "zero-sync-e2e",
+        "zero-draft-e2e",
+        "draft-leave",
+        "draft-save-transaction",
+        "daily-operations-registry",
+        "daily-parts-contract"
+      ]
     },
     "daily-parts": {
       "paths": [
@@ -189,7 +286,10 @@
         "^src/core/daily-end\\.js$",
         "^src/features/tower-journal\\.js$"
       ],
-      "suites": ["mutation-block-e2e", "draft-save-transaction"]
+      "suites": [
+        "mutation-block-e2e",
+        "draft-save-transaction"
+      ]
     },
     "archive-safety": {
       "paths": [
@@ -352,14 +452,41 @@
       ]
     },
     "routine-view": {
-      "paths": ["^src/features/routine-view\\.js$"],
-      "patterns": ["routine-(new|edit|save|cancel|end)"],
-      "suites": ["routine-view", "now-view", "action-registry-core", "recurrence-core", "mutation-recurrence-e2e", "v333"]
+      "paths": [
+        "^src/features/routine-view\\.js$"
+      ],
+      "patterns": [
+        "routine-(new|edit|save|cancel|end)"
+      ],
+      "suites": [
+        "routine-view",
+        "now-view",
+        "action-registry-core",
+        "recurrence-core",
+        "mutation-recurrence-e2e",
+        "v333"
+      ]
     },
     "dandori-view": {
-      "paths": ["^src/features/dandori-view\\.js$"],
-      "patterns": ["[Dd]andori"],
-      "suites": ["dandori-view", "now-view", "exec-timeline-e2e", "exec-layout-media", "v334", "work-list-e2e", "three-screen-flow-e2e", "action-registry-core", "track-crud-core", "v258", "v264"]
+      "paths": [
+        "^src/features/dandori-view\\.js$"
+      ],
+      "patterns": [
+        "[Dd]andori"
+      ],
+      "suites": [
+        "dandori-view",
+        "now-view",
+        "exec-timeline-e2e",
+        "exec-layout-media",
+        "v334",
+        "work-list-e2e",
+        "three-screen-flow-e2e",
+        "action-registry-core",
+        "track-crud-core",
+        "v258",
+        "v264"
+      ]
     },
     "today-feature": {
       "paths": [
@@ -388,16 +515,44 @@
       ]
     },
     "single-schedule-view": {
-      "paths": ["^src/features/single-schedule-view\\.js$"],
-      "suites": ["single-schedule-view-e2e", "today-core", "v334", "v355", "v357"]
+      "paths": [
+        "^src/features/single-schedule-view\\.js$"
+      ],
+      "suites": [
+        "single-schedule-view-e2e",
+        "today-core",
+        "v334",
+        "v355",
+        "v357"
+      ]
     },
     "daily-gap-placement": {
-      "paths": ["^src/features/daily-gap-placement\\.js$", "^src/features/daily-gap-sheet\\.js$"],
-      "suites": ["single-schedule-auto-placement", "daily-placement-e2e", "placement-core", "placement-e2e", "v356", "v357", "daily-operations-registry", "daily-parts-contract", "code-index", "mutation-block-e2e"]
+      "paths": [
+        "^src/features/daily-gap-placement\\.js$",
+        "^src/features/daily-gap-sheet\\.js$"
+      ],
+      "suites": [
+        "single-schedule-auto-placement",
+        "daily-placement-e2e",
+        "placement-core",
+        "placement-e2e",
+        "v356",
+        "v357",
+        "daily-operations-registry",
+        "daily-parts-contract",
+        "code-index",
+        "mutation-block-e2e"
+      ]
     },
     "planned-occupancy": {
-      "paths": ["^src/core/planned-occupancy\\.js$"],
-      "suites": ["planned-occupancy-core", "v59", "v199"]
+      "paths": [
+        "^src/core/planned-occupancy\\.js$"
+      ],
+      "suites": [
+        "planned-occupancy-core",
+        "v59",
+        "v199"
+      ]
     },
     "sync-storage": {
       "paths": [
@@ -489,27 +644,63 @@
       ]
     },
     "schedule-series-merge": {
-      "paths": ["^src/core/schedule-series-merge\\.js$"],
-      "patterns": ["mergeScheduleSeries|createSeriesMergeCandidate|legacySeriesOccurrence|chooseSeriesChange|mergeSeriesOverrides"],
-      "suites": ["schedule-series-merge", "single-schedule-merge", "merge-core"]
+      "paths": [
+        "^src/core/schedule-series-merge\\.js$"
+      ],
+      "patterns": [
+        "mergeScheduleSeries|createSeriesMergeCandidate|legacySeriesOccurrence|chooseSeriesChange|mergeSeriesOverrides"
+      ],
+      "suites": [
+        "schedule-series-merge",
+        "single-schedule-merge",
+        "merge-core"
+      ]
     },
     "schedule-series-derive": {
-      "paths": ["^src/core/schedule-series-derive\\.js$"],
-      "patterns": ["deriveScheduleSeries|schedulesWithSeriesForDate"],
-      "suites": ["schedule-series-derive", "schedule-series-core"]
+      "paths": [
+        "^src/core/schedule-series-derive\\.js$"
+      ],
+      "patterns": [
+        "deriveScheduleSeries|schedulesWithSeriesForDate"
+      ],
+      "suites": [
+        "schedule-series-derive",
+        "schedule-series-core"
+      ]
     },
     "schedule-series-storage": {
-      "paths": ["^src/core/schedule-series-storage\\.js$"],
-      "suites": ["schedule-series-sync-e2e", "single-schedule-sync-e2e"]
+      "paths": [
+        "^src/core/schedule-series-storage\\.js$"
+      ],
+      "suites": [
+        "schedule-series-sync-e2e",
+        "single-schedule-sync-e2e"
+      ]
     },
     "schedule-series-operations": {
-      "paths": ["^src/features/schedule-series\\.js$", "^src/features/schedule-occurrence\\.js$", "^src/features/schedule-series-bulk\\.js$"],
-      "suites": ["schedule-series-sync-e2e", "daily-operations-registry", "daily-parts-contract"]
+      "paths": [
+        "^src/features/schedule-series\\.js$",
+        "^src/features/schedule-occurrence\\.js$",
+        "^src/features/schedule-series-bulk\\.js$"
+      ],
+      "suites": [
+        "schedule-series-sync-e2e",
+        "daily-operations-registry",
+        "daily-parts-contract"
+      ]
     },
     "schedule-series-core": {
-      "paths": ["^src/core/schedule-series\\.js$"],
-      "patterns": ["createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"],
-      "suites": ["schedule-series-core", "recurrence-core", "v59"]
+      "paths": [
+        "^src/core/schedule-series\\.js$"
+      ],
+      "patterns": [
+        "createScheduleSeries|scheduleSeriesDates|scheduleSeriesFingerprint|normalizeSeriesTime"
+      ],
+      "suites": [
+        "schedule-series-core",
+        "recurrence-core",
+        "v59"
+      ]
     },
     "recurrence-engine": {
       "paths": [

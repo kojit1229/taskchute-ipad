@@ -1,6 +1,6 @@
-// v330 A-2: WBS「今週やること」と1280px以上のProject 2ペイン。
+// v330 / A-3: Projectチップ・Project箱・表示切替の回帰。
 const {
-  browseYesterdayForPlacement, assertUntimedTodayPlacement, chromium, launchOptions, startServer, blockGithubApiByDefault,
+  chromium, launchOptions, startServer, blockGithubApiByDefault,
   passGithubGate, randomPort, STATE_KEY
 } = require("./helpers");
 
@@ -96,51 +96,16 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, projects, tasks, weeklyCommitments, today: TODAY });
     await page.reload();
-    await page.waitForSelector(".wbs-week-panel");
+    await page.waitForSelector('[data-work-list="wbs"]');
+    check("週パネルは作業一覧に表示しない", await page.locator('.wbs-week-panel').count() === 0);
 
-    console.log("[1] 今週パネルの母集団・重複排除・並び・週境界");
-    const weekRows = page.locator(".wbs-week-list [data-wbs-week-row-id]");
-    const ids = await weekRows.evaluateAll((rows) => rows.map((row) => row.dataset.wbsWeekRowId));
-    // 並び: 未完了→完了、未完了内は期限昇順(期限なしは末尾)→プロジェクト順。
-    const expectedIds = [boundaryThisMon.id, currentDue.id, dupTask.id, otherDue.id, suspendedDue.id,
-      boundaryThisSun.id, stepOpen.id, stepDone.id];
-    check("確定Step2件+今週期限5件+確定/期限の重複1件(dup)の計8件、重複は1行かつ期限昇順→完了は末尾",
-      JSON.stringify(ids) === JSON.stringify(expectedIds), JSON.stringify(ids));
-    check("確定+今週期限の重複タスクは1回だけ出現", ids.filter((id) => id === dupTask.id).length === 1);
-    check("来週Step・来週期限・Wish・前週日曜・翌週月曜は出ない", !ids.includes(nextStep.id) && !ids.includes(nextDue.id)
-      && !ids.includes(wishDue.id) && !ids.includes(boundaryPrevSun.id) && !ids.includes(boundaryNextMon.id));
-    check("今週月曜(境界)は入る", ids.includes(boundaryThisMon.id));
-    check("今週日曜(境界)は入る", ids.includes(boundaryThisSun.id));
-    check("中断中でも今週期限なら入る", ids.includes(suspendedDue.id));
-    check("見出しは確定8・完了1・期限超過2", (await page.locator(".wbs-week-panel > header").textContent()).includes("確定 8件 ・ 完了 1 ・ 期限超過 2"));
-    check("所属Project・進捗・期限を既存行書式で表示", (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("12WY Project")
-      && (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("進捗 2/10")
-      && (await weekRows.nth(1).locator(".wbs-task-meta").textContent()).includes("期限 9/1 超過"));
-
-    console.log("[2] 今日へは既存task-todayを再利用");
-    const placementBrowsingDate = await browseYesterdayForPlacement(page);
-    const beforeBlocks = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);
-    await page.locator(`[data-wbs-week-row-id="${stepOpen.id}"] [data-action="task-today"]`).click();
-    await assertUntimedTodayPlacement(page, { key: STATE_KEY, taskId: stepOpen.id, today: TODAY, browsingDate: placementBrowsingDate });
-
-    await page.waitForFunction(({ key, before }) => JSON.parse(localStorage.getItem(key)).blocks.length === before + 1,
-      { key: STATE_KEY, before: beforeBlocks });
-    check("Blockが1件増えtaskIdを引き継ぐ", await page.evaluate(({ key, id, before }) => {
-      const blocks = JSON.parse(localStorage.getItem(key)).blocks;
-      return blocks.length === before + 1 && blocks.at(-1).taskId === id;
-    }, { key: STATE_KEY, id: stepOpen.id, before: beforeBlocks }));
-
-    check("閲覧日を変更せず今日に配置する", await page.evaluate(async date => (await import('/src/state/store.js')).state.selectedDate === date, placementBrowsingDate));
-
-    console.log("[3] PC 2ペイン・12WY優先の既定選択・選択は非永続");
-    check("1280pxは一覧/選択詳細が1:2の2列", await page.locator(".wbs-projects.is-desktop").isVisible()
-      && await page.locator(".wbs-project-list").evaluate((element) => Math.abs(element.getBoundingClientRect().width * 2 - document.querySelector(".wbs-project-detail").getBoundingClientRect().width) < 1 && element.getBoundingClientRect().width > 0)
-      && await page.locator('[data-wbs-detail-id="p-cycle"]').isVisible());
-    check("既定選択は配列順ではなく12WY優先(先頭は!Alpha)", await page.locator('.wbs-project-choice').first().textContent()
-      .then((text) => text.includes("!Alpha")) && await page.locator('[data-wbs-detail-id="p-cycle"]').isVisible());
-
-    // v330修正(レビュー対応): fixture保存直後の値を基準に、選択・ビューポート切替を挟んでも
-    // 内容が変わるsetItemが0回であることを検証する(以前は選択クリック前後だけの比較だった)。
+    console.log("[3] A-3: Project chips and boxes, non-persistent selection");
+    const root = page.locator('[data-work-list="wbs"]');
+    const chip = id => root.locator(`[data-kind="project"][data-value="${id}"]`);
+    const box = id => root.locator(`[data-work-group="${id}"]`);
+    check("既定はすべてのProject", await chip('').getAttribute('aria-pressed') === 'true'
+      && await box('p-other').isVisible() && await box('p-cycle').isVisible());
+    check("12週計画情報をProject箱に表示", (await box('p-cycle').locator('summary').textContent()).includes('12週計画 第3週'));
     const stableValue = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
     await page.evaluate((key) => {
       window.__v330StateWrites = 0;
@@ -150,59 +115,38 @@ function commitmentItem(weekStart, blockId, taskId, projectId, plannedDate, comp
         return original.call(this, name, value);
       };
     }, STATE_KEY);
-    await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
-    check("選択で右ペインが切り替わる", await page.locator('[data-wbs-detail-id="p-other"]').isVisible());
-    await page.setViewportSize({ width: 1279, height: 900 });
-    await page.waitForFunction(() => { const a=document.querySelector('.wbs-project-list').getBoundingClientRect(), b=document.querySelector('.wbs-project-detail').getBoundingClientRect(); return b.top >= a.bottom; });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(50);
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.waitForSelector(".wbs-projects.is-desktop");
+    await chip('p-other').click();
+    check("チップ選択で該当Project箱だけ残る", await box('p-other').isVisible() && await box('p-cycle').count() === 0);
+    for (const width of [1279, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      check(`${width}pxでも選択・題名検索・Projectチップを保持`, await chip('p-other').getAttribute('aria-pressed') === 'true'
+        && await box('p-other').isVisible() && await root.locator('[data-work-filter="query"]').isVisible()
+        && await root.locator('[data-kind="project"]').count() === await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.filter(p => !p.deleted).length + 1, STATE_KEY));
+      check(`${width}pxで操作列と一覧が重ならない`, await root.evaluate(el => {
+        const a = el.querySelector('.work-decide-sidebar').getBoundingClientRect(), b = el.querySelector('.work-decide-groups').getBoundingClientRect();
+        return b.left >= a.right || b.top >= a.bottom;
+      }));
+    }
     check("選択・ビューポート切替を通じstate/localStorageの内容が変わらない",
       await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === stableValue
         && await page.evaluate(() => window.__v330StateWrites) === 0);
+    console.log("[5] A-3: 中断Projectは表示設定に従う");
+    // The old pane is gone; retain the existing delegated action's persistence contract.
+    const projectAction = action => page.evaluate(action => {
+      const button = document.createElement('button'); button.dataset.action = action; button.dataset.id = 'p-other';
+      document.body.append(button); button.click(); button.remove();
+    }, action);
+    await projectAction('suspend-project');
+    check("既存中断actionがProject状態を保存", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.find(p => p.id === 'p-other').status, STATE_KEY) === 'paused');
+    const suspended = root.locator('[data-action="toggle-show-suspended"]');
+    check("中断表示ONで中断Projectの行が見える", await root.locator('[data-work-key="task:t-other-due"]').count() === 1);
+    await suspended.evaluate(el => el.closest('details').open = true); await suspended.click();
+    check("中断表示OFFで行が消える", await root.locator('[data-work-key="task:t-other-due"]').count() === 0);
+    await suspended.evaluate(el => el.closest('details').open = true); await suspended.click();
+    check("中断表示ONで行が戻る", await root.locator('[data-work-key="task:t-other-due"]').count() === 1);
+    await projectAction('resume-project');
+    check("既存再開actionがProject状態を保存", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.find(p => p.id === 'p-other').status, STATE_KEY) === 'active');
 
-    console.log("[4] 1279pxはProject選択とTask検索を縦置き");
-    await page.setViewportSize({ width: 1279, height: 900 });
-    await page.waitForFunction(() => { const a=document.querySelector('.wbs-project-list').getBoundingClientRect(), b=document.querySelector('.wbs-project-detail').getBoundingClientRect(); return b.top >= a.bottom; });
-    const mobileLayout2 = { panes: await page.locator(".wbs-project-list, .wbs-project-detail").count(),
-      choices: await page.locator('[data-action="wbs-select-project"]').count(),
-      projects: await page.evaluate(key => JSON.parse(localStorage.getItem(key)).projects.filter(p => !p.deleted).length, STATE_KEY) };
-    check("1279pxは選択Projectを保持し独立検索2枠と全Project/なし選択肢を縦に表示", mobileLayout2.panes === 2
-      && mobileLayout2.choices === mobileLayout2.projects + 1
-      && await page.locator('[data-wbs-detail-id="p-other"]').isVisible()
-      && await page.locator('#wbs-projects-query').isVisible()
-      && await page.locator('#wbs-tasks-p-other-query').isVisible(), JSON.stringify(mobileLayout2));
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.waitForSelector(".wbs-projects.is-desktop");
-
-    console.log("[5] 右ペインの操作チップは既存actionを再利用");
-    await page.locator('[data-action="wbs-select-project"][data-id="p-other"]').click();
-    await page.waitForSelector('[data-wbs-detail-id="p-other"]');
-    check("中断前は「中断」チップ", await page.locator('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]').isVisible());
-    await page.locator('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]').click();
-    await page.waitForSelector('[data-wbs-detail-id="p-other"] [data-action="resume-project"]');
-    check("suspend-project実行後は既存状態(中断)に反映され「再開」チップへ切り替わる",
-      await page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).projects.find((p) => p.id === id).status === "paused",
-        { key: STATE_KEY, id: other.id }));
-    // 後片付け: 以降のテストに影響しないよう再開しておく。
-    await page.locator('[data-wbs-detail-id="p-other"] [data-action="resume-project"]').click();
-    await page.waitForSelector('[data-wbs-detail-id="p-other"] [data-action="suspend-project"]');
-
-    console.log("[6] 日跨ぎで翌週の母集団へ更新");
-    await page.clock.setFixedTime(new Date(2026, 8, 8, 10, 0, 0, 0));
-    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => document.querySelector('[data-wbs-week-row-id="t-next-step"]'));
-    const nextWeekIds = await weekRows.evaluateAll((rows) => rows.map((row) => row.dataset.wbsWeekRowId));
-    check("翌週は来週Step+来週期限+翌週月曜境界へ入れ替わる(期限昇順)",
-      JSON.stringify(nextWeekIds) === JSON.stringify([boundaryNextMon.id, nextDue.id, nextStep.id]), JSON.stringify(nextWeekIds));
-
-    console.log("[7] 対象0件のときの文言");
-    await page.clock.setFixedTime(new Date(2026, 8, 15, 10, 0, 0, 0));
-    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForFunction(() => !document.querySelector(".wbs-week-list [data-wbs-week-row-id]"));
-    check("0件文言が表示される", (await page.locator(".wbs-week-empty").textContent())
-      .includes("今週の確定 Step と期限が今週のタスクはありません(12WY の「今週を確定」で追加)"));
 
     console.log("[8] レスポンシブ品質");
     async function noOverflow(width) {

@@ -110,7 +110,7 @@ function check(name, cond, extra = "") {
     const viewAfterTap = await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).currentView, KEY);
     check("1タップでcurrentViewがjournalになる", viewAfterTap === "journal", viewAfterTap);
 
-    console.log("[1c] 「その他」はFUND+12WY+ルーティン追加後の11項目で、削除済みhomeや主要4タブを重複表示しない");
+    console.log("[1c] 「その他」はFUND+12WY+ルーティン追加後の12項目で、削除済みhomeや主要4タブを重複表示しない");
     await seed({ blocks: [], view: "more" });
     const moreGridText = await page.locator(".more-tower-grid").textContent();
     // v403 契約追随(監督者 2026-09-13、束R4-A 4回-06): 「WBS」の表示ラベルは「作業一覧」(入口は不変)。
@@ -119,8 +119,8 @@ function check(name, cond, extra = "") {
     const moreDataViews = await page.locator('.more-tower-grid [data-action="nav"]').evaluateAll((els) => els.map((el) => el.dataset.view));
     check("「その他」の受け皿にwbsが含まれる", moreDataViews.includes("wbs"), JSON.stringify(moreDataViews));
     // v230でhome撤去、v233でinstruments/iron-log追加、v356で12WY追加、v425でルーティン追加。
-    check("「その他」は現行11項目の順序と一致する",
-      moreDataViews.join(",") === "routine,wbs,wish,vision,twelveweek,zero,ai-reports,fund,instruments,iron-log,settings",
+    check("「その他」は現行12項目の順序と一致する",
+      moreDataViews.join(",") === "routine,wbs,decide,wish,vision,twelveweek,zero,ai-reports,fund,instruments,iron-log,settings",
       JSON.stringify(moreDataViews));
     check("削除済みhomeと主要4タブは「その他」に重複しない",
       !moreDataViews.includes("home") && !moreDataViews.includes("journal")

@@ -121,12 +121,19 @@ function check(name, cond, extra = "") {
       : previous === 'exec' ? await page.locator('.exec-mode-segmented .active[data-action="exec-mode-toggle"]').getAttribute('data-mode') : null;
     await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
-    const root = page.locator('[data-work-list="wbs-tasks-test-proj"]');
-    await root.locator('[data-work-filter="status"]').selectOption('');
+    const root = page.locator('[data-work-list="wbs"]');
+    const menu = root.locator('details').filter({ has: page.locator('[data-action="toggle-wbs-hide-done"]') });
+    const showCompleted = async hide => {
+      if (await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings.wbsHideCompleted, KEY) !== hide) {
+        if (!await menu.evaluate(el => el.open)) await menu.locator('summary').click();
+        await menu.locator('[data-action="toggle-wbs-hide-done"]').click();
+      }
+    };
+    await showCompleted(false);
     check('全件WBSは対象Taskを保持: ' + taskId, await root.locator(`[data-work-key="task:${taskId}"]`).count() === 1);
-    await root.locator('[data-work-filter="status"]').selectOption('open');
+    await showCompleted(true);
     const count = await root.locator(`[data-work-key="task:${taskId}"]`).count();
-    await root.locator('[data-work-filter="status"]').selectOption('');
+    await showCompleted(false);
     await page.locator(`.sidebar [data-action="nav"][data-view="${returnView}"]`).click();
     if (returnMode) await page.locator(`.exec-mode-segmented [data-action="exec-mode-toggle"][data-mode="${returnMode}"]`).click();
     check('WBS確認後は元の論理view・日付・実行modeへ戻る: ' + taskId,
@@ -137,8 +144,7 @@ function check(name, cond, extra = "") {
   }
 
   function wbsBadge(taskId) {
-    // v328 WBS TOWER化で完了表示は .badge から .wbs-task-done(「完了」)へ移った(表示契約は同じ)。
-    return page.locator(`.wbs-projects .row:has([data-action="edit-task"][data-id="${taskId}"]) .wbs-task-done, .wbs-projects .row:has([data-action="edit-task"][data-id="${taskId}"]) .badge`).first();
+    return page.locator(`[data-work-key="task:${taskId}"] .work-list-meta`);
   }
 
   try {
@@ -413,7 +419,7 @@ function check(name, cond, extra = "") {
     await page.locator('.sidebar [data-action="nav"][data-view="wbs"]').click();
     await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await page.waitForSelector('[data-action="edit-task"][data-id="task-C"]');
-    await page.locator('[data-work-list="wbs-tasks-test-proj"] .wbs-task-title[data-action="edit-task"][data-id="task-C"]').click();
+    await page.locator('[data-work-list="wbs"] .work-list-title[data-action="edit-task"][data-id="task-C"]').click();
     await page.waitForTimeout(200);
     await page.selectOption('[data-modal-field="status"]', "completed");
     await page.click('[data-action="modal-save"]');
@@ -488,15 +494,15 @@ function check(name, cond, extra = "") {
     const receptacleKeys = (await page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)).tasks, KEY))
       .filter(task => task.title === "その他" && !task.deleted).map(task => `task:${task.id}`);
     check("受け皿「その他」Taskは高々1件", receptacleKeys.length <= 1, JSON.stringify(receptacleKeys));
-    const rows = page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key^="task:"]');
+    const rows = page.locator('[data-work-list="wbs"] [data-work-key^="task:"]');
     const rowKeys = async () => (await rows.evaluateAll(els => els.map(el => el.dataset.workKey))).filter(key => !receptacleKeys.includes(key));
     const idsInOrder = (await rowKeys()).map(key => key.slice(5));
-    check("選択Projectは期限7日・8日・未設定を落とさず既存ツリーの期限順で表示する",
-      JSON.stringify(idsInOrder) === JSON.stringify(["task-overdue", "task-today2", "task-tomorrow", "task-in3days", "task-in7days", "task-8days", "task-nodue2"]), JSON.stringify(idsInOrder));
+    check("選択Projectは期限7日・8日・未設定を落とさず既存ツリー(投入順)で表示する",
+      JSON.stringify(idsInOrder) === JSON.stringify(SORT_TASKS.map(task => task.id)), JSON.stringify(idsInOrder));
     check("表示順を変えても保存された元Task順は変えない", JSON.stringify((await stateNow()).tasks.filter(task => SORT_TASKS.some(seed => seed.id === task.id)).map(task => task.id)) === JSON.stringify(SORT_TASKS.map(task => task.id)));
-    await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-filter="due"]').selectOption('overdue');
+    { const dueChip = page.locator('[data-work-list="wbs"] [data-kind="due"][data-value="overdue"]'); if(await dueChip.getAttribute('aria-pressed')!=='true') await dueChip.click(); }
     check("期限超過filterは超過Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-overdue']));
-    await page.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-filter="due"]').selectOption('none');
+    { const dueChip = page.locator('[data-work-list="wbs"] [data-kind="due"][data-value="none"]'); if(await dueChip.getAttribute('aria-pressed')!=='true') await dueChip.click(); }
     check("期限なしfilterは未設定Taskだけを表示する", JSON.stringify(await rowKeys()) === JSON.stringify(['task:task-nodue2']));
     await page.locator('.sidebar [data-action="nav"][data-view="exec"]').click();
     check("Task期限から架空の予定Blockを作らない", await page.locator('[data-work-list="exec"] [data-work-key]').count() === 0 && (await stateNow()).blocks.length === 0);

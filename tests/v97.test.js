@@ -88,7 +88,7 @@ function check(name, cond, extra = "") {
   }
 
   function taskTodayBtn(id) {
-    return page.locator(`[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:${id}"]`);
+    return page.locator(`[data-work-list="wbs"] [data-work-key="task:${id}"]`);
   }
 
   try {
@@ -113,15 +113,15 @@ function check(name, cond, extra = "") {
     // 「表示しない」(v107)から「末尾に表示する」へ再度仕様変更された。
     check("期日未設定Taskは末尾に表示される(v332で表示へ変更)", await taskTodayBtn("task-nodue").count() === 1);
     check("8日後Taskも全件WBSに保持", await taskTodayBtn("task-8days").count() === 1);
-    const result = page.locator('[data-work-list="wbs-tasks-test-proj"]');
+    const result = page.locator('[data-work-list="wbs"]');
     const ids = () => result.locator('[data-work-key^="task:"]').evaluateAll(els=>els.map(el=>el.dataset.workKey.slice(5)));
     const allIds = await ids();
     check("元5件が正確に1件ずつ存在する", allIds.length === TASKS.length && TASKS.every(t=>allIds.filter(id=>id===t.id).length===1));
-    await result.locator('[data-work-filter="due"]').selectOption("overdue");
-    check("超過条件は超過Taskだけ", JSON.stringify(await ids())===JSON.stringify(["task-overdue"]));
-    await result.locator('[data-work-filter="due"]').selectOption("today");
-    check("今日条件に未来/超過/期限なしを混ぜない", JSON.stringify(await ids())===JSON.stringify(["task-today"]));
-    await result.locator('[data-action="work-list-clear"]').click();
+    await result.locator('[data-work-filter="query"]').fill('期日超過Task');
+    check("題名検索で超過Taskだけ", JSON.stringify(await ids())===JSON.stringify(["task-overdue"]));
+    await result.locator('[data-work-filter="query"]').fill('当日期日Task');
+    check("当日期日の題名検索に未来/超過/期限なしを混ぜない", JSON.stringify(await ids())===JSON.stringify(["task-today"]));
+    await result.locator('[data-work-filter="query"]').fill('');
 
     // ============================================================
     // (b) 8日後以降を表示するトグルUIはもう存在しない(WBS導線へ一本化。発注v332 §B)
@@ -147,16 +147,15 @@ function check(name, cond, extra = "") {
     await page.waitForTimeout(200);
     check("WBSタブでは8日後Taskが見える(表示から消えただけでデータは健在)",
       (await page.textContent("body"))?.includes("8日後Task(母集団外)"));
-    await result.locator('[data-work-key="task:task-overdue"] .wbs-task-title').scrollIntoViewIfNeeded();
+    await result.locator('[data-work-key="task:task-overdue"] .work-list-title').scrollIntoViewIfNeeded();
     await page.waitForTimeout(200);
 
     // ============================================================
     // (d) 期日超過タスクはアンバー表示(.exec-task-overdue)になる(赤系背景ではない)
     // ============================================================
     console.log("[4] 期日超過Taskは.exec-task-overdue(アンバー)で表示され、赤系背景ではない");
-    const overdueRow = page.locator('.wbs-projects [data-wbs-row-id="task-overdue"] > .wbs-task-row');
-    check("期日超過Taskの行に.exec-task-overdue(アンバー)クラスが付く",
-      ((await overdueRow.locator(".wbs-overdue").getAttribute("class")) || "").includes("wbs-overdue"));
+    const overdueRow = page.locator('[data-wbs-row-id="task-overdue"]');
+    check("期日超過Taskの情報欄に超過日数を表示", /超過 \d+日/.test(await overdueRow.locator(".work-list-meta").textContent()));
     const overdueRowStyle = await overdueRow.evaluate((el) => el.getAttribute("style") || "");
     check("期日超過Taskの行に赤系背景(var(--red-soft))は付かない(v332でアンバー表現へ統一)",
       !overdueRowStyle.includes("var(--red-soft)"), overdueRowStyle);
@@ -193,9 +192,9 @@ function check(name, cond, extra = "") {
     const expandedPath = path.join(screenshotDir, "v97-taskchute-390px-row-expanded.png");
     await pageMobile.screenshot({ path: defaultPath, fullPage: true });
     await pageMobile.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
-    await pageMobile.locator('[data-work-list="wbs-tasks-test-proj"] [data-work-key="task:task-overdue"] .wbs-task-title').scrollIntoViewIfNeeded();
-    await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] .wbs-row-menu-toggle').click();
-    check("390pxで同Task副操作へ到達", await pageMobile.locator('.wbs-projects [data-wbs-row-id="task-overdue"] .wbs-row-menu-panel [data-action="edit-task"]').isVisible());
+    await pageMobile.locator('[data-work-list="wbs"] [data-work-key="task:task-overdue"] .work-list-title').scrollIntoViewIfNeeded();
+    await pageMobile.locator('[data-wbs-row-id="task-overdue"] [data-action="edit-task"]').click();
+    check("390pxで同Task詳細へ到達", await pageMobile.locator('[data-modal-field="title"]').inputValue() === TASKS.find(t => t.id === "task-overdue").title);
     await pageMobile.waitForTimeout(200);
     await pageMobile.screenshot({ path: expandedPath, fullPage: true });
     check("スクショ2枚が生成された",

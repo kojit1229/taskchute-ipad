@@ -174,13 +174,11 @@ function sourceBetween(source, startMarker, endMarker) {
       localStorage.setItem(key, JSON.stringify(state));
     }, { key: STATE_KEY, today: TODAY, projectCycle, settingCycle, tracks, measurements, title });
     await page.reload();
-    // v329: 行の副操作は…メニュー(排他)の中。reload直後は必ず閉じているため先に開く
-    // (セレクタ追随・assert不変)
+    // 新一覧でProjectを選び、同じ登録済み編集アクションからcarryの検査を始める。
     await page.waitForSelector('[data-action="wbs-select-project"][data-id="p259"]');
     await page.locator('[data-action="wbs-select-project"][data-id="p259"]').first().click();
     await page.waitForTimeout(150);
-    await page.waitForSelector('[data-action="edit-project"][data-id="p259"]');
-    await page.locator('[data-action="edit-project"][data-id="p259"]').first().click();
+    await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('edit-project', { id: 'p259' }));
     await page.waitForSelector("[data-twy-track]", { state: "attached" });
     dialogs = [];
     acceptDialog = false;

@@ -9,7 +9,7 @@ const { setup } = require('./remaining-twelveweek-layout.test');
 
 const entries = [
   ['routine', 'ルーティン', '計画'], // v425: ルーティンの専用画面(B2-35、K 指示 2026-10-02)
-  ['wbs', '作業一覧', '計画'], ['wish', 'やりたいこと', '計画'], ['vision', 'ビジョン', '計画'],
+  ['wbs', '作業一覧', '計画'], ['decide', '決めること', '計画'], ['wish', 'やりたいこと', '計画'], ['vision', 'ビジョン', '計画'],
   ['twelveweek', '12週計画', '計画'], ['zero', '0秒思考', '思考'], ['ai-reports', 'AIレポート', '振り返り'],
   ['fund', '資産', '振り返り'], ['instruments', '健康と継続', 'ツール'],
   ['iron-log', '筋トレ記録', 'ツール'], ['settings', '設定', 'ツール']
@@ -30,7 +30,7 @@ module.exports = async function navJapanese() {
   assert.deepEqual(plain('mobileNav.map(({id,label}) => [id,label])'),
     [['now', 'いま'], ['dandori', '段取り'], ['today', '今日'], ['exec', '実行'], ['wbs', '作業一覧'], ['more', 'その他']]); // v418: いま・段取りを独立タブに(K承認 2026-10-01)
   const sidebar = plain('navItems.map(({id,label}) => [id,label])');
-  assert.equal(sidebar.length, 17); // v418: いま・段取りを追加(K承認 2026-10-01)/ v425: ルーティンを追加(K 包括承認 2026-10-02)
+  assert.equal(sidebar.length, 18); // v418: いま・段取りを追加(K承認 2026-10-01)/ v425: ルーティンを追加(K 包括承認 2026-10-02)
   assert.deepEqual(sidebar.find(([id]) => id === 'journal'), ['journal', '日報']);
   for (const [id, label, group] of entries) {
     assert.deepEqual(sidebar.find(item => item[0] === id), [id, label]);
@@ -39,7 +39,7 @@ module.exports = async function navJapanese() {
   for (const count of [0, 3, 100]) {
     unread = count;
     const html = vm.runInContext('renderMore()', context);
-    assert.equal((html.match(/data-action="nav"/g) || []).length, 11); // v425: ルーティンを追加
+    assert.equal((html.match(/data-action="nav"/g) || []).length, 12); // v425: ルーティンを追加
     assert.doesNotMatch(html, /NAV \d+/);
     if (count) assert.ok(html.includes('<span class="nav-badge">' + (count > 99 ? '99+' : count) + '</span>'));
     else assert.doesNotMatch(html, /nav-badge/);
@@ -80,7 +80,7 @@ module.exports = async function navJapanese() {
         const active = width === 390 ? (id === 'wbs' ? 'wbs' : 'more') : id;
         assert.equal(await page.locator((width === 390 ? '#bottomNav' : '#sidebar') + ' [data-view="' + active + '"].active').count(), 1);
         await more.click(); await page.locator('.more-tower-grid').waitFor();
-        assert.equal(await page.locator('.more-tower-item').count(), 11); // v425: ルーティンを追加
+        assert.equal(await page.locator('.more-tower-item').count(), 12); // v425: ルーティンを追加
       }
       assert.deepEqual(await stored(), baseline, 'all ten round trips preserve user records');
       assert.deepEqual(await page.locator('#bottomNav > button').evaluateAll(nodes => nodes.map(n => n.dataset.view)),

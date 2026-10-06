@@ -5,12 +5,14 @@ import { renderSearchFrame, patchSearchFrame } from "../ui/daily-parts/search-fr
 import { buildThreeScreenRows, renderScreenGroups } from "./three-screen-rows.js";
 import { renderScheduleSection } from "./single-schedule-view.js";
 import { isTodayActual, renderTodayTable, renderTodayTableRow } from "../ui/daily-parts/today-table.js";
+import { collapseSeries } from "../core/work-series.js";
 
 let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails;
 let modalOrigin;
 let renderFocus;
 let screenDeps;
 const views = new Map();
+const workDisplay = { expanded: new Set(), groups: new Map(), children: new Set() };
 function view(scope) {
   if (!views.has(scope)) views.set(scope, { query: "", status: "", project: "", category: "", due: "", mode: "today", scroll: 0 });
   return views.get(scope);
@@ -26,6 +28,18 @@ function configureWorkList(deps) {
     patchWorkList(root, true);
   };
   registerActions({ "work-list-clear": clear, "daily-search-clear": clear,
+    "work-list-toggle": ({ target, event }) => {
+      const { kind, value } = target.dataset, root = target.closest('[data-work-list="wbs"]');
+      if (kind === "project" && value !== "" && value !== "__none__" && !state.projects.some(p => !p.deleted && p.id === value)) return;
+      if (kind === "series") workDisplay.expanded.has(value) ? workDisplay.expanded.delete(value) : workDisplay.expanded.add(value);
+      else if (kind === "children") workDisplay.children.has(value) ? workDisplay.children.delete(value) : workDisplay.children.add(value);
+      else if (kind === "group") { event.preventDefault(); workDisplay.groups.set(value, !target.closest("details").open); }
+      else {
+        if (kind === "due" && !view("wbs").due && value) workDisplay.children.clear();
+        view("wbs")[kind] = view("wbs")[kind] === value ? "" : value;
+      }
+      patchWorkList(root, true);
+    },
     "today-list-tab": ({ target }) => {
       const root = target.closest('[data-work-list="today"]');
       if (!root || !["plans", "actuals"].includes(target.dataset.tab)) return;
@@ -86,7 +100,72 @@ function searchModel(scope, model, composing = false) {
     emptyMessage: "条件に一致する項目はありません。",
     resultRegionId: scope === "wbs" ? "wbs-search-results" : scope + "-search-results" };
 }
+function workDateLabel(date, weekday = false) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(date || "");
+  if (!parts) return "";
+  return `${Number(parts[2])}/${Number(parts[3])}${weekday ? `（${"日月火水木金土"[new Date(+parts[1], +parts[2] - 1, +parts[3]).getDay()]}曜）` : ""}`;
+}
+function workDueMatches(task, filter, today) {
+  const due = dueDate(task);
+  return !filter || (filter === "none" ? !due : filter === "overdue" ? due && due < today : filter === "today" ? due === today : due >= today && due <= screenDeps.addDays(today, 7));
+}
+function renderWorkTaskRow(t, { titleHTML = "", ghost = false, depth = 0 } = {}) {
+  const e = escapeHTML, due = dueDate(t), today = todayISO();
+  const status = { doing: "着手中", completed: "完了", suspended: "中断" }[t.status] || "";
+  return `<div class="work-list-row work-task-row${ghost ? " work-context-parent" : ""}" data-work-key="task:${e(t.id)}" data-wbs-row-id="${e(t.id)}"><div class="work-task-name">
+    <button class="checkbox-button ${t.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${e(t.id)}" aria-label="${t.status === "completed" ? "完了を解除" : "完了"}">✓</button>
+    ${titleHTML || `<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${e(t.title || "（名称なし）")}</button>`}
+  </div><div class="work-list-meta">
+    ${e([status, ghost ? "(条件外の親)" : "", `進捗 ${Number(t.progressNum) || 0}/${Number(t.progressDen) || 0}`, due && due < today && ["todo", "doing"].includes(t.status) ? `超過 ${screenDeps.daysBetween(due, today)}日` : "", due ? `作業 ${workDateLabel(due)}` : ""].filter(Boolean).join(" ・ "))}
+    ${depth < 2 ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${e(t.id)}">＋ サブ</button>` : ""}
+    ${placementActions({ kind: "task", id: t.id, item: t }, "wbs")}
+  </div><div class="work-task-due">
+    ${t.dueDate ? `期日 ${workDateLabel(t.dueDate, true)}` : "期日なし"}<br>見積 ${Number(t.estimateMin) || 0}分
+  </div></div>`;
+}
+function renderWbsList() {
+  const ui = view("wbs"), today = todayISO(), e = escapeHTML, settings = state.settings;
+  const projects = state.projects.filter(p => !p.deleted), byId = new Map(projects.map(p => [p.id, p]));
+  const live = state.tasks.filter(t => !t.deleted && t.kind !== "other" && (!t.projectId || byId.has(t.projectId)));
+  const unfinished = live.filter(t => ["todo", "doing"].includes(t.status));
+  const visible = live.filter(t => (!settings.wbsHideCompleted || t.status !== "completed") && (settings.showSuspended || (t.status !== "suspended" && byId.get(t.projectId)?.status !== "paused")) && (!settings.wbsHideDoneProjects || byId.get(t.projectId)?.status !== "completed"));
+  const q = ui.query.normalize("NFKC").trim().toLocaleLowerCase(), words = q.split(/\s+/).filter(Boolean);
+  const hits = visible.filter(t => (!ui.project || (t.projectId || "__none__") === ui.project) && words.every(word => String(t.title || "").normalize("NFKC").toLocaleLowerCase().includes(word)) && (!ui.due || unfinished.includes(t) && workDueMatches(t, ui.due, today)));
+  const hitIds = new Set(hits.map(t => t.id)), keep = new Map(hits.map(t => [t.id, t]));
+  for (const task of hits) {
+    let parent = live.find(t => t.id === task.parentTaskId && t.projectId === task.projectId);
+    const seen = new Set([task.id]);
+    while (parent && !seen.has(parent.id)) { seen.add(parent.id); keep.set(parent.id, parent); parent = live.find(t => t.id === parent.parentTaskId && t.projectId === task.projectId); }
+  }
+  const groupTasks = tasks => {
+    const open = tasks.filter(t => !["completed", "suspended"].includes(t.status));
+    return [...collapseSeries(open, { noCollapse: !!q }), ...tasks.filter(t => !open.includes(t)).map(task => ({ task, hidden: 0, rest: [] }))].sort((a,b) => Math.min(...[a.task,...a.rest].map(t=>tasks.indexOf(t))) - Math.min(...[b.task,...b.rest].map(t=>tasks.indexOf(t))));
+  };
+  const chip = (kind, value, title, count) => `<button class="btn" data-action="${kind === "project" ? "wbs-select-project" : "work-list-toggle"}" ${kind === "project" ? `data-id="${e(value)}"` : ""} data-kind="${kind}" data-value="${e(value)}" aria-pressed="${ui[kind] === value}">${e(title)} ${count}</button>`;
+  const counts = [["overdue", "超過"], ["week", "7日以内"], ["none", "期日なし"]].map(([key, label]) => chip("due", key, label, key === "none" ? collapseSeries(unfinished.filter(t => !dueDate(t))).length : unfinished.filter(t => workDueMatches(t, key, today)).length)).join("");
+  const row = ({ task: t, hidden, rest }, depth = 0, seen = new Set()) => {
+    if (seen.has(t.id)) return "";
+    const trail = new Set([...seen, t.id]), due = dueDate(t), ghost = !hitIds.has(t.id), expanded = workDisplay.expanded.has(t.id);
+    const children = [...keep.values()].filter(k => k.parentTaskId === t.id && k.projectId === t.projectId);
+    const childrenOpen = !workDisplay.children.has(t.id);
+    const titleHTML = `${children.length ? `<button class="btn" data-action="work-list-toggle" data-kind="children" data-value="${e(t.id)}" aria-expanded="${childrenOpen}" aria-label="子タスクを開閉">${childrenOpen ? "▾" : "▸"}</button>` : ""}<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${depth ? "└ " : ""}${e(t.title || "（名称なし）")}</button>${hidden ? `<button class="btn" data-action="work-list-toggle" data-kind="series" data-value="${e(t.id)}" aria-expanded="${expanded}">+${hidden}件</button>` : ""}`;
+    return renderWorkTaskRow(t, { titleHTML, ghost, depth }) + (childrenOpen ? groupTasks(children).map(g => row(g, depth + 1, trail)).join("") : "") + (expanded ? rest.map(task => row({ task, hidden: 0, rest: [] }, depth, trail)).join("") : "");
+  };
+  const groups = [...projects, ...(live.some(t => !t.projectId) ? [{ id: "", title: "Projectなし" }] : [])].filter(p => !settings.wbsCategoryFilter || (p.category || "未分類") === settings.wbsCategoryFilter);
+  const groupsHTML = groups.map(p => {
+    const tasks = [...keep.values()].filter(t => (t.projectId || "") === p.id), matched = hits.filter(t => (t.projectId || "") === p.id);
+    if (!tasks.length && ui.project !== (p.id || "__none__")) return "";
+    const all = live.filter(t => (t.projectId || "") === p.id), progress = screenDeps.projectProgressAgg(all);
+    const week = p.twelveWeekStartDate ? Math.floor(screenDeps.daysBetween(p.twelveWeekStartDate, today) / 7) + 1 : 0;
+    const overdue = unfinished.filter(t => (t.projectId || "") === p.id && workDueMatches(t, "overdue", today)).length;
+    const roots = tasks.filter(t => !tasks.some(parent => parent.id === t.parentTaskId));
+    const open = workDisplay.groups.get(p.id) ?? (!!ui.project || !!q || !!ui.due || groupTasks(roots).length <= 6);
+    return `<details class="work-project-group wbs-project-detail" data-work-group="${e(p.id)}" data-work-scope="wbs-tasks-${e(p.id)}" ${open ? "open" : ""}><summary data-action="work-list-toggle" data-kind="group" data-value="${e(p.id)}">${e(p.title)} <span>${e(p.category || "")} ${groupTasks(matched).length}/${matched.length}件 ・ 進捗 ${progress.num}/${progress.den} (${progress.pct}%)${week > 0 ? ` ・ 12週計画 第${week}週` : ""} ・ 期限超過 ${overdue}</span>${p.id ? `<button class="btn ghost" data-action="edit-project" data-id="${e(p.id)}">編集</button>` : ""}</summary>${groupTasks(roots).map(g => row(g)).join("") || '<p>該当するタスクはありません。</p>'}</details>`;
+  }).join("");
+  return `<section class="work-list work-decide-layout" data-work-list="wbs"><aside class="work-decide-sidebar"><div data-work-decide-link><button class="btn ghost" data-action="nav" data-view="decide">期日が決まっていないもの ${screenDeps.undecidedCount()} 件 → 決めること</button></div><div data-work-mode>一覧</div><div class="work-decide-chips" data-work-counts>${counts}</div>${screenDeps.renderWbsAddMenu()}<label class="work-decide-query">題名を検索<input class="input" type="search" id="wbs-projects-query" data-work-filter="query" value="${e(ui.query)}"></label><div class="work-decide-chips" data-work-projects data-work-list="wbs-projects" data-work-scope="wbs-projects">${chip("project", "", "すべて", groupTasks(visible).length)}${groups.map(p => chip("project", p.id || "__none__", p.title, groupTasks(visible.filter(t => (t.projectId || "") === p.id)).length)).join("")}</div><details><summary>その他</summary><button class="btn" data-action="toggle-wbs-hide-done">完了を隠す ${settings.wbsHideCompleted ? "ON" : "OFF"}</button><button class="btn" data-action="toggle-show-suspended">中断を表示 ${settings.showSuspended ? "ON" : "OFF"}</button></details></aside><div class="work-decide-groups" data-work-list-rows>${groupsHTML || '<p>該当するタスクはありません。</p>'}</div></section>`;
+}
 function renderWorkList(scope) {
+  if (scope === "wbs") return renderWbsList();
   const model = rowsFor(scope);
   if (scope === "today") {
     const minutes = model.rows.reduce((sum, row) => sum + (Number(row.kind === "block" ? resolveEstimateMin(row.item) : row.item.estimateMin) || 0), 0);
@@ -112,6 +191,15 @@ function renderWorkList(scope) {
 }
 function patchWorkList(root, reset = false) {
   if (root.dataset.workComposing === "1") return;
+  if (root.dataset.workList === "wbs") {
+    const template = root.ownerDocument.createElement("template"); template.innerHTML = renderWbsList();
+    for (const selector of ["[data-work-decide-link]", "[data-work-counts]", "[data-work-projects]", "[data-work-list-rows]"]) {
+      const current = root.querySelector(selector), next = template.content.querySelector(selector);
+      if (current.innerHTML !== next.innerHTML) current.innerHTML = next.innerHTML;
+    }
+    if (reset) root.querySelector("[data-work-list-rows]").scrollTop = 0;
+    return;
+  }
   const scope = root.dataset.workList, model = rowsFor(scope);
   // Compare browser-serialized HTML so attribute whitespace never replaces unchanged rows.
   const template = root.ownerDocument.createElement("template");
@@ -136,6 +224,7 @@ function handleWorkListInput(target) {
   if (!["query", "status", "project", "category", "due", "mode"].includes(key)) return false;
   // Native change fires again on query blur: do not scroll away the clicked row.
   if (ui[key] === target.value) return true;
+  if (root.dataset.workList === "wbs" && key === "query" && !ui.query && target.value) workDisplay.children.clear();
   ui[key] = target.value;
   patchWorkList(root, true);
   return true;
@@ -145,7 +234,9 @@ function handleWorkListComposition(target, composing) {
   if (!root || !target.matches("[data-work-filter]")) return;
   root.dataset.workComposing = composing ? "1" : "0";
   if (!composing) {
-    view(root.dataset.workList)[target.dataset.workFilter] = target.value;
+    const ui = view(root.dataset.workList);
+    if (root.dataset.workList === "wbs" && target.dataset.workFilter === "query" && !ui.query && target.value) workDisplay.children.clear();
+    ui[target.dataset.workFilter] = target.value;
     patchWorkList(root, true);
   }
 }
@@ -169,7 +260,7 @@ function restoreWorkListOrigin() {
     (button || root?.querySelector('[data-work-filter="query"]'))?.focus({ preventScroll: true });
   });
 }
-function updateWorkLists() { document.querySelectorAll("[data-work-list]").forEach(root => patchWorkList(root)); }
+function updateWorkLists() { document.querySelectorAll("[data-work-list]:not([data-work-projects])").forEach(root => patchWorkList(root)); }
 function rememberWorkListScroll() {
   const button = document.activeElement;
   const root = button?.closest?.('[data-work-list]'), row = button?.closest?.('[data-work-key]');
@@ -177,7 +268,7 @@ function rememberWorkListScroll() {
     ? { element: button, scope: root.dataset.workList, key: row.dataset.workKey,
       action: button.dataset.action, id: button.dataset.id, blockId: button.dataset.blockId,
       view: state.currentView, date: state.selectedDate, today: todayISO?.() } : null;
-  document.querySelectorAll("[data-work-list]").forEach(root => {
+  document.querySelectorAll("[data-work-list]:not([data-work-projects])").forEach(root => {
     const ui = view(root.dataset.workList);
     ui.scroll = root.querySelector("[data-work-list-rows]").scrollTop;
     ui.input = root.querySelector('[data-work-filter="query"]');
@@ -186,7 +277,7 @@ function rememberWorkListScroll() {
   });
 }
 function restoreWorkListScroll() {
-  document.querySelectorAll("[data-work-list]").forEach(root => {
+  document.querySelectorAll("[data-work-list]:not([data-work-projects])").forEach(root => {
     const ui = view(root.dataset.workList), input = root.querySelector('[data-work-filter="query"]');
     root.querySelector("[data-work-list-rows]").scrollTop = ui.scroll;
     if (ui.input && input !== ui.input) {
@@ -207,4 +298,4 @@ function restoreWorkListScroll() {
     : saved.blockId != null ? `[data-block-id="${CSS.escape(saved.blockId)}"]` : '';
   root?.querySelector(`[data-work-key="${CSS.escape(saved.key)}"] button[data-action="${CSS.escape(saved.action)}"]${identity}:not(:disabled)`)?.focus({ preventScroll: true });
 }
-export { view as workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };
+export { renderWorkTaskRow, workDateLabel, workDueMatches, view as workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, updateWorkLists, rememberWorkListScroll, restoreWorkListScroll };

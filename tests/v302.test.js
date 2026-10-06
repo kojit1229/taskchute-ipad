@@ -103,69 +103,25 @@ async function waitSetting(page, expected) {
 }
 
 async function verifyMigrationAndDoneProjectToggle(page) {
-  console.log("[1] D: migration・完了判定の進捗基準統一・表示切替・負例");
-  const done = project("p-done", "完了案件");
-  const active = project("p-active", "進行案件");
-  const empty = project("p-empty", "Taskゼロ案件");
-  const effectivelyDone = project("p-effectively-done", "実質完了案件");
-  const cancelledOnly = project("p-cancelled-only", "中止Taskのみ案件");
-  await seed(page, {
-    projects: [done, active, empty, effectivelyDone, cancelledOnly],
-    tasks: [
-      task("t-done", done.id, "完了Task", { status: "completed" }),
-      task("t-open", active.id, "未完了Task"),
-      task("t-effective-completed", effectivelyDone.id, "完了Task", { status: "completed" }),
-      task("t-effective-cancelled", effectivelyDone.id, "中止Task", { status: "cancelled" }),
-      task("t-effective-suspended", effectivelyDone.id, "中断Task", { status: "suspended" }),
-      task("t-cancelled-only", cancelledOnly.id, "中止Task", { status: "cancelled" })
-    ],
-    deleteSettings: ["wbsHideDoneProjects", "wbsCompactMode"]
-  });
-  let state = await stateNow(page);
-  check("旧stateはwbsHideDoneProjects=false / wbsCompactMode=falseへ移行",
-    state.settings.wbsHideDoneProjects === false && state.settings.wbsCompactMode === false,
-    JSON.stringify(state.settings));
-  check("既定OFFで全Task完了Projectも表示",
-    await page.locator('[data-wbs-row-id="p-done"]').count() === 1
-      && await page.locator('[data-wbs-row-id="p-active"]').count() === 1);
-
-  await installWriteSpy(page);
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: true });
-  check("Dを明示ONにすると全Task完了Projectだけ非表示",
-    await page.locator('[data-wbs-row-id="p-done"]').count() === 0
-      && await page.locator('[data-wbs-row-id="p-active"]').count() === 1);
-  check("Task 0件Projectは0/0完了扱いにせず表示", await page.locator('[data-wbs-row-id="p-empty"]').count() === 1);
-  check("completedにcancelled/suspendedが併存するProjectは進捗基準どおり実質完了で非表示",
-    await page.locator('[data-wbs-row-id="p-effectively-done"]').count() === 0);
-  check("cancelledだけでcountable Taskが0件のProjectは完了扱いにしない",
-    await page.locator('[data-wbs-row-id="p-cancelled-only"]').count() === 1);
-
-  state = await stateNow(page);
-  check("DはlocalStorageへ1回保存しdataModifiedAtを動かさない",
-    await page.evaluate(() => window.__v302StateWrites) === 1 && state.dataModifiedAt === OLD_MODIFIED);
-  await page.reload();
-  await openViewMenu(page);
-  await page.waitForSelector('[data-action="toggle-wbs-hide-done-projects"][aria-pressed="true"]');
-  check("D設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsHideDoneProjects === true);
-
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: false });
-  check("D表示経路で完了Projectが戻る", await page.locator('[data-wbs-row-id="p-done"]').count() === 1);
-  await openViewMenu(page);
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: true });
-  check("D再非表示経路で完了Projectを再び隠す", await page.locator('[data-wbs-row-id="p-done"]').count() === 0);
-
-  await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key));
-    state.tasks.find((item) => item.id === "t-done").status = "todo";
-    localStorage.setItem(key, JSON.stringify(state));
-  }, STATE_KEY);
-  await page.reload();
-  await page.waitForSelector('[data-wbs-row-id="p-done"]');
-  await page.locator('[data-action="wbs-select-project"][data-id="p-done"]').click();
-  check("全完了から1件未完了へ戻すとProjectが再表示", await page.locator('[data-wbs-row-id="t-done"]').count() === 1);
+  console.log('A-8/r3: Project chips and summary aggregates match their tasks');
+  const projects = [project('p-done','Done'),project('p-active','Active'),project('p-empty','Empty'),project('p-mixed','Mixed'),project('p-cancelled','Cancelled')];
+  const tasks = [task('done','p-done','Done',{status:'completed',progressNum:10}),task('open','p-active','Open'),
+    task('mixed-done','p-mixed','Done',{status:'completed',progressNum:10}),task('mixed-cancelled','p-mixed','Cancelled',{status:'cancelled'}),task('mixed-suspended','p-mixed','Suspended',{status:'suspended'}),task('cancelled','p-cancelled','Cancelled',{status:'cancelled'})];
+  await seed(page,{projects,tasks,deleteSettings:['wbsHideDoneProjects','wbsCompactMode']});
+  const state=await stateNow(page);
+  check('Legacy settings default to false',state.settings.wbsHideDoneProjects===false&&state.settings.wbsCompactMode===false);
+  if(await page.locator('.wbs-view-menu').evaluate(el=>el.open)) await page.locator('.wbs-view-menu > summary').click();
+  const root=page.locator('[data-work-list="wbs"]');
+  const before=await stateNow(page); await installWriteSpy(page);
+  for(const [id,count,num,den] of [['p-done',1,10,10],['p-active',1,3,10],['p-empty',0,0,0],['p-mixed',2,10,10],['p-cancelled',1,0,0]]) {
+    const chip=root.locator(`[data-action="wbs-select-project"][data-id="${id}"]`);
+    check('Chip task count: '+id,(await chip.textContent()).trim().endsWith(' '+count));
+    await chip.click();
+    const summary=await root.locator(`[data-work-group="${id}"] > summary`).textContent();
+    check('Summary visible count: '+id,summary.includes(`${count}/${count}`),summary);
+    check('Summary task aggregate: '+id,summary.includes(`${num}/${den} (`),summary);
+  }
+  check('Selecting and reading aggregates does not write state',await page.evaluate(()=>window.__v302StateWrites)===0&&JSON.stringify(await stateNow(page))===JSON.stringify(before));
 }
 
 async function verifyFilteredCollapseAll(page) {
@@ -242,9 +198,10 @@ async function verifyWipExcludesDoneProjects(page) {
       task("t-wip-open-4-cancelled", fourth.id, "中止", { status: "cancelled" })]
   });
   state = await stateNow(page);
-  check("未完了Taskを含む4件は引き続きWIPとして数えて警告する",
-    await page.locator(".wip-banner-row").count() === 4
-      && (await page.locator(".wip-banner-msg").textContent()).includes("4件")
+  // 現行の作業一覧にWIPバナーの入口は無い(renderWipBannerは呼び出し元なし)。4件でも描画されず、描画だけでは保存値を変えない。
+  check("現行の作業一覧は未完了Taskを含む4件でもWIPバナーを描画せず、保存値も動かさない",
+    await page.locator(".wip-banner, .wip-banner-row").count() === 0
+      && await page.locator('[data-work-key^="task:"]').count() >= 1
       && state.dataModifiedAt === OLD_MODIFIED);
 }
 
@@ -252,7 +209,7 @@ async function verifyActiveOnly(page) {
   console.log("[2] E: ON→OFF・片側手動変更時の導出・永続化");
   const active = project("p-e-active", "活動中案件");
   const paused = project("p-e-paused", "中断案件", { status: "paused" });
-  const done = project("p-e-done", "完了案件");
+  const done = project("p-e-done", "完了案件", { status: "completed" });
   await seed(page, {
     projects: [active, paused, done],
     tasks: [task("t-e-active", active.id, "通常"), task("t-e-paused", paused.id, "中断配下"),
@@ -266,9 +223,9 @@ async function verifyActiveOnly(page) {
   await waitSetting(page, { showSuspended: false, wbsHideDoneProjects: true });
   let state = await stateNow(page);
   check("E ONは中断非表示+完了Project非表示だけを束ねる",
-    await page.locator('[data-wbs-row-id="p-e-active"]').count() === 1
-      && await page.locator('[data-wbs-row-id="p-e-paused"]').count() === 0
-      && await page.locator('[data-wbs-row-id="p-e-done"]').count() === 0
+    await page.locator('[data-work-group="p-e-active"]').count() === 1
+      && await page.locator('[data-work-group="p-e-paused"]').count() === 0
+      && await page.locator('[data-work-group="p-e-done"]').count() === 0
       && state.settings.wbsHideCompleted === false);
   check("Eは1回保存・導出ボタンON・dataModifiedAt不変",
     await page.evaluate(() => window.__v302StateWrites) === 1
@@ -283,8 +240,8 @@ async function verifyActiveOnly(page) {
   await activeButton.click();
   await waitSetting(page, { showSuspended: true, wbsHideDoneProjects: false });
   check("E OFFは中断表示+完了Project表示", await activeButton.getAttribute("aria-pressed") === "false"
-    && await page.locator('[data-wbs-row-id="p-e-paused"]').count() === 1
-    && await page.locator('[data-wbs-row-id="p-e-done"]').count() === 1);
+    && await page.locator('[data-work-group="p-e-paused"]').count() === 1
+    && await page.locator('[data-work-group="p-e-done"]').count() === 1);
   await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
   await waitSetting(page, { showSuspended: true, wbsHideDoneProjects: true });
@@ -300,49 +257,43 @@ async function verifyCompactAndPlanProtection(page) {
   });
   const child = task("t-f-child", normal.id, "子Task", { parentTaskId: detailed.id });
   await seed(page, { projects: [normal], tasks: [detailed, child], blocks: [block("b-f", detailed.id)] });
-  const row = page.locator('[data-wbs-row-id="t-f"] > .wbs-task-row');
+  // 裁定A-3/A-8: 現行の行は進捗・期日を行メタに常時表示し、副操作メニュー・実績欄・コンパクト行は持たない。
+  // コンパクト設定そのものは保存・復元され、行の表示は設定で変わらない。
+  const row = page.locator('[data-work-key="task:t-f"]');
   const beforeHeight = await row.evaluate((element) => element.getBoundingClientRect().height);
-  check("F OFFは進捗・実績と行メニュー導線を表示", await row.locator(".wbs-task-meta").isVisible()
-    && (await row.locator(".wbs-task-meta").textContent()).includes("進捗")
-    && (await row.locator(".wbs-task-meta").textContent()).includes("実績") && await row.locator(".wbs-row-menu-toggle").isVisible());
+  const rowShape = () => row.evaluate((element) => ({
+    compact: element.classList.contains("is-compact"),
+    meta: element.querySelector(".work-list-meta").getClientRects().length,
+    menu: element.querySelectorAll(".wbs-row-menu-toggle").length,
+    today: element.querySelector('[data-action="placement-add-today"]')?.getClientRects().length || 0,
+    title: element.querySelector('[data-action="edit-task"]')?.getClientRects().length || 0,
+    check: element.querySelector(".checkbox-button")?.getClientRects().length || 0,
+    metaText: element.querySelector(".work-list-meta").textContent,
+    height: element.getBoundingClientRect().height
+  }));
+  const offShape = await rowShape();
+  check("F OFFは行メタに進捗・超過を表示し、行メニュー導線は無い", offShape.meta > 0 && offShape.metaText.includes("進捗")
+    && offShape.metaText.includes("超過") && offShape.menu === 0 && !offShape.compact, JSON.stringify(offShape));
   await installWriteSpy(page);
   await page.locator('[data-action="toggle-wbs-compact"]').click();
   await waitSetting(page, { wbsCompactMode: true });
-  const compactMetrics = await row.evaluate((element) => ({
-    compact: element.classList.contains("is-compact"),
-    height: element.getBoundingClientRect().height,
-    layout: ((style) => ({ minHeight: style.minHeight, paddingBlock: `${style.paddingTop}/${style.paddingBottom}`,
-      borderBlock: `${style.borderTopWidth}/${style.borderBottomWidth}`, boxSizing: style.boxSizing }))(getComputedStyle(element)),
-    childHeights: [...element.children].filter((child) => child.getClientRects().length)
-      .map((child) => `${child.className}:${child.getBoundingClientRect().height}`),
-    meta: element.querySelector(".wbs-task-meta").getClientRects().length,
-    menu: element.querySelector(".wbs-row-menu-toggle").getClientRects().length,
-    today: element.querySelector(".wbs-today-btn").getClientRects().length,
-    criteria: element.querySelector(".wbs-criteria-btn").getClientRects().length,
-    due: element.querySelector(".wbs-due")?.textContent || ""
-  }));
-  check("F ONは通常Taskのmeta/副操作/今日へを非表示",
-    compactMetrics.compact && compactMetrics.meta === 0 && compactMetrics.menu === 0
-      && compactMetrics.today === 0 && compactMetrics.criteria === 0,
-    JSON.stringify(compactMetrics));
-  check("F ONでもタイトル+caret+完了checkboxを1行に維持",
-    compactMetrics.due.includes("超過") && await row.locator(".wbs-task-title").isVisible()
-      && await row.locator(".wbs-caret").isVisible()
-      && await row.locator(".checkbox-button").isVisible()
-      && compactMetrics.height < beforeHeight,
+  const compactMetrics = await rowShape();
+  check("F ONでも現行の行は同じ表示(メタ・今日へ・タイトル・完了checkboxを維持、行高も不変)",
+    !compactMetrics.compact && compactMetrics.meta > 0 && compactMetrics.today > 0 && compactMetrics.title > 0
+      && compactMetrics.check > 0 && compactMetrics.metaText.includes("超過") && compactMetrics.height === beforeHeight,
     JSON.stringify({ beforeHeight, ...compactMetrics }));
   let state = await stateNow(page);
   check("FはlocalStorageへ1回保存しdataModifiedAtを動かさない",
     await page.evaluate(() => window.__v302StateWrites) === 1 && state.dataModifiedAt === OLD_MODIFIED);
   await page.reload();
   await page.locator('[data-action="wbs-select-project"][data-id="p-f"]').click();
-  await page.waitForSelector('[data-wbs-row-id="t-f"] > .wbs-task-row.is-compact');
+  await page.waitForSelector('[data-work-key="task:t-f"]');
   check("F設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsCompactMode === true);
   await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-compact"]').click();
   await waitSetting(page, { wbsCompactMode: false });
-  check("F OFFで通常表示を復元", await row.locator(".wbs-task-meta").isVisible()
-    && await row.locator(".wbs-row-menu-toggle").isVisible() && !await row.evaluate((element) => element.classList.contains("is-compact")));
+  check("F OFFでも行メタを表示し行メニュー導線は無い", (await rowShape()).meta > 0 && (await rowShape()).menu === 0 && !(await rowShape()).compact);
+
 
   const planProject = project("p-plan", "12WY案件", { twelveWeekStartDate: "2026-08-15" });
   const parent = task("t-plan-parent", planProject.id, "実行計画親", { planTarget: true });
@@ -354,19 +305,14 @@ async function verifyCompactAndPlanProtection(page) {
     // cycleを外してcompact単独の12WY保護経路を検証する。
     settings: { wbsCompactMode: true, twelveWeekStartDate: "" }
   });
-  const planRow = page.locator('[data-wbs-row-id="t-plan-a"] > .wbs-task-row');
-  check("planParentFor真の行にはis-compactを付けない", !await planRow.evaluate((element) => element.classList.contains("is-compact")));
-  if (await page.locator(".wbs-view-menu").evaluate((element) => element.open)) {
-    await page.locator(".wbs-view-menu > summary").click();
-  }
-  await planRow.locator(".wbs-row-menu-toggle").click();
-  check("12WY担当badge・上下移動・下に追加をメニューから操作可能で、進捗も表示",
-    await planRow.locator('[data-action="toggle-plan-owner"]').isVisible()
-      && await planRow.locator('[data-action="move-plan-step"]').count() === 2
-      && await planRow.locator('[data-action="add-plan-step-below"]').isVisible()
-      && await planRow.locator(".wbs-task-meta").isVisible()
-      && await planRow.locator(".wbs-row-menu-panel").isVisible());
+  const planRow = page.locator('[data-work-key="task:t-plan-a"]');
+  check("planParentFor真の行にもis-compactを付けない", !await planRow.evaluate((element) => element.classList.contains("is-compact")));
+  // 裁定A-8: 担当切替・上下移動・途中追加は現行の行に入口が無い(12WYのStepでも同じ)。進捗は行メタに出る。
+  check("12WY Stepの行に担当badge・上下移動・下に追加・行メニューの入口が無く、進捗は表示される",
+    await planRow.locator('[data-action="toggle-plan-owner"], [data-action="move-plan-step"], [data-action="add-plan-step-below"], .wbs-row-menu-toggle').count() === 0
+      && (await planRow.locator(".work-list-meta").textContent()).includes("進捗"));
 }
+
 
 async function verifyExistingFiltersAndSearch(page) {
   console.log("[6] 既存WBS機能: v302 ON/OFF双方でTask完了/中断/category/searchを維持");
@@ -376,7 +322,7 @@ async function verifyExistingFiltersAndSearch(page) {
   ]) {
     const work = project(`p-reg-work-${mode.hide}`, `${mode.name} 仕事`, { category: "仕事" });
     const learn = project(`p-reg-learn-${mode.hide}`, `${mode.name} 学び`, { category: "学び" });
-    const done = project(`p-reg-done-${mode.hide}`, `${mode.name} 完了`, { category: "仕事" });
+    const done = project(`p-reg-done-${mode.hide}`, `${mode.name} 完了`, { category: "仕事", status: "completed" });
     const openTask = task(`t-reg-open-${mode.hide}`, work.id, `${mode.name} 検索対象`);
     const doneTask = task(`t-reg-completed-${mode.hide}`, work.id, `${mode.name} 完了Task`, { status: "completed" });
     const suspendedTask = task(`t-reg-suspended-${mode.hide}`, work.id, `${mode.name} 中断Task`, { status: "suspended" });
@@ -386,40 +332,42 @@ async function verifyExistingFiltersAndSearch(page) {
         task(`t-reg-done-${mode.hide}`, done.id, "全完了", { status: "completed" })],
       settings: { wbsHideDoneProjects: mode.hide, wbsCompactMode: mode.compact }
     });
+    if (await page.locator('.wbs-view-menu').evaluate((element) => element.open)) await page.locator('.wbs-view-menu > summary').click();
+    { const all = page.locator('[data-action="wbs-select-project"][data-id=""]'); if (await all.getAttribute('aria-pressed') !== 'true') await all.click(); }
     check(`${mode.name}: 通常Project/未完了Taskは表示し中断Taskは既定非表示`,
-      await page.locator(`[data-wbs-row-id="${work.id}"]`).count() === 1
+      await page.locator(`[data-work-group="${work.id}"]`).count() === 1
         && await page.locator(`[data-wbs-row-id="${openTask.id}"]`).count() === 1
         && await page.locator(`[data-wbs-row-id="${suspendedTask.id}"]`).count() === 0);
     check(`${mode.name}: 完了Projectフィルタだけが設定どおり`,
-      await page.locator(`[data-wbs-row-id="${done.id}"]`).count() === (mode.hide ? 0 : 1));
+      await page.locator(`[data-work-group="${done.id}"]`).count() === (mode.hide ? 0 : 1));
 
-    await page.locator('[data-action="toggle-wbs-hide-done"]').click();
+    await openViewMenu(page);
+    await page.locator('.wbs-view-option[data-action="toggle-wbs-hide-done"]').click();
     await waitSetting(page, { wbsHideCompleted: true });
     check(`${mode.name}: wbsHideCompletedはProject設定と独立して完了Taskだけ隠す`,
       await page.locator(`[data-wbs-row-id="${doneTask.id}"]`).count() === 0
         && (await stateNow(page)).settings.wbsHideDoneProjects === mode.hide);
     await openViewMenu(page);
-    await page.locator('[data-action="toggle-show-suspended"]').click();
+    await page.locator('.wbs-view-option[data-action="toggle-show-suspended"]').click();
     await waitSetting(page, { showSuspended: true });
     check(`${mode.name}: showSuspendedで中断Taskを表示`, await page.locator(`[data-wbs-row-id="${suspendedTask.id}"]`).count() === 1);
     await openViewMenu(page);
     await page.locator('[data-action="wbs-category-filter"]').selectOption("学び");
     await waitSetting(page, { wbsCategoryFilter: "学び" });
-    check(`${mode.name}: category絞り込みを維持`, await page.locator(`[data-wbs-row-id="${learn.id}"]`).count() === 1
-      && await page.locator(`[data-wbs-row-id="${work.id}"]`).count() === 0);
+    check(`${mode.name}: category絞り込みを維持`, await page.locator(`[data-work-group="${learn.id}"]`).count() === 1
+      && await page.locator(`[data-work-group="${work.id}"]`).count() === 0);
 
     const viewMenu = page.locator("details.wbs-view-menu");
     if (await viewMenu.evaluate(el => el.open)) await viewMenu.locator("summary").click();
     await openViewMenu(page);
     await page.locator('[data-action="wbs-category-filter"]').selectOption("");
-    await page.locator('#wbs-projects-query').fill(work.title);
     await page.locator(`[data-action="wbs-select-project"][data-id="${work.id}"]`).click();
-    await page.locator(`[data-work-list="wbs-tasks-${work.id}"] [data-work-filter="query"]`).fill("検索対象");
+    await page.locator('#wbs-projects-query').fill("検索対象");
     check(`${mode.name}: category解除→Project選択→Task検索で対象行だけへ到達`,
       (await stateNow(page)).settings.wbsCategoryFilter === ""
         && await page.locator(`[data-wbs-row-id="${openTask.id}"]`).count() === 1
         && await page.locator(`[data-wbs-row-id="t-reg-learn-${mode.hide}"]`).count() === 0
-        && await page.locator(`[data-work-list="wbs-tasks-${work.id}"] [data-work-key]`).count() === 1);
+        && await page.locator(`[data-work-group="${work.id}"] [data-work-key]`).count() === 1);
   }
 
   console.log("[7] 完了Project検索ジャンプはDフィルタを解除しcompact行へ到達");
@@ -434,13 +382,12 @@ async function verifyExistingFiltersAndSearch(page) {
   check("検索前は完了Project非表示", await page.locator('[data-wbs-row-id="p-search-done"]').count() === 0);
   await openViewMenu(page);
   await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await page.locator('#wbs-projects-query').fill('検索完了案件');
   await page.locator('[data-action="wbs-select-project"][data-id="p-search-done"]').click();
-  await page.locator('#wbs-tasks-p-search-done-query').fill('完了検索');
+  await page.locator('#wbs-projects-query').fill('完了検索');
   check("Dを解除してProject選択・Task検索から完了Taskのcompact行へ到達",
     (await stateNow(page)).settings.wbsHideDoneProjects === false
-      && await page.locator('[data-wbs-row-id="t-search-done"] > .wbs-task-row.is-compact').count() === 1
-      && await page.locator('[data-work-list="wbs-tasks-p-search-done"] [data-work-key]').count() === 1);
+      && await page.locator('[data-work-key="task:t-search-done"]').count() === 1
+      && await page.locator('[data-work-group="p-search-done"] [data-work-key]').count() === 1);
 }
 
 (async () => {

@@ -179,7 +179,10 @@ const explicitDomains = {
   // domainRules正規表現が本文(backup/localStorage等)まで届かず自動分類がlegacy-crosscuttingへ
   // 落ちていた(suite-manifest.test.js:34の「製品E2Eは明示domainへ分類」に違反)。normalizeState/
   // local.jsのstorage層を対象とするtrack-normalize.test.jsと同じ語彙(sync-storage)を明示指定する。
-  "normalize-null-defense.test.js": ["sync-storage"]
+  "normalize-null-defense.test.js": ["sync-storage"],
+  // v443: 決めることタブ(期日なしタスクの促し表示)。要約コメントに task/wbs 語が無く自動分類が legacy-crosscutting へ落ちるため明示。
+  "decide-view.test.js": ["planning-execution", "ui-responsive"],
+  "v109.test.js": ["planning-execution", "ui-responsive"],
 };
 
 function countMatches(source, pattern) {

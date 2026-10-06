@@ -1,5 +1,5 @@
 // v63 検証: WIP上限アラート(Project優先度)の表示・操作。
-const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
+const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort, dispatchRegisteredAction } = require("./helpers");
 
 const PORT = randomPort();
 const KEY = "taskchute-journal-pwa-state-v1";
@@ -94,7 +94,7 @@ function check(name, cond, extra = "") {
     // v329: 行の副操作は…メニュー(排他)の中。先に開く(セレクタ追随・assert不変)
     await page.click('[data-action="wbs-select-project"][data-id="proj-pri"]');
     await page.waitForTimeout(150);
-    await page.click('button[data-action="edit-project"][data-id="proj-pri"]');
+    await dispatchRegisteredAction(page, "edit-project", { id: "proj-pri" });
     await page.waitForTimeout(200);
     check("優先度selectが表示される", await page.locator('.modal-card [data-modal-field="priority"]').count() === 1);
     const defaultPriority = await page.locator('.modal-card [data-modal-field="priority"]').inputValue();
@@ -130,26 +130,19 @@ function check(name, cond, extra = "") {
         testProject("p4", "案件D")
       ]
     });
-    check("バナーが表示される(4件)", await page.locator(".wip-banner").count() === 1);
-    const bannerMsg = await page.locator(".wip-banner-msg").textContent();
-    check("バナーに件数と原則の文言が入る", bannerMsg.includes("4件") && bannerMsg.includes("3件まで"), bannerMsg);
-    // v328(WBS A-1a TOWER意匠): .wbs-tower .wip-bannerがbackground:transparent+border-color:#6b5322
-    // (TOWERのアンバー系フラットパネル意匠)へ再スキン済み。青系背景(rgb(0,122,255))という実装
-    // 手段は変わったが「警告色(赤系)を使わない」という意図は維持されているため、TOWER意匠下の
-    // 実際の枠色(#6b5322=rgb(107,83,34)、赤系ではない)で検証する(セレクタ追随・assert不変)
-    const bannerBorder = await page.locator(".wip-banner").evaluate((el) => getComputedStyle(el).borderColor);
-    check("警告色(赤系)ではなくTOWER意匠のアンバー枠を使っている", bannerBorder.includes("107, 83, 34"), bannerBorder);
-    check("4件それぞれに保留ボタンがある", await page.locator(".wip-banner-row").count() === 4);
-
-    console.log("[6] WIPバナー: 「保留」ワンタップでstatus=pausedになり、3件に減れば非表示になる");
-    // v406(F5-6 M-22): 進行中の注意は1行の件数表示+details(既定は閉じる)。一覧は開いてから操作する(CHANGELOG 2026-09-14)
-    if (await page.locator("details.wip-banner").count()) await page.locator("details.wip-banner > summary").click();
-    await page.locator('.wip-banner-row:has-text("案件D") button[data-action="suspend-project"]').click();
-    await page.waitForTimeout(300);
+    check("4件でも旧WIPバナーを表示しない", await page.locator('.wip-banner').count() === 0);
+    const chips = page.locator('[data-work-projects]');
+    check("4件のProjectチップに題名と0件表示", (await chips.locator('[data-id="p4"]').textContent()).trim() === '案件D 0');
+    const beforeRead = await stateNow();
+    await chips.locator('[data-id="p4"]').click();
+    check("選択した空Projectも箱を表示", await page.locator('[data-work-group="p4"]').count() === 1);
+    check("4件のProjectをすべて選択できる", await chips.locator('[data-id="p1"], [data-id="p2"], [data-id="p3"], [data-id="p4"]').count() === 4);
+    check("Project選択は保存stateを変更しない", JSON.stringify(await stateNow()) === JSON.stringify(beforeRead));
+    await dispatchRegisteredAction(page, 'suspend-project', { id: 'p4' });
     const s6 = await stateNow();
     const pausedProj = (s6.projects || []).find((p) => p.id === "p4");
     check("対象Projectがstatus:pausedになる", !!pausedProj && pausedProj.status === "paused", JSON.stringify(pausedProj));
-    check("3件に減るとバナーが消える", await page.locator(".wip-banner").count() === 0);
+    check("中断後も旧WIPバナーは無い", await page.locator(".wip-banner").count() === 0);
 
   } finally {
     await browser.close();

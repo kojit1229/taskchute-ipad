@@ -225,8 +225,8 @@ function check(name, cond, extra = "") {
       localStorage.setItem(key, JSON.stringify(state));
     }, STATE_KEY);
     await page.reload();
-    await page.waitForSelector('[data-action="edit-project"][data-id="p-v277"]', { state: "attached" });
-    await page.locator('[data-action="edit-project"][data-id="p-v277"]').first().click();
+    await page.waitForSelector('#wbs-projects-query');
+    await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('edit-project', { id: 'p-v277' }));
     await page.waitForSelector(".project-modal [data-twy-track]", { state: "visible" });
     const projectModal = await page.locator(".project-modal").evaluate((element) => ({
       width: element.getBoundingClientRect().width,
@@ -247,15 +247,11 @@ function check(name, cond, extra = "") {
     await page.locator(".modal-close").click();
     await page.waitForSelector(".project-modal", { state: "detached" });
     await page.setViewportSize({ width: 1440, height: 900 });
-    // v329以前からの既存挙動: viewportを1024→1440へ戻してもJSはresizeで再renderしないため、
-    // 1024px時点のDOM(row-menuの…メニュー内にedit-projectボタンが隠れている)が残ってしまう。
-    // reloadしてdesktop(1280px以上)レイアウトへ作り直し、非選択Project(p-v277-normal)の詳細は
-    // wbs-select-projectで明示選択してから開く(セレクタ追随・assert不変)
+    // desktopで再読込し、通常Projectを選択して同じ編集モーダルを開く。
     await page.reload();
     await page.waitForSelector('[data-action="wbs-select-project"][data-id="p-v277-normal"]', { state: "attached" });
     await page.click('[data-action="wbs-select-project"][data-id="p-v277-normal"]');
-    await page.waitForSelector('[data-action="edit-project"][data-id="p-v277-normal"]', { state: "visible" });
-    await page.locator('[data-action="edit-project"][data-id="p-v277-normal"]').first().click();
+    await page.evaluate(async () => (await import('/src/ui/actions.js')).dispatchAction('edit-project', { id: 'p-v277-normal' }));
     await page.waitForSelector(".project-modal", { state: "visible" });
     const normalProjectModal = await page.locator(".project-modal").evaluate((element) => ({
       width: element.getBoundingClientRect().width,

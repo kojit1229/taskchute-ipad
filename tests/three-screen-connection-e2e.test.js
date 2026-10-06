@@ -110,75 +110,80 @@ const today = '2026-09-06', selected = '2026-09-07';
       return JSON.stringify([state.tasks, state.projects, state.blocks]);
     });
     assert.equal(businessAfter, businessBefore, 'navigation, classification and searching do not save business changes');
-    // S3-02: independent Project/Task searches, hierarchy, retained DOM and two placements.
+    // S3-02 / A-5: shared title search, visibility settings, retained expansion and two placements.
     await page.evaluate(async () => {
       const { state } = await import('/src/state/store.js');
       state.projects.push({ id: 'alpha', title: 'Alpha', description: '検索用説明', status: 'active' }, { id: 'beta', title: 'Beta', status: 'active' });
       state.tasks.push({ id: 'parent', title: '親', projectId: 'alpha', status: 'completed', collapsed: true },
         { id: 'child', title: '検索対象', projectId: 'alpha', parentTaskId: 'parent', status: 'todo' },
         { id: 'grandchild', title: '未完了の子', projectId: 'alpha', parentTaskId: 'child', status: 'todo' },
+        { id: 'done-alone', title: '独立完了', projectId: 'alpha', status: 'completed' },
+        { id: 'paused-alone', title: '独立中断', projectId: 'alpha', status: 'suspended' },
         { id: 'beta-task', title: '別Project', projectId: 'beta', status: 'todo' },
         ...Array.from({ length: 40 }, (_, i) => ({ id: 'alpha-' + i, title: '連続 ' + i, projectId: 'alpha', status: 'todo', order: i })));
-      state.settings.wbsHideCompleted = false; state.settings.wbsCompactMode = false;
+      state.settings.wbsHideCompleted = false; state.settings.showSuspended = false; state.settings.wbsCompactMode = false;
     });
     await page.setViewportSize({ width: 1280, height: 844 });
     await page.locator('[data-action="nav"][data-view="wbs"]').first().click();
-    const projectSearch = page.locator('[data-work-list="wbs-projects"]');
-    await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
-    const taskSearch = page.locator('[data-work-list="wbs-tasks-alpha"]');
-    assert.deepEqual(await taskSearch.locator('[data-work-filter="status"] option').evaluateAll(nodes => nodes.map(node => node.value)), ['', 'open', 'running', 'completed', 'suspended']);
-    await taskSearch.locator('[data-work-filter="status"]').selectOption('open');
+    const wbs = page.locator('[data-work-list="wbs"]');
+    const projectSearch = wbs.locator('[data-work-scope="wbs-projects"]');
+    const projectChip = id => projectSearch.locator(`[data-kind="project"][data-value="${id}"]`);
+    await projectChip('alpha').click();
+    const taskSearch = wbs.locator('[data-work-scope="wbs-tasks-alpha"]');
+    const row = id => taskSearch.locator(`[data-work-key="task:${id}"]`);
+    assert.equal(await taskSearch.locator('select').count(), 0);
+    for (const [action, id, initiallyVisible] of [['toggle-wbs-hide-done','done-alone',true], ['toggle-show-suspended','paused-alone',false]]) {
+      const toggle = wbs.locator(`[data-action="${action}"]`);
+      assert.equal(await row(id).count(), initiallyVisible ? 1 : 0);
+      await toggle.evaluate(el => el.closest('details').open = true); await toggle.click();
+      assert.equal(await row(id).count(), initiallyVisible ? 0 : 1);
+      await toggle.evaluate(el => el.closest('details').open = true); await toggle.click();
+      assert.equal(await row(id).count(), initiallyVisible ? 1 : 0);
+    }
     const searchBefore = await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.tasks, state.projects, state.blocks, state.settings]); });
-    const projectQuery = projectSearch.locator('[data-work-filter="query"]');
-    await projectQuery.fill('検索用説明');
-    assert.equal(await projectSearch.locator('[data-action="wbs-select-project"]').count(), 1);
-    await projectQuery.fill('該当なし');
-    assert.equal(await projectSearch.locator('[data-action="wbs-select-project"]').count(), 0);
-    assert.equal(await taskSearch.count(), 1, 'filtering projects never changes selection');
-    await projectQuery.fill('');
-    const taskQuery = taskSearch.locator('[data-work-filter="query"]');
+    const taskQuery = wbs.locator('[data-work-filter="query"]');
     await taskQuery.fill('検索対象');
-    for (const id of ['parent', 'child', 'grandchild']) assert.equal(await taskSearch.locator('[data-work-key="task:' + id + '"]').count(), 1);
+    assert.deepEqual(await taskSearch.locator('[data-work-key]').evaluateAll(nodes => nodes.map(n => n.dataset.workKey)), ['task:parent','task:child']);
+    await taskQuery.fill('検索用説明'); assert.equal(await wbs.locator('[data-work-key]').count(), 0, 'title-only search');
+    await taskQuery.fill('該当なし');
+    assert.equal(await wbs.locator('[data-work-key]').count(), 0);
+    assert(await projectChip('alpha').isVisible()); assert(await projectChip('beta').isVisible());
+    assert(await wbs.locator('[data-work-list-rows]').isVisible()); assert.equal(await taskSearch.count(),1);
+    await taskQuery.fill('検索対象');
+    await row('parent').locator('[data-kind="children"]').click(); assert.equal(await row('child').count(),0);
+    await projectChip('beta').click(); assert.equal(await taskQuery.inputValue(),'検索対象');
+    await projectChip('alpha').click(); assert.equal(await taskQuery.inputValue(),'検索対象');
+    assert.equal(await row('child').count(),0,'Project round trip keeps child collapse');
+    await row('parent').locator('[data-kind="children"]').click(); assert.equal(await row('child').count(),1);
+    await taskQuery.focus(); // Start IME in the input after the child-toggle button interaction.
     await taskQuery.evaluate(el => { window.taskSearchInput = el; el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); el.value = '連続'; el.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true })); });
-    assert.equal(await taskSearch.locator('[data-work-key="task:child"]').count(), 1);
+    assert.equal(await row('child').count(),1);
     await taskQuery.evaluate(el => el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
-    assert.equal(await taskSearch.locator('[data-work-key]').count(), 40);
+    assert.equal(await taskSearch.locator('[data-work-key]').count(),40);
     assert(await taskQuery.evaluate(el => el === window.taskSearchInput && el === document.activeElement));
-    await taskSearch.locator('[data-work-list-rows]').evaluate(el => { el.scrollTop = 900; window.taskSearchTop = el.scrollTop; });
-    await projectSearch.locator('[data-action="wbs-select-project"][data-id="beta"]').click();
-    const betaQuery = page.locator('[data-work-list="wbs-tasks-beta"] [data-work-filter="query"]');
-    assert.equal(await betaQuery.inputValue(), '');
-    await betaQuery.fill('別Project');
-    await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
-    assert.equal(await taskQuery.inputValue(), '連続');
-    assert.equal(await taskSearch.locator('[data-work-filter="status"]').inputValue(), 'open');
-    assert(await taskQuery.evaluate(el => el === window.taskSearchInput));
-    assert(await taskSearch.locator('[data-work-list-rows]').evaluate(el => el.scrollTop === window.taskSearchTop));
     await taskQuery.fill('検索対象');
-    await taskSearch.locator('.wbs-task-title[data-id="child"]').click();
+    await row('child').locator('[data-action="edit-task"]').click();
     await page.locator('.task-modal').waitFor();
     await page.locator('.task-modal [data-action="modal-close"]').last().click();
     await page.locator('.task-modal').waitFor({ state: 'hidden' });
-    assert(await taskQuery.evaluate(el => el === window.taskSearchInput));
-    assert.equal(await taskQuery.inputValue(), '検索対象');
-    assert.equal(await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.tasks, state.projects, state.blocks, state.settings]); }), searchBefore, 'search and return never mutate business state or settings');
-    await projectSearch.locator('[data-action="wbs-select-project"][data-id=""]').click();
-    assert.equal(await page.locator('[data-work-list="wbs-tasks-"] [data-work-key="task:none"]').count(), 1);
-    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.projects.some(p => p.id === '')), false);
-    await projectSearch.locator('[data-action="wbs-select-project"][data-id="alpha"]').click();
-    await taskSearch.locator('[data-action="task-today"][data-id="child"]').click();
+    assert(await taskQuery.evaluate(el => el === window.taskSearchInput)); assert.equal(await taskQuery.inputValue(),'検索対象');
+    assert.equal(await page.evaluate(async () => { const { state } = await import('/src/state/store.js'); return JSON.stringify([state.tasks, state.projects, state.blocks, state.settings]); }),searchBefore,'search and return never mutate business state or settings');
+    await taskQuery.fill(''); await projectChip('__none__').click();
+    assert.equal(await wbs.locator('[data-work-scope="wbs-tasks-"] [data-work-key="task:none"]').count(),1);
+    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.projects.some(p => p.id === '')),false);
+    await projectChip('alpha').click(); await taskQuery.fill('検索対象');
+    await row('child').locator('[data-action="placement-add-today"]').click();
     await page.locator('.modal-footer [data-action="modal-save"]').click();
-    await taskSearch.locator('[data-action="placement-add-another"][data-id="child"]').click();
+    await row('child').locator('[data-action="placement-add-another"]').click();
     await page.locator('.modal-footer [data-action="modal-save"]').click();
-    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.blocks.filter(b => !b.deleted && b.taskId === 'child').length), 2);
-    assert.equal(await taskSearch.locator('[data-action="placement-add-today"][data-id="child"]').count(), 1);
-    for (const width of [390, 1280]) {
+    assert.equal(await page.evaluate(async () => (await import('/src/state/store.js')).state.blocks.filter(b => !b.deleted && b.taskId === 'child').length),2);
+    assert.equal(await row('child').locator('[data-action="placement-add-today"]').count(),1);
+    for (const width of [390,1280]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.waitForFunction(() => !!document.querySelector('[data-work-list="wbs-tasks-alpha"]'));
       assert(await taskQuery.isVisible());
-      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'WBS no horizontal overflow');
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),'WBS no horizontal overflow');
     }
-    console.log('PASS S3-02: left/right search, hierarchy, IME, per-Project DOM/query/scroll, detail return, no save and two placements');
+    console.log('PASS S3-02: title search, settings, hierarchy, IME, retained query/expansion, detail return, no save and two placements');
     // S3-03: every existing field remains in one common, vertically scrollable editor.
     const taskAction = (name, id) => page.evaluate(({ name, id }) => {
       const button = document.createElement('button'); button.dataset.action = name; button.dataset.id = id;
@@ -452,7 +457,7 @@ dailyLayoutChecks.push(async page => {
     const result = await page.evaluate(view => {
       const root = document.querySelector('[data-daily-view="' + view + '"]');
       const selectors = view === 'today' ? ['.life-band', '.so-row', '.today-now-card', '#dailyTodayPlans', '.daily-today-records', '.daily-today-clock']
-        : view === 'wbs' ? ['.wbs-project-list', '.wbs-project-detail']
+        : view === 'wbs' ? ['.work-decide-sidebar', '.work-decide-groups']
         : view === 'exec' ? (root.querySelector('.exec-two-pane') ? ['.exec-pane-left', '.exec-pane-right'] : ['.timeline-tower', '[data-work-list="exec"]', '[data-work-list="exec-candidates"]']) : ['.detail-column'];
       const regions = [...new Set(selectors.flatMap(s => [...root.querySelectorAll(s)]))].map(el => {
         const r = el.getBoundingClientRect(); return { name: el.className || el.id, x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
@@ -466,7 +471,7 @@ dailyLayoutChecks.push(async page => {
       const inputs = [...root.querySelectorAll('input:not([type="hidden"]),select,textarea')];
       const buttons = [...root.querySelectorAll('button')].filter(el => el.getBoundingClientRect().height > 0);
       const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
-      const layout = root.querySelector(({ today: '.daily-today-main', exec: '.exec-two-pane', wbs: '.wbs-projects', detail: '.detail-columns' })[view]) || root;
+      const layout = root.querySelector(({ today: '.daily-today-main', exec: '.exec-two-pane', wbs: '.work-decide-layout', detail: '.detail-columns' })[view]) || root;
       const style = getComputedStyle(layout);
       const rects = selector => [...root.querySelectorAll(selector)].map(el => {
         const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
@@ -487,8 +492,8 @@ dailyLayoutChecks.push(async page => {
     try {
     assert(result.regions.length > 0, view + ' must have measured regions');
     assert(result.regions.every(region => region.width > 0 && region.height > 0), view + ' visible measured regions');
-    // Detail/exec retain the 1024px boundary; F6 Today uses three columns from 1280px.
-    const twoColumns = view === 'exec' || view === 'detail' ? width >= 1024 : width >= 1280;
+    // WBS uses 900px; detail/exec retain 1024px; Today uses its 1280px boundary.
+    const twoColumns = view === 'wbs' ? width >= 900 : view === 'exec' || view === 'detail' ? width >= 1024 : width >= 1280;
     assert.equal(result.columns, twoColumns ? 2 : 1, view + ' column count');
     const leftOf = (a, b) => assert(a.right <= b.x + 1 && Math.abs(a.y - b.y) <= 1, view + ' left/right placement');
     const above = (a, b) => assert(a.bottom <= b.y + 1 && Math.abs(a.x - b.x) <= 1, view + ' vertical placement');
@@ -557,7 +562,14 @@ dailyLayoutChecks.push(async page => {
       }
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       await page.locator('[data-action="nav"][data-view="wbs"]:visible').first().click();
-      await page.locator('[data-action="wbs-select-project"][data-id="layout-project"]').click();
+      const layoutWbs = page.locator('[data-work-list="wbs"]');
+      const layoutChip = layoutWbs.locator('[data-kind="project"][data-value="layout-project"]');
+      if (await layoutChip.getAttribute('aria-pressed') !== 'true') await layoutChip.click();
+      // A-5: the shared query persists across Projects; explicitly select this fixture's titles.
+      await layoutWbs.locator('[data-work-filter="query"]').fill('長い作業名');
+      const layoutGroup = layoutWbs.locator('[data-work-group="layout-project"]');
+      if (await layoutGroup.getAttribute('open') === null) await layoutGroup.locator('summary').click();
+      assert.equal(await layoutGroup.locator('[data-work-key]').count(), count, 'measure every fixture row, without series collapse or stale query');
       for (const zoom of [100, 200]) {
         await page.evaluate(zoom => { document.documentElement.style.fontSize = zoom + '%'; }, zoom);
         await measure('wbs', width, count, zoom);
