@@ -105,7 +105,7 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
         await page.setViewportSize({width,height:900});
         await root.locator('.work-decide-sidebar').waitFor();
         await root.locator('[data-work-list-rows]').waitFor();
-        await root.locator('input').waitFor();
+        await root.locator('[data-work-filter="query"]').waitFor();
         const size = await root.evaluate(el=>{const side=el.querySelector('.work-decide-sidebar'),groups=el.querySelector('[data-work-list-rows]'),a=side.getBoundingClientRect(),b=groups.getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,side:a.width,sideX:a.x,listX:b.x,listY:b.y,sideBottom:a.bottom,position:getComputedStyle(side).position,columns:getComputedStyle(groups).columnCount,font:parseFloat(getComputedStyle(el.querySelector('input')).fontSize)};});
         assert(!size.overflow,'overflow at '+width); assert(size.font>=16);
         if(width>=900) { assert.equal(Math.round(size.side),400); assert(size.listX>size.sideX); assert.equal(size.position,'sticky'); } else assert(size.listY>=size.sideBottom);
@@ -116,6 +116,35 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
         }
       }
       assert.deepEqual(errors,[]);
+    });
+    await check('U2-5 A-9 restored completion, subtask, project edit and add entries', async () => {
+      await page.setViewportSize({width:1280,height:900});
+      await root.locator('[data-work-filter="query"]').fill('自由な作業');
+      const complete = taskRow('free').locator('[data-action="toggle-task"][data-id="free"]');
+      assert.equal(await complete.count(),1,'completion entry in the task row');
+      await complete.click();
+      const completed = await page.evaluate(async()=> (await import('/src/state/store.js')).state);
+      assert.equal(completed.tasks.find(t=>t.id==='free').status,'completed');
+      const actual = completed.blocks.filter(b=>b.taskId==='free'&&!b.deleted&&b.completed&&b.actualStartAt&&b.actualEndAt);
+      assert.equal(actual.length,1,'v419 records one actual');
+      assert.equal(actual[0].actualStartAt,fixture.date+'T11:30:00');
+      assert.equal(actual[0].actualEndAt,fixture.date+'T12:00:00');
+      await root.locator('[data-work-filter="query"]').fill('親の作業');
+      await taskRow('parent').locator('[data-action="add-subtask"][data-parent-task="parent"]').click();
+      await page.locator('[data-modal-field="title"]').fill('入口から作った子');
+      await page.locator('[data-action="modal-save"]').click();
+      assert(await page.evaluate(async()=> (await import('/src/state/store.js')).state.tasks.some(t=>t.title==='入口から作った子'&&t.parentTaskId==='parent'&&t.projectId==='p')));
+      const group = root.locator('[data-work-group="p"]');
+      const wasOpen = await group.getAttribute('open');
+      await group.locator('summary [data-action="edit-project"][data-id="p"]').click();
+      assert.equal(await page.locator('[data-modal-field="title"]').inputValue(),'管理Project');
+      assert.equal(await group.getAttribute('open'),wasOpen,'edit does not toggle the group');
+      await page.locator('[data-action="modal-close"]').first().click();
+      await root.locator('.wbs-add-menu > summary').click();
+      await root.locator('#taskTitle').fill('追加入口のTask');
+      await root.locator('#taskProject').selectOption('q');
+      await root.locator('[data-action="add-task"]').click();
+      assert(await page.evaluate(async()=> (await import('/src/state/store.js')).state.tasks.some(t=>t.title==='追加入口のTask'&&t.projectId==='q'&&!t.deleted)));
     });
     assert.equal(failures,0,'acceptance failures');
   } finally { if(browser) await browser.close(); if(server) await new Promise(resolve=>server.close(resolve)); }

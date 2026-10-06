@@ -108,10 +108,19 @@ function workDueMatches(task, filter, today) {
   const due = dueDate(task);
   return !filter || (filter === "none" ? !due : filter === "overdue" ? due && due < today : filter === "today" ? due === today : due >= today && due <= screenDeps.addDays(today, 7));
 }
-function renderWorkTaskRow(t, { titleHTML = "", ghost = false } = {}) {
+function renderWorkTaskRow(t, { titleHTML = "", ghost = false, depth = 0 } = {}) {
   const e = escapeHTML, due = dueDate(t), today = todayISO();
   const status = { doing: "着手中", completed: "完了", suspended: "中断" }[t.status] || "";
-  return `<div class="work-list-row work-task-row${ghost ? " work-context-parent" : ""}" data-work-key="task:${e(t.id)}" data-wbs-row-id="${e(t.id)}"><div class="work-task-name">${titleHTML || `<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${e(t.title || "（名称なし）")}</button>`}</div><div class="work-list-meta">${e([status, ghost ? "(条件外の親)" : "", `進捗 ${Number(t.progressNum) || 0}/${Number(t.progressDen) || 0}`, due && due < today && ["todo", "doing"].includes(t.status) ? `超過 ${screenDeps.daysBetween(due, today)}日` : "", due ? `作業 ${workDateLabel(due)}` : ""].filter(Boolean).join(" ・ "))}</div><div class="work-task-due">${t.dueDate ? `期日 ${workDateLabel(t.dueDate, true)}` : "期日なし"}<br>見積 ${Number(t.estimateMin) || 0}分${placementActions({ kind: "task", id: t.id, item: t }, "wbs")}</div></div>`;
+  return `<div class="work-list-row work-task-row${ghost ? " work-context-parent" : ""}" data-work-key="task:${e(t.id)}" data-wbs-row-id="${e(t.id)}"><div class="work-task-name">
+    <button class="checkbox-button ${t.status === "completed" ? "done" : ""}" data-action="toggle-task" data-id="${e(t.id)}" aria-label="${t.status === "completed" ? "完了を解除" : "完了"}">✓</button>
+    ${titleHTML || `<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${e(t.title || "（名称なし）")}</button>`}
+  </div><div class="work-list-meta">
+    ${e([status, ghost ? "(条件外の親)" : "", `進捗 ${Number(t.progressNum) || 0}/${Number(t.progressDen) || 0}`, due && due < today && ["todo", "doing"].includes(t.status) ? `超過 ${screenDeps.daysBetween(due, today)}日` : "", due ? `作業 ${workDateLabel(due)}` : ""].filter(Boolean).join(" ・ "))}
+    ${depth < 2 ? `<button class="btn ghost" data-action="add-subtask" data-parent-task="${e(t.id)}">＋ サブ</button>` : ""}
+    ${placementActions({ kind: "task", id: t.id, item: t }, "wbs")}
+  </div><div class="work-task-due">
+    ${t.dueDate ? `期日 ${workDateLabel(t.dueDate, true)}` : "期日なし"}<br>見積 ${Number(t.estimateMin) || 0}分
+  </div></div>`;
 }
 function renderWbsList() {
   const ui = view("wbs"), today = todayISO(), e = escapeHTML, settings = state.settings;
@@ -139,7 +148,7 @@ function renderWbsList() {
     const children = [...keep.values()].filter(k => k.parentTaskId === t.id && k.projectId === t.projectId);
     const childrenOpen = !workDisplay.children.has(t.id);
     const titleHTML = `${children.length ? `<button class="btn" data-action="work-list-toggle" data-kind="children" data-value="${e(t.id)}" aria-expanded="${childrenOpen}" aria-label="子タスクを開閉">${childrenOpen ? "▾" : "▸"}</button>` : ""}<button class="btn ghost work-list-title" data-action="edit-task" data-id="${e(t.id)}">${depth ? "└ " : ""}${e(t.title || "（名称なし）")}</button>${hidden ? `<button class="btn" data-action="work-list-toggle" data-kind="series" data-value="${e(t.id)}" aria-expanded="${expanded}">+${hidden}件</button>` : ""}`;
-    return renderWorkTaskRow(t, { titleHTML, ghost }) + (childrenOpen ? groupTasks(children).map(g => row(g, depth + 1, trail)).join("") : "") + (expanded ? rest.map(task => row({ task, hidden: 0, rest: [] }, depth, trail)).join("") : "");
+    return renderWorkTaskRow(t, { titleHTML, ghost, depth }) + (childrenOpen ? groupTasks(children).map(g => row(g, depth + 1, trail)).join("") : "") + (expanded ? rest.map(task => row({ task, hidden: 0, rest: [] }, depth, trail)).join("") : "");
   };
   const groups = [...projects, ...(live.some(t => !t.projectId) ? [{ id: "", title: "Projectなし" }] : [])];
   const groupsHTML = groups.map(p => {
@@ -150,9 +159,9 @@ function renderWbsList() {
     const overdue = unfinished.filter(t => (t.projectId || "") === p.id && workDueMatches(t, "overdue", today)).length;
     const roots = tasks.filter(t => !tasks.some(parent => parent.id === t.parentTaskId));
     const open = workDisplay.groups.get(p.id) ?? (!!ui.project || !!q || !!ui.due || groupTasks(roots).length <= 6);
-    return `<details class="work-project-group wbs-project-detail" data-work-group="${e(p.id)}" data-work-scope="wbs-tasks-${e(p.id)}" ${open ? "open" : ""}><summary data-action="work-list-toggle" data-kind="group" data-value="${e(p.id)}">${e(p.title)} <span>${e(p.category || "")} ${groupTasks(matched).length}/${matched.length}件 ・ 進捗 ${progress.num}/${progress.den} (${progress.pct}%)${week > 0 ? ` ・ 12週計画 第${week}週` : ""} ・ 期限超過 ${overdue}</span></summary>${groupTasks(roots).map(g => row(g)).join("") || '<p>該当するタスクはありません。</p>'}</details>`;
+    return `<details class="work-project-group wbs-project-detail" data-work-group="${e(p.id)}" data-work-scope="wbs-tasks-${e(p.id)}" ${open ? "open" : ""}><summary data-action="work-list-toggle" data-kind="group" data-value="${e(p.id)}">${e(p.title)} <span>${e(p.category || "")} ${groupTasks(matched).length}/${matched.length}件 ・ 進捗 ${progress.num}/${progress.den} (${progress.pct}%)${week > 0 ? ` ・ 12週計画 第${week}週` : ""} ・ 期限超過 ${overdue}</span>${p.id ? `<button class="btn ghost" data-action="edit-project" data-id="${e(p.id)}">編集</button>` : ""}</summary>${groupTasks(roots).map(g => row(g)).join("") || '<p>該当するタスクはありません。</p>'}</details>`;
   }).join("");
-  return `<section class="work-list work-decide-layout" data-work-list="wbs"><aside class="work-decide-sidebar"><div data-work-decide-link><button class="btn ghost" data-action="nav" data-view="decide">期日が決まっていないもの ${screenDeps.undecidedCount()} 件 → 決めること</button></div><div data-work-mode>一覧</div><div class="work-decide-chips" data-work-counts>${counts}</div><label class="work-decide-query">題名を検索<input class="input" type="search" id="wbs-projects-query" data-work-filter="query" value="${e(ui.query)}"></label><div class="work-decide-chips" data-work-projects data-work-list="wbs-projects" data-work-scope="wbs-projects">${chip("project", "", "すべて", groupTasks(visible).length)}${groups.map(p => chip("project", p.id || "__none__", p.title, groupTasks(visible.filter(t => (t.projectId || "") === p.id)).length)).join("")}</div><details><summary>その他</summary><button class="btn" data-action="toggle-wbs-hide-done">完了を隠す ${settings.wbsHideCompleted ? "ON" : "OFF"}</button><button class="btn" data-action="toggle-show-suspended">中断を表示 ${settings.showSuspended ? "ON" : "OFF"}</button></details></aside><div class="work-decide-groups" data-work-list-rows>${groupsHTML || '<p>該当するタスクはありません。</p>'}</div></section>`;
+  return `<section class="work-list work-decide-layout" data-work-list="wbs"><aside class="work-decide-sidebar"><div data-work-decide-link><button class="btn ghost" data-action="nav" data-view="decide">期日が決まっていないもの ${screenDeps.undecidedCount()} 件 → 決めること</button></div><div data-work-mode>一覧</div><div class="work-decide-chips" data-work-counts>${counts}</div>${screenDeps.renderWbsAddMenu()}<label class="work-decide-query">題名を検索<input class="input" type="search" id="wbs-projects-query" data-work-filter="query" value="${e(ui.query)}"></label><div class="work-decide-chips" data-work-projects data-work-list="wbs-projects" data-work-scope="wbs-projects">${chip("project", "", "すべて", groupTasks(visible).length)}${groups.map(p => chip("project", p.id || "__none__", p.title, groupTasks(visible.filter(t => (t.projectId || "") === p.id)).length)).join("")}</div><details><summary>その他</summary><button class="btn" data-action="toggle-wbs-hide-done">完了を隠す ${settings.wbsHideCompleted ? "ON" : "OFF"}</button><button class="btn" data-action="toggle-show-suspended">中断を表示 ${settings.showSuspended ? "ON" : "OFF"}</button></details></aside><div class="work-decide-groups" data-work-list-rows>${groupsHTML || '<p>該当するタスクはありません。</p>'}</div></section>`;
 }
 function renderWorkList(scope) {
   if (scope === "wbs") return renderWbsList();

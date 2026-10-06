@@ -344,7 +344,7 @@ configureGithubSync({
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
 configureDecideView({ renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
-configureWorkList({ undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureWorkList({ renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
@@ -5433,12 +5433,20 @@ function wbsFilteredProjects() {
     .sort((a, b) => a.title.localeCompare(b.title, "ja"));
 }
 
+function renderWbsAddMenu() {
+  const sorted = state.projects.filter(project => !project.deleted).sort((a, b) => a.title.localeCompare(b.title, "ja"));
+  return `
+    <details class="wbs-add-menu"><summary class="btn wbs-add-trigger">＋ 追加</summary><div class="wbs-add-panel">
+      <div class="form-strip"><input id="projectTitle" class="input" placeholder="Project名"><button class="btn primary" data-action="add-project">Project を追加</button></div>
+      <div class="form-strip"><input id="taskTitle" class="input" placeholder="Task名"><select id="taskProject" class="select">${sorted.map((project) => `<option value="${project.id}">${escapeHTML(project.title)}</option>`).join("")}<option value="">単発Task</option></select><button class="btn primary" data-action="add-task">Task を追加</button></div>
+    </div></details>`;
+}
+
 function renderWBS() {
   // v126: 「やりたいこと」もWBSのProject+Taskとして扱う(v16のWish除外を撤去。
   //       期日設定→WBS期日駆動フローでタスクシュート候補に載せられるようにする)。
   //       Wishタブ自体は専用ビュー(実現/未実現の絞り込み等)として存続する。
   const activeProjects = state.projects.filter((project) => !project.deleted);
-  const sorted = [...activeProjects].sort((a, b) => a.title.localeCompare(b.title, "ja"));
 
   // v35: 中断中の項目は既定で非表示。トグルで再表示して再開できる。
   const showSusp = Boolean(state.settings.showSuspended);
@@ -5481,10 +5489,7 @@ function renderWBS() {
       </div></div>
     </details>
     <button class="btn ghost wbs-edit-toggle" data-action="toggle-wbs-edit" aria-pressed="${editMode}">編集モード</button>
-    <details class="wbs-add-menu"><summary class="btn wbs-add-trigger">＋ 追加</summary><div class="wbs-add-panel">
-      <div class="form-strip"><input id="projectTitle" class="input" placeholder="Project名"><button class="btn primary" data-action="add-project">Project を追加</button></div>
-      <div class="form-strip"><input id="taskTitle" class="input" placeholder="Task名"><select id="taskProject" class="select">${sorted.map((project) => `<option value="${project.id}">${escapeHTML(project.title)}</option>`).join("")}<option value="">単発Task</option></select><button class="btn primary" data-action="add-task">Task を追加</button></div>
-    </div></details>
+
   </div>`;
 
   return `
