@@ -181,7 +181,7 @@ const explicitDomains = {
   // local.jsのstorage層を対象とするtrack-normalize.test.jsと同じ語彙(sync-storage)を明示指定する。
   "normalize-null-defense.test.js": ["sync-storage"],
   // v443: 決めることタブ(期日なしタスクの促し表示)。要約コメントに task/wbs 語が無く自動分類が legacy-crosscutting へ落ちるため明示。
-  "decide-view.test.js": ["planning-execution", "ui-responsive"]
+  "decide-view.test.js": ["planning-execution", "ui-responsive"],
   "v109.test.js": ["planning-execution", "ui-responsive"],
 };
 
