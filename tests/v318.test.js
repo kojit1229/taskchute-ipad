@@ -161,14 +161,16 @@ const HEALTH_FIXTURE = {
       const box = element.getBoundingClientRect();
       return { width: box.width, height: box.height, left: box.left, right: box.right };
     }));
-    check("WBS行内ボタンは全て高さ44px以上で画面内", wbsButtons.length === 2
+    check("WBS行内ボタンは全て高さ44px以上で画面内", wbsButtons.length === 4
       && wbsButtons.every((box) => box.height >= 44 && box.left >= 0 && box.right <= 391), JSON.stringify(wbsButtons));
     const wbsInlineTargets = await page.locator('[data-wbs-row-id="task-v318"] button').evaluateAll((elements) => elements.map((element) => {
       const box = element.getBoundingClientRect();
       return { action: element.dataset.action, width: box.width, height: box.height, left: box.left, right: box.right };
     }));
-    check("WBSの子開閉・題名・今日へボタンは実体が44px以上", ["work-list-toggle", "edit-task", "placement-add-today"].every((name) =>
+    check("WBSの子開閉・題名・今日へボタンは実体が44px以上", ["work-list-toggle", "edit-task", "placement-add-today", "toggle-task", "add-subtask"].every((name) =>
       wbsInlineTargets.some((target) => target.action === name && target.height >= 44 && target.width >= 44)), JSON.stringify(wbsInlineTargets));
+    const projectEditBox = await rect(page.locator('[data-work-group="project-v318"] > summary [data-action="edit-project"]'));
+    check('A-9 project edit target is at least 44x44px',projectEditBox.width>=44&&projectEditBox.height>=44,JSON.stringify(projectEditBox));
     const taskCaret = page.locator('[data-wbs-row-id="task-v318"] [data-kind="children"]');
     await taskCaret.evaluate((caret) => caret.closest(".work-task-row").scrollIntoView({ block: "center" }));
     const wbsHitTargets = await taskCaret.evaluate((caret) => {

@@ -1,19 +1,4 @@
-// v109 検証: WBSタブ画面上部のカテゴリ絞り込みプルダウン(K依頼、2026-07-16)。
-//
-// 背景: WBSタブのProjectが増えたため、Project.category(既存フィールド。v9のカテゴリマスタを
-// 使ってProject/Task/Blockに横断で付与できる)を使って、WBS上部のプルダウンでProjectを
-// カテゴリごとに絞り込み表示できるようにした。project.categoryは既存フィールドのため新規
-// マイグレーションは不要(addProjectで既定""、renderProjectTree/編集モーダルで既に使用中)。
-// プルダウンの選択肢は実在するProjectのcategoryから動的生成し、category未設定のProjectは
-// 「未分類」として選択肢にもフィルタ結果にも含める(絞り込みで消えて見つからなくなる事故防止)。
-// 選択状態はstate.settings.wbsCategoryFilter(既定""=すべて)に永続化する(wbsHideCompleted等の
-// 既存UI状態と同じ流儀)。
-//
-// (a) プルダウンでカテゴリを選択→そのカテゴリのProjectのみ表示される
-// (b) 「すべて」を選択→全Projectが表示される
-// (c) category未設定のProjectは「未分類」として選択肢に出て、選択すると該当Projectのみ表示される
-// (d) 絞り込み中もタスク操作(完了チェック・進捗の分子/分母入力)が正常に動作する
-// (e) 390px幅でプルダウンが表示され、横スクロールが発生しない
+// v443 A-8/A-9: title query, project chips, filtered completion; inline progress deferred.
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -86,15 +71,6 @@ function check(name, cond, extra = "") {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
 
-  function projectTitleLocator(page_) {
-    return page_.locator('.wbs-project-choice:not([data-id=""]) > strong');
-  }
-  async function openViewMenu(page_) {
-    if (!await page_.locator(".wbs-view-menu").evaluate((element) => element.open)) {
-      await page_.locator(".wbs-view-menu > summary").click();
-    }
-  }
-
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -104,86 +80,39 @@ function check(name, cond, extra = "") {
     await seed();
     await page.click('[data-action="nav"][data-view="wbs"]');
     await page.waitForTimeout(200);
-    await openViewMenu(page);
-
-    // ============================================================
-    // 選択肢の動的生成 & 既定値の確認
-    // ============================================================
-    console.log("[0] プルダウンの選択肢は実在するProjectのcategoryから動的生成される(ハードコードでない)");
-    const filterSelect = page.locator('select[data-action="wbs-category-filter"]');
-    check("プルダウンが画面上部に表示される", await filterSelect.count() === 1);
-    const optionTexts = await filterSelect.locator("option").allTextContents();
-    // v126: Wish Project(category「回復」)もWBSに表示されるようになったため選択肢+1(CHANGES_v126.md)
-    check("選択肢は「すべて/回復/学び/仕事/未分類」の5件(順不同判定)",
-      optionTexts.length === 5 && ["すべて", "回復", "学び", "仕事", "未分類"].every((t) => optionTexts.includes(t)),
-      JSON.stringify(optionTexts));
-    check("既定の選択値は「すべて」", await filterSelect.inputValue() === "");
-    // v28: normalizeStateがcategory未設定の「その他」Projectを常に1件保証するため、
-    // 種分けした3件+「その他」=4件になる(既存仕様、絞り込み機能の対象外にはしない)
-    check("既定表示では全5件のProjectが表示される(自動生成の「その他」とWish Project含む。v126)", await projectTitleLocator(page).count() === 5);
-
-    // ============================================================
-    // (a) カテゴリ選択→該当Projectのみ表示
-    // ============================================================
-    console.log("[1] 「学び」を選択→学びプロジェクトのみ表示される");
-    await filterSelect.selectOption("学び");
-    await page.waitForTimeout(200);
-    const titlesManabi = await projectTitleLocator(page).allTextContents();
-    check("「学び」選択時は学びプロジェクトのみ表示", JSON.stringify(titlesManabi) === JSON.stringify(["学びプロジェクト"]), JSON.stringify(titlesManabi));
-    check("選択状態がstateに永続化される(wbsCategoryFilter)", (await stateNow()).settings.wbsCategoryFilter === "学び");
-    // リロードしても選択状態が保持される(永続化の確認)
-    await page.reload();
-    await page.waitForTimeout(400);
-    check("リロード後も絞り込みが維持される", await filterSelect.inputValue() === "学び");
-    const titlesAfterReload = await projectTitleLocator(page).allTextContents();
-    check("リロード後も学びプロジェクトのみ表示", JSON.stringify(titlesAfterReload) === JSON.stringify(["学びプロジェクト"]), JSON.stringify(titlesAfterReload));
-
-    // ============================================================
-    // (b) 「すべて」で全件表示に戻る
-    // ============================================================
-    console.log("[2] 「すべて」を選択→全Projectが表示される");
-    await openViewMenu(page);
-    await filterSelect.selectOption("");
-    await page.waitForTimeout(200);
-    check("「すべて」選択時は全5件表示(v126でWish Project追加)", await projectTitleLocator(page).count() === 5);
-    check("wbsCategoryFilterは空文字に戻る", (await stateNow()).settings.wbsCategoryFilter === "");
-
-    // ============================================================
-    // (c) 未分類の扱い(category未設定のProjectに加え、自動生成の「その他」Projectも含む)
-    // ============================================================
-    console.log("[3] 「未分類」を選択→category未設定のProject(「未分類プロジェクト」と自動生成「その他」)のみ表示される");
-    await openViewMenu(page);
-    await filterSelect.selectOption("未分類");
-    await page.waitForTimeout(200);
-    const titlesNone = await projectTitleLocator(page).allTextContents();
-    check("「未分類」選択時はcategory未設定の2件のみ表示", JSON.stringify(titlesNone) === JSON.stringify(["その他", "未分類プロジェクト"]), JSON.stringify(titlesNone));
-
-    // ============================================================
-    // (d) 絞り込み中もタスク操作(完了チェック・進捗入力)が正常に動く
-    // ============================================================
-    console.log("[4] 絞り込み中(未分類)でもタスクの完了チェック・進捗の分子/分母入力が正常に動作する");
-    await page.locator('[data-action="wbs-select-project"][data-id="proj-none"]').click();
-    await page.click('[data-action="toggle-task"][data-id="task-none"]');
-    await page.waitForTimeout(300);
-    let s4 = await stateNow();
-    check("絞り込み中でもタスク完了チェックが反映される", s4.tasks.find((t) => t.id === "task-none")?.status === "completed", JSON.stringify(s4.tasks));
-    check("完了操作後も絞り込み状態(未分類)は維持される", s4.settings.wbsCategoryFilter === "未分類");
-    check("完了操作後も未分類の2件のみ表示のまま", await projectTitleLocator(page).count() === 2);
-
-    // 完了を隠すトグルで一覧から消えるため、進捗入力の検証は別カテゴリの未完了タスクで行う
-    await openViewMenu(page);
-    await filterSelect.selectOption("仕事");
-    await page.waitForTimeout(200);
-    await openViewMenu(page);
-    await page.locator('[data-action="toggle-wbs-edit"].wbs-menu-edit-toggle').click();
-    await page.locator('[data-action="wbs-select-project"][data-id="proj-work"]').click();
-    const numInput = page.locator('input[data-wbs-progress="num"][data-id="task-work"]');
-    await numInput.fill("7");
-    await numInput.dispatchEvent("change");
-    await page.waitForTimeout(300);
-    const s5 = await stateNow();
-    check("絞り込み中(仕事)でも進捗の分子入力が反映される", s5.tasks.find((t) => t.id === "task-work")?.progressNum === 7, JSON.stringify(s5.tasks));
-    check("進捗入力後も絞り込み状態(仕事)は維持される", s5.settings.wbsCategoryFilter === "仕事");
+    // A-8: one title query and project chips replace the category list filter.
+    const root = page.locator('[data-work-list="wbs"]');
+    const query = root.locator('[data-work-filter="query"]');
+    const selectProject = async id => {
+      const chip = root.locator(`[data-action="wbs-select-project"][data-id="${id}"]`);
+      if (await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+    };
+    const chips = root.locator('[data-action="wbs-select-project"]');
+    const storedProjects = (await stateNow()).projects.filter(p => !p.deleted);
+    check("Every live project has one chip", await chips.count() === storedProjects.length + 1);
+    for (const project of PROJECTS) {
+      const chip = root.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`);
+      check("Project chip retains title: " + project.id, (await chip.textContent()).includes(project.title));
+    }
+    for (const task of TASKS) {
+      await query.fill(task.title);
+      await selectProject(task.projectId);
+      check("Title query finds task in selected project: " + task.id, await root.locator(`[data-work-key="task:${task.id}"]`).count() === 1);
+      check("Project selection remains explicit", await root.locator(`[data-action="wbs-select-project"][data-id="${task.projectId}"]`).getAttribute('aria-pressed') === 'true');
+    }
+    await query.fill('');
+    await selectProject('proj-none');
+    const noneTitle = TASKS.find(t => t.id === 'task-none').title;
+    await query.fill(noneTitle);
+    await root.locator('[data-action="toggle-task"][data-id="task-none"]').click();
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).tasks.find(t => t.id === 'task-none').status === 'completed', KEY);
+    check("Completion works while filtered", (await stateNow()).tasks.find(t => t.id === 'task-none').status === 'completed');
+    check("Completion retains title query and selected project", await query.inputValue() === noneTitle && await root.locator('[data-action="wbs-select-project"][data-id="proj-none"]').getAttribute('aria-pressed') === 'true');
+    await query.fill('');
+    await selectProject('proj-work');
+    const work = root.locator('[data-work-key="task:task-work"]');
+    check("Inline progress editor deferred to bundle B", await work.locator('[data-wbs-progress]').count() === 0);
+    check("Read-only row preserves progress", (await stateNow()).tasks.find(t => t.id === 'task-work').progressNum === 0);
 
     // ============================================================
     // (e) 390px幅でプルダウンが表示され、横スクロールが発生しない
@@ -209,10 +138,11 @@ function check(name, cond, extra = "") {
     }, { KEY, projects: PROJECTS, tasks: TASKS, TODAY });
     await pageMobile.reload();
     await pageMobile.waitForTimeout(500);
-    await openViewMenu(pageMobile);
-    const filterSelectMobile = pageMobile.locator('select[data-action="wbs-category-filter"]');
-    check("390px幅でプルダウンが表示される", await filterSelectMobile.count() === 1);
-    check("390px幅でも絞り込みが効いている(学びプロジェクトのみ)", await projectTitleLocator(pageMobile).count() === 1);
+    const filterSelectMobile = pageMobile.locator('[data-work-list="wbs"] [data-work-filter="query"]');
+    const mobileTask = TASKS.find(t => t.projectId === 'proj-work');
+    await filterSelectMobile.fill(mobileTask.title);
+    check("390px title query is visible", await filterSelectMobile.isVisible());
+    check("390px title query finds the matching task", await pageMobile.locator(`[data-work-key="task:${mobileTask.id}"]`).count() === 1);
     const fontSize = await filterSelectMobile.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     check("プルダウンのfont-sizeは16px以上(iOSズーム防止)", fontSize >= 16, `fontSize=${fontSize}`);
     const metricsMobile = await pageMobile.evaluate(() => {

@@ -34,7 +34,7 @@ function check(name, cond, extra = "") {
   }
   const parent = makeTask("plan-parent", "計画対象の親");
   const children = [
-    makeTask("step-a", "ステップA", { parentTaskId: parent.id, dueDate: "2026-08-10", aiStatus: "queued" }),
+    makeTask("step-a", "ステップA", { parentTaskId: parent.id, dueDate: "2026-08-10", aiStatus: "queued", owner: "ai", aiWork: true }),
     makeTask("step-b", "ステップB", { parentTaskId: parent.id, dueDate: "2026-08-11" }),
     makeTask("step-c", "ステップC", { parentTaskId: parent.id })
   ];
@@ -46,27 +46,8 @@ function check(name, cond, extra = "") {
   async function storedTask(id) {
     return page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.id === id), { key: STATE_KEY, id });
   }
-  async function siblingOrder(ids) {
-    return page.locator('.wbs-projects .wbs-task-title[data-id]').evaluateAll((els, wanted) => {
-      const set = new Set(wanted);
-      return els.map((el) => el.dataset.id).filter((id) => set.has(id));
-    }, ids);
-  }
-  async function waitForOrder(ids, expected) {
-    await page.waitForFunction(({ ids, expected }) => {
-      const wanted = new Set(ids);
-      const actual = Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title[data-id]'))
-        .map((el) => el.dataset.id).filter((id) => wanted.has(id));
-      return JSON.stringify(actual) === JSON.stringify(expected);
-    }, { ids, expected });
-  }
-  async function openTaskMenu(id) {
-    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
-    await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
-  }
   async function openTaskEditor(id) {
-    await openTaskMenu(id);
-    await page.locator(`.wbs-row-menu-panel [data-action="edit-task"][data-id="${id}"]`).click();
+    await page.locator(`[data-work-key="task:${id}"] [data-action="edit-task"]`).click();
   }
 
   try {
@@ -88,87 +69,32 @@ function check(name, cond, extra = "") {
     await page.waitForSelector('#app[data-view="wbs"]');
     await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
 
-    console.log("[1] planTarget OFFでは従来表示、owner=aiはaiWorkへ正規化");
-    check("対象外の子に担当バッジが出ない", await page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').count() === 0);
-    check("別の対象外親配下にも操作が出ない", await page.locator('[data-action="add-plan-step-below"][data-id="off-child"]').count() === 0);
-    await openTaskMenu("normalize-ai");
-    const normalizedLine = page.locator('[data-wbs-row-id="normalize-ai"] > .wbs-task-row');
-    check("owner=aiなら既存aiWork表示も有効になる", await normalizedLine.locator(".ai-work-flag").isVisible());
-
-    console.log("[2] 親モーダルの適用フラグで、直下だけに担当・状態・操作を表示");
-    await openTaskEditor("plan-parent");
+    console.log("A-8: no owner, move, insert or AI toggle in current rows");
+    for (const id of ['step-a', 'off-child', 'normalize-ai']) {
+      const row = page.locator(`[data-work-key="task:${id}"]`);
+      check("Task row exists: " + id, await row.count() === 1);
+      check("Removed inline actions absent: " + id, await row.locator('[data-action="toggle-plan-owner"], [data-action="move-plan-step"], [data-action="add-plan-step-below"], [data-action="toggle-criteria-request"], [data-wbs-edit="status"]').count() === 0);
+    }
+    await openTaskEditor('plan-parent');
     await page.locator('[data-modal-field="planTarget"]').check();
     await page.locator('[data-action="modal-save"]').click();
-    await openTaskMenu("step-a");
-    await page.waitForSelector('[data-action="toggle-plan-owner"][data-id="step-a"]');
-    const savedParent = await storedTask("plan-parent");
-    check("planTargetとupdatedAtが保存される", savedParent.planTarget === true && savedParent.updatedAt !== "2026-01-01T00:00");
-    const normalized = await storedTask("normalize-ai");
-    check("owner=aiならaiWork=trueに揃えて保存される", normalized.aiWork === true, JSON.stringify(normalized));
-    // v195レビュー(必須1)対応: normalizeStateは起動時・同期時に走る。ここでupdatedAtを進めると、
-    // 手を触れていないローカルの古い内容がリモートの新しい変更に勝って上書きしてしまう(v135の事故)。
-    // 正規化は読み取り時の整形に留め、updatedAtは元の値のまま保持されなければならない。
-    check("正規化ではupdatedAtを進めない(同期マージの勝敗を狂わせないため)",
-      normalized.updatedAt === "2026-01-01T00:00", normalized.updatedAt);
-    check("初期担当Kを表示", await page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').textContent() === "K");
-    const titleLine = page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').locator("..");
-    check("queuedを待機中と表示", (await titleLine.textContent()).includes("待機中"));
-
-    console.log("[3] 担当切替とAI指示文保存");
-    await page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').click();
-    await page.waitForFunction(() => document.querySelector('[data-action="toggle-plan-owner"][data-id="step-a"]')?.textContent === "AI");
-    let stepA = await storedTask("step-a");
-    check("担当AIでowner/aiWork/updatedAtが追随", stepA.owner === "ai" && stepA.aiWork === true && stepA.updatedAt !== originalUpdatedAt[stepA.id]);
-    check("aiWorkBriefは変換せず保持", stepA.aiWorkBrief === "既存ワーカー指示");
-    await openTaskMenu("step-a");
-    await page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').click();
-    await page.waitForFunction(() => document.querySelector('[data-action="toggle-plan-owner"][data-id="step-a"]')?.textContent === "K");
-    stepA = await storedTask("step-a");
-    check("AI→Kでもowner/aiWorkが追随", stepA.owner === "k" && stepA.aiWork === false);
-    await openTaskMenu("step-a");
-    await page.locator('[data-action="toggle-plan-owner"][data-id="step-a"]').click();
-    await page.waitForFunction(() => document.querySelector('[data-action="toggle-plan-owner"][data-id="step-a"]')?.textContent === "AI");
-    await openTaskEditor("step-a");
-    await page.locator('[data-modal-field="aiBrief"]').fill("調査結果を箇条書きで返す");
+    const savedParent = await storedTask('plan-parent');
+    check("Plan target is saved with updated timestamp", savedParent.planTarget === true && savedParent.updatedAt !== '2026-01-01T00:00');
+    const normalized = await storedTask('normalize-ai');
+    check("owner=ai normalizes aiWork without changing timestamp", normalized.aiWork === true && normalized.updatedAt === '2026-01-01T00:00');
+    check("Enabling plan target does not restore removed inline actions", await page.locator('[data-work-list="wbs"] [data-action="toggle-plan-owner"], [data-work-list="wbs"] [data-action="move-plan-step"], [data-work-list="wbs"] [data-action="add-plan-step-below"]').count() === 0);
+    await openTaskEditor('step-a');
+    await page.locator('[data-modal-field="aiBrief"]').fill('Return investigation notes');
     await page.locator('[data-action="modal-save"]').click();
-    stepA = await storedTask("step-a");
-    check("実行計画用aiBriefを保存", stepA.aiBrief === "調査結果を箇条書きで返す");
-
-    console.log("[4] order未設定を表示順で遅延採番し、上下移動を永続化");
-    const lazyUpdatedAt = "2026-02-01T00:00";
-    await page.evaluate(({ key, ids, updatedAt }) => {
-      const state = JSON.parse(localStorage.getItem(key));
-      state.tasks = state.tasks.map((t) => ids.includes(t.id) ? { ...t, order: null, updatedAt } : t);
-      localStorage.setItem(key, JSON.stringify(state));
-    }, { key: STATE_KEY, ids: children.map((t) => t.id), updatedAt: lazyUpdatedAt });
-    await page.reload();
-    await page.waitForSelector('#app[data-view="wbs"]');
-    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
-    await openTaskMenu("step-a");
-    await page.locator('[data-action="move-plan-step"][data-id="step-a"][data-direction="1"]').click();
-    const childIds = children.map((t) => t.id);
-    await waitForOrder(childIds, ["step-b", "step-a", "step-c"]);
-    const moved = await page.evaluate(({ key, ids }) => {
-      const tasks = JSON.parse(localStorage.getItem(key)).tasks.filter((t) => ids.includes(t.id));
-      return Object.fromEntries(tasks.map((t) => [t.id, { order: t.order, updatedAt: t.updatedAt }]));
-    }, { key: STATE_KEY, ids: childIds });
-    check("全兄弟を1000刻みで採番して入れ替える", moved["step-b"].order === 1000 && moved["step-a"].order === 2000 && moved["step-c"].order === 3000, JSON.stringify(moved));
-    check("遅延採番で触れた全兄弟のupdatedAtを更新", childIds.every((id) => moved[id].updatedAt !== lazyUpdatedAt));
-    await page.reload();
-    await page.waitForSelector('#app[data-view="wbs"]');
-    await page.locator(`[data-action="wbs-select-project"][data-id="${project.id}"]`).click();
-    check("リロード後も順序を保持", JSON.stringify(await siblingOrder(childIds)) === JSON.stringify(["step-b", "step-a", "step-c"]));
-
-    console.log("[5] 下に追加は前後orderの中間値で保存");
-    await openTaskMenu("step-a");
-    await page.locator('[data-action="add-plan-step-below"][data-id="step-a"]').click();
-    await page.locator('[data-modal-field="title"]').fill("途中に追加したステップ");
-    await page.locator('[data-action="modal-save"]').click();
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title')).some((el) => el.textContent === "途中に追加したステップ"));
-    const inserted = await page.evaluate(({ key }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.title === "途中に追加したステップ"), { key: STATE_KEY });
-    check("同じ親へ2000と3000の中間で追加", inserted.parentTaskId === "plan-parent" && inserted.order === 2500 && Boolean(inserted.updatedAt), JSON.stringify(inserted));
-    const finalIds = ["step-b", "step-a", inserted.id, "step-c"];
-    check("挿入後の表示順が崩れない", JSON.stringify(await siblingOrder(finalIds)) === JSON.stringify(finalIds));
+    const stepA = await storedTask('step-a');
+    check("Modal still saves aiBrief and preserves worker brief", stepA.aiBrief === 'Return investigation notes' && stepA.aiWorkBrief === children[0].aiWorkBrief);
+    const beforeBrief = new Map(await Promise.all(children.map(async child => [child.id, await storedTask(child.id)])));
+    await page.locator('[data-work-list="wbs"] [data-work-filter="query"]').fill(children[0].title);
+    await page.locator('[data-work-list="wbs"] [data-work-filter="query"]').fill('');
+    for (const child of children) {
+      const saved = await storedTask(child.id);
+      check("Read-only actions retain owner/order: " + child.id, saved.owner === beforeBrief.get(child.id).owner && saved.order === beforeBrief.get(child.id).order);
+    }
   } finally {
     await browser.close();
     server.close();
@@ -229,7 +155,7 @@ process.on("beforeExit", async () => {
     return page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((t) => t.id === id), { key: STATE_KEY, id });
   }
   async function regressionSiblingOrder(page, ids) {
-    return page.locator('.wbs-projects .wbs-task-title[data-id]').evaluateAll((els, wanted) => {
+    return page.locator('[data-work-list="wbs"] .work-list-title[data-id]').evaluateAll((els, wanted) => {
       const set = new Set(wanted);
       return els.map((el) => el.dataset.id).filter((id) => set.has(id));
     }, ids);
@@ -237,13 +163,10 @@ process.on("beforeExit", async () => {
   async function waitForRegressionOrder(page, ids, expected) {
     await page.waitForFunction(({ ids, expected }) => {
       const wanted = new Set(ids);
-      const actual = Array.from(document.querySelectorAll('.wbs-projects .wbs-task-title[data-id]'))
+      const actual = Array.from(document.querySelectorAll('[data-work-list="wbs"] .work-list-title[data-id]'))
         .map((el) => el.dataset.id).filter((id) => wanted.has(id));
       return JSON.stringify(actual) === JSON.stringify(expected);
     }, { ids, expected });
-  }
-  async function openRegressionMenu(page, id) {
-    await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
   }
 
   try {
@@ -261,7 +184,6 @@ process.on("beforeExit", async () => {
     const parentA = regressionTask("reg-a-parent", projectA.id, "通常の親", { planTarget: false });
     await loadWbsState(page, projectA, [parentA]);
     async function addRegressionSubtask(title) {
-      await openRegressionMenu(page, "reg-a-parent");
       await page.locator('[data-action="add-subtask"][data-parent-task="reg-a-parent"]').click();
       await page.waitForSelector('[data-modal-field="title"]');
       await page.locator('[data-modal-field="title"]').fill(title);
@@ -276,7 +198,7 @@ process.on("beforeExit", async () => {
     const addedB = await addRegressionSubtask("通常サブB");
     check("planTarget=false親の+サブ2件はorder=null", addedA.order === null && addedB.order === null,
       JSON.stringify({ a: addedA.order, b: addedB.order }));
-    await page.locator(`.wbs-projects [data-action="toggle-task"][data-id="${addedA.id}"]`).click();
+    await page.locator(`[data-work-list="wbs"] [data-action="toggle-task"][data-id="${addedA.id}"]`).click();
     await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).tasks.find((task) => task.id === id)?.status === "completed",
       { key: STATE_KEY, id: addedA.id });
     await waitForRegressionOrder(page, [addedA.id, addedB.id], [addedB.id, addedA.id]);
@@ -290,9 +212,8 @@ process.on("beforeExit", async () => {
     });
     delete legacyAiTask.owner;
     await loadWbsState(page, projectB, [legacyAiTask]);
-    await openRegressionMenu(page, "reg-b-legacy-ai");
-    const legacyLine = page.locator('[data-wbs-row-id="reg-b-legacy-ai"] > .wbs-task-row');
-    await legacyLine.locator(".ai-work-flag").waitFor();
+    const legacyLine = page.locator('[data-work-key="task:reg-b-legacy-ai"]');
+    check("AI toggle absent for legacy AI task", await legacyLine.locator('[data-action="toggle-criteria-request"]').count() === 0);
     await page.locator('[data-action="nav"][data-view="today"]').first().click();  // v230: home撤去後の現行起点
     await page.waitForSelector('#app[data-view="today"]');
     await page.waitForFunction(({ key, id }) => {

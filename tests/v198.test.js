@@ -212,17 +212,16 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("r3");
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs", settings: { wbsEditMode: true } });
-      await page.selectOption(`[data-wbs-edit="status"][data-id="${kStep.id}"]`, "completed");
-      await page.waitForSelector(".ai-step-confirm-modal");
-      check("経路#3でも引き継ぎシートが開く", true);
-      await page.click('[data-action="ai-step-confirm-later"]');
+      const row = page.locator(`[data-work-key="task:${kStep.id}"]`);
+      check("A-8 inline status entry is absent", await row.count() === 1 && await row.locator('[data-wbs-edit="status"]').count() === 0);
+      check("No inline status edit leaves task pending and no handoff", (await storedTasks()).find(t => t.id === kStep.id).status === 'todo' && await sheetVisible() === 0);
     }
 
     console.log("[1-4] 経路#4 タスク編集モーダルの保存(saveTaskFromModal)");
     {
       const { parent, kStep, aiStep } = triple("r4");
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.click(`[data-work-list^="wbs-tasks-"] .wbs-task-title[data-action="edit-task"][data-id="${kStep.id}"]`);
+      await page.click(`[data-work-list="wbs"] .work-list-title[data-action="edit-task"][data-id="${kStep.id}"]`);
       await page.selectOption('[data-modal-field="status"]', "completed");
       await page.click('[data-action="modal-save"]');
       await page.waitForSelector(".ai-step-confirm-modal");
@@ -234,11 +233,9 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("r5");
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.locator(`input[data-wbs-progress="num"][data-id="${kStep.id}"]`).fill("10");
-      await page.locator(`input[data-wbs-progress="num"][data-id="${kStep.id}"]`).dispatchEvent("change");
-      await page.waitForSelector(".ai-step-confirm-modal");
-      check("経路#5でも引き継ぎシートが開く", true);
-      await page.click('[data-action="ai-step-confirm-later"]');
+      const row = page.locator(`[data-work-key="task:${kStep.id}"]`);
+      check("A-9 inline progress entry is absent", await row.count() === 1 && await row.locator('[data-wbs-progress]').count() === 0);
+      check("Read-only progress leaves task pending and no handoff", (await storedTasks()).find(t => t.id === kStep.id).status === 'todo' && await sheetVisible() === 0);
     }
 
     console.log("[1-6] 経路#6 Wish詳細のサブタスクチェックボックス(toggleWishSubtask)");
@@ -259,7 +256,7 @@ function check(name, cond, extra = "") {
     {
       const { parent, kStep, aiStep } = triple("c1", { k: { status: "completed", progressNum: 10 } });
       await resetState({ tasks: [parent, kStep, aiStep], view: "wbs" });
-      await page.click(`[data-work-list^="wbs-tasks-"] .wbs-task-title[data-action="edit-task"][data-id="${kStep.id}"]`);
+      await page.click(`[data-work-list="wbs"] .work-list-title[data-action="edit-task"][data-id="${kStep.id}"]`);
       await page.click('[data-action="modal-save"]');  // statusは触らず「completed」のまま保存
       await page.waitForTimeout(300);
       check("再保存では発火しない", await sheetVisible() === 0);

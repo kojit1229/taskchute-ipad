@@ -103,69 +103,25 @@ async function waitSetting(page, expected) {
 }
 
 async function verifyMigrationAndDoneProjectToggle(page) {
-  console.log("[1] D: migration・完了判定の進捗基準統一・表示切替・負例");
-  const done = project("p-done", "完了案件");
-  const active = project("p-active", "進行案件");
-  const empty = project("p-empty", "Taskゼロ案件");
-  const effectivelyDone = project("p-effectively-done", "実質完了案件");
-  const cancelledOnly = project("p-cancelled-only", "中止Taskのみ案件");
-  await seed(page, {
-    projects: [done, active, empty, effectivelyDone, cancelledOnly],
-    tasks: [
-      task("t-done", done.id, "完了Task", { status: "completed" }),
-      task("t-open", active.id, "未完了Task"),
-      task("t-effective-completed", effectivelyDone.id, "完了Task", { status: "completed" }),
-      task("t-effective-cancelled", effectivelyDone.id, "中止Task", { status: "cancelled" }),
-      task("t-effective-suspended", effectivelyDone.id, "中断Task", { status: "suspended" }),
-      task("t-cancelled-only", cancelledOnly.id, "中止Task", { status: "cancelled" })
-    ],
-    deleteSettings: ["wbsHideDoneProjects", "wbsCompactMode"]
-  });
-  let state = await stateNow(page);
-  check("旧stateはwbsHideDoneProjects=false / wbsCompactMode=falseへ移行",
-    state.settings.wbsHideDoneProjects === false && state.settings.wbsCompactMode === false,
-    JSON.stringify(state.settings));
-  check("既定OFFで全Task完了Projectも表示",
-    await page.locator('[data-wbs-row-id="p-done"]').count() === 1
-      && await page.locator('[data-wbs-row-id="p-active"]').count() === 1);
-
-  await installWriteSpy(page);
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: true });
-  check("Dを明示ONにすると全Task完了Projectだけ非表示",
-    await page.locator('[data-wbs-row-id="p-done"]').count() === 0
-      && await page.locator('[data-wbs-row-id="p-active"]').count() === 1);
-  check("Task 0件Projectは0/0完了扱いにせず表示", await page.locator('[data-wbs-row-id="p-empty"]').count() === 1);
-  check("completedにcancelled/suspendedが併存するProjectは進捗基準どおり実質完了で非表示",
-    await page.locator('[data-wbs-row-id="p-effectively-done"]').count() === 0);
-  check("cancelledだけでcountable Taskが0件のProjectは完了扱いにしない",
-    await page.locator('[data-wbs-row-id="p-cancelled-only"]').count() === 1);
-
-  state = await stateNow(page);
-  check("DはlocalStorageへ1回保存しdataModifiedAtを動かさない",
-    await page.evaluate(() => window.__v302StateWrites) === 1 && state.dataModifiedAt === OLD_MODIFIED);
-  await page.reload();
-  await openViewMenu(page);
-  await page.waitForSelector('[data-action="toggle-wbs-hide-done-projects"][aria-pressed="true"]');
-  check("D設定はリロード後もtrueを復元", (await stateNow(page)).settings.wbsHideDoneProjects === true);
-
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: false });
-  check("D表示経路で完了Projectが戻る", await page.locator('[data-wbs-row-id="p-done"]').count() === 1);
-  await openViewMenu(page);
-  await page.locator('[data-action="toggle-wbs-hide-done-projects"]').click();
-  await waitSetting(page, { wbsHideDoneProjects: true });
-  check("D再非表示経路で完了Projectを再び隠す", await page.locator('[data-wbs-row-id="p-done"]').count() === 0);
-
-  await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key));
-    state.tasks.find((item) => item.id === "t-done").status = "todo";
-    localStorage.setItem(key, JSON.stringify(state));
-  }, STATE_KEY);
-  await page.reload();
-  await page.waitForSelector('[data-wbs-row-id="p-done"]');
-  await page.locator('[data-action="wbs-select-project"][data-id="p-done"]').click();
-  check("全完了から1件未完了へ戻すとProjectが再表示", await page.locator('[data-wbs-row-id="t-done"]').count() === 1);
+  console.log('A-8/r3: Project chips and summary aggregates match their tasks');
+  const projects = [project('p-done','Done'),project('p-active','Active'),project('p-empty','Empty'),project('p-mixed','Mixed'),project('p-cancelled','Cancelled')];
+  const tasks = [task('done','p-done','Done',{status:'completed',progressNum:10}),task('open','p-active','Open'),
+    task('mixed-done','p-mixed','Done',{status:'completed',progressNum:10}),task('mixed-cancelled','p-mixed','Cancelled',{status:'cancelled'}),task('mixed-suspended','p-mixed','Suspended',{status:'suspended'}),task('cancelled','p-cancelled','Cancelled',{status:'cancelled'})];
+  await seed(page,{projects,tasks,deleteSettings:['wbsHideDoneProjects','wbsCompactMode']});
+  const state=await stateNow(page);
+  check('Legacy settings default to false',state.settings.wbsHideDoneProjects===false&&state.settings.wbsCompactMode===false);
+  if(await page.locator('.wbs-view-menu').evaluate(el=>el.open)) await page.locator('.wbs-view-menu > summary').click();
+  const root=page.locator('[data-work-list="wbs"]');
+  const before=await stateNow(page); await installWriteSpy(page);
+  for(const [id,count,num,den] of [['p-done',1,10,10],['p-active',1,3,10],['p-empty',0,0,0],['p-mixed',2,10,10],['p-cancelled',1,0,0]]) {
+    const chip=root.locator(`[data-action="wbs-select-project"][data-id="${id}"]`);
+    check('Chip task count: '+id,(await chip.textContent()).trim().endsWith(' '+count));
+    await chip.click();
+    const summary=await root.locator(`[data-work-group="${id}"] > summary`).textContent();
+    check('Summary visible count: '+id,summary.includes(`${count}/${count}`),summary);
+    check('Summary task aggregate: '+id,summary.includes(`${num}/${den} (`),summary);
+  }
+  check('Selecting and reading aggregates does not write state',await page.evaluate(()=>window.__v302StateWrites)===0&&JSON.stringify(await stateNow(page))===JSON.stringify(before));
 }
 
 async function verifyFilteredCollapseAll(page) {

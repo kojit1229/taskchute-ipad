@@ -1,20 +1,4 @@
-// v95 検証: WBSタブに Task進捗(分子/分母)入力+バー、Project進捗率集計を追加。
-//
-// (a) normalizeState 後方互換: 旧Task(progressNum/progressDen無し)に 0/10 が補完される。
-//     旧Project(showProgress無し)に false が補完される
-// (b) WBSタブの通常表示(編集モードOFF)でも分子/分母の数値入力欄が常時表示され、
-//     入力→change→保存→再描画で値が保持される
-// (c) Task行のバー幅が num/den に一致する(0除算ガード: 分母0→0%)
-// (d) Project集計: 配下Taskの Σ分子/Σ分母 で進捗率を算出しバー表示する
-// (e) 「進捗率を表示」チェックボックスOFFならProject行にバー・集計が出ない(Task入力欄は出る)
-// (f) 390px幅でWBSタブに横スクロールが発生しない
-// (g) 完了チェック → 分子が分母と同じ値になる
-// (h) 完了済みTaskに分子<分母を入力 → 完了解除されdoing(着手中)になる
-// (i) 分子>分母を入力 → 分子が分母にクランプされ completed になる
-// (j) 分子=分母を入力 → completed になる。分子0の未完了Taskはtodo(未着手)のまま
-//
-// 方針: 既存スイート(v55/v67)と同じく、app.jsはtype="module"のため内部関数はwindowに
-// 露出しない。ブラウザ操作 + localStorage状態の直接注入で観測する。
+// v443 A-9: progress is read-only; retain normalization, aggregation and completion linkage.
 const { chromium, launchOptions, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -121,58 +105,19 @@ function check(name, cond, extra = "") {
     // ============================================================
     // (b)(c) 入力欄常時表示 + 保存 + バー幅
     // ============================================================
-    console.log("[2] 編集モードOFFでも分子/分母の入力欄が常時表示され、入力→保存→再描画で値保持、バー幅がnum/denに一致");
-    await seed(page, { tasks: [wbsTask("task-A", "進捗つきTask", { progressNum: 0, progressDen: 10 })], projects: [testProject()] });
-    check("編集モードOFF", await page.locator('[data-action="toggle-wbs-edit"].primary').count() === 0);
-    check("分子入力欄が常時表示される", await page.locator('input[data-wbs-progress="num"][data-id="task-A"]').count() === 1);
-    check("分母入力欄が常時表示される", await page.locator('input[data-wbs-progress="den"][data-id="task-A"]').count() === 1);
-    check("入力欄はfont-size 16px以上", await page.locator('input[data-wbs-progress="num"][data-id="task-A"]').evaluate(
-      (el) => parseFloat(getComputedStyle(el).fontSize) >= 16));
-
-    await page.locator('input[data-wbs-progress="num"][data-id="task-A"]').fill("3");
-    await page.locator('input[data-wbs-progress="num"][data-id="task-A"]').dispatchEvent("change");
-    await page.waitForTimeout(200);
-    const s2 = await stateNow(page);
-    check("分子3が保存される", s2.tasks.find((t) => t.id === "task-A")?.progressNum === 3, JSON.stringify(s2.tasks));
-    check("再描画後も入力欄の値3が保持される", await page.locator('input[data-wbs-progress="num"][data-id="task-A"]').inputValue() === "3");
-    // v95補足: normalizeState()が「その他」Project/Task(受け皿)を必ず1つ自動生成するため、
-    // .wbs-progress-row は複数存在しうる。.first()に頼らずtask-Aの行に:has()で絞り込む。
-    const barWidth = await page.locator('.wbs-progress-row:has(input[data-id="task-A"]) .wbs-progress-bar > span').evaluate((el) => el.style.width);
-    check("バー幅が30%(3/10)", barWidth === "30%", barWidth);
-
-    console.log("[3] 0除算ガード: 分母を0にするとバーが0%になる(エラーにならない)");
-    await page.locator('input[data-wbs-progress="den"][data-id="task-A"]').fill("0");
-    await page.locator('input[data-wbs-progress="den"][data-id="task-A"]').dispatchEvent("change");
-    await page.waitForTimeout(200);
-    const barWidth0 = await page.locator('.wbs-progress-row:has(input[data-id="task-A"]) .wbs-progress-bar > span').evaluate((el) => el.style.width);
-    check("分母0でバー0%(0除算ガード)", barWidth0 === "0%", barWidth0);
-
-    // ============================================================
-    // (d)(e) Project集計 + 表示トグル
-    // ============================================================
-    console.log("[4] Project集計: Σ分子/Σ分母で進捗率算出、showProgress ONの時だけバー表示");
-    await seed(page, {
-      tasks: [
-        wbsTask("task-B1", "子1", { progressNum: 4, progressDen: 10 }),
-        wbsTask("task-B2", "子2", { progressNum: 2, progressDen: 10 })
-      ],
-      projects: [testProject({ showProgress: false })]
-    });
-    check("showProgress OFFでは集計バーが出ない", await page.locator('.wbs-progress-agg').count() === 0);
-    // v95補足: 「その他」Project配下の受け皿Taskにも進捗入力欄が出るため、全体件数ではなく個別に確認する
-    check("Task入力欄はshowProgress OFFでも出る(子1)", await page.locator('input[data-wbs-progress="num"][data-id="task-B1"]').count() === 1);
-    check("Task入力欄はshowProgress OFFでも出る(子2)", await page.locator('input[data-wbs-progress="num"][data-id="task-B2"]').count() === 1);
-
-    await seed(page, {
-      tasks: [
-        wbsTask("task-B1", "子1", { progressNum: 4, progressDen: 10 }),
-        wbsTask("task-B2", "子2", { progressNum: 2, progressDen: 10 })
-      ],
-      projects: [testProject({ showProgress: true })]
-    });
-    check("showProgress ONで集計バーが出る", await page.locator('.wbs-progress-agg').count() === 1);
-    const aggText = await page.locator('.wbs-progress-agg').textContent();
-    check("集計が6/20(30%)", aggText.includes("6 / 20") && aggText.includes("30%"), aggText);
+    // A-9: inline progress editing belongs to bundle B; values remain visible.
+    for (const den of [10, 0]) {
+      await seed(page, { tasks: [wbsTask("task-A", "Progress task", { progressNum: 3, progressDen: den })], projects: [testProject()] });
+      const row = page.locator('[data-work-key="task:task-A"]');
+      check("No inline numerator/denominator editors", await row.locator('[data-wbs-progress]').count() === 0);
+      check("Progress information retains numerator and denominator", (await row.locator('.work-list-meta').textContent()).includes(`3/${den}`));
+    }
+    for (const showProgress of [false, true]) {
+      await seed(page, { tasks: [wbsTask("task-B1", "Child 1", { progressNum: 4 }), wbsTask("task-B2", "Child 2", { progressNum: 2 })], projects: [testProject({ showProgress })] });
+      const summary = await page.locator('[data-work-group="test-proj"] > summary').textContent();
+      check("Project task aggregate is 6/20 (30%)", summary.includes('6/20 (30%)'), summary);
+      check("Both task rows have information and no inline editor", await page.locator('[data-work-group="test-proj"] .work-list-meta').count() === 2 && await page.locator('[data-work-group="test-proj"] [data-wbs-progress]').count() === 0);
+    }
 
     // ============================================================
     // (f) 390px幅で横スクロールが発生しない
@@ -211,33 +156,13 @@ function check(name, cond, extra = "") {
     check("完了チェックで分子が分母(10)と同じになる", t6?.progressNum === 10, JSON.stringify(t6));
     check("ステータスがcompletedになる", t6?.status === "completed", JSON.stringify(t6));
 
-    console.log("[7] 完了済みTaskに分子<分母を入力 → 完了解除されdoing(着手中)になる");
-    await seed(page, { tasks: [wbsTask("task-D", "完了済みTask", { progressNum: 10, progressDen: 10, status: "completed" })], projects: [testProject()] });
-    await page.locator('input[data-wbs-progress="num"][data-id="task-D"]').fill("4");
-    await page.locator('input[data-wbs-progress="num"][data-id="task-D"]').dispatchEvent("change");
-    await page.waitForTimeout(200);
-    const s7 = await stateNow(page);
-    const t7 = s7.tasks.find((t) => t.id === "task-D");
-    check("分子<分母でステータスがdoing(着手中)になる", t7?.status === "doing", JSON.stringify(t7));
-    check("分子は入力値4のまま", t7?.progressNum === 4, JSON.stringify(t7));
-
-    console.log("[8] 分子>分母を入力 → 分子が分母にクランプされ completed になる");
-    await seed(page, { tasks: [wbsTask("task-E", "オーバーTask", { progressNum: 2, progressDen: 10 })], projects: [testProject()] });
-    await page.locator('input[data-wbs-progress="num"][data-id="task-E"]').fill("15");
-    await page.locator('input[data-wbs-progress="num"][data-id="task-E"]').dispatchEvent("change");
-    await page.waitForTimeout(200);
-    const s8 = await stateNow(page);
-    const t8 = s8.tasks.find((t) => t.id === "task-E");
-    check("分子が分母(10)にクランプされる", t8?.progressNum === 10, JSON.stringify(t8));
-    check("ステータスがcompletedになる", t8?.status === "completed", JSON.stringify(t8));
-
-    console.log("[9] 分子=分母を入力 → completed になる");
-    await seed(page, { tasks: [wbsTask("task-F", "ぴったりTask", { progressNum: 3, progressDen: 10 })], projects: [testProject()] });
-    await page.locator('input[data-wbs-progress="num"][data-id="task-F"]').fill("10");
-    await page.locator('input[data-wbs-progress="num"][data-id="task-F"]').dispatchEvent("change");
-    await page.waitForTimeout(200);
-    const s9 = await stateNow(page);
-    check("分子=分母でcompletedになる", s9.tasks.find((t) => t.id === "task-F")?.status === "completed", JSON.stringify(s9.tasks));
+    for (const [id, num, status] of [["task-D", 10, "completed"], ["task-E", 2, "todo"], ["task-F", 3, "todo"]]) {
+      await seed(page, { tasks: [wbsTask(id, "Progress editor deferred", { progressNum: num, status })], projects: [testProject()] });
+      const row = page.locator(`[data-work-key="task:${id}"]`);
+      check("Bundle B editor absent for " + id, await row.locator('[data-wbs-progress]').count() === 0);
+      const saved = (await stateNow(page)).tasks.find(t => t.id === id);
+      check("Displaying row preserves progress/status for " + id, saved.progressNum === num && saved.status === status);
+    }
 
     console.log("[10] 分子0の未完了Taskは従来どおり未着手(todo)表示のまま");
     await seed(page, { tasks: [wbsTask("task-G", "未着手Task", { progressNum: 0, progressDen: 10 })], projects: [testProject()] });

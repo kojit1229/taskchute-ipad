@@ -143,11 +143,14 @@ async function seed(page, values) {
     const placedOrder = await page.locator('[data-work-list="exec"] [data-work-key]').evaluateAll(els => els.map(el => el.dataset.workKey).filter(id => ["block:b-added", "block:b-up-b", "block:b-up-a"].includes(id)));
     check("予定は期限順でなくBlock開始時刻順に並ぶ", JSON.stringify(placedOrder) === JSON.stringify(["block:b-added", "block:b-up-b", "block:b-up-a"]), JSON.stringify(placedOrder));
     await page.locator('[data-work-list="exec"] [data-action="nav"][data-view="wbs"]').click();
-    const results = page.locator('[data-work-list^="wbs-tasks-"]');
-    const selectProject = async id => page.locator(`[data-action="wbs-select-project"][data-id="${id}"]`).click();
+    const results = page.locator('[data-work-list="wbs"]');
+    const selectProject = async id => {
+      const chip = page.locator(`[data-action="wbs-select-project"][data-id="${id}"]`);
+      if(await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+    };
     await selectProject('p1');
     await page.locator('.wbs-view-menu > summary').click();
-    await page.locator('[data-action="toggle-show-suspended"]').click();
+    await page.locator('.wbs-view-menu [data-action="toggle-show-suspended"]').click();
     check("表示設定から中断Taskを含めた全件へ切り替えられる", await page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings.showSuspended, STATE_KEY) === true);
     const ids = () => results.locator('[data-work-key]').evaluateAll(els => els.map(el => el.dataset.workKey));
     const shown = [];
@@ -198,7 +201,7 @@ async function seed(page, values) {
     check("期限なしfilterは期限ありTaskを混ぜない", (await ids()).includes("task:t-nodue") && !(await ids()).some(id => ["task:t-overdue", "task:t-today", "task:t-plus3", "task:t-plus7", "task:t-plus8"].includes(id)));
     await results.locator('[data-action="work-list-clear"]').click();
     check("絞り込み・解除は保存しない", await page.evaluate(key => localStorage.getItem(key), STATE_KEY) === beforeFilters && await contentChangingWrites(page, STATE_KEY) === 0);
-    const tree = id => page.locator(`.wbs-projects [data-wbs-row-id="${id}"] > .wbs-task-row`);
+    const tree = id => page.locator(`[data-work-key="task:${id}"]`);
     await results.locator('[data-work-key="task:t-overdue"]').scrollIntoViewIfNeeded();
     check("超過TaskはWBSでアンバー表示", await tree("t-overdue").locator('.wbs-overdue').evaluate(el => getComputedStyle(el).color) === await tokenColor(page, ".wbs-tower", "--tower-amber"));
     const beforeExisting = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).blocks.length, STATE_KEY);

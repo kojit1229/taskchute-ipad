@@ -41,7 +41,7 @@ function task(id, projectId, title, extra = {}) {
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 }, timezoneId: "Asia/Tokyo" });
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("pageerror", (error) => { pageErrors.push(error.message); console.error("PAGEERROR",error.message); });
   await blockGithubApiByDefault(page);
   try {
     await page.clock.setFixedTime(FIXED_NOW);
@@ -85,29 +85,24 @@ function task(id, projectId, title, extra = {}) {
     await page.reload();
     await page.waitForSelector(".wbs-header");
 
-    console.log("[1] モバイルの常時ツールバーと非永続の表示メニュー");
-    check("作業一覧と12週計画の週・日付範囲を表示", /作業一覧/.test(await page.locator(".wbs-heading").textContent())
-      && (await page.locator(".wbs-heading").textContent()).includes("12週計画 第3週 ・ 8/29 – 9/4"));
-    check("検索は常設し、閉時のツールバー操作は表示と追加を保持", await page.locator(".wbs-view-menu > summary").isVisible()
-      && await page.locator(".wbs-add-menu > summary").isVisible()
-      && await page.locator('#wbs-projects-query').isVisible() && await page.locator('#wbs-tasks-p-cycle-query').isVisible() && !await page.locator(".wbs-edit-toggle").isVisible());
-    const stateBeforeMenus = await page.evaluate((key) => localStorage.getItem(key), STATE_KEY);
-    await page.locator(".wbs-view-menu > summary").click();
-    check("表示メニュー内に検索と編集を含む8操作、ON/OFFを表示", await page.locator("#wbs-projects-query").isVisible()
-      && await page.locator(".wbs-view-options [data-action]").count() === 8
-      && (await page.locator(".wbs-view-options").textContent()).includes("カテゴリ絞り込み")
-      && await page.locator(".wbs-view-option b").count() === 7);
-    check("表示メニュー開閉はstate/localStorageへ書かない", await page.evaluate((key) => localStorage.getItem(key), STATE_KEY) === stateBeforeMenus);
-    const menuEdit = page.locator(".wbs-menu-edit-toggle");
-    check("モバイルの編集モード行は44px・現在値OFF", await menuEdit.isVisible()
-      && await menuEdit.evaluate((element) => element.getBoundingClientRect().height >= 44)
-      && await menuEdit.locator("b").textContent() === "OFF");
-    await menuEdit.click();
-    await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).settings.wbsEditMode === true, STATE_KEY);
-    await page.locator(".wbs-view-menu > summary").click();
-    check("表示メニューの編集モード行は既存actionでONへ更新", await page.locator(".wbs-menu-edit-toggle b").textContent() === "ON");
-    await page.locator(".wbs-menu-edit-toggle").click();
-    await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).settings.wbsEditMode === false, STATE_KEY);
+    check('WBS header keeps cycle week and date range', (await page.locator('.wbs-heading').textContent()).includes('8/29')&&(await page.locator('.wbs-heading').textContent()).includes('9/4'));
+    check('One title query and add panel are always available',await page.locator('#wbs-projects-query').isVisible()&&await page.locator('[data-work-list="wbs"] [data-work-filter="query"]').count()===1&&await page.locator('.wbs-add-menu > summary').isVisible());
+    const menu=page.locator('.wbs-view-menu');
+    const openMenu=async()=>{if(!await menu.evaluate(el=>el.open))await menu.locator('summary').click();};
+    const closeMenu=async()=>{if(await menu.evaluate(el=>el.open))await menu.locator('summary').click();};
+    const beforeMenus=await page.evaluate(key=>localStorage.getItem(key),STATE_KEY);
+    await openMenu();
+    check('View menu retains 8 operations',await page.locator('.wbs-view-options [data-action]').count()===8);
+    await closeMenu();
+    check('Opening and closing view menu does not save',await page.evaluate(key=>localStorage.getItem(key),STATE_KEY)===beforeMenus);
+    for(const enabled of [true,false]) {
+      await openMenu();
+      const button=page.locator('.wbs-menu-edit-toggle');
+      check('Edit mode tap height >=44px',await button.evaluate(el=>el.getBoundingClientRect().height>=44));
+      await button.click();
+      check('Existing edit setting is saved: '+enabled,await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).settings.wbsEditMode,STATE_KEY)===enabled);
+    }
+    await closeMenu();
 
     console.log("[2] 追加パネルは既定閉、Project/Task追加は既存actionのまま");
     check("追加パネルは既定閉", !await page.locator("#projectTitle").isVisible() && !await page.locator("#taskTitle").isVisible());
@@ -132,20 +127,20 @@ function task(id, projectId, title, extra = {}) {
     check("add-project/add-taskが従来どおり保存", added?.projectId === addedProjectId);
 
     console.log("[3] TOWER色・44px・390/1280pxレスポンシブ");
-    await page.locator(".wbs-view-menu > summary").click();
+    await closeMenu();
     await page.locator('[data-action="wbs-select-project"][data-id="p-cycle"]').click();
-    await page.locator('#wbs-tasks-p-cycle-query').fill("未着手 Task");
-    await page.waitForSelector('[data-work-list="wbs-tasks-p-cycle"] [data-work-key="task:t-todo"]');
-    check("選択Project内検索は一致Taskだけを表示し別Projectを混ぜない", await page.locator('[data-work-list="wbs-tasks-p-cycle"] [data-work-key]').count() === 1
+    await page.locator('#wbs-projects-query').fill("未着手 Task");
+    await page.waitForSelector('[data-work-group="p-cycle"] [data-work-key="task:t-todo"]');
+    check("選択Project内検索は一致Taskだけを表示し別Projectを混ぜない", await page.locator('[data-work-group="p-cycle"] [data-work-key]').count() === 1
       && await page.locator(`[data-work-key="task:${added.id}"]`).count() === 0);
-    await page.locator('#wbs-tasks-p-cycle-query').fill('');
+    await page.locator('#wbs-projects-query').fill('');
     const mobile = await page.evaluate(() => {
       const root = document.querySelector(".wbs-tower");
       const doc = document.scrollingElement || document.documentElement;
       const buttons = [...document.querySelectorAll(".wbs-toolbar summary")].map((el) => el.getBoundingClientRect().height);
       return { bg: getComputedStyle(root).backgroundColor, noOverflow: doc.scrollWidth <= innerWidth + 1, buttons };
     });
-    const overdueColor = await page.locator(".wbs-projects .wbs-overdue").first().evaluate((el) => getComputedStyle(el).color);
+    const overdueColor = await page.locator('[data-work-key="task:t-active"] .work-list-meta').first().evaluate((el) => getComputedStyle(el).color);
     check("390pxでTOWER背景・アンバー期限超過・横スクロールなし", mobile.bg === await tokenColor(page, ".wbs-tower", "--tower-bg")
       && overdueColor === await tokenColor(page, ".wbs-tower", "--tower-amber") && mobile.noOverflow);
     check("常時ボタンは44px以上", mobile.buttons.every((height) => height >= 44), JSON.stringify(mobile.buttons));
@@ -171,16 +166,22 @@ function task(id, projectId, title, extra = {}) {
     });
     check("WBSタブの可視テキストは11px以上・opacity .7以上", accessibilityViolations.length === 0,
       JSON.stringify(accessibilityViolations.slice(0, 12)));
-    const towerTokens = await page.evaluate(() => ({
-      criteria: getComputedStyle(document.querySelector(".wbs-criteria-btn.on")).borderColor,
-      searchKind: getComputedStyle(document.querySelector('.wbs-project-choice.selected')).borderLeftColor,
-      track: getComputedStyle(document.querySelector(".twy-row")).backgroundColor
-    }));
-    check("選択Project・条件ボタン・12WYトラックはTOWERトークン配色",
-      towerTokens.criteria === await tokenColor(page, ".wbs-tower", "--tower-cyan") && towerTokens.searchKind === await tokenColor(page, ".wbs-tower", "--tower-amber")
-        && towerTokens.track === await tokenColor(page, ".wbs-tower", "--tower-bg"), JSON.stringify(towerTokens));
-    check("週の確定操作は選択12WY Project詳細内", await page.locator('[data-wbs-detail-id="p-cycle"] [data-action="twy-open-commit"]').count() === 1
-      && await page.locator(".wbs-toolbar [data-action='twy-open-commit']").count() === 0);
+    check('AI request toggle is deferred while saved flag is retained',await page.locator('[data-work-list="wbs"] [data-action="toggle-criteria-request"]').count()===0&&await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).tasks.find(t=>t.id==='t-active').criteriaRequest,STATE_KEY)===true);
+    const selectedColor=await page.locator('[data-action="wbs-select-project"][data-id="p-cycle"]').evaluate(el=>getComputedStyle(el).borderLeftColor);
+    check('Selected project retains amber indicator',selectedColor===await tokenColor(page,'.wbs-tower','--tower-amber'),selectedColor);
+    const summary=await page.locator('[data-work-group="p-cycle"] > summary').textContent();
+    check('Project summary carries cycle week',/12\u9031\u8a08\u753b \u7b2c3\u9031/.test(summary),summary);
+    check('WBS no longer embeds track editing',await page.locator('[data-work-list="wbs"] [data-twy-track-id]').count()===0);
+    await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
+    await page.locator('.more-tower-grid [data-action="nav"][data-view="twelveweek"]').click();
+  console.log('Twelve-week navigation',await page.locator('#app').getAttribute('data-view'),await page.locator('.twy-tower').count());
+    await page.locator('.twy-cycle-fold > summary').click();
+    const track=page.locator('.twy-goals-panel [data-twy-track-id="track-numeric"]');
+    check('Track moves to twelve-week tab',await track.count()===1);
+    check('Track retains TOWER background',await track.evaluate(el=>getComputedStyle(el).backgroundColor)===await tokenColor(page,'.twy-goals-panel','--tower-bg'));
+    check('Week commit remains reachable in twelve-week tab',await page.locator('.twy-goals-panel [data-action="twy-open-commit"]').count()===1);
+    await page.locator('#bottomNav [data-action="nav"][data-view="more"]').click();
+    await page.locator('.more-tower-grid [data-action="nav"][data-view="wbs"]').click();
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.reload();

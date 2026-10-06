@@ -1,9 +1,4 @@
-// v99 検証: WBSタブのタスク行に「翌朝のAI処理を依頼する」チェックUI(criteriaRequest)を追加。
-// (a) トグルON→保存→再描画で保持 (b) 既定false・normalizeState後方互換
-// (c) ON状態が視覚的にわかる(.on付与+バッジ) (d) 完了チェック/進捗入力と独立に動作(双方向)
-// (e) 390px幅で横スクロールが発生しない
-// 方針: v96/v95と同じく、app.js は type="module" のため内部関数はwindowに露出しない。
-// ブラウザ操作 + localStorage 状態の直接注入で観測する。
+// v443 A-9: request toggle absent; stored flags remain independent of completion.
 const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer, blockGithubApiByDefault, passGithubGate, randomPort } = require("./helpers");
 
 const PORT = randomPort();
@@ -56,7 +51,7 @@ function check(name, cond, extra = "") {
       await page.locator(`[data-action="wbs-select-project"][data-id="${tasks[0].projectId}"]`).click();
       await page.waitForFunction(
         (ids) => ids.every((id) =>
-          document.querySelectorAll(`[data-action="toggle-criteria-request"][data-id="${id}"]`).length === 1),
+          document.querySelectorAll(`[data-work-key="task:${id}"]`).length === 1),
         tasks.map((t) => t.id)
       );
     } else {
@@ -67,14 +62,6 @@ function check(name, cond, extra = "") {
   async function stateNow() {
     return page.evaluate((KEY) => JSON.parse(localStorage.getItem(KEY)), KEY);
   }
-  async function openTaskMenu(id) {
-    await page.locator(`[data-wbs-row-id="${id}"] > .wbs-task-row > .wbs-row-menu-toggle`).click();
-  }
-  async function enableEditMode() {
-    await page.locator(".wbs-view-menu > summary").click();
-    await page.locator('[data-action="toggle-wbs-edit"].wbs-menu-edit-toggle').click();
-  }
-
   try {
     await page.clock.setFixedTime(now0);
     await page.goto(`http://localhost:${PORT}/`);
@@ -106,58 +93,21 @@ function check(name, cond, extra = "") {
     const legacyTask = (normalized.tasks || []).find((t) => t.id === "legacy-task");
     check("旧TaskにcriteriaRequest:falseが補完される", legacyTask?.criteriaRequest === false, JSON.stringify(legacyTask));
 
-    // (c) WBS行にトグルボタン + 既定OFF表示
-    console.log("[2] WBS行にトグルボタンがあり、既定はOFF(.on無し・バッジ無し)");
-    await seed({ tasks: [task("task-A", "テストTask")], projects: [testProject()] });
-    const btnA = page.locator('[data-action="toggle-criteria-request"][data-id="task-A"]');
-    check("トグルボタンが1個ある", await btnA.count() === 1);
-    check("既定はOFF(onクラス無し)", !(await btnA.evaluate((el) => el.classList.contains("on"))));
-    check("既定はaria-pressed=false", await btnA.getAttribute("aria-pressed") === "false");
-    check("既定ではバッジ非表示", await page.locator(".wbs-criteria-badge").count() === 0);
-
-    // (a)(c) トグルON→保存→再描画で保持 + 視覚表示
-    console.log("[3] トグルをタップ→ONになり保存される→再読込後も保持・視覚表示される");
-    await openTaskMenu("task-A");
-    await btnA.click();
-    await page.waitForTimeout(250);
-    const taskOn = (await stateNow()).tasks.find((t) => t.id === "task-A");
-    check("state.criteriaRequestがtrueになる", taskOn?.criteriaRequest === true, JSON.stringify(taskOn));
-    check("トグルボタンに.onが付く", await btnA.evaluate((el) => el.classList.contains("on")));
-    check("aria-pressed=trueになる", await btnA.getAttribute("aria-pressed") === "true");
-    await openTaskMenu("task-A");
-    check("メニュー内のAI依頼ボタンがON表示になる", await btnA.isVisible()
-      && await btnA.evaluate((el) => el.classList.contains("on"))
-      && await btnA.getAttribute("aria-pressed") === "true");
-    await page.reload();
-    await page.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
-    await page.waitForTimeout(500);
-    const btnAReload = page.locator('[data-action="toggle-criteria-request"][data-id="task-A"]');
-    check("再読込後もONが保持される(.on)", await btnAReload.evaluate((el) => el.classList.contains("on")));
-    check("再読込後もstate上criteriaRequest=true", (await stateNow()).tasks.find((t) => t.id === "task-A")?.criteriaRequest === true);
-    await openTaskMenu("task-A");
-    await btnAReload.click();  // バッチの自動解除と同じUIパスで、再タップでOFFに戻せることも確認
-    await page.waitForTimeout(250);
-    check("再タップでOFFに戻る", (await stateNow()).tasks.find((t) => t.id === "task-A")?.criteriaRequest === false);
-
-    // (d) 完了チェック(toggle-task)・進捗入力(wbs-progress)と双方向に独立して動作する
-    console.log("[4] 完了チェック・進捗入力と双方向に独立して動作する(互いの値を書き換えない)");
-    await seed({ tasks: [task("task-B", "独立性確認Task", { progressNum: 3, progressDen: 10, status: "doing" })], projects: [testProject()] });
-    const btnB = page.locator('[data-action="toggle-criteria-request"][data-id="task-B"]');
-    await openTaskMenu("task-B");
-    await btnB.click();
-    await page.waitForTimeout(200);
-    let taskB = (await stateNow()).tasks.find((t) => t.id === "task-B");
-    check("criteriaRequestトグルはprogressNum/statusを変えない", taskB?.progressNum === 3 && taskB?.status === "doing", JSON.stringify(taskB));
-    await page.click('[data-action="toggle-task"][data-id="task-B"]');
-    await page.waitForTimeout(200);
-    taskB = (await stateNow()).tasks.find((t) => t.id === "task-B");
-    check("完了チェック操作後もcriteriaRequest=trueを維持", taskB?.criteriaRequest === true && taskB?.status === "completed", JSON.stringify(taskB));
-    await enableEditMode();
-    await page.fill('[data-wbs-progress="den"][data-id="task-B"]', "20");
-    await page.locator('[data-wbs-progress="den"][data-id="task-B"]').dispatchEvent("change");
-    await page.waitForTimeout(200);
-    taskB = (await stateNow()).tasks.find((t) => t.id === "task-B");
-    check("進捗編集操作後もcriteriaRequest=trueを維持", taskB?.criteriaRequest === true, JSON.stringify(taskB));
+    // A-9: AI request and inline progress controls belong to bundle B.
+    for (const criteriaRequest of [false, true]) {
+      await seed({tasks:[task('task-A','Request state',{criteriaRequest,progressNum:3,status:'doing'})],projects:[testProject()]});
+      const row = page.locator('[data-work-key="task:task-A"]');
+      check('AI request control absent for saved value '+criteriaRequest,await row.locator('[data-action="toggle-criteria-request"]').count()===0);
+      check('Inline progress editor absent',await row.locator('[data-wbs-progress]').count()===0);
+      let saved=(await stateNow()).tasks.find(t=>t.id==='task-A');
+      check('Displaying row preserves request, progress and status',saved.criteriaRequest===criteriaRequest&&saved.progressNum===3&&saved.status==='doing');
+      await row.locator('[data-action="toggle-task"]').click();
+      await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key)).tasks.find(t=>t.id==='task-A').status==='completed',KEY);
+      saved=(await stateNow()).tasks.find(t=>t.id==='task-A');
+      check('Completion remains independent of AI request flag',saved.status==='completed'&&saved.progressNum===saved.progressDen&&saved.criteriaRequest===criteriaRequest);
+      await page.reload();
+      check('Reload retains saved AI request flag', (await stateNow()).tasks.find(t=>t.id==='task-A').criteriaRequest===criteriaRequest);
+    }
 
     // (e) 390px幅で横スクロールが発生しない
     console.log("[5] 390px幅のWBSタブでトグルON状態でも横スクロールが発生しない");
@@ -187,8 +137,8 @@ function check(name, cond, extra = "") {
     await pageMobile.reload();
     await pageMobile.locator('[data-action="wbs-select-project"][data-id="test-proj"]').click();
     await pageMobile.waitForTimeout(500);
-    check("モバイル幅でもトグルON表示(.on)が見える",
-      await pageMobile.locator('[data-action="toggle-criteria-request"][data-id="task-M"]').evaluate((el) => el.classList.contains("on")));
+    check('Mobile row has no AI toggle even with stored request ON',
+      await pageMobile.locator('[data-work-key="task:task-M"]').count()===1 && await pageMobile.locator('[data-work-key="task:task-M"] [data-action="toggle-criteria-request"]').count()===0);
     const metricsMobile = await pageMobile.evaluate(() => {
       const doc = document.scrollingElement || document.documentElement;
       return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth };
