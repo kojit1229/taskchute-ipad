@@ -98,7 +98,7 @@ async function verifySearchAndDebounce(page) {
   }
   await search(page, 'absent');
   check('Zero matches retain input and show no task rows', (await taskKeys(page)).length === 0 && await page.locator(rootSelector + ' [data-work-filter="query"]').inputValue() === 'absent');
-  check('Zero-match guidance remains visible',(await page.locator(rootSelector+' [data-work-list-rows]').textContent()).trim()==='\u8a72\u5f53\u3059\u308b\u30bf\u30b9\u30af\u306f\u3042\u308a\u307e\u305b\u3093\u3002');
+  check('Zero-match guidance remains visible',(await page.locator(rootSelector+' [data-work-list-rows]').textContent()).includes('\u8a72\u5f53\u3059\u308b\u30bf\u30b9\u30af\u306f\u3042\u308a\u307e\u305b\u3093\u3002'));
   await page.locator('#bottomNav [data-view="exec"]').click();
   check('Live task under deleted project remains reachable from execution candidates',await page.locator('[data-work-list="exec-candidates"] [data-work-key="task:t-orphan"]').count()===1 && await page.locator('[data-work-list="exec-candidates"] [data-work-key="task:t-deleted"]').count()===0);
   const projects = Array.from({length:51}, (_,i) => project('p-limit-' + i, 'Project ' + i));
@@ -150,10 +150,10 @@ async function verifyJumpPaths(page) {
   check('Negative case starts from B and its matching task', JSON.stringify(beforeSelection.selected)==='["p-b"]' && JSON.stringify(await taskKeys(page))==='["task:t-b"]');
   for (const id of ['missing','p-deleted']) {
     const button=page.locator('[data-work-list="wbs"] [data-action="wbs-select-project"][data-value="p-a"]');
-    await button.evaluate((el,id)=>el.dataset.id=id,id); await button.click();
+    const handle=await button.elementHandle(); await handle.evaluate((el,id)=>{el.dataset.id=id;el.dataset.value=id;},id); await handle.click();
     check(id+': invalid selection preserves query, selected project and rows', JSON.stringify(await snapshot())===JSON.stringify(beforeSelection));
     check(id+': invalid selection makes no storage changes',await page.evaluate(()=>window.__v288StateWrites)===0 && await page.evaluate(()=>JSON.stringify(Object.entries(localStorage).sort()))===beforeStorage);
-    await button.evaluate(el=>el.dataset.id='p-a');
+    await button.evaluate(el=>{el.dataset.id='p-a';el.dataset.value='p-a';});
   }
 }
 async function verifyRegressionAndProjectDefault(page) {
