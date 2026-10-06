@@ -6,7 +6,6 @@ import { buildThreeScreenRows, renderScreenGroups } from "./three-screen-rows.js
 import { renderScheduleSection } from "./single-schedule-view.js";
 import { isTodayActual, renderTodayTable, renderTodayTableRow } from "../ui/daily-parts/today-table.js";
 import { collapseSeries } from "../core/work-series.js";
-import { renderDecideView } from "./decide-view.js";
 
 let escapeHTML, todayISO, dueDate, renderBlock, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails;
 let modalOrigin;
@@ -240,7 +239,7 @@ function handleWorkListEdit(target) {
   }
   const root = target.closest('[data-work-list="wbs"]');
   if (!screenDeps.updateTaskField(id, field, value)) target.value = task[field] ?? (field === "estimateMin" ? 0 : "");
-  else if (target.closest("[data-decide-view]")) { target.closest("[data-decide-view]").outerHTML = renderDecideView(); return true; }
+  else if (target.closest("[data-decide-view]")) { target.closest("[data-decide-view]").outerHTML = screenDeps.renderDecideView(); return true; }  // 循環 import を避け deps 経由(fixB-2)
   if (root) patchWorkList(root, false, id);
   else {
     const row = target.closest("[data-work-key]");

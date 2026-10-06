@@ -344,7 +344,7 @@ configureGithubSync({
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
 configureDecideView({ updateTaskField, saveDecision: callback => draftSaveTransaction.run(callback, { kinds: ["tasks"] }).ok, renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
-configureWorkList({ handleDecideEdit, updateTaskField: updateDecideTaskField, renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureWorkList({ handleDecideEdit, renderDecideView, updateTaskField: updateDecideTaskField, renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
