@@ -47,7 +47,8 @@ export function createFeedbackHttp({ connection, headers, fetch: request = globa
     const work = async () => {
       guard();
       const base = `https://api.github.com/repos/${encodeURIComponent(s.cfg.owner)}/${encodeURIComponent(s.cfg.repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
-      const init = { method, signal: controller.signal, headers: { ...headers(s.cfg.token), Accept: 'application/vnd.github+json' } };
+      // v444: 同じ URL を Accept: raw で取った応答がブラウザのHTTPキャッシュから JSON 要求へ返る(PC Chrome で本文が「未取得」になる)ため、API はキャッシュを使わない。
+      const init = { method, signal: controller.signal, cache: 'no-store', headers: { ...headers(s.cfg.token), Accept: 'application/vnd.github+json' } };
       if (method === 'PUT') {
         if (!(bytes instanceof Uint8Array) || bytes.byteLength > maxBytes) throw Error('http_payload_invalid');
         let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte);

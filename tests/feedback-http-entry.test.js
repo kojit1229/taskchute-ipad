@@ -23,7 +23,7 @@ const response=(text='synthetic 😀')=>({status:200,headers:{get:()=>null},text
 function http(fetch){const time=timers();let cfg={owner:'synthetic-owner',repo:'synthetic-repo',branch:'fixture branch',token:'SYNTHETIC_SECRET',path:'taskchute/custom-state.json'};
  const h=createFeedbackHttp({connection:()=>cfg,headers:token=>({Authorization:'Bearer '+token}),fetch,...time});return {h,time,cycle:()=>{const old=cfg;cfg={...cfg,repo:'other'};h.invalidate();cfg=old;h.invalidate();}};}
 test('HTTP binds actual configured path/branch/token, decodes contents, and does not expose credentials',async()=>{
- const f=http(async(url,opts)=>{assert.match(url,/custom-state\.json\?ref=fixture%20branch$/);assert.equal(opts.headers.Authorization,'Bearer SYNTHETIC_SECRET');return response();});
+ const f=http(async(url,opts)=>{assert.match(url,/custom-state\.json\?ref=fixture%20branch$/);assert.equal(opts.headers.Authorization,'Bearer SYNTHETIC_SECRET');assert.equal(opts.cache,'no-store','v444: API はブラウザのHTTPキャッシュを使わない(Accept 違いの応答が混ざる)');return response();});
  const result=await f.h.get({kind:'primary-state'});assert.equal(result.text,'synthetic 😀');assert(!JSON.stringify(result).includes('SECRET'));assert.equal(f.time.active.size,0);
 });
 test('conditional report PUT only: missing SHA, primary write, and traversal all stop before fetch',async()=>{
