@@ -7715,15 +7715,15 @@
       "kind": "e2e",
       "tier": "full",
       "domains": [
-        "planning-execution",
-        "ui-responsive"
+        "sync-storage",
+        "planning-execution"
       ],
-      "assertionSignals": 10,
-      "assertionHash": "72a1a5ef14f4234c",
-      "sourceHash": "63b9c90879651270",
+      "assertionSignals": 13,
+      "assertionHash": "c56450ae6077dc79",
+      "sourceHash": "43655c1e5fec36b3",
       "waits": {
-        "fixedCount": 4,
-        "numericMilliseconds": 1700,
+        "fixedCount": 0,
+        "numericMilliseconds": 0,
         "unresolvedCount": 0
       },
       "sideEffects": {
@@ -7731,7 +7731,7 @@
         "server": true,
         "fileWrite": false,
         "networkMock": false,
-        "clock": false
+        "clock": true
       }
     },
     {
@@ -8890,9 +8890,9 @@
       "domains": [
         "planning-execution"
       ],
-      "assertionSignals": 66,
-      "assertionHash": "4467958a9a3ce364",
-      "sourceHash": "74bfba898a325e25",
+      "assertionSignals": 84,
+      "assertionHash": "c554aced52f1c39f",
+      "sourceHash": "4d1f4e5b0466ff36",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

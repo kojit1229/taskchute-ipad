@@ -5738,6 +5738,7 @@ details.settings-row > .fold-summary.settings-row-summary {
 .work-task-name .work-list-title { flex: 1; min-width: 44px; min-height: 44px; width: auto; padding: 4px; box-sizing: border-box; }
 .work-task-row .work-list-meta { padding: 0; }
 .work-task-due { font-size: 12px; }
+.work-task-due input { width: 100%; min-width: 0; min-height: 44px; }
 .work-list-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; align-items: end; }
 .work-list-filters label { display: flex; flex: 1 1 120px; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
 .work-list-filters .work-list-query { flex-basis: 100%; }

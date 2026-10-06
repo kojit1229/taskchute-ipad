@@ -60,7 +60,7 @@ import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
 import { configureDecideView, renderDecideView, undecidedCount } from "./src/features/decide-view.js";
-import { workListConditions, configureWorkList, renderWorkList, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
+import { workListConditions, configureWorkList, renderWorkList, handleWorkListEdit, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 import { workListRows, filterWorkList } from "./src/core/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
 //   経由のみ(claude-review-result.md §2 Blocker-1)。store.jsは何もimportしない真の葉。
@@ -344,7 +344,7 @@ configureGithubSync({
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
 configureDecideView({ renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
-configureWorkList({ renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureWorkList({ updateTaskField, renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
@@ -1959,6 +1959,7 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (handleWorkListEdit(event.target)) return;
   if (handleWorkListInput(event.target)) return;
   const target = event.target;
   // v315: selectの登録済みdata-actionはchangeでもレジストリ経由で処理する。
