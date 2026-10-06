@@ -106,7 +106,7 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
         await root.locator('.work-decide-sidebar').waitFor();
         await root.locator('[data-work-list-rows]').waitFor();
         await root.locator('[data-work-filter="query"]').waitFor();
-        const size = await root.evaluate(el=>{const side=el.querySelector('.work-decide-sidebar'),groups=el.querySelector('[data-work-list-rows]'),a=side.getBoundingClientRect(),b=groups.getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,side:a.width,sideX:a.x,listX:b.x,listY:b.y,sideBottom:a.bottom,position:getComputedStyle(side).position,columns:getComputedStyle(groups).columnCount,font:parseFloat(getComputedStyle(el.querySelector('input')).fontSize)};});
+        const size = await root.evaluate(el=>{const side=el.querySelector('.work-decide-sidebar'),groups=el.querySelector('[data-work-list-rows]'),a=side.getBoundingClientRect(),b=groups.getBoundingClientRect();return {overflow:document.documentElement.scrollWidth>innerWidth,side:a.width,sideX:a.x,listX:b.x,listY:b.y,sideBottom:a.bottom,position:getComputedStyle(side).position,columns:getComputedStyle(groups).columnCount,font:parseFloat(getComputedStyle(el.querySelector('[data-work-filter="query"]')).fontSize)};});
         assert(!size.overflow,'overflow at '+width); assert(size.font>=16);
         if(width>=900) { assert.equal(Math.round(size.side),400); assert(size.listX>size.sideX); assert.equal(size.position,'sticky'); } else assert(size.listY>=size.sideBottom);
         assert.equal(size.columns,'auto');
