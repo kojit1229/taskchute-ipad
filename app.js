@@ -59,7 +59,7 @@ import { candidateTasks } from "./src/features/three-screen-rows.js";
 import { configureScheduleView } from "./src/features/single-schedule-view.js";
 import { plannedAvailability, displayPlannedGaps, draftPlannedIntervals, capturePlannedDraft, validatePlannedDraft, gapWarning } from "./src/features/daily-gap-placement.js";
 import { createDailyGapSheet } from "./src/features/daily-gap-sheet.js";
-import { configureDecideView, renderDecideView, undecidedCount, handleDecideEdit } from "./src/features/decide-view.js";
+import { configureDecideView, renderDecideView, undecidedCount, handleDecideEdit, inheritDueNudge, updateDecideTaskField } from "./src/features/decide-view.js";
 import { workListConditions, configureWorkList, renderWorkList, handleWorkListEdit, handleWorkListInput, handleWorkListComposition, rememberWorkListOrigin, restoreWorkListOrigin, rememberWorkListScroll, restoreWorkListScroll } from "./src/features/work-list.js";
 import { workListRows, filterWorkList } from "./src/core/work-list.js";
 // v166: app.js分割・段階3(state store + storage/sync gateway)。stateの再代入はsetState()
@@ -344,7 +344,7 @@ configureGithubSync({
   readArchiveForSync: async (year, cfg) => (await fetchGitHubJSONFile(cfg, personalDataPath(`archive/archive-${year}.json`)))?.obj
 });
 configureDecideView({ updateTaskField, saveDecision: callback => draftSaveTransaction.run(callback, { kinds: ["tasks"] }).ok, renderHeader, escapeHTML, todayISO, addDays, daysBetween, dueDate: effectiveDueDate });
-configureWorkList({ handleDecideEdit, updateTaskField, renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
+configureWorkList({ handleDecideEdit, updateTaskField: updateDecideTaskField, renderWbsAddMenu, undecidedCount, escapeHTML, todayISO, addDays, daysBetween, projectProgressAgg, isTaskDead, dueDate: effectiveDueDate, resolveEstimateMin, leverageTypeMarkHTML, dailyBlockDetails, wbsSearchModel, wbsSearchRows,
   renderBlock: block => block.completed || block.actualEndAt ? renderExecDoneRow(block) : block.actualStartAt && !block.actualEndAt ? renderExecNowRow(block) : renderExecUpcomingRow(block) });
 configureNowView({ getState: () => state, escapeHTML, todayISO, blocksForDate, localDateTimeToMs, timeFromDateTime, resolveEstimateMin, fetchMorningStatus: fetchGitHubRawResult });
 configureRoutineView({ getState: () => state, escapeHTML, todayISO, nowDateTime, renderHeader, createRecurrenceRule, maintainRecurrences,
@@ -5330,6 +5330,7 @@ function updateTaskField(id, field, value) {
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, [field]: value, ...(field === "status" && value === "completed" ? { progressNum: fillProgressOnComplete(t) } : {}) }
     : t);
+  if (field === "status" && value === "completed") inheritDueNudge(id);
   draftSaveTransaction.complete();
 }
 
@@ -10086,6 +10087,7 @@ function toggleTask(id) {
   }
   state.tasks = state.tasks.map((t) => t.id === id
     ? { ...t, status: "completed", progressNum: fillProgressOnComplete(t) } : t);
+  inheritDueNudge(id);  // v448 束B: シリーズの dueNudge を次の未完了の巻へ引き継ぐ
   const date = todayISO(), end = nowDateTime();
   const minutes = Number.isFinite(task.estimateMin) && task.estimateMin > 0 ? task.estimateMin : 15;
   // 既存の減算ヘルパーは分までを返すので、チェック時刻の秒を保つ。

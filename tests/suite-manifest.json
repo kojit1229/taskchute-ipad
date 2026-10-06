@@ -1028,9 +1028,9 @@
         "planning-execution",
         "ui-responsive"
       ],
-      "assertionSignals": 53,
-      "assertionHash": "d27036994b6345f6",
-      "sourceHash": "d158d8249ae1b37d",
+      "assertionSignals": 85,
+      "assertionHash": "1b1c5764b29bc246",
+      "sourceHash": "a88d184de08ac6e1",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,
@@ -8913,9 +8913,9 @@
       "domains": [
         "legacy-crosscutting"
       ],
-      "assertionSignals": 14,
-      "assertionHash": "a961b9b851a975c3",
-      "sourceHash": "d8cb41f99fba8ba3",
+      "assertionSignals": 15,
+      "assertionHash": "213635bfbd314762",
+      "sourceHash": "9f58432fd6ebfb10",
       "waits": {
         "fixedCount": 0,
         "numericMilliseconds": 0,

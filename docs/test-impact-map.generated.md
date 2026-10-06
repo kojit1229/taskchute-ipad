@@ -46,7 +46,7 @@
 | data-contract-gate.test.js | node | full | content-ai | 20 | 0 | 0 |
 | data-stamp-normalize.test.js | node | full | legacy-crosscutting | 13 | 0 | 0 |
 | day-cross-ticker.test.js | e2e | full | sync-storage, planning-execution, content-ai | 20 | 8 | 7600 |
-| decide-view.test.js | e2e | full | planning-execution, ui-responsive | 53 | 0 | 0 |
+| decide-view.test.js | e2e | full | planning-execution, ui-responsive | 85 | 0 | 0 |
 | detail-draft-e2e.test.js | e2e | full | sync-storage, planning-execution, ui-responsive | 31 | 0 | 0 |
 | directory-fallback.test.js | node | full | content-ai | 14 | 0 | 0 |
 | draft-leave.test.js | node | full | legacy-crosscutting | 34 | 0 | 0 |
@@ -374,7 +374,7 @@
 | work-list-model.test.js | node | full | legacy-crosscutting | 19 | 0 | 0 |
 | work-list-render-focus.test.js | node | full | ui-responsive | 5 | 0 | 0 |
 | work-list-wbs.test.js | e2e | full | planning-execution | 84 | 0 | 0 |
-| work-series.test.js | node | full | legacy-crosscutting | 14 | 0 | 0 |
+| work-series.test.js | node | full | legacy-crosscutting | 15 | 0 | 0 |
 | xss-sanitizer.test.js | e2e | smoke | content-ai, security-offline | 41 | 2 | 1000 |
 | zero-autosave-e2e.test.js | node | full | legacy-crosscutting | 65 | 0 | 0 |
 | zero-clock.test.js | node | full | legacy-crosscutting | 18 | 0 | 0 |

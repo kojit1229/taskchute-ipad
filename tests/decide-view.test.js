@@ -145,6 +145,84 @@ const { chromium, launchOptions, defaultContextOptions, fixedClock, startServer,
       assert((await root.textContent()).includes('今日の分(5 件)は決め終わりました。続きは明日。'));
       assert.deepEqual(errors,[]);
     });
+    const refresh = () => page.evaluate(async()=>{document.querySelector('[data-decide-view]').outerHTML=(await import('/src/features/decide-view.js')).renderDecideView();});
+    const storedTask = id => page.evaluate(({key,id})=>JSON.parse(localStorage.getItem(key)).tasks.find(t=>t.id===id),{key:STATE_KEY,id});
+    async function resetNudges(series = false) {
+      await page.evaluate(async series=>{
+        const {state}=await import('/src/state/store.js'), now=new Date();
+        const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        state.tasks=Array.from({length:8},(_,i)=>({id:'r'+i,title:series&&i<3?`読書 ${i+1}巻`:`確認 ${i}`,projectId:'p',parentTaskId:'',status:'todo',kind:'task',dueDate:'',estimateMin:30,createdAt:iso(new Date(now.getFullYear(),now.getMonth(),now.getDate()-30+i))+'T10:00:00'}));
+      },series);
+      await refresh();
+    }
+    await check('B-4 reminder cycles, rollback, two rechecks per day and total five', async () => {
+      await resetNudges();
+      const select = id => root.locator(`[data-work-nudge-cycle="${id}"]`);
+      assert.deepEqual(await select('r0').locator('option').allTextContents(),['期日なし…','1週間後に再確認','1か月後に再確認','3か月後に再確認','促さない']);
+      const size=await select('r0').evaluate(el=>({font:parseFloat(getComputedStyle(el).fontSize),height:el.getBoundingClientRect().height}));
+      assert(size.font>=16&&size.height>=44);
+      const initial=await snapshot();
+      await page.evaluate(key=>{window.__nudgeSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k===key)throw new DOMException('injected failure','QuotaExceededError');return window.__nudgeSetItem.call(this,k,v);};},STATE_KEY);
+      try {
+        await select('r0').selectOption('1m');
+        assert.equal(await select('r0').inputValue(),'');
+        assert.deepEqual(await snapshot(),initial);
+        assert((await page.locator('body').textContent()).includes('端末に保存できませんでした'));
+      } finally { await page.evaluate(()=>{Storage.prototype.setItem=window.__nudgeSetItem;delete window.__nudgeSetItem;}); }
+      const expected=await page.evaluate(()=>{
+        const d=new Date(), iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const month=n=>iso(new Date(d.getFullYear(),d.getMonth()+n,Math.min(d.getDate(),new Date(d.getFullYear(),d.getMonth()+n+1,0).getDate())));
+        return {today:iso(d),week:iso(new Date(d.getFullYear(),d.getMonth(),d.getDate()+7)),month:month(1),quarter:month(3)};
+      });
+      for(const [id,cycle,at] of [['r0','1m',expected.month],['r1','1w',expected.week],['r2','3m',expected.quarter]]) {
+        await select(id).selectOption(cycle);
+        assert.deepEqual((await storedTask(id)).dueNudge,{cycle,at,decidedAt:expected.today,key:id,count:1});
+        assert.equal(await root.locator(`[data-nudge-id="${id}"]`).count(),0);
+      }
+      assert.equal(await root.locator('[data-value="sleep"]').textContent(),'再確認待ち 3');
+      assert((await root.textContent()).includes('今日 3/5 件'));
+      await root.locator('[data-action="decide-adopt"]').first().click();
+      await root.locator('[data-action="decide-adopt"]').first().click();
+      assert((await root.textContent()).includes('今日の分(5 件)は決め終わりました。続きは明日。'));
+      const [y,m,d]=expected.quarter.split('-').map(Number);
+      await page.clock.setFixedTime(new Date(y,m-1,d+1,12)); await refresh();
+      assert.deepEqual(await root.locator('[data-nudge-id]').evaluateAll(rows=>rows.filter(r=>r.querySelector('strong').textContent.includes('再確認')).map(r=>r.dataset.nudgeId)),['r1','r0']);
+      for(const id of ['r1','r0']) {
+        await select(id).selectOption('1w');
+        assert.equal((await storedTask(id)).dueNudge.count,2);
+      }
+      await refresh();
+      assert.equal(await root.locator('[data-nudge-id="r2"]').count(),0,'third recheck waits until tomorrow');
+      assert((await root.textContent()).includes('今日 2/5 件'));
+      await page.clock.setFixedTime(new Date(y,m-1,d+2,12)); await refresh();
+      assert((await root.locator('[data-nudge-id="r2"]').textContent()).includes('再確認'));
+      const stable=await snapshot(); await refresh(); assert.deepEqual(await snapshot(),stable,'render never mutates or saves state');
+    });
+    await check('B-4 series carries reminders on decision and completion; never can be cleared', async () => {
+      await resetNudges(true);
+      await root.locator('[data-work-nudge-cycle="r0"]').selectOption('never');
+      const reminder=(await storedTask('r0')).dueNudge;
+      assert.equal(reminder.key,'s:p||読書|巻'); assert.equal(reminder.at,'9999-12-31');
+      assert.deepEqual((await storedTask('r1')).dueNudge,reminder,'decision carries the series key');
+      assert((await root.textContent()).includes('今日 1/5 件'),'series copies count once');
+      assert.equal(await root.locator('[data-value="never"]').textContent(),'促さない 1');
+      await root.locator('[data-value="never"]').click();
+      assert.equal(await root.locator('[data-decide-results] [data-work-key]').count(),1);
+      // Remove the copied value in memory to exercise the completion save path independently.
+      await page.evaluate(async()=>{const {state}=await import('/src/state/store.js');delete state.tasks.find(t=>t.id==='r1').dueNudge;});
+      await root.locator('[data-action="toggle-task"][data-id="r0"]').click();
+      assert.deepEqual((await storedTask('r1')).dueNudge,reminder);
+      assert.equal(await root.locator('[data-nudge-id="r1"]').count(),0);
+      assert.equal(await root.locator('[data-value="never"]').textContent(),'促さない 1');
+      await root.locator('[data-action="decide-resume"][data-id="r1"]').click();
+      assert.equal((await storedTask('r1')).dueNudge,null);
+      assert.equal((await storedTask('r2')).dueNudge,null);
+      assert.equal(await root.locator('[data-value="never"]').count(),0);
+      await root.locator('[data-action="decide-adopt"][data-id="r1"]').click();
+      assert((await storedTask('r1')).dueDate);
+      assert.equal((await storedTask('r2')).dueNudge,null);
+      assert.deepEqual(errors,[]);
+    });
     assert.equal(failures,0,'acceptance failures');
   } finally { if(browser) await browser.close(); if(server) await new Promise(resolve=>server.close(resolve)); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

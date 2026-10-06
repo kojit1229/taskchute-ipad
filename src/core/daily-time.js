@@ -1,4 +1,10 @@
 const invalid = message => Object.assign(new Error(message), { code: "DAILY_OPERATION_INVALID" });
+export function addMonths(dateISO, n) {
+  const [, y, m, d] = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day(dateISO)).map(Number);
+  const last = new Date(y, m + n, 0).getDate();
+  const date = new Date(y, m - 1 + n, Math.min(d, last));
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 function day(value, offset = 0) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
   if (!match) throw invalid("日付を確認してください");
